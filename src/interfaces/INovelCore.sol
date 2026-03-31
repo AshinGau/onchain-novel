@@ -1,0 +1,103 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.28;
+
+import {DataTypes} from "../libraries/DataTypes.sol";
+
+/// @title INovelCore
+/// @notice Core interface for the Decentralized Novel Protocol
+interface INovelCore {
+    // ============================================================
+    //                          EVENTS
+    // ============================================================
+
+    event NovelCreated(uint256 indexed novelId, address indexed creator, bytes32 genesisContentHash);
+    event NovelForked(uint256 indexed novelId, uint256 indexed sourceNovelId, uint256 sourceChapterId);
+    event ChapterSubmitted(
+        uint256 indexed novelId, uint256 indexed chapterId, address indexed author, uint256 parentId
+    );
+    event RoundPhaseChanged(uint256 indexed novelId, uint32 round, DataTypes.RoundPhase phase);
+    event EpochPhaseChanged(uint256 indexed novelId, uint32 epoch, DataTypes.EpochPhase phase);
+    event WorldLinesSelected(uint256 indexed novelId, uint32 round, uint256[] selectedChapterIds);
+    event CanonEstablished(uint256 indexed novelId, uint32 epoch, uint256 canonWorldLineId);
+    event StakeRefunded(uint256 indexed novelId, address indexed author, uint256 amount);
+    event StakeSlashed(uint256 indexed novelId, address indexed author, uint256 amount);
+
+    // ============================================================
+    //                     NOVEL LIFECYCLE
+    // ============================================================
+
+    /// @notice Create a new novel with optional initial prize pool
+    /// @param config Novel configuration parameters
+    /// @param genesisContentHash CID of genesis content
+    /// @return novelId The ID of the newly created novel
+    function createNovel(DataTypes.NovelConfig calldata config, bytes32 genesisContentHash)
+        external
+        payable
+        returns (uint256 novelId);
+
+    /// @notice Fork a novel from a rejected branch
+    /// @param originalNovelId Source novel ID
+    /// @param branchChapterId Chapter to fork from
+    /// @param config Configuration for the new novel
+    /// @return novelId The ID of the forked novel
+    function forkNovel(uint256 originalNovelId, uint256 branchChapterId, DataTypes.NovelConfig calldata config)
+        external
+        payable
+        returns (uint256 novelId);
+
+    // ============================================================
+    //                   CHAPTER SUBMISSION
+    // ============================================================
+
+    /// @notice Submit a chapter continuation (requires stake deposit)
+    /// @param novelId Novel ID
+    /// @param parentChapterId World line chapter to extend
+    /// @param contentHash Content CID (IPFS/Arweave)
+    /// @param declaredLength Declared content byte length
+    /// @return chapterId The ID of the submitted chapter
+    function submitChapter(uint256 novelId, uint256 parentChapterId, bytes32 contentHash, uint64 declaredLength)
+        external
+        payable
+        returns (uint256 chapterId);
+
+    // ============================================================
+    //                  ROUND STATE TRANSITIONS
+    // ============================================================
+
+    /// @notice Close submission phase and enter voting (requires minDuration + minSubmissions)
+    function closeSubmissions(uint256 novelId) external;
+
+    /// @notice Close commit phase and enter reveal phase
+    function closeCommit(uint256 novelId) external;
+
+    /// @notice Close reveal phase and settle the round
+    function settleRound(uint256 novelId) external;
+
+    // ============================================================
+    //                  EPOCH STATE TRANSITIONS
+    // ============================================================
+
+    /// @notice Close epoch commit phase
+    function closeEpochCommit(uint256 novelId) external;
+
+    /// @notice Close epoch reveal phase and settle the epoch
+    function settleEpoch(uint256 novelId) external;
+
+    // ============================================================
+    //                      STAKE CLAIMS
+    // ============================================================
+
+    /// @notice Claim refundable stake deposits
+    function claimStakeRefund(uint256 novelId) external;
+
+    // ============================================================
+    //                        QUERIES
+    // ============================================================
+
+    function getNovel(uint256 novelId) external view returns (DataTypes.Novel memory);
+    function getChapter(uint256 chapterId) external view returns (DataTypes.Chapter memory);
+    function getActiveWorldLines(uint256 novelId) external view returns (uint256[] memory);
+    function getRoundSubmissions(uint256 novelId, uint32 round) external view returns (uint256[] memory);
+    function getNovelCount() external view returns (uint256);
+    function getChapterCount() external view returns (uint256);
+}
