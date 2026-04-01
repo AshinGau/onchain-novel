@@ -2,7 +2,8 @@
 pragma solidity ^0.8.28;
 
 /// @title DataTypes
-/// @notice Shared data structures and enums for the Decentralized Novel Protocol
+/// @notice Shared data structures and enums for the Decentralized Collaborative Novel Protocol
+/// @dev This protocol enables multiple AI Agents and humans to co-author novels on-chain
 library DataTypes {
     // ============================================================
     //                          ENUMS
@@ -14,6 +15,7 @@ library DataTypes {
         Committing, // Accepting vote commits
         Revealing, // Accepting vote reveals
         Settling // Round settlement in progress
+
     }
 
     /// @notice Phase within an Epoch lifecycle
@@ -22,13 +24,7 @@ library DataTypes {
         Committing, // Epoch vote commit phase
         Revealing, // Epoch vote reveal phase
         Settling // Epoch settlement (Canon + NFT + rewards)
-    }
 
-    /// @notice Supported voting weight strategies
-    enum VotingStrategy {
-        TokenWeighted, // 1 token = 1 vote
-        QuadraticVoting, // cost = votes²
-        StakeToVote // Staked ETH = voting weight
     }
 
     // ============================================================
@@ -47,7 +43,6 @@ library DataTypes {
         uint64 commitDuration; // Commit phase duration in seconds
         uint64 revealDuration; // Reveal phase duration in seconds
         uint256 stakeAmount; // Required stake per chapter submission (wei)
-        VotingStrategy votingStrategy; // Voting weight scheme
         uint8 pollutionRounds; // M: pollution tracking window (consecutive rounds)
         uint8 pollutionThreshold; // Bottom X percentile counts as pollution (e.g., 20 = bottom 20%)
     }
@@ -88,7 +83,7 @@ library DataTypes {
         bytes32 commitHash; // hash(candidateId, salt)
         uint256 stakeAmount; // ETH staked for StakeToVote
         bool revealed; // Whether the vote has been revealed
-        bool claimed; // Whether Schelling reward has been claimed
+        bool claimed; // Whether voting stake refund has been claimed
         uint256 revealedCandidateId; // The candidate voted for (set after reveal)
     }
 

@@ -12,6 +12,7 @@ import {DataTypes} from "../src/libraries/DataTypes.sol";
 
 /// @title Integration Test
 /// @notice Tests the full lifecycle: create novel → submit chapters → round voting → epoch settlement
+/// @dev Simulates multi-Agent collaborative novel creation on-chain
 contract IntegrationTest is Test {
     NovelCore public novelCore;
     VotingEngine public votingEngine;
@@ -36,31 +37,19 @@ contract IntegrationTest is Test {
         ChapterNFT chapterNFTImpl = new ChapterNFT();
 
         // Deploy proxies with placeholder addresses (will set real ones after)
-        bytes memory novelCoreData = abi.encodeCall(
-            NovelCore.initialize,
-            (owner, address(0), address(0), address(0))
-        );
+        bytes memory novelCoreData = abi.encodeCall(NovelCore.initialize, (owner, address(0), address(0), address(0)));
         ERC1967Proxy novelCoreProxy = new ERC1967Proxy(address(novelCoreImpl), novelCoreData);
         novelCore = NovelCore(address(novelCoreProxy));
 
-        bytes memory votingData = abi.encodeCall(
-            VotingEngine.initialize,
-            (owner, address(novelCoreProxy))
-        );
+        bytes memory votingData = abi.encodeCall(VotingEngine.initialize, (owner, address(novelCoreProxy)));
         ERC1967Proxy votingProxy = new ERC1967Proxy(address(votingEngineImpl), votingData);
         votingEngine = VotingEngine(address(votingProxy));
 
-        bytes memory prizeData = abi.encodeCall(
-            PrizePool.initialize,
-            (owner, address(novelCoreProxy))
-        );
+        bytes memory prizeData = abi.encodeCall(PrizePool.initialize, (owner, address(novelCoreProxy)));
         ERC1967Proxy prizeProxy = new ERC1967Proxy(address(prizePoolImpl), prizeData);
         prizePool = PrizePool(address(prizeProxy));
 
-        bytes memory nftData = abi.encodeCall(
-            ChapterNFT.initialize,
-            (owner, address(novelCoreProxy))
-        );
+        bytes memory nftData = abi.encodeCall(ChapterNFT.initialize, (owner, address(novelCoreProxy)));
         ERC1967Proxy nftProxy = new ERC1967Proxy(address(chapterNFTImpl), nftData);
         chapterNFT = ChapterNFT(address(nftProxy));
 
@@ -91,7 +80,6 @@ contract IntegrationTest is Test {
             commitDuration: 3 days,
             revealDuration: 2 days,
             stakeAmount: 0.01 ether,
-            votingStrategy: DataTypes.VotingStrategy.StakeToVote,
             pollutionRounds: 3,
             pollutionThreshold: 20
         });
@@ -103,10 +91,7 @@ contract IntegrationTest is Test {
 
     function test_CreateNovel() public {
         vm.prank(creator);
-        uint256 novelId = novelCore.createNovel{value: 1 ether}(
-            defaultConfig,
-            bytes32("genesis_hash")
-        );
+        uint256 novelId = novelCore.createNovel{value: 1 ether}(defaultConfig, bytes32("genesis_hash"));
 
         assertEq(novelId, 1);
         assertEq(novelCore.getNovelCount(), 1);
@@ -149,9 +134,8 @@ contract IntegrationTest is Test {
 
         // Author1 submits a chapter
         vm.prank(author1);
-        uint256 chapterId = novelCore.submitChapter{value: 0.01 ether}(
-            novelId, genesisId, bytes32("chapter1_hash"), 500
-        );
+        uint256 chapterId =
+            novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, bytes32("chapter1_hash"), 500);
 
         assertEq(chapterId, 2); // Genesis is 1, this is 2
 
@@ -170,9 +154,7 @@ contract IntegrationTest is Test {
 
         vm.prank(author1);
         vm.expectRevert();
-        novelCore.submitChapter{value: 0.005 ether}(
-            novelId, worldLines[0], bytes32("ch_hash"), 500
-        );
+        novelCore.submitChapter{value: 0.005 ether}(novelId, worldLines[0], bytes32("ch_hash"), 500);
     }
 
     function test_SubmitChapter_RevertContentTooShort() public {
@@ -183,7 +165,10 @@ contract IntegrationTest is Test {
         vm.prank(author1);
         vm.expectRevert();
         novelCore.submitChapter{value: 0.01 ether}(
-            novelId, worldLines[0], bytes32("ch_hash"), 50 // Below minChapterLength of 100
+            novelId,
+            worldLines[0],
+            bytes32("ch_hash"),
+            50 // Below minChapterLength of 100
         );
     }
 
@@ -224,19 +209,13 @@ contract IntegrationTest is Test {
 
         // 2. Submit 3 chapters (meets roundMinSubmissions)
         vm.prank(author1);
-        uint256 ch1 = novelCore.submitChapter{value: 0.01 ether}(
-            novelId, genesisId, bytes32("ch1"), 500
-        );
+        uint256 ch1 = novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, bytes32("ch1"), 500);
 
         vm.prank(author2);
-        uint256 ch2 = novelCore.submitChapter{value: 0.01 ether}(
-            novelId, genesisId, bytes32("ch2"), 600
-        );
+        uint256 ch2 = novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, bytes32("ch2"), 600);
 
         vm.prank(author3);
-        novelCore.submitChapter{value: 0.01 ether}(
-            novelId, genesisId, bytes32("ch3"), 700
-        );
+        novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, bytes32("ch3"), 700);
 
         // 3. Fast forward past roundMinDuration
         vm.warp(block.timestamp + 1 days + 1);
@@ -349,9 +328,13 @@ contract IntegrationTest is Test {
         bytes32 es2 = bytes32("es2");
 
         vm.prank(reader1);
-        votingEngine.commitVote{value: 0.1 ether}(novelId, epochVotingId, keccak256(abi.encodePacked(worldLines[0], es1)));
+        votingEngine.commitVote{value: 0.1 ether}(
+            novelId, epochVotingId, keccak256(abi.encodePacked(worldLines[0], es1))
+        );
         vm.prank(reader2);
-        votingEngine.commitVote{value: 0.05 ether}(novelId, epochVotingId, keccak256(abi.encodePacked(worldLines[0], es2)));
+        votingEngine.commitVote{value: 0.05 ether}(
+            novelId, epochVotingId, keccak256(abi.encodePacked(worldLines[0], es2))
+        );
 
         // T=9d -> T=13d: Close epoch commit
         vm.warp(13 days);
@@ -487,7 +470,7 @@ contract IntegrationTest is Test {
 
     function test_ClaimPrizeReward() public {
         // Run full epoch to generate rewards
-        (uint256 novelId, ) = _runFullEpoch();
+        (uint256 novelId,) = _runFullEpoch();
 
         // author1 should have 0.3 ether pending reward
         uint256 reward = prizePool.getPendingReward(novelId, author1);
@@ -596,7 +579,9 @@ contract IntegrationTest is Test {
         // Attempting to commit after tally should revert
         vm.prank(reader2);
         vm.expectRevert();
-        votingEngine.commitVote{value: 0.1 ether}(novelId, votingRoundId, keccak256(abi.encodePacked(ch1, bytes32("late"))));
+        votingEngine.commitVote{value: 0.1 ether}(
+            novelId, votingRoundId, keccak256(abi.encodePacked(ch1, bytes32("late")))
+        );
     }
 
     // ============================================================
@@ -641,9 +626,13 @@ contract IntegrationTest is Test {
         bytes32 es1 = bytes32("es1");
         bytes32 es2 = bytes32("es2");
         vm.prank(reader1);
-        votingEngine.commitVote{value: 0.1 ether}(novelId, epochVotingId, keccak256(abi.encodePacked(worldLines[0], es1)));
+        votingEngine.commitVote{value: 0.1 ether}(
+            novelId, epochVotingId, keccak256(abi.encodePacked(worldLines[0], es1))
+        );
         vm.prank(reader2);
-        votingEngine.commitVote{value: 0.05 ether}(novelId, epochVotingId, keccak256(abi.encodePacked(worldLines[0], es2)));
+        votingEngine.commitVote{value: 0.05 ether}(
+            novelId, epochVotingId, keccak256(abi.encodePacked(worldLines[0], es2))
+        );
 
         vm.warp(13 days);
         novelCore.closeEpochCommit(novelId);

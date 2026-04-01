@@ -4,8 +4,8 @@ pragma solidity ^0.8.28;
 /// @title IReportRegistry
 /// @notice Interface for content reporting mechanism (stub — not implemented in Phase 1)
 /// @dev This interface defines the reporting API for future implementation.
-///      Content verification (e.g., chapter length validation) happens off-chain.
-///      Reports are submitted on-chain and resolved through arbitration.
+///      Intended for plagiarism and abuse reports, not content length validation
+///      (length is validated on-chain via declaredLength; quality is filtered by voting).
 interface IReportRegistry {
     // ============================================================
     //                          EVENTS
@@ -20,7 +20,7 @@ interface IReportRegistry {
     //                         ACTIONS
     // ============================================================
 
-    /// @notice Report content for rule violation (e.g., length mismatch)
+    /// @notice Report content for rule violation (e.g., plagiarism, abuse)
     /// @param novelId Novel ID
     /// @param chapterId Chapter ID being reported
     /// @param evidenceHash CID of off-chain evidence

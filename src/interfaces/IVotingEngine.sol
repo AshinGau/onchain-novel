@@ -4,7 +4,7 @@ pragma solidity ^0.8.28;
 import {DataTypes} from "../libraries/DataTypes.sol";
 
 /// @title IVotingEngine
-/// @notice Interface for the Commit-Reveal voting engine
+/// @notice Interface for the Commit-Reveal voting engine (Stake-to-Vote)
 interface IVotingEngine {
     // ============================================================
     //                          EVENTS
@@ -16,7 +16,9 @@ interface IVotingEngine {
     );
     event VotingInitialized(uint256 indexed novelId, uint256 indexed votingRoundId, uint256 candidateCount);
     event VotesTallied(uint256 indexed novelId, uint256 indexed votingRoundId, uint256[] rankedCandidateIds);
-    event VotingRewardClaimed(uint256 indexed novelId, uint256 indexed votingRoundId, address indexed voter, uint256 amount);
+    event VotingRewardClaimed(
+        uint256 indexed novelId, uint256 indexed votingRoundId, address indexed voter, uint256 amount
+    );
 
     // ============================================================
     //                      VOTER ACTIONS
@@ -35,7 +37,7 @@ interface IVotingEngine {
     /// @param salt Random salt used in commit
     function revealVote(uint256 novelId, uint256 votingRoundId, uint256 candidateId, bytes32 salt) external;
 
-    /// @notice Claim Schelling Point reward for voting with majority
+    /// @notice Claim voting stake refund after tally (all revealed voters can claim)
     /// @param novelId Novel ID
     /// @param votingRoundId Unique voting round identifier
     function claimVotingReward(uint256 novelId, uint256 votingRoundId) external;
@@ -48,13 +50,7 @@ interface IVotingEngine {
     /// @param novelId Novel ID
     /// @param votingRoundId Unique voting round identifier
     /// @param candidateIds IDs of candidates (chapters or world lines)
-    /// @param strategy Voting weight strategy to use
-    function initializeVoting(
-        uint256 novelId,
-        uint256 votingRoundId,
-        uint256[] calldata candidateIds,
-        DataTypes.VotingStrategy strategy
-    ) external;
+    function initializeVoting(uint256 novelId, uint256 votingRoundId, uint256[] calldata candidateIds) external;
 
     /// @notice Tally votes and return ranked results
     /// @param novelId Novel ID

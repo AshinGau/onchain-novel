@@ -10,16 +10,11 @@ import {IVotingEngine} from "../interfaces/IVotingEngine.sol";
 import {DataTypes} from "../libraries/DataTypes.sol";
 
 /// @title VotingEngine
-/// @notice Commit-Reveal voting engine supporting multiple voting strategies
+/// @notice Commit-Reveal voting engine using Stake-to-Vote (staked ETH = voting weight)
 /// @dev Manages voting rounds identified by (novelId, votingRoundId) pairs.
 ///      votingRoundId is computed by NovelCore to be unique per round/epoch.
-contract VotingEngine is
-    Initializable,
-    OwnableUpgradeable,
-    ReentrancyGuard,
-    UUPSUpgradeable,
-    IVotingEngine
-{
+///      Both AI Agents and humans can participate as voters.
+contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuard, UUPSUpgradeable, IVotingEngine {
     // ============================================================
     //                         STORAGE
     // ============================================================
@@ -30,7 +25,6 @@ contract VotingEngine is
     /// @dev Composite key for voting round data: keccak256(novelId, votingRoundId)
     struct VotingRoundData {
         uint256[] candidateIds;
-        DataTypes.VotingStrategy strategy;
         bool initialized;
         bool tallied;
         uint256 totalVoters; // Number of voters who revealed
@@ -145,17 +139,9 @@ contract VotingEngine is
         commit.revealed = true;
         commit.revealedCandidateId = candidateId;
 
-        // For StakeToVote, weight = staked amount (in wei, normalized to ether for counting)
-        uint256 voteWeight;
-
-        if (round.strategy == DataTypes.VotingStrategy.StakeToVote) {
-            voteWeight = commit.stakeAmount / 1e15; // Normalize: 0.001 ETH = 1 vote
-            if (voteWeight == 0) voteWeight = 1; // Minimum 1 vote
-        } else {
-            // TokenWeighted and QuadraticVoting: 1 vote per address for now
-            // (Token integration deferred to when governance token exists)
-            voteWeight = 1;
-        }
+        // Stake-to-Vote: weight = staked amount normalized (0.001 ETH = 1 vote)
+        uint256 voteWeight = commit.stakeAmount / 1e15;
+        if (voteWeight == 0) voteWeight = 1; // Minimum 1 vote
 
         _voteCounts[roundKey][candidateId] += voteWeight;
         round.totalVoters++;
@@ -184,11 +170,6 @@ contract VotingEngine is
             if (!success) revert();
         }
 
-        // TODO (Phase 2): Schelling Point reward from prize pool for majority voters
-        // if (commit.revealedCandidateId == round.winnerCandidateId) {
-        //     // Allocate extra reward from prize pool
-        // }
-
         emit VotingRewardClaimed(novelId, votingRoundId, msg.sender, refund);
     }
 
@@ -197,12 +178,10 @@ contract VotingEngine is
     // ============================================================
 
     /// @inheritdoc IVotingEngine
-    function initializeVoting(
-        uint256 novelId,
-        uint256 votingRoundId,
-        uint256[] calldata candidateIds,
-        DataTypes.VotingStrategy strategy
-    ) external onlyNovelCore {
+    function initializeVoting(uint256 novelId, uint256 votingRoundId, uint256[] calldata candidateIds)
+        external
+        onlyNovelCore
+    {
         if (candidateIds.length == 0) revert NoCandidates();
 
         bytes32 roundKey = _roundKey(novelId, votingRoundId);
@@ -211,7 +190,6 @@ contract VotingEngine is
 
         _votingRounds[roundKey] = VotingRoundData({
             candidateIds: candidateIds,
-            strategy: strategy,
             initialized: true,
             tallied: false,
             totalVoters: 0,
