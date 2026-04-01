@@ -58,6 +58,9 @@ contract NovelCore is
     /// @notice Novel ID => author => pollution tracking
     mapping(uint256 => mapping(address => DataTypes.PollutionRecord)) private _pollutionRecords;
 
+    /// @notice Global keeper reward amount (owner-settable, per state transition call)
+    uint256 public keeperRewardAmount;
+
     // ============================================================
     //                         ERRORS
     // ============================================================
@@ -78,6 +81,7 @@ contract NovelCore is
     error TransferFailed();
     error ChapterNotInNovel(uint256 chapterId, uint256 novelId);
     error BranchNotRejected(uint256 chapterId);
+    error InvalidGenesisInput();
 
     // ============================================================
     //                      INITIALIZER
@@ -88,11 +92,6 @@ contract NovelCore is
         _disableInitializers();
     }
 
-    /// @notice Initialize the NovelCore contract
-    /// @param owner_ Initial owner
-    /// @param votingEngine_ VotingEngine contract address
-    /// @param prizePool_ PrizePool contract address
-    /// @param chapterNFT_ ChapterNFT contract address
     function initialize(address owner_, address votingEngine_, address prizePool_, address chapterNFT_)
         external
         initializer
@@ -112,6 +111,7 @@ contract NovelCore is
     event VotingEngineUpdated(address indexed oldAddr, address indexed newAddr);
     event PrizePoolUpdated(address indexed oldAddr, address indexed newAddr);
     event ChapterNFTUpdated(address indexed oldAddr, address indexed newAddr);
+    event KeeperRewardAmountUpdated(uint256 oldAmount, uint256 newAmount);
 
     function setVotingEngine(address addr) external onlyOwner {
         address old = address(votingEngine);
@@ -131,6 +131,12 @@ contract NovelCore is
         emit ChapterNFTUpdated(old, addr);
     }
 
+    function setKeeperRewardAmount(uint256 amount) external onlyOwner {
+        uint256 old = keeperRewardAmount;
+        keeperRewardAmount = amount;
+        emit KeeperRewardAmountUpdated(old, amount);
+    }
+
     function pause() external onlyOwner {
         _pause();
     }
@@ -144,13 +150,14 @@ contract NovelCore is
     // ============================================================
 
     /// @inheritdoc INovelCore
-    function createNovel(DataTypes.NovelConfig calldata config, bytes32 genesisContentHash)
-        external
-        payable
-        whenNotPaused
-        returns (uint256 novelId)
-    {
+    function createNovel(
+        DataTypes.NovelConfig calldata config,
+        bytes32[] calldata genesisContentHashes,
+        uint64[] calldata genesisLengths
+    ) external payable whenNotPaused returns (uint256 novelId) {
         _validateConfig(config);
+        if (genesisContentHashes.length == 0) revert InvalidGenesisInput();
+        if (genesisContentHashes.length != genesisLengths.length) revert InvalidGenesisInput();
 
         novelId = ++_novelCount;
 
@@ -163,37 +170,44 @@ contract NovelCore is
             roundPhase: DataTypes.RoundPhase.Submitting,
             epochPhase: DataTypes.EpochPhase.Rounds,
             phaseStartTime: block.timestamp,
-            genesisContentHash: genesisContentHash,
+            genesisChapterCount: uint32(genesisContentHashes.length),
+            cumulativeCanonChapters: 0,
             active: true,
             forkSourceNovelId: 0,
             forkSourceChapterId: 0
         });
 
-        // Create genesis root chapter (virtual, id=0 is reserved)
-        uint256 genesisChapterId = ++_chapterCount;
-        _chapters[genesisChapterId] = DataTypes.Chapter({
-            id: genesisChapterId,
-            novelId: novelId,
-            parentId: 0,
-            author: msg.sender,
-            contentHash: genesisContentHash,
-            declaredLength: 0,
-            round: 0,
-            epoch: 0,
-            voteCount: 0,
-            isWorldLine: true,
-            isCanon: false
-        });
+        // Create genesis chapters — each becomes an initial active world line
+        for (uint256 i = 0; i < genesisContentHashes.length; i++) {
+            // Validate each genesis chapter against minChapterLength
+            if (genesisLengths[i] < config.minChapterLength) {
+                revert ContentLengthOutOfRange(genesisLengths[i], config.minChapterLength, config.maxChapterLength);
+            }
 
-        // Genesis chapter is the initial active world line
-        _activeWorldLines[novelId].push(genesisChapterId);
+            uint256 genesisChapterId = ++_chapterCount;
+            _chapters[genesisChapterId] = DataTypes.Chapter({
+                id: genesisChapterId,
+                novelId: novelId,
+                parentId: 0,
+                author: msg.sender,
+                contentHash: genesisContentHashes[i],
+                declaredLength: genesisLengths[i],
+                round: 0,
+                epoch: 0,
+                voteCount: 0,
+                isWorldLine: true,
+                isCanon: false
+            });
+
+            _activeWorldLines[novelId].push(genesisChapterId);
+        }
 
         // Deposit initial prize pool if any ETH sent
         if (msg.value > 0) {
             prizePool.deposit{value: msg.value}(novelId, "genesis");
         }
 
-        emit NovelCreated(novelId, msg.sender, genesisContentHash);
+        emit NovelCreated(novelId, msg.sender, uint32(genesisContentHashes.length));
     }
 
     /// @inheritdoc INovelCore
@@ -203,16 +217,12 @@ contract NovelCore is
         whenNotPaused
         returns (uint256 novelId)
     {
-        // Validate source novel exists
         DataTypes.Novel storage sourceNovel = _novels[originalNovelId];
         if (sourceNovel.id == 0) revert NovelNotFound(originalNovelId);
 
-        // Validate the branch chapter exists and belongs to the source novel
         DataTypes.Chapter storage branch = _chapters[branchChapterId];
         if (branch.id == 0) revert ChapterNotFound(branchChapterId);
         if (branch.novelId != originalNovelId) revert ChapterNotInNovel(branchChapterId, originalNovelId);
-
-        // Branch should not be a current canon/worldline (forking is for rejected branches)
         if (branch.isCanon) revert BranchNotRejected(branchChapterId);
 
         _validateConfig(config);
@@ -228,7 +238,8 @@ contract NovelCore is
             roundPhase: DataTypes.RoundPhase.Submitting,
             epochPhase: DataTypes.EpochPhase.Rounds,
             phaseStartTime: block.timestamp,
-            genesisContentHash: branch.contentHash,
+            genesisChapterCount: 1,
+            cumulativeCanonChapters: 0,
             active: true,
             forkSourceNovelId: originalNovelId,
             forkSourceChapterId: branchChapterId
@@ -257,7 +268,7 @@ contract NovelCore is
         }
 
         emit NovelForked(novelId, originalNovelId, branchChapterId);
-        emit NovelCreated(novelId, msg.sender, branch.contentHash);
+        emit NovelCreated(novelId, msg.sender, 1);
     }
 
     // ============================================================
@@ -275,7 +286,6 @@ contract NovelCore is
         if (novel.id == 0) revert NovelNotFound(novelId);
         if (!novel.active) revert NovelNotActive(novelId);
 
-        // Must be in Submitting phase
         if (novel.roundPhase != DataTypes.RoundPhase.Submitting) {
             revert WrongRoundPhase(DataTypes.RoundPhase.Submitting, novel.roundPhase);
         }
@@ -283,24 +293,20 @@ contract NovelCore is
             revert WrongEpochPhase(DataTypes.EpochPhase.Rounds, novel.epochPhase);
         }
 
-        // Validate parent chapter is an active world line
         DataTypes.Chapter storage parent = _chapters[parentChapterId];
         if (parent.id == 0) revert ChapterNotFound(parentChapterId);
         if (parent.novelId != novelId) revert ChapterNotInNovel(parentChapterId, novelId);
         if (!_isActiveWorldLine(novelId, parentChapterId)) revert NotWorldLine(parentChapterId);
 
-        // Validate content length
         DataTypes.NovelConfig storage config = novel.config;
         if (declaredLength < config.minChapterLength || declaredLength > config.maxChapterLength) {
             revert ContentLengthOutOfRange(declaredLength, config.minChapterLength, config.maxChapterLength);
         }
 
-        // Validate stake
         if (msg.value != config.stakeAmount) {
             revert InvalidStakeAmount(msg.value, config.stakeAmount);
         }
 
-        // Create chapter
         chapterId = ++_chapterCount;
         _chapters[chapterId] = DataTypes.Chapter({
             id: chapterId,
@@ -316,10 +322,7 @@ contract NovelCore is
             isCanon: false
         });
 
-        // Track submission
         _roundSubmissions[novelId][novel.currentRound].push(chapterId);
-
-        // Track stake
         _stakeBalances[novelId][msg.sender] += msg.value;
 
         emit ChapterSubmitted(novelId, chapterId, msg.sender, parentChapterId);
@@ -340,24 +343,22 @@ contract NovelCore is
 
         DataTypes.NovelConfig storage config = novel.config;
 
-        // Check minimum duration elapsed
         if (block.timestamp < novel.phaseStartTime + config.roundMinDuration) {
             revert RoundConditionsNotMet();
         }
 
-        // Check minimum submissions
         uint256[] storage submissions = _roundSubmissions[novelId][novel.currentRound];
         if (submissions.length < config.roundMinSubmissions) {
             revert RoundConditionsNotMet();
         }
 
-        // Initialize voting in VotingEngine
         uint256 votingRoundId = _computeVotingRoundId(novelId, novel.currentEpoch, novel.currentRound, false);
         votingEngine.initializeVoting(novelId, votingRoundId, submissions);
 
-        // Transition to Committing
         novel.roundPhase = DataTypes.RoundPhase.Committing;
         novel.phaseStartTime = block.timestamp;
+
+        _payKeeper(novelId);
 
         emit RoundPhaseChanged(novelId, novel.currentRound, DataTypes.RoundPhase.Committing);
     }
@@ -371,14 +372,14 @@ contract NovelCore is
             revert WrongRoundPhase(DataTypes.RoundPhase.Committing, novel.roundPhase);
         }
 
-        // Check commit duration elapsed
         if (block.timestamp < novel.phaseStartTime + novel.config.commitDuration) {
             revert PhaseNotExpired();
         }
 
-        // Transition to Revealing
         novel.roundPhase = DataTypes.RoundPhase.Revealing;
         novel.phaseStartTime = block.timestamp;
+
+        _payKeeper(novelId);
 
         emit RoundPhaseChanged(novelId, novel.currentRound, DataTypes.RoundPhase.Revealing);
     }
@@ -392,7 +393,6 @@ contract NovelCore is
             revert WrongRoundPhase(DataTypes.RoundPhase.Revealing, novel.roundPhase);
         }
 
-        // Check reveal duration elapsed
         if (block.timestamp < novel.phaseStartTime + novel.config.revealDuration) {
             revert PhaseNotExpired();
         }
@@ -405,7 +405,6 @@ contract NovelCore is
         uint32 N = novel.config.worldLineCount;
         uint256 selectCount = rankedIds.length < N ? rankedIds.length : N;
 
-        // Clear old world lines and set new ones
         delete _activeWorldLines[novelId];
 
         uint256[] memory selectedIds = new uint256[](selectCount);
@@ -416,35 +415,30 @@ contract NovelCore is
             selectedIds[i] = selectedId;
         }
 
-        // Update pollution records for submitters
         _updatePollutionRecords(novelId, novel.currentRound, rankedIds);
-
-        // Return stakes for all submitters in this round
-        // (Pollution-based slashing is separate from round settlement)
         _returnRoundStakes(novelId, novel.currentRound);
 
         emit WorldLinesSelected(novelId, novel.currentRound, selectedIds);
 
-        // Check if this was the last round in the epoch
         if (novel.currentRound >= novel.config.roundsPerEpoch) {
             // Transition to Epoch voting
             novel.epochPhase = DataTypes.EpochPhase.Committing;
             novel.roundPhase = DataTypes.RoundPhase.Settling;
             novel.phaseStartTime = block.timestamp;
 
-            // Initialize epoch voting with world lines as candidates
             uint256 epochVotingId = _computeVotingRoundId(novelId, novel.currentEpoch, novel.currentRound, true);
             votingEngine.initializeVoting(novelId, epochVotingId, _activeWorldLines[novelId]);
 
             emit EpochPhaseChanged(novelId, novel.currentEpoch, DataTypes.EpochPhase.Committing);
         } else {
-            // Next round
             novel.currentRound++;
             novel.roundPhase = DataTypes.RoundPhase.Submitting;
             novel.phaseStartTime = block.timestamp;
 
             emit RoundPhaseChanged(novelId, novel.currentRound, DataTypes.RoundPhase.Submitting);
         }
+
+        _payKeeper(novelId);
     }
 
     // ============================================================
@@ -467,6 +461,8 @@ contract NovelCore is
         novel.epochPhase = DataTypes.EpochPhase.Revealing;
         novel.phaseStartTime = block.timestamp;
 
+        _payKeeper(novelId);
+
         emit EpochPhaseChanged(novelId, novel.currentEpoch, DataTypes.EpochPhase.Revealing);
     }
 
@@ -487,24 +483,45 @@ contract NovelCore is
         uint256 epochVotingId = _computeVotingRoundId(novelId, novel.currentEpoch, novel.currentRound, true);
         uint256[] memory rankedWorldLines = votingEngine.tallyVotes(novelId, epochVotingId);
 
-        // The top-voted world line becomes Canon
         uint256 canonWorldLineId = rankedWorldLines[0];
         _chapters[canonWorldLineId].isCanon = true;
 
         emit CanonEstablished(novelId, novel.currentEpoch, canonWorldLineId);
 
-        // Collect all canon chapter authors (trace the winning world line's path)
-        // For simplicity in this phase, the canon is the single winning chapter
-        // In full implementation, we'd trace the entire chain from genesis to this world line
+        // Collect canon chapter authors for this epoch
         address[] memory canonAuthors = _collectCanonAuthors(novelId, canonWorldLineId);
 
         // Mint NFTs for canon chapters
         _mintCanonNFTs(novelId, novel.currentEpoch, canonWorldLineId);
 
-        // Distribute prize pool rewards
-        prizePool.distributeEpochRewards(novelId, novel.currentEpoch, canonAuthors, novel.config.prizeReleaseRate);
+        // Distribute prize pool rewards (three-layer: creator royalty → authors → voters)
+        uint256 voterRewardPool = prizePool.distributeEpochRewards(
+            novelId,
+            novel.currentEpoch,
+            novel.creator,
+            canonAuthors,
+            novel.config.prizeReleaseRate,
+            novel.genesisChapterCount,
+            novel.cumulativeCanonChapters,
+            novel.config.voterRewardRate,
+            payable(address(votingEngine))
+        );
 
-        // Reset for next epoch: Canon becomes the sole world line
+        // Record voter reward allocation in VotingEngine (ETH already sent by PrizePool)
+        if (voterRewardPool > 0) {
+            uint256 roundCount = uint256(novel.currentRound) + 1; // K round votes + 1 epoch vote
+            uint256[] memory votingRoundIds = new uint256[](roundCount);
+            for (uint32 r = 1; r <= novel.currentRound; r++) {
+                votingRoundIds[r - 1] = _computeVotingRoundId(novelId, novel.currentEpoch, r, false);
+            }
+            votingRoundIds[roundCount - 1] = epochVotingId;
+            votingEngine.depositVoterRewards(novelId, votingRoundIds, voterRewardPool);
+        }
+
+        // Update cumulative canon chapters
+        novel.cumulativeCanonChapters += uint32(canonAuthors.length);
+
+        // Reset for next epoch
         delete _activeWorldLines[novelId];
         _activeWorldLines[novelId].push(canonWorldLineId);
 
@@ -514,8 +531,45 @@ contract NovelCore is
         novel.epochPhase = DataTypes.EpochPhase.Rounds;
         novel.phaseStartTime = block.timestamp;
 
+        _payKeeper(novelId);
+
         emit EpochPhaseChanged(novelId, novel.currentEpoch, DataTypes.EpochPhase.Rounds);
         emit RoundPhaseChanged(novelId, novel.currentRound, DataTypes.RoundPhase.Submitting);
+    }
+
+    /// @inheritdoc INovelCore
+    function triggerEarlyEpoch(uint256 novelId) external onlyOwner whenNotPaused {
+        DataTypes.Novel storage novel = _novels[novelId];
+        if (novel.id == 0) revert NovelNotFound(novelId);
+
+        // Must be in Rounds phase and Submitting sub-phase
+        if (novel.epochPhase != DataTypes.EpochPhase.Rounds) {
+            revert WrongEpochPhase(DataTypes.EpochPhase.Rounds, novel.epochPhase);
+        }
+        if (novel.roundPhase != DataTypes.RoundPhase.Submitting) {
+            revert WrongRoundPhase(DataTypes.RoundPhase.Submitting, novel.roundPhase);
+        }
+
+        // Must have completed at least 1 round (need world lines for epoch vote)
+        require(novel.currentRound > 1 || novel.config.roundsPerEpoch == 1, "No rounds completed");
+
+        // Return stakes for any in-progress round submissions
+        uint256[] storage submissions = _roundSubmissions[novelId][novel.currentRound];
+        for (uint256 i = 0; i < submissions.length; i++) {
+            // Stakes are already in _stakeBalances, so they're claimable
+            // No need to do anything extra — they can claim via claimStakeRefund
+        }
+
+        // Skip remaining rounds → enter Epoch Committing
+        novel.epochPhase = DataTypes.EpochPhase.Committing;
+        novel.roundPhase = DataTypes.RoundPhase.Settling;
+        novel.phaseStartTime = block.timestamp;
+
+        uint256 epochVotingId = _computeVotingRoundId(novelId, novel.currentEpoch, novel.currentRound - 1, true);
+        votingEngine.initializeVoting(novelId, epochVotingId, _activeWorldLines[novelId]);
+
+        emit EarlyEpochTriggered(novelId, novel.currentEpoch);
+        emit EpochPhaseChanged(novelId, novel.currentEpoch, DataTypes.EpochPhase.Committing);
     }
 
     // ============================================================
@@ -569,11 +623,13 @@ contract NovelCore is
         return _chapterCount;
     }
 
+    /// @notice Accept ETH (voter reward refund from VotingEngine interactions)
+    receive() external payable {}
+
     // ============================================================
     //                    INTERNAL HELPERS
     // ============================================================
 
-    /// @dev Validate novel configuration parameters
     function _validateConfig(DataTypes.NovelConfig calldata config) internal pure {
         if (config.minChapterLength == 0) revert InvalidConfig("minChapterLength must be > 0");
         if (config.maxChapterLength <= config.minChapterLength) {
@@ -586,11 +642,11 @@ contract NovelCore is
         }
         if (config.roundsPerEpoch == 0) revert InvalidConfig("roundsPerEpoch must be > 0");
         if (config.prizeReleaseRate > 10000) revert InvalidConfig("prizeReleaseRate must be <= 10000");
+        if (config.voterRewardRate > 2000) revert InvalidConfig("voterRewardRate must be <= 2000");
         if (config.commitDuration == 0) revert InvalidConfig("commitDuration must be > 0");
         if (config.revealDuration == 0) revert InvalidConfig("revealDuration must be > 0");
     }
 
-    /// @dev Check if a chapter ID is in the active world lines of a novel
     function _isActiveWorldLine(uint256 novelId, uint256 chapterId) internal view returns (bool) {
         uint256[] storage worldLines = _activeWorldLines[novelId];
         for (uint256 i = 0; i < worldLines.length; i++) {
@@ -599,18 +655,14 @@ contract NovelCore is
         return false;
     }
 
-    /// @dev Compute a unique voting round ID
-    /// @param isEpoch Whether this is an epoch vote (vs round vote)
     function _computeVotingRoundId(uint256 novelId, uint32 epoch, uint32 round, bool isEpoch)
         internal
         pure
         returns (uint256)
     {
-        // Pack into a unique uint256: novelId in high bits, epoch, round, and isEpoch flag
         return uint256(keccak256(abi.encodePacked(novelId, epoch, round, isEpoch)));
     }
 
-    /// @dev Return stakes for all submitters in a given round
     function _returnRoundStakes(uint256 novelId, uint32 round) internal {
         uint256[] storage submissions = _roundSubmissions[novelId][round];
         DataTypes.NovelConfig storage config = _novels[novelId].config;
@@ -619,63 +671,51 @@ contract NovelCore is
             DataTypes.Chapter storage chapter = _chapters[submissions[i]];
             address author = chapter.author;
 
-            // Check for pollution-based slashing
             DataTypes.PollutionRecord storage record = _pollutionRecords[novelId][author];
             if (record.consecutiveStrikes >= config.pollutionRounds && config.pollutionRounds > 0) {
-                // Slash 50% of stake for this submission
                 uint256 slashAmount = config.stakeAmount / 2;
                 uint256 refundAmount = config.stakeAmount - slashAmount;
 
                 if (_stakeBalances[novelId][author] >= config.stakeAmount) {
                     _stakeBalances[novelId][author] -= config.stakeAmount;
 
-                    // Refund the non-slashed portion
                     if (refundAmount > 0) {
                         _stakeBalances[novelId][author] += refundAmount;
                     }
 
-                    // Send slashed amount to prize pool
                     if (slashAmount > 0) {
                         prizePool.deposit{value: slashAmount}(novelId, "pollution_slash");
                         emit StakeSlashed(novelId, author, slashAmount);
                     }
                 }
 
-                // Reset strikes after slashing
                 record.consecutiveStrikes = 0;
             }
-            // Normal case: stake stays in _stakeBalances, claimable by author
         }
     }
 
-    /// @dev Update pollution records based on voting results
-    /// @notice Skips pollution tracking when fewer than 10 submissions to avoid small-sample false positives
+    /// @dev Skips pollution tracking when fewer than 10 submissions
     function _updatePollutionRecords(uint256 novelId, uint32 round, uint256[] memory rankedIds) internal {
         DataTypes.NovelConfig storage config = _novels[novelId].config;
         if (config.pollutionThreshold == 0 || rankedIds.length < 10) return;
 
-        // Calculate the cutoff index for "bottom X%"
         uint256 bottomCount = (rankedIds.length * config.pollutionThreshold) / 100;
-        if (bottomCount == 0) bottomCount = 1; // At least 1
+        if (bottomCount == 0) bottomCount = 1;
 
         uint256 bottomStartIdx = rankedIds.length - bottomCount;
 
-        // Authors in bottom portion get a strike
         for (uint256 i = bottomStartIdx; i < rankedIds.length; i++) {
             address author = _chapters[rankedIds[i]].author;
             DataTypes.PollutionRecord storage record = _pollutionRecords[novelId][author];
 
             if (record.lastRecordedRound == round - 1 || record.lastRecordedRound == 0) {
-                // Consecutive
                 record.consecutiveStrikes++;
             } else {
-                // Reset: not consecutive
                 record.consecutiveStrikes = 1;
             }
             record.lastRecordedRound = round;
         }
 
-        // Authors NOT in bottom portion: reset their strikes if they submitted this round
         for (uint256 i = 0; i < bottomStartIdx; i++) {
             address author = _chapters[rankedIds[i]].author;
             DataTypes.PollutionRecord storage record = _pollutionRecords[novelId][author];
@@ -686,14 +726,10 @@ contract NovelCore is
         }
     }
 
-    /// @dev Collect authors of canon chapters by tracing the path
-    /// @notice Traces the winning world line's parentId chain back to genesis,
-    ///         collecting authors of chapters that belong to the current epoch.
     function _collectCanonAuthors(uint256 novelId, uint256 canonWorldLineId) internal view returns (address[] memory) {
         uint32 currentEpoch = _novels[novelId].currentEpoch;
 
-        // Trace back from canon world line to collect chapter authors in this epoch
-        uint256[] memory authorChapterIds = new uint256[](32); // Max depth
+        uint256[] memory authorChapterIds = new uint256[](32);
         uint256 count = 0;
         uint256 currentId = canonWorldLineId;
 
@@ -701,12 +737,10 @@ contract NovelCore is
             DataTypes.Chapter storage ch = _chapters[currentId];
             if (ch.novelId != novelId) break;
 
-            // Only include chapters from the current epoch (filter by epoch)
             if (ch.epoch == currentEpoch && ch.round > 0) {
                 authorChapterIds[count] = currentId;
                 count++;
             } else if (ch.epoch < currentEpoch) {
-                // Reached previous epoch's territory, stop tracing
                 break;
             }
 
@@ -721,7 +755,6 @@ contract NovelCore is
         return authors;
     }
 
-    /// @dev Mint NFTs for canon chapters in the current epoch only
     function _mintCanonNFTs(uint256 novelId, uint32 epoch, uint256 canonWorldLineId) internal {
         uint256 currentId = canonWorldLineId;
 
@@ -729,15 +762,24 @@ contract NovelCore is
             DataTypes.Chapter storage ch = _chapters[currentId];
             if (ch.novelId != novelId) break;
 
-            // Only mint for chapters from the current epoch
             if (ch.epoch == epoch && ch.round > 0 && !chapterNFT.isChapterMinted(novelId, currentId)) {
                 ch.isCanon = true;
                 chapterNFT.mint(ch.author, novelId, currentId, epoch, ch.contentHash);
             } else if (ch.epoch < epoch) {
-                break; // Reached previous epoch, stop
+                break;
             }
 
             currentId = ch.parentId;
+        }
+    }
+
+    /// @dev Pay keeper reward from novel's prize pool (if configured)
+    function _payKeeper(uint256 novelId) internal {
+        if (keeperRewardAmount > 0) {
+            bool paid = prizePool.payKeeperReward(novelId, msg.sender, keeperRewardAmount);
+            if (paid) {
+                emit KeeperRewarded(novelId, msg.sender, keeperRewardAmount);
+            }
         }
     }
 

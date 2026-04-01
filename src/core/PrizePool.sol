@@ -32,7 +32,7 @@ contract PrizePool is
     /// @notice Novel ID => total tipped amount (cumulative, for stats)
     mapping(uint256 => uint256) private _totalTipped;
 
-    /// @notice Novel ID => author address => pending reward (claimable)
+    /// @notice Novel ID => address => pending reward (claimable)
     mapping(uint256 => mapping(address => uint256)) private _pendingRewards;
 
     /// @notice Minimum tip amount
@@ -67,9 +67,6 @@ contract PrizePool is
         _disableInitializers();
     }
 
-    /// @notice Initialize the prize pool contract
-    /// @param owner_ Initial owner address
-    /// @param novelCore_ Authorized NovelCore contract address
     function initialize(address owner_, address novelCore_) external initializer {
         __Ownable_init(owner_);
         __Pausable_init();
@@ -81,17 +78,14 @@ contract PrizePool is
     //                     ADMIN FUNCTIONS
     // ============================================================
 
-    /// @notice Update the authorized NovelCore address
     function setNovelCore(address newNovelCore) external onlyOwner {
         novelCore = newNovelCore;
     }
 
-    /// @notice Pause the contract (emergency)
     function pause() external onlyOwner {
         _pause();
     }
 
-    /// @notice Unpause the contract
     function unpause() external onlyOwner {
         _unpause();
     }
@@ -138,35 +132,86 @@ contract PrizePool is
     }
 
     /// @inheritdoc IPrizePool
-    function distributeEpochRewards(uint256 novelId, uint32 epoch, address[] calldata authors, uint16 releaseRate)
-        external
-        onlyNovelCore
-    {
+    function distributeEpochRewards(
+        uint256 novelId,
+        uint32 epoch,
+        address creator,
+        address[] calldata authors,
+        uint16 releaseRate,
+        uint32 genesisChapterCount,
+        uint32 cumulativeCanonChapters,
+        uint16 voterRewardRate,
+        address payable votingEngine
+    ) external onlyNovelCore returns (uint256 voterRewardPool) {
         if (authors.length == 0) revert NoAuthors();
 
         uint256 poolBalance = _poolBalances[novelId];
-        if (poolBalance == 0) return; // No funds to distribute
+        if (poolBalance == 0) return 0;
 
-        // Calculate epoch release amount: poolBalance * releaseRate / 10000
+        // Calculate epoch release amount
         uint256 totalRelease = (poolBalance * releaseRate) / 10000;
-        if (totalRelease == 0) return;
+        if (totalRelease == 0) return 0;
 
-        // Equal share per chapter (author may appear multiple times for multiple chapters)
-        uint256 perChapterReward = totalRelease / authors.length;
-        if (perChapterReward == 0) return;
-
-        // Actual total distributed (may be slightly less than totalRelease due to rounding)
-        uint256 actualDistributed = perChapterReward * authors.length;
-
-        // Deduct from pool
-        _poolBalances[novelId] -= actualDistributed;
-
-        // Credit each author
-        for (uint256 i = 0; i < authors.length; i++) {
-            _pendingRewards[novelId][authors[i]] += perChapterReward;
+        // === Layer 1: Creator Royalty ===
+        // creatorRoyalty = totalRelease * G / (G + C)
+        uint256 creatorRoyalty = 0;
+        uint256 g = uint256(genesisChapterCount);
+        uint256 c = uint256(cumulativeCanonChapters);
+        if (g > 0) {
+            creatorRoyalty = (totalRelease * g) / (g + c);
+            if (creatorRoyalty > 0) {
+                _pendingRewards[novelId][creator] += creatorRoyalty;
+                emit CreatorRoyaltyDistributed(novelId, epoch, creator, creatorRoyalty);
+            }
         }
 
-        emit RewardDistributed(novelId, epoch, actualDistributed, authors.length);
+        uint256 remaining = totalRelease - creatorRoyalty;
+
+        // === Layer 2: Author Rewards ===
+        // authorPool = remaining * (10000 - voterRewardRate) / 10000
+        uint256 authorPool = (remaining * (10000 - voterRewardRate)) / 10000;
+
+        if (authorPool > 0 && authors.length > 0) {
+            uint256 perChapterReward = authorPool / authors.length;
+            if (perChapterReward > 0) {
+                for (uint256 i = 0; i < authors.length; i++) {
+                    _pendingRewards[novelId][authors[i]] += perChapterReward;
+                }
+                // Adjust authorPool to actual distributed (handle rounding)
+                authorPool = perChapterReward * authors.length;
+            }
+        }
+
+        // === Layer 3: Voter Rewards ===
+        voterRewardPool = remaining - authorPool;
+
+        // Deduct total release from pool
+        _poolBalances[novelId] -= totalRelease;
+
+        // Send voter reward ETH directly to VotingEngine
+        if (voterRewardPool > 0) {
+            (bool success,) = votingEngine.call{value: voterRewardPool}("");
+            if (!success) revert TransferFailed();
+        }
+
+        emit RewardDistributed(novelId, epoch, totalRelease, authors.length);
+
+        return voterRewardPool;
+    }
+
+    /// @inheritdoc IPrizePool
+    function payKeeperReward(uint256 novelId, address keeper, uint256 amount)
+        external
+        onlyNovelCore
+        returns (bool paid)
+    {
+        if (amount == 0 || _poolBalances[novelId] < amount) return false;
+
+        _poolBalances[novelId] -= amount;
+        _pendingRewards[novelId][keeper] += amount;
+
+        emit KeeperRewardPaid(novelId, keeper, amount);
+        return true;
     }
 
     // ============================================================

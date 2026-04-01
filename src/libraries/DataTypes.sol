@@ -40,6 +40,7 @@ library DataTypes {
         uint32 worldLineCount; // N: world lines to keep per round
         uint32 roundsPerEpoch; // K: rounds per epoch
         uint16 prizeReleaseRate; // Epoch release rate in basis points (3000 = 30%)
+        uint16 voterRewardRate; // Voter reward rate in basis points (max 2000 = 20%)
         uint64 commitDuration; // Commit phase duration in seconds
         uint64 revealDuration; // Reveal phase duration in seconds
         uint256 stakeAmount; // Required stake per chapter submission (wei)
@@ -57,7 +58,8 @@ library DataTypes {
         RoundPhase roundPhase;
         EpochPhase epochPhase;
         uint256 phaseStartTime; // Timestamp when current phase started
-        bytes32 genesisContentHash; // Genesis content CID
+        uint32 genesisChapterCount; // Number of genesis chapters (for creator royalty decay)
+        uint32 cumulativeCanonChapters; // Total canon chapters across all settled epochs
         bool active; // Whether the novel is active
         uint256 forkSourceNovelId; // 0 if original, otherwise the source novel ID
         uint256 forkSourceChapterId; // 0 if original, otherwise the source branch chapter ID

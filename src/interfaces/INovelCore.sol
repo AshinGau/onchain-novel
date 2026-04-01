@@ -10,7 +10,7 @@ interface INovelCore {
     //                          EVENTS
     // ============================================================
 
-    event NovelCreated(uint256 indexed novelId, address indexed creator, bytes32 genesisContentHash);
+    event NovelCreated(uint256 indexed novelId, address indexed creator, uint32 genesisChapterCount);
     event NovelForked(uint256 indexed novelId, uint256 indexed sourceNovelId, uint256 sourceChapterId);
     event ChapterSubmitted(
         uint256 indexed novelId, uint256 indexed chapterId, address indexed author, uint256 parentId
@@ -21,19 +21,23 @@ interface INovelCore {
     event CanonEstablished(uint256 indexed novelId, uint32 epoch, uint256 canonWorldLineId);
     event StakeRefunded(uint256 indexed novelId, address indexed author, uint256 amount);
     event StakeSlashed(uint256 indexed novelId, address indexed author, uint256 amount);
+    event KeeperRewarded(uint256 indexed novelId, address indexed keeper, uint256 amount);
+    event EarlyEpochTriggered(uint256 indexed novelId, uint32 epoch);
 
     // ============================================================
     //                     NOVEL LIFECYCLE
     // ============================================================
 
-    /// @notice Create a new novel with optional initial prize pool
+    /// @notice Create a new novel with multi-chapter genesis and optional initial prize pool
     /// @param config Novel configuration parameters
-    /// @param genesisContentHash CID of genesis content
+    /// @param genesisContentHashes Array of CIDs for genesis chapters
+    /// @param genesisLengths Declared byte lengths for each genesis chapter
     /// @return novelId The ID of the newly created novel
-    function createNovel(DataTypes.NovelConfig calldata config, bytes32 genesisContentHash)
-        external
-        payable
-        returns (uint256 novelId);
+    function createNovel(
+        DataTypes.NovelConfig calldata config,
+        bytes32[] calldata genesisContentHashes,
+        uint64[] calldata genesisLengths
+    ) external payable returns (uint256 novelId);
 
     /// @notice Fork a novel from a rejected branch
     /// @param originalNovelId Source novel ID
@@ -50,11 +54,6 @@ interface INovelCore {
     // ============================================================
 
     /// @notice Submit a chapter continuation (requires stake deposit)
-    /// @param novelId Novel ID
-    /// @param parentChapterId World line chapter to extend
-    /// @param contentHash Content CID (IPFS/Arweave)
-    /// @param declaredLength Declared content byte length
-    /// @return chapterId The ID of the submitted chapter
     function submitChapter(uint256 novelId, uint256 parentChapterId, bytes32 contentHash, uint64 declaredLength)
         external
         payable
@@ -82,6 +81,9 @@ interface INovelCore {
 
     /// @notice Close epoch reveal phase and settle the epoch
     function settleEpoch(uint256 novelId) external;
+
+    /// @notice Owner triggers early epoch (skip remaining rounds)
+    function triggerEarlyEpoch(uint256 novelId) external;
 
     // ============================================================
     //                      STAKE CLAIMS

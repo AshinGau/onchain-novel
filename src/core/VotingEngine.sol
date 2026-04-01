@@ -12,7 +12,6 @@ import {DataTypes} from "../libraries/DataTypes.sol";
 /// @title VotingEngine
 /// @notice Commit-Reveal voting engine using Stake-to-Vote (staked ETH = voting weight)
 /// @dev Manages voting rounds identified by (novelId, votingRoundId) pairs.
-///      votingRoundId is computed by NovelCore to be unique per round/epoch.
 ///      Both AI Agents and humans can participate as voters.
 contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuard, UUPSUpgradeable, IVotingEngine {
     // ============================================================
@@ -27,8 +26,13 @@ contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuard, UUP
         uint256[] candidateIds;
         bool initialized;
         bool tallied;
+        bool swept; // Whether unrevealed stakes have been swept
         uint256 totalVoters; // Number of voters who revealed
         uint256 winnerCandidateId; // Top voted candidate (set after tally)
+        uint256 totalRevealedStake; // Sum of stakes from revealed voters
+        uint256 totalUnrevealedStake; // Sum of stakes from unrevealed voters (set at sweep)
+        uint256 totalAccurateStake; // Sum of stakes from voters who voted for winner
+        uint256 voterRewardPool; // Accuracy reward pool for this round (from PrizePool)
     }
 
     /// @notice Voting round data: roundKey => VotingRoundData
@@ -58,8 +62,9 @@ contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuard, UUP
     error AlreadyTallied();
     error NotTallied();
     error AlreadyClaimed();
-    error NotMajorityVoter();
     error NoCandidates();
+    error AlreadySwept();
+    error NotRevealed();
 
     // ============================================================
     //                        MODIFIERS
@@ -145,6 +150,7 @@ contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuard, UUP
 
         _voteCounts[roundKey][candidateId] += voteWeight;
         round.totalVoters++;
+        round.totalRevealedStake += commit.stakeAmount;
 
         emit VoteRevealed(novelId, votingRoundId, msg.sender, candidateId);
     }
@@ -157,20 +163,74 @@ contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuard, UUP
         if (!round.tallied) revert NotTallied();
 
         DataTypes.VoteCommit storage commit = _voteCommits[roundKey][msg.sender];
-        if (!commit.revealed) revert NotCommitted();
+        if (!commit.revealed) revert NotRevealed();
         if (commit.claimed) revert AlreadyClaimed();
 
         commit.claimed = true;
 
-        // Return staked amount to ALL revealed voters (majority or not)
-        uint256 refund = commit.stakeAmount;
-        if (refund > 0) {
-            commit.stakeAmount = 0;
-            (bool success,) = msg.sender.call{value: refund}("");
+        uint256 totalPayout = 0;
+
+        // 1. Stake refund (all revealed voters)
+        totalPayout += commit.stakeAmount;
+
+        // 2. Unrevealed stake share (if sweep has been done)
+        if (round.swept && round.totalUnrevealedStake > 0 && round.totalRevealedStake > 0) {
+            uint256 unrevealedShare = (round.totalUnrevealedStake * commit.stakeAmount) / round.totalRevealedStake;
+            totalPayout += unrevealedShare;
+        }
+
+        // 3. Accuracy reward (if voter reward pool exists)
+        if (round.voterRewardPool > 0 && round.totalRevealedStake > 0) {
+            // Accurate voters (voted for winner) get 3x weight, others get 1x
+            bool isAccurate = (commit.revealedCandidateId == round.winnerCandidateId);
+            uint256 myWeight = isAccurate ? commit.stakeAmount * 3 : commit.stakeAmount;
+
+            // totalWeight = totalAccurateStake * 3 + (totalRevealedStake - totalAccurateStake) * 1
+            //             = totalRevealedStake + totalAccurateStake * 2
+            uint256 totalWeight = round.totalRevealedStake + round.totalAccurateStake * 2;
+
+            if (totalWeight > 0) {
+                uint256 accuracyReward = (round.voterRewardPool * myWeight) / totalWeight;
+                totalPayout += accuracyReward;
+            }
+        }
+
+        // Clear stakeAmount to prevent re-inclusion in calculations
+        commit.stakeAmount = 0;
+
+        if (totalPayout > 0) {
+            (bool success,) = msg.sender.call{value: totalPayout}("");
             if (!success) revert();
         }
 
-        emit VotingRewardClaimed(novelId, votingRoundId, msg.sender, refund);
+        emit VotingRewardClaimed(novelId, votingRoundId, msg.sender, totalPayout);
+    }
+
+    /// @inheritdoc IVotingEngine
+    function sweepUnrevealedStakes(uint256 novelId, uint256 votingRoundId) external {
+        bytes32 roundKey = _roundKey(novelId, votingRoundId);
+        VotingRoundData storage round = _votingRounds[roundKey];
+
+        if (!round.tallied) revert NotTallied();
+        if (round.swept) revert AlreadySwept();
+
+        round.swept = true;
+
+        // Iterate all voters, sum unrevealed stakes
+        address[] storage voters = _voters[roundKey];
+        uint256 totalUnrevealed = 0;
+
+        for (uint256 i = 0; i < voters.length; i++) {
+            DataTypes.VoteCommit storage commit = _voteCommits[roundKey][voters[i]];
+            if (!commit.revealed) {
+                totalUnrevealed += commit.stakeAmount;
+                commit.stakeAmount = 0; // Confiscate
+            }
+        }
+
+        round.totalUnrevealedStake = totalUnrevealed;
+
+        emit UnrevealedStakesSwept(novelId, votingRoundId, totalUnrevealed);
     }
 
     // ============================================================
@@ -192,8 +252,13 @@ contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuard, UUP
             candidateIds: candidateIds,
             initialized: true,
             tallied: false,
+            swept: false,
             totalVoters: 0,
-            winnerCandidateId: 0
+            winnerCandidateId: 0,
+            totalRevealedStake: 0,
+            totalUnrevealedStake: 0,
+            totalAccurateStake: 0,
+            voterRewardPool: 0
         });
 
         emit VotingInitialized(novelId, votingRoundId, candidateIds.length);
@@ -223,7 +288,6 @@ contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuard, UUP
         }
 
         // Simple insertion sort by vote count (descending)
-        // Fine for small N (typically ≤ 20 candidates)
         for (uint256 i = 1; i < len; i++) {
             uint256 keyId = rankedIds[i];
             uint256 keyCount = counts[i];
@@ -241,10 +305,42 @@ contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuard, UUP
         round.tallied = true;
         round.winnerCandidateId = rankedIds[0];
 
+        // Compute totalAccurateStake: sum of stakes from voters who voted for the winner
+        address[] storage voters = _voters[roundKey];
+        uint256 accurateStake = 0;
+        for (uint256 i = 0; i < voters.length; i++) {
+            DataTypes.VoteCommit storage commit = _voteCommits[roundKey][voters[i]];
+            if (commit.revealed && commit.revealedCandidateId == rankedIds[0]) {
+                accurateStake += commit.stakeAmount;
+            }
+        }
+        round.totalAccurateStake = accurateStake;
+
         emit VotesTallied(novelId, votingRoundId, rankedIds);
 
         return rankedIds;
     }
+
+    /// @inheritdoc IVotingEngine
+    function depositVoterRewards(uint256 novelId, uint256[] calldata votingRoundIds, uint256 totalAmount)
+        external
+        onlyNovelCore
+    {
+        if (totalAmount == 0 || votingRoundIds.length == 0) return;
+
+        uint256 perRound = totalAmount / votingRoundIds.length;
+        if (perRound == 0) return;
+
+        for (uint256 i = 0; i < votingRoundIds.length; i++) {
+            bytes32 roundKey = _roundKey(novelId, votingRoundIds[i]);
+            _votingRounds[roundKey].voterRewardPool += perRound;
+        }
+
+        emit VoterRewardsDeposited(novelId, totalAmount, votingRoundIds.length);
+    }
+
+    /// @notice Accept ETH transfers (from PrizePool for voter rewards)
+    receive() external payable {}
 
     // ============================================================
     //                        QUERIES
