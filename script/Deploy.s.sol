@@ -36,7 +36,7 @@ contract Deploy is Script {
         bytes memory novelCoreData =
             abi.encodeCall(NovelCore.initialize, (deployer, address(0), address(0), address(0)));
         ERC1967Proxy novelCoreProxy = new ERC1967Proxy(address(novelCoreImpl), novelCoreData);
-        NovelCore novelCore = NovelCore(address(novelCoreProxy));
+        NovelCore novelCore = NovelCore(payable(address(novelCoreProxy)));
 
         // 3. Deploy module proxies (pointing to NovelCore)
         bytes memory votingData = abi.encodeCall(VotingEngine.initialize, (deployer, address(novelCoreProxy)));

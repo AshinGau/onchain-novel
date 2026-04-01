@@ -2,128 +2,112 @@
 
 ---
 
-## Phase 1 — Core Contracts
+## Phase 1 — Core Contracts (Done)
 
-### 1.1 Done (MVP)
+All core economic mechanisms implemented and tested (21 tests passing).
 
-- [x] Foundry project + OpenZeppelin v5.6.1 dependencies
-- [x] `DataTypes.sol` — shared enums & structs
-- [x] 5 interface files (INovelCore / IVotingEngine / IPrizePool / IChapterNFT / IReportRegistry)
-- [x] `ChapterNFT.sol` — ERC-721 upgradeable NFT
-- [x] `PrizePool.sol` — prize pool, tipping, epoch distribution, pull-based claims
-- [x] `VotingEngine.sol` — Commit-Reveal Stake-to-Vote, phase checks, all revealed voters reclaim stakes
-- [x] `NovelCore.sol` — state machine, chapter tree, staking, pollution tracking (epoch-filtered, ≥10 submissions guard)
-- [x] Storage gaps (`__gap`) in all 4 contracts
-- [x] `Integration.t.sol` — 14 integration tests passing
-- [x] `Deploy.s.sol` — UUPS proxy deployment script
-- [x] Documentation: README.md, README_cn.md, usage.md, design_cn.md
-
-### 1.2 To Do: Multi-Chapter Genesis
-
-- [ ] `createNovel` accepts `bytes32[] calldata genesisContentHashes` (array of CIDs, not single hash)
-- [ ] Each genesis chapter creates a `Chapter` with `round=0, epoch=0, isWorldLine=true`
-- [ ] All genesis chapters become initial active world lines
-- [ ] Each genesis chapter validated against `minChapterLength` via `declaredLength`
-- [ ] Store `genesisChapterCount` in `Novel` struct for creator royalty calculation
-- [ ] Update `forkNovel` to handle new genesis format
-- [ ] Update `Integration.t.sol` and `Deploy.s.sol`
-
-### 1.3 To Do: Creator Royalty
-
-- [ ] Add `genesisChapterCount` and `cumulativeCanonChapters` to `Novel` struct
-- [ ] In `settleEpoch`: calculate `creatorRoyalty = epochRelease × G / (G + C)` before author/voter split
-- [ ] Credit creator's reward to `_pendingRewards` in PrizePool (pull model)
-- [ ] Increment `cumulativeCanonChapters` after each epoch settlement
-- [ ] `PrizePool.distributeEpochRewards` signature update: accept creator address + royalty amount
-- [ ] Tests: creator royalty in epoch 1/5/10 matches expected decay
-
-### 1.4 To Do: Voter Incentive — Unrevealed Stake Redistribution
-
-- [ ] `sweepUnrevealedStakes(novelId, votingRoundId)` callable by anyone post-tally
-- [ ] Iterate `_voters[roundKey]`, sum unrevealed stakes → distribute to revealed voters by stake proportion
-- [ ] Record `totalRevealedStake` and `unrevealedPool` at sweep time
-- [ ] Merge into `claimVotingReward()`: voter claims stake refund + unrevealed share in one call
-- [ ] Tests: partial reveal, full no-reveal, sweep after claim, all-reveal (zero unrevealed pool)
-
-### 1.5 To Do: Voter Incentive — Accuracy Rewards
-
-- [ ] Add `voterRewardRate` (uint16, basis points) to `NovelConfig`, validate ≤ 2000
-- [ ] At tally: record `totalAccurateStake` and `totalInaccurateStake` in `VotingRoundData`
-  - Round voting: accurate = voted for a world line winner
-  - Epoch voting: accurate = voted for Canon
-- [ ] At epoch settlement: calculate `voterRewardPool = remaining × voterRewardRate / 10000`
-- [ ] Split `voterRewardPool` equally across K+1 voting rounds, write `perRoundReward` per round
-- [ ] `claimVotingReward()`: compute reward = `perRoundReward × myWeight / totalWeight` (accurate: 3x, other: 1x)
-- [ ] Voter rewards credited to VotingEngine (pull model), not PrizePool
-- [ ] Tests: accurate voter gets 3x share, inaccurate still gets reward, single voter edge case
-
-### 1.6 To Do: Keeper Rewards
-
-- [ ] Add `keeperRewardAmount` as a global protocol parameter (owner-settable)
-- [ ] Each state transition function (`closeSubmissions`, `closeCommit`, `settleRound`, `closeEpochCommit`, `settleEpoch`): reward `msg.sender` from prize pool
-- [ ] If pool balance < keeperRewardAmount, skip reward (state transition still executes)
-- [ ] Deduct from pool balance directly (independent of epoch release)
-- [ ] Tests: keeper receives reward, insufficient pool skips gracefully
-
-### 1.7 To Do: Admin Early Epoch Trigger
-
-- [ ] `triggerEarlyEpoch(novelId)` callable by owner
-- [ ] Requires `EpochPhase.Rounds` + `RoundPhase.Submitting`
-- [ ] Skip remaining rounds → enter Epoch Committing
-- [ ] Return stakes for any in-progress round submissions
-- [ ] Tests: early trigger, non-owner rejected
-
-### 1.8 To Do: Update Docs & Tests
-
-- [ ] Update `usage.md` — new NovelConfig fields, new claim flows, keeper rewards
-- [ ] Update `README.md` / `README_cn.md` — reflect completed Phase 1 features
-- [ ] Update `CLAUDE.md` — architecture changes
+- [x] Four UUPS-upgradeable contracts: NovelCore, VotingEngine, PrizePool, ChapterNFT
+- [x] Multi-chapter genesis (`bytes32[]` CIDs, each validated against `minChapterLength`)
+- [x] Commit-Reveal Stake-to-Vote voting engine
+- [x] Three-layer epoch reward distribution: creator royalty (`G/(G+C)` decay) → author rewards → voter accuracy rewards (3x weight for winners)
+- [x] Unrevealed stake redistribution (`sweepUnrevealedStakes` → proportional share to revealed voters)
+- [x] Keeper rewards for state transition callers (from prize pool, skip if insufficient)
+- [x] Pollution tracking with ≥10 submission guard and 50% stake slashing
+- [x] Admin early epoch trigger (`triggerEarlyEpoch`)
+- [x] On-chain forking from rejected branches
+- [x] ERC-721 copyright NFT minting for canon chapters (epoch-filtered)
+- [ ] Update docs: usage.md, README.md, README_cn.md, CLAUDE.md
 
 ---
 
-## Phase 2 — Agent Tooling & Testing
+## Phase 2 — Anvil E2E Multi-Role Testing
 
-### 2.1 MCP Server
-- [ ] Wraps all contract interactions as MCP tools (read state, submit chapter, vote, claim)
-- [ ] Wallet management, `votingRoundId` computation helper, CID upload to IPFS/Arweave
+End-to-end tests on local Anvil chain simulating real multi-role collaboration. Uses Forge Script (`--broadcast`) with independent signing keys per role, and `cast rpc evm_increaseTime` for time advancement.
 
-### 2.2 Agent Skill
-- [ ] Writing skill: read world lines → generate continuation → upload IPFS → submit
-- [ ] Voting skill: read candidates → evaluate → commit-reveal
-- [ ] Keeper skill: monitor timers → call state transitions
+### 2.1 Infrastructure
+- [ ] `script/E2E.s.sol` — deploy contracts + assign role wallets from Anvil pre-funded accounts
+- [ ] Roles: Creator × 1, Author × 5, Voter × 3, Keeper × 1
+- [ ] Helper library: `_computeVotingRoundId`, `_commitHash`, time-skip wrapper
 
-### 2.3 Off-chain Content Bridge
+### 2.2 Scenario: Single Epoch Full Lifecycle
+- [ ] Creator creates novel (2 genesis chapters) + injects 10 ETH prize pool
+- [ ] 5 Authors submit chapters on different world lines
+- [ ] Keeper calls `closeSubmissions`, verify keeper reward credited
+- [ ] 3 Voters commit-reveal vote (1 deliberately does not reveal)
+- [ ] Keeper drives `closeCommit` → `settleRound`
+- [ ] Verify: correct world lines selected, unrevealed stake swept
+- [ ] Epoch voting → `settleEpoch`
+- [ ] Verify: Canon correct, NFT minted, creator royalty, author reward, voter accuracy reward
+- [ ] All roles claim rewards, verify final balances
+
+### 2.3 Scenario: Multi-Epoch Economic Decay
+- [ ] Config: K=3 rounds per epoch, run 3 full epochs
+- [ ] Verify creator royalty decay: Epoch 1 (~50%) → Epoch 2 (~33%) → Epoch 3 (~25%)
+- [ ] Verify pool exponential decay: `balance × (1 - releaseRate)^n`
+- [ ] Reader tips mid-run, verify tip correctly added to pool
+
+### 2.4 Scenario: Pollution Detection & Slashing
+- [ ] Config: `pollutionRounds=2, pollutionThreshold=20`, ≥10 submissions per round
+- [ ] 1 Author ranks in bottom 20% for 2 consecutive rounds
+- [ ] On round settlement after 2nd strike: verify 50% stake slashed, slashed amount enters pool
+- [ ] Verify: submission count < 10 skips pollution tracking entirely
+
+### 2.5 Scenario: Fork & Early Epoch
+- [ ] Fork a rejected branch into a new novel, verify independent lifecycle
+- [ ] Owner calls `triggerEarlyEpoch` at Round 2, verify skip to epoch voting
+- [ ] Verify in-progress round stakes remain claimable via `claimStakeRefund`
+
+### 2.6 Scenario: Edge Cases
+- [ ] Zero prize pool through full epoch (no division-by-zero)
+- [ ] All voters reveal (sweep yields 0 unrevealed)
+- [ ] Single voter in a round
+- [ ] Keeper reward > pool balance (graceful skip, state transition still executes)
+- [ ] `voterRewardRate = 0` (all remaining goes to authors)
+
+### 2.7 Fuzz & Invariant Tests
+- [ ] Fuzz: `_updatePollutionRecords()` with random ranked arrays
+- [ ] Fuzz: `distributeEpochRewards` with varying G, C, voterRewardRate values
+- [ ] Invariant: `poolBalance + sum(pendingRewards) + voterRewardsSent ≤ totalDeposited`
+- [ ] Invariant: `cumulativeCanonChapters` monotonically increases
+
+---
+
+## Phase 3 — Agent Tooling
+
+### 3.1 MCP Server
+- [ ] Wrap all contract read/write as MCP tools
+- [ ] `votingRoundId` computation helper, wallet management
+- [ ] CID upload to IPFS/Arweave
+
+### 3.2 Agent Skills
+- [ ] Writer: read world lines → generate continuation → upload IPFS → submit on-chain
+- [ ] Voter: read candidates → evaluate quality → commit-reveal vote
+- [ ] Keeper: monitor phase timers → call state transitions → earn rewards
+
+### 3.3 Off-chain Content Bridge
 - [ ] Trace parentId chain → fetch CIDs → assemble full story text
 - [ ] API endpoint + cache layer for Agent consumption
 
-### 2.4 Economic Testing
-- [ ] Multi-epoch test (3+ epochs): pool decay, creator royalty decay, accuracy reward distribution
-- [ ] Pollution slashing pipeline: consecutive strikes, reset logic, edge cases
-- [ ] Voter lifecycle: commit → reveal → tally → claim (stake + unrevealed share + accuracy reward)
-- [ ] Multi-round epoch (K=3): canon chain correctness across rounds
-- [ ] Zero prize pool through full epoch (no division by zero)
-- [ ] Fuzz tests: `_updatePollutionRecords()`, economic invariants
-
 ---
 
-## Phase 3 — Production Readiness
+## Phase 4 — Production Readiness
 
-### 3.1 Contracts
+### 4.1 Contracts
 - [ ] `ReportRegistry.sol` — plagiarism/abuse reports with bond mechanism
 - [ ] `ChapterNFT` — EIP-2981 royalties + `tokenURI()` implementation
 - [ ] Novel deactivation: `completeNovel(novelId)`
 - [ ] Protocol treasury: `protocolFeeRate` (optional cut from epoch release)
 
-### 3.2 Upgrade & Deployment
+### 4.2 Upgrade & Deployment
 - [ ] UUPS upgrade flow tests (V1 → V2, storage layout, non-owner rejected)
 - [ ] Multi-sig + TimelockController deployment script
 - [ ] L2 deployment (Base Sepolia / Arbitrum Sepolia) + contract verification
 - [ ] Gas profiling for all key operations
 
-### 3.3 Security
+### 4.3 Security
 - [ ] NatSpec documentation on all public/external functions
-- [ ] `ReentrancyGuardUpgradeable` migration
-- [ ] Reentrancy attack tests on all claim functions
+- [ ] `ReentrancyGuardUpgradeable` migration (replace non-upgradeable `ReentrancyGuard`)
+- [ ] Reentrancy attack tests on all claim/transfer paths
 - [ ] External audit
 
 ---
@@ -132,5 +116,6 @@
 
 - `_isActiveWorldLine()` / `_isValidCandidate()`: linear search → consider mapping for O(1)
 - `_returnRoundStakes()`: O(n) per round iteration
-- `tallyVotes()`: insertion sort, fine for small N (≤ worldLineCount)
-- Concurrent novels: verify global chapterId counter doesn't cause cross-novel issues
+- `tallyVotes()`: insertion sort — fine for small N (≤ worldLineCount)
+- Concurrent novels: verify global `chapterId` counter doesn't cause cross-novel issues
+- `ReentrancyGuard` (non-upgradeable) used in NovelCore/VotingEngine/PrizePool — should migrate to `ReentrancyGuardUpgradeable`
