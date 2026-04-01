@@ -35,14 +35,26 @@ forge script script/Deploy.s.sol --rpc-url http://localhost:8545 --broadcast
 
 Four UUPS-upgradeable contracts behind ERC1967 proxies, wired together at deployment:
 
-- **NovelCore** (`src/core/NovelCore.sol`) — Central coordinator. Novel creation, chapter submission, Round/Epoch state machine, stake management, pollution tracking. Holds references to the other three modules.
-- **VotingEngine** (`src/core/VotingEngine.sol`) — Commit-Reveal Stake-to-Vote voting (staked ETH = voting weight). Handles commit, reveal, tallying, and ranking. Only callable by NovelCore.
-- **PrizePool** (`src/core/PrizePool.sol`) — Fund management: genesis deposits, reader tipping, epoch proportional release, pull-based reward claiming. Only callable by NovelCore.
+- **NovelCore** (`src/core/NovelCore.sol`) — Central coordinator. Novel creation, chapter submission, Round/Epoch state machine, stake management, pollution tracking. Multi-chapter genesis, creator royalty, keeper rewards, early epoch trigger. Holds references to the other three modules.
+- **VotingEngine** (`src/core/VotingEngine.sol`) — Commit-Reveal Stake-to-Vote voting (staked ETH = voting weight). Handles commit, reveal, tallying, and ranking. Unrevealed stake sweep, accuracy reward tracking and distribution. Only callable by NovelCore.
+- **PrizePool** (`src/core/PrizePool.sol`) — Fund management: genesis deposits, reader tipping, epoch proportional release, pull-based reward claiming. Three-layer epoch distribution (creator->author->voter), keeper rewards. Only callable by NovelCore.
 - **ChapterNFT** (`src/core/ChapterNFT.sol`) — ERC-721. Mints copyright-proof NFTs for chapters that make it into Canon (filtered to current epoch). Only callable by NovelCore.
 
 **Key relationships:** NovelCore orchestrates all modules. VotingEngine, PrizePool, and ChapterNFT each hold a reference back to NovelCore and restrict mutations to calls from NovelCore only. Deploy script (`script/Deploy.s.sol`) deploys all four implementations + proxies, then wires them via `setVotingEngine/setPrizePool/setChapterNFT`.
 
 **Shared types:** All data structures and enums live in `src/libraries/DataTypes.sol` — `Novel`, `Chapter`, `NovelConfig`, `VoteCommit`, `RoundPhase`, `EpochPhase`, `PollutionRecord`, etc.
+
+## Economic Model
+
+Three-layer epoch reward distribution (in `PrizePool.distributeEpochRewards`):
+1. **Creator Royalty**: `epochRelease * G / (G + C)` — naturally decays as canon chapters accumulate
+2. **Author Rewards**: `remaining * (10000 - voterRewardRate) / 10000` — equal per canon chapter
+3. **Voter Accuracy Rewards**: `remaining * voterRewardRate / 10000` — 3x weight for accurate voters (voted for winner), sent to VotingEngine
+
+Other economic mechanisms:
+- **Unrevealed Stake Redistribution**: `sweepUnrevealedStakes()` confiscates unrevealed voters' stakes, distributed proportionally to revealed voters
+- **Keeper Rewards**: `keeperRewardAmount` (owner-settable) paid from prize pool on each state transition
+- **Pollution Slashing**: Bottom X% authors for M consecutive rounds get 50% stake slashed (skipped when < 10 submissions)
 
 ## Domain Concepts
 
@@ -53,6 +65,9 @@ Four UUPS-upgradeable contracts behind ERC1967 proxies, wired together at deploy
 - **Fork**: Create a new independent novel from a rejected branch
 - **Pollution**: Authors consistently ranking in bottom percentile get stakes slashed (only when ≥ 10 submissions in a round)
 - **Stake-to-Vote**: Only voting mechanism — staked ETH = voting weight, no governance token
+- **Creator Royalty**: Decaying share of epoch release — `G/(G+C)` where G=genesis chapter count, C=cumulative canon chapters
+- **Multi-Chapter Genesis**: Novel can start with multiple genesis chapters, each becoming an initial world line
+- **Keeper**: Anyone who calls state transition functions, earning small rewards from the prize pool
 
 ## Formatting
 

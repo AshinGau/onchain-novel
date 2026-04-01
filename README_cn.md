@@ -10,6 +10,10 @@
 - **Commit-Reveal Stake-to-Vote 投票** — 质押 ETH 投票，质押量 = 投票权重，Agent 和人类均可参与评审
 - **多世界线机制** — 每轮保留 N 条平行世界线，Epoch 收束为唯一 Canon
 - **奖金池激励** — 创世者注入 + 读者打赏 → Epoch 按贡献分配给主线作者
+- **创世者分成（自然衰减）** — 通过 `G/(G+C)` 公式实现的 Epoch 释放衰减分成
+- **Keeper 奖励** — 任何人触发状态转换均可获得奖金池中的小额奖励
+- **多章创世** — 小说可以多个创世章节启动，每个创世章节成为一条初始世界线
+- **投票者准确性奖励** — 投票给获胜候选人的投票者获得额外奖励，权重为 3 倍
 - **版权 NFT** — 入选 Canon 的章节自动铸造 ERC-721 版权证明 NFT（按当前 Epoch 过滤）
 - **链上分叉** — 落选分支可 Fork 为独立新小说
 
@@ -28,9 +32,9 @@
 
 | 合约 | 职责 |
 |------|------|
-| **NovelCore** | 创建小说、续写提交、Round/Epoch 状态机、保证金管理、污染追踪 |
-| **VotingEngine** | Commit-Reveal Stake-to-Vote 投票、计票排序 |
-| **PrizePool** | 创世注入、读者打赏、Epoch 按比例释放、Pull 模式领取 |
+| **NovelCore** | 创建小说、续写提交、Round/Epoch 状态机、保证金管理、污染追踪、多章创世、创世者分成、Keeper 奖励、提前触发 Epoch |
+| **VotingEngine** | Commit-Reveal Stake-to-Vote 投票、计票排序、未揭示质押清扫、准确性奖励追踪与分发 |
+| **PrizePool** | 创世注入、读者打赏、三层 Epoch 分配（创世者->作者->投票者）、Keeper 奖励、Pull 模式领取 |
 | **ChapterNFT** | ERC-721 铸造、章节版权证明、元数据查询 |
 
 ## 生命周期
@@ -120,10 +124,20 @@ script/
 - **读者打赏** — 任何人可通过 `tipNovel()` 打赏
 - **污染罚没** — 被罚没保证金的 50% 流入奖金池
 
-### 奖金分配
+### 奖金分配（三层分配）
 - 每个 Epoch 释放当前奖金池余额的固定百分比（默认 30%）
-- 奖金按入选 Canon 的章节数量均分给对应作者
-- 作者通过 `claimReward()` 主动领取（Pull 模式，CEI 模式）
+- **创世者分成**: `epochRelease * G / (G + C)`，其中 G = 创世章节数，C = 累计 Canon 章节数。创世者份额随 Canon 章节积累自然衰减。
+- **作者奖励**: 扣除创世者分成后的剩余部分，按 `(10000 - voterRewardRate) / 10000` 分配，在 Canon 章节作者间均分
+- **投票者准确性奖励**: 剩余部分按 `voterRewardRate / 10000` 分配，发送至 VotingEngine。投票给获胜候选人的投票者获得 3 倍权重。
+- 作者和创世者通过 `claimReward()` 主动领取（Pull 模式，CEI 模式）
+
+### 投票者激励
+- **未揭示质押再分配**: `sweepUnrevealedStakes()` 在计票后没收未揭示投票者的质押，按比例分配给已揭示投票者
+- **准确性奖励**: 投票给获胜候选人的投票者从投票者奖励池中获得奖励，权重为 3 倍
+
+### Keeper 奖励
+- 任何人触发状态转换均可从奖金池获得小额 `keeperRewardAmount`（由 owner 通过 `setKeeperRewardAmount` 配置）
+- 如果奖金池余额不足，状态转换仍会执行但不发放奖励
 
 ### 保证金与罚没
 - Agent/作者提交章节时需质押 ETH（防垃圾投稿）
@@ -145,6 +159,7 @@ script/
 - 合约通过 UUPS Proxy 可升级，升级权限由 `owner` 控制
 - Commit-Reveal 投票防止抢跑和抄票
 - 提交保证金防垃圾投稿
+- 投票者准确性奖励 — 准确投票者获得 3 倍权重；非准确但已揭示的投票者仍获得基础份额
 
 > **注意**：`owner` 角色应在主网部署前转移至多签钱包（如 Gnosis Safe）+ TimelockController。
 
@@ -156,8 +171,8 @@ script/
 
 | 阶段 | 范围 | 状态 |
 |------|------|------|
-| **Phase 1** | 核心合约 + MVP 流程 | 已完成 |
-| **Phase 2** | Agent 工具链（MCP Server, Skill）、sweepUnrevealedStakes、管理员提前触发 Epoch | 计划中 |
+| **Phase 1** | 核心合约 + MVP 流程：多章创世、创世者分成、Keeper 奖励、投票者准确性奖励、未揭示质押清扫、提前触发 Epoch | 已完成 |
+| **Phase 2** | Anvil 端到端多角色测试 | 计划中 |
 | **Phase 3** | 经济机制强化（污染罚没管线、多 Epoch 测试） | 计划中 |
 | **Phase 4** | 举报系统、UUPS 升级测试、L2 部署 | 计划中 |
 
