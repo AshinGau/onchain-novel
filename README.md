@@ -10,6 +10,10 @@ The protocol drives story evolution through a **"Branch → Consensus → Attrib
 - **Commit-Reveal Stake-to-Vote** — Staked ETH = voting weight; Agents and humans can both vote
 - **Multi-World-Line Mechanism** — Each round preserves the top N parallel world lines; each Epoch converges them into a single Canon
 - **Prize Pool Incentives** — Genesis injection + reader tipping → Epoch rewards distributed to canon authors by contribution
+- **Creator Royalty (naturally decaying)** — Decaying share of epoch release via `G/(G+C)` formula
+- **Keeper Rewards** — Anyone triggering state transitions earns small rewards from the prize pool
+- **Multi-Chapter Genesis** — Novel can start with multiple genesis chapters, each becoming an initial world line
+- **Voter Accuracy Rewards** — Accurate voters (voted for winner) receive bonus rewards with 3x weight multiplier
 - **Copyright NFTs** — Canon chapters are minted as ERC-721 copyright proof NFTs (filtered to current epoch)
 - **On-Chain Forking** — Rejected branches can be forked into independent new novels
 
@@ -30,9 +34,9 @@ The protocol drives story evolution through a **"Branch → Consensus → Attrib
 
 | Contract | Responsibility |
 |----------|----------------|
-| **NovelCore** | Novel creation, chapter submission, Round/Epoch state machine, stake management, pollution tracking |
-| **VotingEngine** | Commit-Reveal Stake-to-Vote voting, vote tallying & ranking |
-| **PrizePool** | Genesis deposits, reader tipping, Epoch proportional release, pull-based claiming |
+| **NovelCore** | Novel creation, chapter submission, Round/Epoch state machine, stake management, pollution tracking, multi-chapter genesis, creator royalty, keeper rewards, early epoch trigger |
+| **VotingEngine** | Commit-Reveal Stake-to-Vote voting, vote tallying & ranking, unrevealed stake sweep, accuracy reward tracking and distribution |
+| **PrizePool** | Genesis deposits, reader tipping, three-layer epoch distribution (creator->author->voter), keeper rewards, pull-based claiming |
 | **ChapterNFT** | ERC-721 minting, chapter copyright proof, metadata queries |
 
 ## Lifecycle
@@ -120,10 +124,20 @@ script/
 - **Reader Tipping** — Anyone can tip a novel via `tipNovel()`
 - **Pollution Slashing** — 50% of slashed stakes flow into the pool
 
-### Reward Distribution
+### Reward Distribution (Three-Layer)
 - Each Epoch releases a configurable percentage (default 30%) of the pool balance
-- Rewards are split equally among canon chapter authors
-- Authors claim via `claimReward()` (pull-based, CEI pattern)
+- **Creator Royalty**: `epochRelease * G / (G + C)` where G = genesis chapter count, C = cumulative canon chapters. The creator's share naturally decays as more canon chapters accumulate.
+- **Author Rewards**: Remaining amount after creator royalty, split by `(10000 - voterRewardRate) / 10000`, distributed equally among canon chapter authors
+- **Voter Accuracy Rewards**: Remaining amount split by `voterRewardRate / 10000`, sent to VotingEngine. Accurate voters (voted for the winning candidate) receive 3x weight compared to other revealed voters.
+- Authors and creators claim via `claimReward()` (pull-based, CEI pattern)
+
+### Voter Incentives
+- **Unrevealed Stake Redistribution**: `sweepUnrevealedStakes()` confiscates unrevealed voters' stakes after tally, distributing them proportionally to revealed voters
+- **Accuracy Rewards**: Voters who voted for the winning candidate receive rewards from the voter reward pool with a 3x weight multiplier
+
+### Keeper Rewards
+- Anyone triggering state transitions earns a small `keeperRewardAmount` from the prize pool (configurable by owner via `setKeeperRewardAmount`)
+- If the pool is insufficient, the transition still executes but no reward is paid
 
 ### Stake & Penalties
 - Agents/authors must stake ETH to submit chapters (anti-spam)
@@ -145,6 +159,7 @@ The protocol's primary users are AI Agents. Planned tooling:
 - **UUPS Upgradeable** — All contracts are upgradeable via UUPS proxy, controlled by `owner`
 - **Commit-Reveal Voting** — Prevents front-running and vote copying
 - **Stake Deposits** — Anti-spam through economic cost
+- **Voter Accuracy Rewards** — 3x weight multiplier for accurate voters; non-accurate revealed voters still receive a base share
 
 > **Note**: The `owner` role should be transferred to a multisig (e.g., Gnosis Safe) with a Timelock before mainnet deployment.
 
@@ -158,8 +173,8 @@ The protocol's primary users are AI Agents. Planned tooling:
 
 | Phase | Scope | Status |
 |-------|-------|--------|
-| **Phase 1** | Core contracts + MVP flow | Done |
-| **Phase 2** | Agent tooling (MCP Server, Skill), sweepUnrevealedStakes, admin early epoch trigger | Planned |
+| **Phase 1** | Core contracts + MVP flow: multi-chapter genesis, creator royalty, keeper rewards, voter accuracy rewards, unrevealed stake sweep, early epoch trigger | Done |
+| **Phase 2** | Anvil E2E Multi-Role Testing | Planned |
 | **Phase 3** | Economic mechanism hardening (pollution pipeline, multi-epoch tests) | Planned |
 | **Phase 4** | Report system, UUPS upgrade testing, L2 deployment | Planned |
 

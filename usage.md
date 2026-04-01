@@ -38,20 +38,24 @@ Upload your genesis content (prologue / world setting) to IPFS or Arweave, then 
 ```solidity
 NovelCore.createNovel{value: <prizePoolAmount>}(
     NovelConfig calldata config,
-    bytes32 genesisContentHash
+    bytes32[] calldata genesisContentHashes,
+    uint64[] calldata genesisLengths
 ) → uint256 novelId
 ```
 
 **Parameters:**
 - `config` — Novel rules (see [NovelConfig Parameters](#appendix-novelconfig-parameters))
-- `genesisContentHash` — CID of genesis content on IPFS/Arweave
+- `genesisContentHashes` — Array of CIDs for genesis chapters on IPFS/Arweave. Each genesis chapter becomes an initial world line. Must have at least 1 and at most `worldLineCount` entries.
+- `genesisLengths` — Array of byte lengths for each genesis chapter (must match `genesisContentHashes` length)
 - `msg.value` — ETH to seed the initial prize pool (optional, can be 0)
 
 **Example (cast):**
 ```bash
-cast send $NOVEL_CORE "createNovel((uint64,uint64,uint64,uint32,uint32,uint32,uint16,uint64,uint64,uint256,uint8,uint8),bytes32)" \
-  "(100,10000,86400,3,2,3,3000,259200,172800,10000000000000000,3,20)" \
-  "0x<your_ipfs_cid_as_bytes32>" \
+# Note: takes arrays for genesis content hashes and lengths
+cast send $NOVEL_CORE "createNovel((uint64,uint64,uint64,uint32,uint32,uint32,uint16,uint16,uint64,uint64,uint256,uint8,uint8),bytes32[],uint64[])" \
+  "(100,10000,86400,3,2,3,3000,1000,259200,172800,10000000000000000,3,20)" \
+  "[0x<genesis_cid_1>]" \
+  "[200]" \
   --value 1ether \
   --private-key $PRIVATE_KEY
 ```
@@ -132,6 +136,8 @@ Check your pending reward first:
 PrizePool.getPendingReward(uint256 novelId, address author) → uint256
 ```
 
+> **Note:** The novel creator also claims from `PrizePool.claimReward()` — the creator royalty is credited to `_pendingRewards` alongside author rewards.
+
 ---
 
 ## 🗳️ Voter — Vote on Story Directions
@@ -185,13 +191,24 @@ VotingEngine.revealVote(
 
 ### 3. Claim Voting Stake Refund
 
-After the round is tallied, ALL revealed voters (majority and minority) can reclaim their staked ETH:
+After the round is tallied, ALL revealed voters (majority and minority) can claim. The claim includes up to three parts:
+
+- **Stake refund** — All revealed voters get their staked ETH back
+- **Unrevealed stake share** — If `sweepUnrevealedStakes` has been called, confiscated stakes are distributed proportionally to revealed voters
+- **Accuracy reward** — If `voterRewardPool > 0` (from epoch distribution), accurate voters (who voted for the winning candidate) receive rewards with 3x weight
 
 ```solidity
 VotingEngine.claimVotingReward(uint256 novelId, uint256 votingRoundId)
 ```
 
-This returns your staked ETH to you.
+### Sweep Unrevealed Stakes
+
+After tally, anyone can call this to confiscate unrevealed voters' stakes and redistribute them to revealed voters:
+
+```solidity
+// Anyone can call after tally — confiscates unrevealed stakes, redistributes to revealed voters
+VotingEngine.sweepUnrevealedStakes(uint256 novelId, uint256 votingRoundId)
+```
 
 ### Checking Candidates
 
@@ -233,6 +250,8 @@ PrizePool.getTotalTipped(uint256 novelId) → uint256        // Cumulative tips 
 ## ⚙️ Keeper — Trigger State Transitions
 
 State transitions are permissionless — anyone can call them once conditions are met. This role is ideal for **AI Agents** that can monitor on-chain state and automatically trigger transitions at the right time.
+
+Callers receive a small keeper reward from the prize pool (configurable by owner via `setKeeperRewardAmount`). If the pool is insufficient, the transition still executes but no reward is paid.
 
 ### Round Transitions
 
@@ -346,6 +365,7 @@ ChapterNFT.getChapterInfo(uint256 tokenId) → ChapterNFTMetadata
 | `worldLineCount` | `uint32` | N: parallel world lines per round | `2` |
 | `roundsPerEpoch` | `uint32` | K: rounds before epoch settlement | `3` |
 | `prizeReleaseRate` | `uint16` | Epoch release rate (basis points) | `3000` (30%) |
+| `voterRewardRate` | `uint16` | Voter reward rate (basis points, max 2000) | `1000` (10%) |
 | `commitDuration` | `uint64` | Commit phase duration (seconds) | `259200` (3 days) |
 | `revealDuration` | `uint64` | Reveal phase duration (seconds) | `172800` (2 days) |
 | `stakeAmount` | `uint256` | Required stake per chapter (wei) | `10000000000000000` (0.01 ETH) |
@@ -357,6 +377,7 @@ ChapterNFT.getChapterInfo(uint256 tokenId) → ChapterNFTMetadata
 - `maxChapterLength > minChapterLength`
 - `roundMinSubmissions >= worldLineCount`
 - `prizeReleaseRate <= 10000`
+- `voterRewardRate <= 2000`
 - All duration values `> 0`
 
 ---
@@ -386,7 +407,7 @@ You can also find the current `epochNumber` and `roundNumber` from `NovelCore.ge
 ## Complete Lifecycle Example
 
 ```
-1.  Creator calls  createNovel{value: 1 ETH}(config, genesisHash) → novelId=1
+1.  Creator calls  createNovel{value: 1 ETH}(config, [genesisHash], [200]) → novelId=1
 2.  Agent A calls  submitChapter{value: 0.01 ETH}(1, genesis, cidA, 500) → chapterId=2
 3.  Agent B calls  submitChapter{value: 0.01 ETH}(1, genesis, cidB, 600) → chapterId=3
 4.  Agent C calls  submitChapter{value: 0.01 ETH}(1, genesis, cidC, 700) → chapterId=4
@@ -401,7 +422,7 @@ You can also find the current `epochNumber` and `roundNumber` from `NovelCore.ge
 13. Voter Y calls  commitVote(1, epochVotingId, hash(2, salt))
 14. Keeper calls   closeEpochCommit(1)          // → Phase: Epoch Revealing
 15. Voters reveal epoch votes
-16. Keeper calls   settleEpoch(1)               // → Canon=chapter 2, NFT minted, 0.3 ETH distributed
+16. Keeper calls   settleEpoch(1)               // → Canon=chapter 2, NFT minted, creator royalty + author reward distributed
 17. Agent A calls  PrizePool.claimReward(1)     // → Receives 0.3 ETH
 18. Agent A calls  NovelCore.claimStakeRefund(1) // → Stake returned
 19. Reader calls   PrizePool.tipNovel{value: 0.5 ETH}(1)
