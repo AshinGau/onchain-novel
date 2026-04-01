@@ -16,6 +16,7 @@ import {DataTypes} from "../libraries/DataTypes.sol";
 /// @title NovelCore
 /// @notice Core contract managing novel lifecycle, chapter tree, Round/Epoch state machine,
 ///         staking, and pollution tracking. Coordinates VotingEngine, PrizePool, and ChapterNFT.
+/// @dev Designed for multi-Agent collaborative novel creation on-chain.
 contract NovelCore is
     Initializable,
     OwnableUpgradeable,
@@ -352,7 +353,7 @@ contract NovelCore is
 
         // Initialize voting in VotingEngine
         uint256 votingRoundId = _computeVotingRoundId(novelId, novel.currentEpoch, novel.currentRound, false);
-        votingEngine.initializeVoting(novelId, votingRoundId, submissions, config.votingStrategy);
+        votingEngine.initializeVoting(novelId, votingRoundId, submissions);
 
         // Transition to Committing
         novel.roundPhase = DataTypes.RoundPhase.Committing;
@@ -432,11 +433,8 @@ contract NovelCore is
             novel.phaseStartTime = block.timestamp;
 
             // Initialize epoch voting with world lines as candidates
-            uint256 epochVotingId =
-                _computeVotingRoundId(novelId, novel.currentEpoch, novel.currentRound, true);
-            votingEngine.initializeVoting(
-                novelId, epochVotingId, _activeWorldLines[novelId], novel.config.votingStrategy
-            );
+            uint256 epochVotingId = _computeVotingRoundId(novelId, novel.currentEpoch, novel.currentRound, true);
+            votingEngine.initializeVoting(novelId, epochVotingId, _activeWorldLines[novelId]);
 
             emit EpochPhaseChanged(novelId, novel.currentEpoch, DataTypes.EpochPhase.Committing);
         } else {
@@ -486,8 +484,7 @@ contract NovelCore is
         }
 
         // Tally epoch votes
-        uint256 epochVotingId =
-            _computeVotingRoundId(novelId, novel.currentEpoch, novel.currentRound, true);
+        uint256 epochVotingId = _computeVotingRoundId(novelId, novel.currentEpoch, novel.currentRound, true);
         uint256[] memory rankedWorldLines = votingEngine.tallyVotes(novelId, epochVotingId);
 
         // The top-voted world line becomes Canon
@@ -652,9 +649,10 @@ contract NovelCore is
     }
 
     /// @dev Update pollution records based on voting results
+    /// @notice Skips pollution tracking when fewer than 10 submissions to avoid small-sample false positives
     function _updatePollutionRecords(uint256 novelId, uint32 round, uint256[] memory rankedIds) internal {
         DataTypes.NovelConfig storage config = _novels[novelId].config;
-        if (config.pollutionThreshold == 0 || rankedIds.length == 0) return;
+        if (config.pollutionThreshold == 0 || rankedIds.length < 10) return;
 
         // Calculate the cutoff index for "bottom X%"
         uint256 bottomCount = (rankedIds.length * config.pollutionThreshold) / 100;
@@ -691,11 +689,7 @@ contract NovelCore is
     /// @dev Collect authors of canon chapters by tracing the path
     /// @notice Traces the winning world line's parentId chain back to genesis,
     ///         collecting authors of chapters that belong to the current epoch.
-    function _collectCanonAuthors(uint256 novelId, uint256 canonWorldLineId)
-        internal
-        view
-        returns (address[] memory)
-    {
+    function _collectCanonAuthors(uint256 novelId, uint256 canonWorldLineId) internal view returns (address[] memory) {
         uint32 currentEpoch = _novels[novelId].currentEpoch;
 
         // Trace back from canon world line to collect chapter authors in this epoch
@@ -727,7 +721,7 @@ contract NovelCore is
         return authors;
     }
 
-    /// @dev Mint NFTs for canon chapters
+    /// @dev Mint NFTs for canon chapters in the current epoch only
     function _mintCanonNFTs(uint256 novelId, uint32 epoch, uint256 canonWorldLineId) internal {
         uint256 currentId = canonWorldLineId;
 
@@ -735,10 +729,12 @@ contract NovelCore is
             DataTypes.Chapter storage ch = _chapters[currentId];
             if (ch.novelId != novelId) break;
 
-            // Only mint for chapters from this epoch's rounds
-            if (ch.round > 0 && !chapterNFT.isChapterMinted(novelId, currentId)) {
+            // Only mint for chapters from the current epoch
+            if (ch.epoch == epoch && ch.round > 0 && !chapterNFT.isChapterMinted(novelId, currentId)) {
                 ch.isCanon = true;
                 chapterNFT.mint(ch.author, novelId, currentId, epoch, ch.contentHash);
+            } else if (ch.epoch < epoch) {
+                break; // Reached previous epoch, stop
             }
 
             currentId = ch.parentId;

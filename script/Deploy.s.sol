@@ -11,6 +11,7 @@ import {ChapterNFT} from "../src/core/ChapterNFT.sol";
 
 /// @title Deploy
 /// @notice Deploys all protocol contracts behind UUPS proxies and wires them together
+/// @dev Decentralized Collaborative Novel Protocol — multi-Agent co-authoring on-chain
 contract Deploy is Script {
     function run() external {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
@@ -32,9 +33,8 @@ contract Deploy is Script {
         console.log("ChapterNFT impl:", address(chapterNFTImpl));
 
         // 2. Deploy NovelCore proxy (with placeholder module addresses)
-        bytes memory novelCoreData = abi.encodeCall(
-            NovelCore.initialize, (deployer, address(0), address(0), address(0))
-        );
+        bytes memory novelCoreData =
+            abi.encodeCall(NovelCore.initialize, (deployer, address(0), address(0), address(0)));
         ERC1967Proxy novelCoreProxy = new ERC1967Proxy(address(novelCoreImpl), novelCoreData);
         NovelCore novelCore = NovelCore(address(novelCoreProxy));
 
