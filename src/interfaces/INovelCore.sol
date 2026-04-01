@@ -23,6 +23,7 @@ interface INovelCore {
     event StakeSlashed(uint256 indexed novelId, address indexed author, uint256 amount);
     event KeeperRewarded(uint256 indexed novelId, address indexed keeper, uint256 amount);
     event EarlyEpochTriggered(uint256 indexed novelId, uint32 epoch);
+    event NovelCompleted(uint256 indexed novelId);
 
     // ============================================================
     //                     NOVEL LIFECYCLE
@@ -84,6 +85,9 @@ interface INovelCore {
 
     /// @notice Owner triggers early epoch (skip remaining rounds)
     function triggerEarlyEpoch(uint256 novelId) external;
+
+    /// @notice Deactivate a novel permanently
+    function completeNovel(uint256 novelId) external;
 
     // ============================================================
     //                      STAKE CLAIMS
