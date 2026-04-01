@@ -145,6 +145,22 @@ contract NovelCore is
         _unpause();
     }
 
+    /// @notice Deactivate a novel (no more submissions or voting)
+    /// @param novelId Novel to deactivate
+    function completeNovel(uint256 novelId) external onlyOwner {
+        DataTypes.Novel storage novel = _novels[novelId];
+        if (novel.id == 0) revert NovelNotFound(novelId);
+        if (!novel.active) revert NovelNotActive(novelId);
+
+        // Only allow completion during Submitting phase (not mid-vote)
+        if (novel.roundPhase != DataTypes.RoundPhase.Submitting) {
+            revert WrongRoundPhase(DataTypes.RoundPhase.Submitting, novel.roundPhase);
+        }
+
+        novel.active = false;
+        emit NovelCompleted(novelId);
+    }
+
     // ============================================================
     //                   NOVEL LIFECYCLE
     // ============================================================

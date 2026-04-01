@@ -2,17 +2,28 @@
 pragma solidity ^0.8.28;
 
 import {ERC721Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC721/ERC721Upgradeable.sol";
+import {ERC2981Upgradeable} from "@openzeppelin/contracts-upgradeable/token/common/ERC2981Upgradeable.sol";
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 
 import {IChapterNFT} from "../interfaces/IChapterNFT.sol";
 import {DataTypes} from "../libraries/DataTypes.sol";
 
 /// @title ChapterNFT
-/// @notice ERC-721 NFT for chapter copyright proof. One global contract for all novels.
-/// @dev Only the authorized NovelCore contract can mint NFTs.
-contract ChapterNFT is Initializable, ERC721Upgradeable, OwnableUpgradeable, UUPSUpgradeable, IChapterNFT {
+/// @notice ERC-721 + ERC-2981 NFT for chapter copyright proof. One global contract for all novels.
+/// @dev Only the authorized NovelCore contract can mint NFTs. Supports EIP-2981 royalties.
+contract ChapterNFT is
+    Initializable,
+    ERC721Upgradeable,
+    ERC2981Upgradeable,
+    OwnableUpgradeable,
+    UUPSUpgradeable,
+    IChapterNFT
+{
+    using Strings for uint256;
+
     // ============================================================
     //                         STORAGE
     // ============================================================
@@ -28,6 +39,9 @@ contract ChapterNFT is Initializable, ERC721Upgradeable, OwnableUpgradeable, UUP
 
     /// @notice Track minted chapters: novelId => chapterId => bool
     mapping(uint256 novelId => mapping(uint256 chapterId => bool)) private _mintedChapters;
+
+    /// @notice Base URI for token metadata (e.g., "https://api.example.com/nft/")
+    string private _baseTokenURI;
 
     // ============================================================
     //                         ERRORS
@@ -60,10 +74,14 @@ contract ChapterNFT is Initializable, ERC721Upgradeable, OwnableUpgradeable, UUP
     /// @param novelCore_ Authorized NovelCore contract address
     function initialize(address owner_, address novelCore_) external initializer {
         __ERC721_init("Chapter Copyright NFT", "CHAPTER");
+        __ERC2981_init();
         __Ownable_init(owner_);
 
         novelCore = novelCore_;
-        _nextTokenId = 1; // Start from 1
+        _nextTokenId = 1;
+
+        // Default royalty: 5% to contract owner (can be changed later)
+        _setDefaultRoyalty(owner_, 500);
     }
 
     // ============================================================
@@ -71,9 +89,25 @@ contract ChapterNFT is Initializable, ERC721Upgradeable, OwnableUpgradeable, UUP
     // ============================================================
 
     /// @notice Update the authorized NovelCore address (for upgrades)
-    /// @param newNovelCore New NovelCore contract address
     function setNovelCore(address newNovelCore) external onlyOwner {
         novelCore = newNovelCore;
+    }
+
+    /// @notice Set the base URI for token metadata
+    function setBaseURI(string calldata baseURI) external onlyOwner {
+        _baseTokenURI = baseURI;
+    }
+
+    /// @notice Set the default royalty for all tokens
+    /// @param receiver Address that receives royalty payments
+    /// @param feeNumerator Royalty fee in basis points (e.g., 500 = 5%)
+    function setDefaultRoyalty(address receiver, uint96 feeNumerator) external onlyOwner {
+        _setDefaultRoyalty(receiver, feeNumerator);
+    }
+
+    /// @notice Set royalty for a specific token (overrides default)
+    function setTokenRoyalty(uint256 tokenId, address receiver, uint96 feeNumerator) external onlyOwner {
+        _setTokenRoyalty(tokenId, receiver, feeNumerator);
     }
 
     // ============================================================
@@ -104,6 +138,9 @@ contract ChapterNFT is Initializable, ERC721Upgradeable, OwnableUpgradeable, UUP
 
         _mintedChapters[novelId][chapterId] = true;
 
+        // Set per-token royalty: author receives 5% of secondary sales
+        _setTokenRoyalty(tokenId, to, 500);
+
         emit ChapterNFTMinted(tokenId, novelId, chapterId, to, epoch);
     }
 
@@ -122,11 +159,46 @@ contract ChapterNFT is Initializable, ERC721Upgradeable, OwnableUpgradeable, UUP
         return _mintedChapters[novelId][chapterId];
     }
 
+    /// @notice Returns the token URI for a given token ID
+    function tokenURI(uint256 tokenId) public view override returns (string memory) {
+        if (_ownerOf(tokenId) == address(0)) revert TokenDoesNotExist(tokenId);
+
+        string memory base = _baseTokenURI;
+        if (bytes(base).length > 0) {
+            return string.concat(base, tokenId.toString());
+        }
+
+        // Fallback: return a data URI with on-chain metadata
+        DataTypes.ChapterNFTMetadata memory meta = _chapterMetadata[tokenId];
+        return string.concat(
+            "data:application/json,{\"name\":\"Chapter #",
+            meta.chapterId.toString(),
+            "\",\"description\":\"Canon chapter from Novel #",
+            meta.novelId.toString(),
+            ", Epoch ",
+            uint256(meta.epoch).toString(),
+            "\"}"
+        );
+    }
+
+    // ============================================================
+    //                   ERC-165 SUPPORT
+    // ============================================================
+
+    /// @dev Override required by Solidity for multiple inheritance
+    function supportsInterface(bytes4 interfaceId)
+        public
+        view
+        override(ERC721Upgradeable, ERC2981Upgradeable)
+        returns (bool)
+    {
+        return super.supportsInterface(interfaceId);
+    }
+
     // ============================================================
     //                     UUPS UPGRADE
     // ============================================================
 
-    /// @dev Only the owner can authorize upgrades
     function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 
     // ============================================================

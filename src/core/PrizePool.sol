@@ -38,6 +38,12 @@ contract PrizePool is
     /// @notice Minimum tip amount
     uint256 public constant MIN_TIP_AMOUNT = 0.001 ether;
 
+    /// @notice Protocol fee rate in basis points (e.g., 500 = 5%), max 1000 (10%)
+    uint16 public protocolFeeRate;
+
+    /// @notice Protocol treasury address
+    address public protocolTreasury;
+
     // ============================================================
     //                         ERRORS
     // ============================================================
@@ -80,6 +86,17 @@ contract PrizePool is
 
     function setNovelCore(address newNovelCore) external onlyOwner {
         novelCore = newNovelCore;
+    }
+
+    /// @notice Set protocol fee rate (basis points, max 1000 = 10%)
+    function setProtocolFeeRate(uint16 rate) external onlyOwner {
+        require(rate <= 1000, "rate > 10%");
+        protocolFeeRate = rate;
+    }
+
+    /// @notice Set protocol treasury address
+    function setProtocolTreasury(address treasury) external onlyOwner {
+        protocolTreasury = treasury;
     }
 
     function pause() external onlyOwner {
@@ -152,6 +169,16 @@ contract PrizePool is
         uint256 totalRelease = (poolBalance * releaseRate) / 10000;
         if (totalRelease == 0) return 0;
 
+        // === Layer 0: Protocol Fee ===
+        uint256 protocolFee = 0;
+        if (protocolFeeRate > 0 && protocolTreasury != address(0)) {
+            protocolFee = (totalRelease * protocolFeeRate) / 10000;
+            if (protocolFee > 0) {
+                _pendingRewards[novelId][protocolTreasury] += protocolFee;
+                totalRelease -= protocolFee;
+            }
+        }
+
         // === Layer 1: Creator Royalty ===
         // creatorRoyalty = totalRelease * G / (G + C)
         uint256 creatorRoyalty = 0;
@@ -185,8 +212,8 @@ contract PrizePool is
         // === Layer 3: Voter Rewards ===
         voterRewardPool = remaining - authorPool;
 
-        // Deduct total release from pool
-        _poolBalances[novelId] -= totalRelease;
+        // Deduct total release + protocol fee from pool
+        _poolBalances[novelId] -= (totalRelease + protocolFee);
 
         // Send voter reward ETH directly to VotingEngine
         if (voterRewardPool > 0) {
@@ -194,7 +221,7 @@ contract PrizePool is
             if (!success) revert TransferFailed();
         }
 
-        emit RewardDistributed(novelId, epoch, totalRelease, authors.length);
+        emit RewardDistributed(novelId, epoch, totalRelease + protocolFee, authors.length);
 
         return voterRewardPool;
     }

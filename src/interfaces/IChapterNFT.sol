@@ -4,7 +4,8 @@ pragma solidity ^0.8.28;
 import {DataTypes} from "../libraries/DataTypes.sol";
 
 /// @title IChapterNFT
-/// @notice Interface for chapter copyright proof NFT (ERC-721)
+/// @notice Interface for chapter copyright proof NFT (ERC-721 + ERC-2981 royalties)
+/// @dev One global contract for all novels. Only NovelCore can mint.
 interface IChapterNFT {
     // ============================================================
     //                          EVENTS
