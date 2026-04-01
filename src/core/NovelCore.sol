@@ -97,7 +97,6 @@ contract NovelCore is
         initializer
     {
         __Ownable_init(owner_);
-
         __Pausable_init();
 
         votingEngine = IVotingEngine(votingEngine_);
@@ -109,16 +108,26 @@ contract NovelCore is
     //                     ADMIN FUNCTIONS
     // ============================================================
 
+    event VotingEngineUpdated(address indexed oldAddr, address indexed newAddr);
+    event PrizePoolUpdated(address indexed oldAddr, address indexed newAddr);
+    event ChapterNFTUpdated(address indexed oldAddr, address indexed newAddr);
+
     function setVotingEngine(address addr) external onlyOwner {
+        address old = address(votingEngine);
         votingEngine = IVotingEngine(addr);
+        emit VotingEngineUpdated(old, addr);
     }
 
     function setPrizePool(address addr) external onlyOwner {
+        address old = address(prizePool);
         prizePool = IPrizePool(addr);
+        emit PrizePoolUpdated(old, addr);
     }
 
     function setChapterNFT(address addr) external onlyOwner {
+        address old = address(chapterNFT);
         chapterNFT = IChapterNFT(addr);
+        emit ChapterNFTUpdated(old, addr);
     }
 
     function pause() external onlyOwner {
@@ -496,7 +505,7 @@ contract NovelCore is
         _mintCanonNFTs(novelId, novel.currentEpoch, canonWorldLineId);
 
         // Distribute prize pool rewards
-        prizePool.distributeEpochRewards(novelId, canonAuthors, novel.config.prizeReleaseRate);
+        prizePool.distributeEpochRewards(novelId, novel.currentEpoch, canonAuthors, novel.config.prizeReleaseRate);
 
         // Reset for next epoch: Canon becomes the sole world line
         delete _activeWorldLines[novelId];
@@ -680,16 +689,16 @@ contract NovelCore is
     }
 
     /// @dev Collect authors of canon chapters by tracing the path
-    /// @notice For Phase 1, returns only the winning world line's author.
-    ///         Full implementation would trace parentId chain for multi-chapter paths.
+    /// @notice Traces the winning world line's parentId chain back to genesis,
+    ///         collecting authors of chapters that belong to the current epoch.
     function _collectCanonAuthors(uint256 novelId, uint256 canonWorldLineId)
         internal
         view
         returns (address[] memory)
     {
-        // Trace back from canon world line to collect all unique chapter authors in the path
-        // For this epoch, collect authors of chapters submitted in rounds 1..K that are
-        // ancestors of the canon world line
+        uint32 currentEpoch = _novels[novelId].currentEpoch;
+
+        // Trace back from canon world line to collect chapter authors in this epoch
         uint256[] memory authorChapterIds = new uint256[](32); // Max depth
         uint256 count = 0;
         uint256 currentId = canonWorldLineId;
@@ -698,10 +707,13 @@ contract NovelCore is
             DataTypes.Chapter storage ch = _chapters[currentId];
             if (ch.novelId != novelId) break;
 
-            // Only include chapters from the current epoch's rounds (round > 0)
-            if (ch.round > 0) {
+            // Only include chapters from the current epoch (filter by epoch)
+            if (ch.epoch == currentEpoch && ch.round > 0) {
                 authorChapterIds[count] = currentId;
                 count++;
+            } else if (ch.epoch < currentEpoch) {
+                // Reached previous epoch's territory, stop tracing
+                break;
             }
 
             currentId = ch.parentId;
@@ -738,4 +750,11 @@ contract NovelCore is
     // ============================================================
 
     function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
+
+    // ============================================================
+    //                    STORAGE GAP
+    // ============================================================
+
+    /// @dev Reserved storage gap for future upgrades
+    uint256[50] private __gap;
 }

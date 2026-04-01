@@ -36,9 +36,11 @@ interface IPrizePool {
 
     /// @notice Distribute epoch rewards to canon chapter authors
     /// @param novelId Novel ID
+    /// @param epoch Epoch number for event tracking
     /// @param authors Array of author addresses for canon chapters
     /// @param releaseRate Release rate in basis points
-    function distributeEpochRewards(uint256 novelId, address[] calldata authors, uint16 releaseRate) external;
+    function distributeEpochRewards(uint256 novelId, uint32 epoch, address[] calldata authors, uint16 releaseRate)
+        external;
 
     // ============================================================
     //                        QUERIES
