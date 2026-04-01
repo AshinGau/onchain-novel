@@ -109,6 +109,7 @@ contract VotingEngine is
         VotingRoundData storage round = _votingRounds[roundKey];
 
         if (!round.initialized) revert VotingNotInitialized();
+        if (round.tallied) revert AlreadyTallied();
         if (_voteCommits[roundKey][msg.sender].commitHash != bytes32(0)) revert AlreadyCommitted();
 
         _voteCommits[roundKey][msg.sender] = DataTypes.VoteCommit({
@@ -125,6 +126,10 @@ contract VotingEngine is
     /// @inheritdoc IVotingEngine
     function revealVote(uint256 novelId, uint256 votingRoundId, uint256 candidateId, bytes32 salt) external {
         bytes32 roundKey = _roundKey(novelId, votingRoundId);
+        VotingRoundData storage round = _votingRounds[roundKey];
+
+        if (round.tallied) revert AlreadyTallied();
+
         DataTypes.VoteCommit storage commit = _voteCommits[roundKey][msg.sender];
 
         if (commit.commitHash == bytes32(0)) revert NotCommitted();
@@ -141,7 +146,6 @@ contract VotingEngine is
         commit.revealedCandidateId = candidateId;
 
         // For StakeToVote, weight = staked amount (in wei, normalized to ether for counting)
-        VotingRoundData storage round = _votingRounds[roundKey];
         uint256 voteWeight;
 
         if (round.strategy == DataTypes.VotingStrategy.StakeToVote) {
@@ -167,23 +171,25 @@ contract VotingEngine is
         if (!round.tallied) revert NotTallied();
 
         DataTypes.VoteCommit storage commit = _voteCommits[roundKey][msg.sender];
-        if (!commit.revealed) revert NotMajorityVoter();
+        if (!commit.revealed) revert NotCommitted();
         if (commit.claimed) revert AlreadyClaimed();
-
-        // Schelling point: reward voters who voted for the winner
-        if (commit.revealedCandidateId != round.winnerCandidateId) revert NotMajorityVoter();
 
         commit.claimed = true;
 
-        // Return staked amount for StakeToVote
-        if (commit.stakeAmount > 0) {
-            uint256 refund = commit.stakeAmount;
+        // Return staked amount to ALL revealed voters (majority or not)
+        uint256 refund = commit.stakeAmount;
+        if (refund > 0) {
             commit.stakeAmount = 0;
             (bool success,) = msg.sender.call{value: refund}("");
             if (!success) revert();
         }
 
-        emit VotingRewardClaimed(novelId, votingRoundId, msg.sender, commit.stakeAmount);
+        // TODO (Phase 2): Schelling Point reward from prize pool for majority voters
+        // if (commit.revealedCandidateId == round.winnerCandidateId) {
+        //     // Allocate extra reward from prize pool
+        // }
+
+        emit VotingRewardClaimed(novelId, votingRoundId, msg.sender, refund);
     }
 
     // ============================================================
@@ -312,4 +318,11 @@ contract VotingEngine is
     // ============================================================
 
     function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
+
+    // ============================================================
+    //                    STORAGE GAP
+    // ============================================================
+
+    /// @dev Reserved storage gap for future upgrades
+    uint256[50] private __gap;
 }

@@ -128,4 +128,11 @@ contract ChapterNFT is Initializable, ERC721Upgradeable, OwnableUpgradeable, UUP
 
     /// @dev Only the owner can authorize upgrades
     function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
+
+    // ============================================================
+    //                    STORAGE GAP
+    // ============================================================
+
+    /// @dev Reserved storage gap for future upgrades
+    uint256[50] private __gap;
 }

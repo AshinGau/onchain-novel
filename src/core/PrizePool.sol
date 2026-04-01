@@ -72,7 +72,6 @@ contract PrizePool is
     /// @param novelCore_ Authorized NovelCore contract address
     function initialize(address owner_, address novelCore_) external initializer {
         __Ownable_init(owner_);
-
         __Pausable_init();
 
         novelCore = novelCore_;
@@ -139,7 +138,7 @@ contract PrizePool is
     }
 
     /// @inheritdoc IPrizePool
-    function distributeEpochRewards(uint256 novelId, address[] calldata authors, uint16 releaseRate)
+    function distributeEpochRewards(uint256 novelId, uint32 epoch, address[] calldata authors, uint16 releaseRate)
         external
         onlyNovelCore
     {
@@ -167,7 +166,7 @@ contract PrizePool is
             _pendingRewards[novelId][authors[i]] += perChapterReward;
         }
 
-        emit RewardDistributed(novelId, 0, actualDistributed, authors.length);
+        emit RewardDistributed(novelId, epoch, actualDistributed, authors.length);
     }
 
     // ============================================================
@@ -194,4 +193,11 @@ contract PrizePool is
     // ============================================================
 
     function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
+
+    // ============================================================
+    //                    STORAGE GAP
+    // ============================================================
+
+    /// @dev Reserved storage gap for future upgrades
+    uint256[50] private __gap;
 }

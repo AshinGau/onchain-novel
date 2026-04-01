@@ -234,7 +234,7 @@ contract IntegrationTest is Test {
         );
 
         vm.prank(author3);
-        uint256 ch3 = novelCore.submitChapter{value: 0.01 ether}(
+        novelCore.submitChapter{value: 0.01 ether}(
             novelId, genesisId, bytes32("ch3"), 700
         );
 
@@ -435,5 +435,226 @@ contract IntegrationTest is Test {
 
         // Original novel's pool unaffected
         assertEq(prizePool.getPoolBalance(novelId), 0);
+    }
+
+    // ============================================================
+    //  TEST: Stake Refund — Authors can claim stake after round
+    // ============================================================
+
+    function test_ClaimStakeRefund() public {
+        vm.prank(creator);
+        uint256 novelId = novelCore.createNovel{value: 1 ether}(defaultConfig, bytes32("genesis_hash"));
+        uint256 genesisId = novelCore.getActiveWorldLines(novelId)[0];
+
+        uint256 balBefore = author1.balance;
+
+        // Submit chapter with stake
+        vm.prank(author1);
+        uint256 ch1 = novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, bytes32("ch1"), 500);
+        vm.prank(author2);
+        novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, bytes32("ch2"), 600);
+        vm.prank(author3);
+        novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, bytes32("ch3"), 700);
+
+        // Run through a round
+        vm.warp(2 days);
+        novelCore.closeSubmissions(novelId);
+
+        uint256 roundVotingId = uint256(keccak256(abi.encodePacked(novelId, uint32(1), uint32(1), false)));
+        bytes32 s1 = bytes32("cs1");
+        vm.prank(reader1);
+        votingEngine.commitVote{value: 0.1 ether}(novelId, roundVotingId, keccak256(abi.encodePacked(ch1, s1)));
+
+        vm.warp(6 days);
+        novelCore.closeCommit(novelId);
+
+        vm.prank(reader1);
+        votingEngine.revealVote(novelId, roundVotingId, ch1, s1);
+
+        vm.warp(9 days);
+        novelCore.settleRound(novelId);
+
+        // Author1 should be able to claim their stake
+        vm.prank(author1);
+        novelCore.claimStakeRefund(novelId);
+
+        assertEq(author1.balance, balBefore); // Back to full balance (stake returned)
+    }
+
+    // ============================================================
+    //  TEST: Prize Pool Reward Claim
+    // ============================================================
+
+    function test_ClaimPrizeReward() public {
+        // Run full epoch to generate rewards
+        (uint256 novelId, ) = _runFullEpoch();
+
+        // author1 should have 0.3 ether pending reward
+        uint256 reward = prizePool.getPendingReward(novelId, author1);
+        assertEq(reward, 0.3 ether);
+
+        uint256 balBefore = author1.balance;
+
+        vm.prank(author1);
+        prizePool.claimReward(novelId);
+
+        assertEq(author1.balance, balBefore + 0.3 ether);
+        assertEq(prizePool.getPendingReward(novelId, author1), 0);
+    }
+
+    // ============================================================
+    //  TEST: Voting Reward — Both majority and minority get stakes
+    // ============================================================
+
+    function test_ClaimVotingReward_BothMajorityAndMinority() public {
+        vm.prank(creator);
+        uint256 novelId = novelCore.createNovel{value: 1 ether}(defaultConfig, bytes32("genesis_hash"));
+        uint256 genesisId = novelCore.getActiveWorldLines(novelId)[0];
+
+        // Submit chapters
+        vm.prank(author1);
+        uint256 ch1 = novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, bytes32("ch1"), 500);
+        vm.prank(author2);
+        uint256 ch2 = novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, bytes32("ch2"), 600);
+        vm.prank(author3);
+        novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, bytes32("ch3"), 700);
+
+        vm.warp(2 days);
+        novelCore.closeSubmissions(novelId);
+
+        uint256 votingRoundId = uint256(keccak256(abi.encodePacked(novelId, uint32(1), uint32(1), false)));
+
+        // Reader1 votes for ch1 (will be majority)
+        bytes32 s1 = bytes32("vs1");
+        vm.prank(reader1);
+        votingEngine.commitVote{value: 0.1 ether}(novelId, votingRoundId, keccak256(abi.encodePacked(ch1, s1)));
+
+        // Reader2 votes for ch2 (will be minority)
+        bytes32 s2 = bytes32("vs2");
+        vm.prank(reader2);
+        votingEngine.commitVote{value: 0.05 ether}(novelId, votingRoundId, keccak256(abi.encodePacked(ch2, s2)));
+
+        vm.warp(6 days);
+        novelCore.closeCommit(novelId);
+
+        vm.prank(reader1);
+        votingEngine.revealVote(novelId, votingRoundId, ch1, s1);
+        vm.prank(reader2);
+        votingEngine.revealVote(novelId, votingRoundId, ch2, s2);
+
+        vm.warp(9 days);
+        novelCore.settleRound(novelId);
+
+        // Both majority AND minority voters should get their stake back
+        uint256 bal1Before = reader1.balance;
+        uint256 bal2Before = reader2.balance;
+
+        vm.prank(reader1); // Majority voter
+        votingEngine.claimVotingReward(novelId, votingRoundId);
+
+        vm.prank(reader2); // Minority voter — should also get stake back now
+        votingEngine.claimVotingReward(novelId, votingRoundId);
+
+        assertEq(reader1.balance, bal1Before + 0.1 ether);
+        assertEq(reader2.balance, bal2Before + 0.05 ether);
+    }
+
+    // ============================================================
+    //  TEST: VotingEngine phase guards
+    // ============================================================
+
+    function test_CommitAfterTally_Reverts() public {
+        vm.prank(creator);
+        uint256 novelId = novelCore.createNovel{value: 1 ether}(defaultConfig, bytes32("genesis_hash"));
+        uint256 genesisId = novelCore.getActiveWorldLines(novelId)[0];
+
+        vm.prank(author1);
+        uint256 ch1 = novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, bytes32("ch1"), 500);
+        vm.prank(author2);
+        novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, bytes32("ch2"), 600);
+        vm.prank(author3);
+        novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, bytes32("ch3"), 700);
+
+        vm.warp(2 days);
+        novelCore.closeSubmissions(novelId);
+
+        uint256 votingRoundId = uint256(keccak256(abi.encodePacked(novelId, uint32(1), uint32(1), false)));
+
+        bytes32 s1 = bytes32("pg1");
+        vm.prank(reader1);
+        votingEngine.commitVote{value: 0.1 ether}(novelId, votingRoundId, keccak256(abi.encodePacked(ch1, s1)));
+
+        vm.warp(6 days);
+        novelCore.closeCommit(novelId);
+
+        vm.prank(reader1);
+        votingEngine.revealVote(novelId, votingRoundId, ch1, s1);
+
+        vm.warp(9 days);
+        novelCore.settleRound(novelId); // This tallies the round votes
+
+        // Attempting to commit after tally should revert
+        vm.prank(reader2);
+        vm.expectRevert();
+        votingEngine.commitVote{value: 0.1 ether}(novelId, votingRoundId, keccak256(abi.encodePacked(ch1, bytes32("late"))));
+    }
+
+    // ============================================================
+    //              HELPER: Run full epoch
+    // ============================================================
+
+    function _runFullEpoch() internal returns (uint256 novelId, uint256 canonChapterId) {
+        vm.prank(creator);
+        novelId = novelCore.createNovel{value: 1 ether}(defaultConfig, bytes32("genesis_hash"));
+        uint256 genesisId = novelCore.getActiveWorldLines(novelId)[0];
+
+        vm.prank(author1);
+        uint256 ch1 = novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, bytes32("ch1"), 500);
+        vm.prank(author2);
+        novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, bytes32("ch2"), 600);
+        vm.prank(author3);
+        novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, bytes32("ch3"), 700);
+
+        vm.warp(2 days);
+        novelCore.closeSubmissions(novelId);
+
+        uint256 roundVotingId = uint256(keccak256(abi.encodePacked(novelId, uint32(1), uint32(1), false)));
+        bytes32 s1 = bytes32("s1");
+        bytes32 s2 = bytes32("s2");
+        vm.prank(reader1);
+        votingEngine.commitVote{value: 0.1 ether}(novelId, roundVotingId, keccak256(abi.encodePacked(ch1, s1)));
+        vm.prank(reader2);
+        votingEngine.commitVote{value: 0.05 ether}(novelId, roundVotingId, keccak256(abi.encodePacked(ch1, s2)));
+
+        vm.warp(6 days);
+        novelCore.closeCommit(novelId);
+        vm.prank(reader1);
+        votingEngine.revealVote(novelId, roundVotingId, ch1, s1);
+        vm.prank(reader2);
+        votingEngine.revealVote(novelId, roundVotingId, ch1, s2);
+
+        vm.warp(9 days);
+        novelCore.settleRound(novelId);
+
+        uint256 epochVotingId = uint256(keccak256(abi.encodePacked(novelId, uint32(1), uint32(1), true)));
+        uint256[] memory worldLines = novelCore.getActiveWorldLines(novelId);
+        bytes32 es1 = bytes32("es1");
+        bytes32 es2 = bytes32("es2");
+        vm.prank(reader1);
+        votingEngine.commitVote{value: 0.1 ether}(novelId, epochVotingId, keccak256(abi.encodePacked(worldLines[0], es1)));
+        vm.prank(reader2);
+        votingEngine.commitVote{value: 0.05 ether}(novelId, epochVotingId, keccak256(abi.encodePacked(worldLines[0], es2)));
+
+        vm.warp(13 days);
+        novelCore.closeEpochCommit(novelId);
+        vm.prank(reader1);
+        votingEngine.revealVote(novelId, epochVotingId, worldLines[0], es1);
+        vm.prank(reader2);
+        votingEngine.revealVote(novelId, epochVotingId, worldLines[0], es2);
+
+        vm.warp(16 days);
+        novelCore.settleEpoch(novelId);
+
+        return (novelId, ch1);
     }
 }
