@@ -14,8 +14,8 @@
 - **Keeper 奖励** — 任何人触发状态转换均可获得奖金池中的小额奖励
 - **多章创世** — 小说可以多个创世章节启动，每个创世章节成为一条初始世界线
 - **投票者准确性奖励** — 投票给获胜候选人的投票者获得额外奖励，权重为 3 倍
-- **版权 NFT** — 入选 Canon 的章节自动铸造 ERC-721 版权证明 NFT（按当前 Epoch 过滤）
-- **链上分叉** — 落选分支可 Fork 为独立新小说
+- **版权 NFT** — 入选 Canon 的章节自动铸造 ERC-721 + ERC-2981 版权证明 NFT（含二级市场版税）
+- **链上分叉** — 落选分支可 Fork 为独立新小说（fork 费用注入原小说奖金池，创世分成回流原创世者）
 
 ## 合约架构
 
@@ -101,20 +101,17 @@ src/
 ├── core/
 │   ├── NovelCore.sol          # 核心：小说生命周期 + 状态机
 │   ├── VotingEngine.sol       # Commit-Reveal Stake-to-Vote 投票引擎
-│   ├── PrizePool.sol          # 奖金池管理
-│   └── ChapterNFT.sol         # ERC-721 版权 NFT
-├── interfaces/
-│   ├── INovelCore.sol
-│   ├── IVotingEngine.sol
-│   ├── IPrizePool.sol
-│   ├── IChapterNFT.sol
-│   └── IReportRegistry.sol    # 举报接口（预留，用于抄袭/滥用举报）
+│   ├── PrizePool.sol          # 奖金池管理 + 协议金库
+│   ├── ChapterNFT.sol         # ERC-721 + ERC-2981 版权 NFT
+│   └── ReportRegistry.sol     # 保证金举报 + 仲裁
+├── interfaces/                # 合约接口
 └── libraries/
     └── DataTypes.sol           # 共享数据结构
-test/
-└── Integration.t.sol           # 全流程集成测试
+test/                           # 62 个测试（集成、E2E、Fuzz、升级、重入、Gas）
 script/
-└── Deploy.s.sol                # UUPS 代理部署脚本
+├── Deploy.s.sol                # 开发部署脚本
+└── DeployProduction.s.sol      # 生产部署（TimelockController + 多签）
+mcp/                            # TypeScript MCP Server
 ```
 
 ## 经济模型
@@ -165,16 +162,16 @@ script/
 
 ## 设计文档
 
-详细需求设计见 [design_cn.md](./design_cn.md)。
+详细需求设计见 [design_cn.md](./design_cn.md)，使用指南见 [usage.md](./usage.md)。
 
 ## Roadmap
 
 | 阶段 | 范围 | 状态 |
 |------|------|------|
-| **Phase 1** | 核心合约 + MVP 流程：多章创世、创世者分成、Keeper 奖励、投票者准确性奖励、未揭示质押清扫、提前触发 Epoch | 已完成 |
-| **Phase 2** | Anvil 端到端多角色测试 | 计划中 |
-| **Phase 3** | 经济机制强化（污染罚没管线、多 Epoch 测试） | 计划中 |
-| **Phase 4** | 举报系统、UUPS 升级测试、L2 部署 | 计划中 |
+| **Phase 1** | 核心合约：多章创世、创世者分成、Keeper 奖励、投票者准确性奖励、未揭示质押清扫、fork 费用、提前触发 Epoch | 已完成 |
+| **Phase 2** | E2E 多角色测试、Fuzz 测试、重入攻击测试、Gas 分析（62 个测试） | 已完成 |
+| **Phase 3** | MCP Server + Agent Skills（TypeScript） | 已完成 |
+| **Phase 4** | 举报系统、EIP-2981、UUPS 升级测试、TimelockController 部署、协议金库 | 已完成 |
 
 ## License
 

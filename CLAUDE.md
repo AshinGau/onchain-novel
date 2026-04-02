@@ -38,7 +38,8 @@ Four UUPS-upgradeable contracts behind ERC1967 proxies, wired together at deploy
 - **NovelCore** (`src/core/NovelCore.sol`) — Central coordinator. Novel creation, chapter submission, Round/Epoch state machine, stake management, pollution tracking. Multi-chapter genesis, creator royalty, keeper rewards, early epoch trigger. Holds references to the other three modules.
 - **VotingEngine** (`src/core/VotingEngine.sol`) — Commit-Reveal Stake-to-Vote voting (staked ETH = voting weight). Handles commit, reveal, tallying, and ranking. Unrevealed stake sweep, accuracy reward tracking and distribution. Only callable by NovelCore.
 - **PrizePool** (`src/core/PrizePool.sol`) — Fund management: genesis deposits, reader tipping, epoch proportional release, pull-based reward claiming. Three-layer epoch distribution (creator->author->voter), keeper rewards. Only callable by NovelCore.
-- **ChapterNFT** (`src/core/ChapterNFT.sol`) — ERC-721. Mints copyright-proof NFTs for chapters that make it into Canon (filtered to current epoch). Only callable by NovelCore.
+- **ChapterNFT** (`src/core/ChapterNFT.sol`) — ERC-721 + ERC-2981. Mints copyright-proof NFTs with royalties for chapters that make it into Canon (filtered to current epoch). Only callable by NovelCore.
+- **ReportRegistry** (`src/core/ReportRegistry.sol`) — Bond-based plagiarism/abuse reporting with owner arbitration.
 
 **Key relationships:** NovelCore orchestrates all modules. VotingEngine, PrizePool, and ChapterNFT each hold a reference back to NovelCore and restrict mutations to calls from NovelCore only. Deploy script (`script/Deploy.s.sol`) deploys all four implementations + proxies, then wires them via `setVotingEngine/setPrizePool/setChapterNFT`.
 
@@ -62,7 +63,7 @@ Other economic mechanisms:
 - **Epoch**: K rounds, then epoch voting → Canon established → NFT minted + rewards distributed
 - **World Line**: Parallel story branches preserved each round (configurable N per novel)
 - **Canon**: The single winning world line after epoch voting — authors get NFTs + prize pool share
-- **Fork**: Create a new independent novel from a rejected branch
+- **Fork**: Create a new independent novel from a rejected branch (fork fee to original pool, creator royalty to original creator)
 - **Pollution**: Authors consistently ranking in bottom percentile get stakes slashed (only when ≥ 10 submissions in a round)
 - **Stake-to-Vote**: Only voting mechanism — staked ETH = voting weight, no governance token
 - **Creator Royalty**: Decaying share of epoch release — `G/(G+C)` where G=genesis chapter count, C=cumulative canon chapters

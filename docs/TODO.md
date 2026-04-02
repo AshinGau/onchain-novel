@@ -1,6 +1,6 @@
 # TODO — Decentralized Collaborative Novel Protocol
 
-All phases completed. 60 Solidity tests passing, MCP Server skeleton implemented.
+All phases completed. 62 Solidity tests passing, MCP Server skeleton implemented.
 
 ---
 
@@ -10,17 +10,19 @@ All phases completed. 60 Solidity tests passing, MCP Server skeleton implemented
 - [x] Multi-chapter genesis, Commit-Reveal Stake-to-Vote
 - [x] Three-layer epoch distribution: creator royalty (`G/(G+C)`) → author → voter accuracy (3x)
 - [x] Unrevealed stake redistribution, keeper rewards, pollution slashing
-- [x] Admin early epoch trigger, on-chain forking, ERC-721 canon NFTs
+- [x] Admin early epoch trigger, on-chain forking (fork fee + creator royalty to original), ERC-721 + ERC-2981 NFTs
+- [x] `contentBaseUrl` in NovelConfig (immutable), locked stakes, min vote stake > 0
+- [x] Security: pollution escape fix, triggerEarlyEpoch ID mismatch fix, genesis count ≤ worldLineCount
 - [x] Documentation: usage.md, README.md, README_cn.md, CLAUDE.md
 
 ---
 
 ## Phase 2 — E2E Multi-Role Testing (Done)
 
-60 tests across 6 test suites, all passing.
+62 tests across 6 test suites, all passing.
 
 - [x] `test/Integration.t.sol` — 21 integration tests
-- [x] `test/E2E.t.sol` — 9 multi-role scenarios (single epoch, multi-epoch decay, pollution, fork, edge cases)
+- [x] `test/E2E.t.sol` — 11 multi-role scenarios (single epoch, multi-epoch decay, pollution, fork, early epoch settlement, edge cases)
 - [x] `test/Fuzz.t.sol` — 6 fuzz tests (creator royalty, accuracy weights, config, rewards, invariants)
 - [x] `test/Upgrade.t.sol` — 9 UUPS upgrade tests (V1→V2, storage preservation, access control)
 - [x] `test/Reentrancy.t.sol` — 3 reentrancy attack tests (PrizePool, VotingEngine, NovelCore)

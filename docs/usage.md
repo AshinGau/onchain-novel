@@ -52,8 +52,8 @@ NovelCore.createNovel{value: <prizePoolAmount>}(
 **Example (cast):**
 ```bash
 # Note: takes arrays for genesis content hashes and lengths
-cast send $NOVEL_CORE "createNovel((uint64,uint64,uint64,uint32,uint32,uint32,uint16,uint16,uint64,uint64,uint256,uint8,uint8),bytes32[],uint64[])" \
-  "(100,10000,86400,3,2,3,3000,1000,259200,172800,10000000000000000,3,20)" \
+cast send $NOVEL_CORE "createNovel((uint64,uint64,uint64,uint32,uint32,uint32,uint16,uint16,uint64,uint64,uint256,uint8,uint8,string),bytes32[],uint64[])" \
+  "(100,10000,86400,3,2,3,3000,1000,259200,172800,10000000000000000,3,20,https://arweave.net/)" \
   "[0x<genesis_cid_1>]" \
   "[200]" \
   --value 1ether \
@@ -72,7 +72,7 @@ NovelCore.forkNovel{value: <prizePoolAmount>}(
 ) → uint256 novelId
 ```
 
-> **Note:** You can only fork from chapters that are NOT currently Canon. This allows rejected but interesting branches to live on as independent stories.
+> **Note:** You can only fork from chapters that are NOT currently Canon. Forking requires paying at least the original novel's `stakeAmount` as a fork fee (injected into the original novel's prize pool). The creator royalty in forked novels flows to the **original creator**, not the fork caller. Content base URL is inherited from the original novel.
 
 ---
 
@@ -371,13 +371,16 @@ ChapterNFT.getChapterInfo(uint256 tokenId) → ChapterNFTMetadata
 | `stakeAmount` | `uint256` | Required stake per chapter (wei) | `10000000000000000` (0.01 ETH) |
 | `pollutionRounds` | `uint8` | M: consecutive rounds for pollution penalty | `3` |
 | `pollutionThreshold` | `uint8` | Bottom X% counts as pollution | `20` |
+| `contentBaseUrl` | `string` | Base URL for content storage (immutable) | `"https://arweave.net/"` |
 
 **Validation rules:**
 - `minChapterLength > 0`
 - `maxChapterLength > minChapterLength`
 - `roundMinSubmissions >= worldLineCount`
-- `prizeReleaseRate <= 10000`
-- `voterRewardRate <= 2000`
+- `stakeAmount > 0`
+- `prizeReleaseRate <= 5000` (max 50%)
+- `voterRewardRate <= 2000` (max 20%)
+- Genesis chapter count `<= worldLineCount`
 - All duration values `> 0`
 
 ---

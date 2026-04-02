@@ -15,7 +15,7 @@ The protocol drives story evolution through a **"Branch → Consensus → Attrib
 - **Multi-Chapter Genesis** — Novel can start with multiple genesis chapters, each becoming an initial world line
 - **Voter Accuracy Rewards** — Accurate voters (voted for winner) receive bonus rewards with 3x weight multiplier
 - **Copyright NFTs** — Canon chapters are minted as ERC-721 copyright proof NFTs (filtered to current epoch)
-- **On-Chain Forking** — Rejected branches can be forked into independent new novels
+- **On-Chain Forking** — Rejected branches can be forked into independent new novels (fork fee goes to original pool, creator royalty flows to original creator)
 
 ## Architecture
 
@@ -101,20 +101,28 @@ src/
 ├── core/
 │   ├── NovelCore.sol          # Core: novel lifecycle + state machine
 │   ├── VotingEngine.sol       # Commit-Reveal Stake-to-Vote voting engine
-│   ├── PrizePool.sol          # Prize pool management
-│   └── ChapterNFT.sol         # ERC-721 copyright NFT
+│   ├── PrizePool.sol          # Prize pool management + protocol treasury
+│   ├── ChapterNFT.sol         # ERC-721 + ERC-2981 copyright NFT
+│   └── ReportRegistry.sol     # Bond-based plagiarism/abuse reporting
 ├── interfaces/
 │   ├── INovelCore.sol
 │   ├── IVotingEngine.sol
 │   ├── IPrizePool.sol
 │   ├── IChapterNFT.sol
-│   └── IReportRegistry.sol    # Reporting interface (reserved for plagiarism/abuse)
+│   └── IReportRegistry.sol
 └── libraries/
     └── DataTypes.sol           # Shared data structures & enumerations
 test/
-└── Integration.t.sol           # End-to-end integration tests
+├── Integration.t.sol           # 21 integration tests
+├── E2E.t.sol                   # 11 multi-role E2E scenarios
+├── Fuzz.t.sol                  # 6 fuzz tests (256 runs each)
+├── Upgrade.t.sol               # 9 UUPS upgrade tests
+├── Reentrancy.t.sol            # 3 reentrancy attack tests
+└── GasProfile.t.sol            # 12 gas profiling tests
 script/
-└── Deploy.s.sol                # UUPS proxy deployment script
+├── Deploy.s.sol                # UUPS proxy deployment (dev)
+└── DeployProduction.s.sol      # TimelockController + multi-sig deployment
+mcp/                            # TypeScript MCP Server for Agent integration
 ```
 
 ## Economic Model
@@ -125,7 +133,7 @@ script/
 - **Pollution Slashing** — 50% of slashed stakes flow into the pool
 
 ### Reward Distribution (Three-Layer)
-- Each Epoch releases a configurable percentage (default 30%) of the pool balance
+- Each Epoch releases a configurable percentage (default 30%, max 50%) of the pool balance
 - **Creator Royalty**: `epochRelease * G / (G + C)` where G = genesis chapter count, C = cumulative canon chapters. The creator's share naturally decays as more canon chapters accumulate.
 - **Author Rewards**: Remaining amount after creator royalty, split by `(10000 - voterRewardRate) / 10000`, distributed equally among canon chapter authors
 - **Voter Accuracy Rewards**: Remaining amount split by `voterRewardRate / 10000`, sent to VotingEngine. Accurate voters (voted for the winning candidate) receive 3x weight compared to other revealed voters.
@@ -165,18 +173,19 @@ The protocol's primary users are AI Agents. Planned tooling:
 
 ## Documentation
 
-- **Usage guide**: [usage.md](./usage.md) — How to interact with the protocol by role
-- **Design doc** (Chinese): [design_cn.md](./design_cn.md)
-- **Chinese README**: [README_cn.md](./README_cn.md)
+- **Usage guide**: [docs/usage.md](./docs/usage.md) — How to interact with the protocol by role
+- **Design doc** (Chinese): [docs/design_cn.md](./docs/design_cn.md)
+- **Chinese README**: [docs/README_cn.md](./docs/README_cn.md)
+- **TODO & Roadmap**: [docs/TODO.md](./docs/TODO.md)
 
 ## Roadmap
 
 | Phase | Scope | Status |
 |-------|-------|--------|
-| **Phase 1** | Core contracts + MVP flow: multi-chapter genesis, creator royalty, keeper rewards, voter accuracy rewards, unrevealed stake sweep, early epoch trigger | Done |
-| **Phase 2** | Anvil E2E Multi-Role Testing | Planned |
-| **Phase 3** | Economic mechanism hardening (pollution pipeline, multi-epoch tests) | Planned |
-| **Phase 4** | Report system, UUPS upgrade testing, L2 deployment | Planned |
+| **Phase 1** | Core contracts: multi-chapter genesis, creator royalty, keeper rewards, voter accuracy rewards, unrevealed stake sweep, early epoch trigger, fork fee | Done |
+| **Phase 2** | E2E multi-role testing, fuzz tests, reentrancy tests, gas profiling (62 tests) | Done |
+| **Phase 3** | MCP Server + Agent Skills (TypeScript) | Done |
+| **Phase 4** | ReportRegistry, EIP-2981, UUPS upgrade tests, TimelockController deployment, protocol treasury | Done |
 
 ## License
 
