@@ -49,3 +49,6 @@ yarn-error.log*
 # Coverage
 coverage/
 lcov.info
+
+# Local dev node
+.local-node/
