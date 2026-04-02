@@ -287,7 +287,8 @@ contract UpgradeTest is Test {
             revealDuration: 2 days,
             stakeAmount: 0.01 ether,
             pollutionRounds: 3,
-            pollutionThreshold: 20
+            pollutionThreshold: 20,
+            contentBaseUrl: ""
         });
     }
 }

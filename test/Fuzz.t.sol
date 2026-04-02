@@ -142,7 +142,7 @@ contract FuzzTest is Test {
         maxLen = uint64(bound(maxLen, minLen + 1, 20000));
         worldLines = uint32(bound(worldLines, 1, 10));
         minSubs = uint32(bound(minSubs, worldLines, 50));
-        prizeRate = uint16(bound(prizeRate, 0, 10000));
+        prizeRate = uint16(bound(prizeRate, 0, 5000));
         voterRate = uint16(bound(voterRate, 0, 2000));
 
         DataTypes.NovelConfig memory config = DataTypes.NovelConfig({
@@ -158,7 +158,8 @@ contract FuzzTest is Test {
             revealDuration: 1 days,
             stakeAmount: 0.01 ether,
             pollutionRounds: 3,
-            pollutionThreshold: 20
+            pollutionThreshold: 20,
+            contentBaseUrl: ""
         });
 
         bytes32[] memory hashes = new bytes32[](1);
@@ -191,7 +192,8 @@ contract FuzzTest is Test {
             revealDuration: 1 days,
             stakeAmount: 0.01 ether,
             pollutionRounds: 3,
-            pollutionThreshold: 20
+            pollutionThreshold: 20,
+            contentBaseUrl: ""
         });
 
         bytes32[] memory hashes = new bytes32[](1);
@@ -215,16 +217,19 @@ contract FuzzTest is Test {
         uint16 voterRewardRate
     ) public {
         poolAmount = bound(poolAmount, 0.1 ether, 100 ether);
-        genesisCount = uint32(bound(genesisCount, 1, 10));
+        genesisCount = uint32(bound(genesisCount, 1, 3));
         cumulativeCanon = uint32(bound(cumulativeCanon, 0, 50));
         voterRewardRate = uint16(bound(voterRewardRate, 0, 2000));
+
+        // worldLineCount must be >= genesisCount AND <= roundMinSubmissions (3 in _runEpoch)
+        uint32 worldLines = genesisCount < 3 ? genesisCount : 3;
 
         DataTypes.NovelConfig memory config = DataTypes.NovelConfig({
             minChapterLength: 100,
             maxChapterLength: 10000,
             roundMinDuration: 1 days,
-            roundMinSubmissions: 3,
-            worldLineCount: 2,
+            roundMinSubmissions: 3, // Fixed: must match actual submission count in _runEpoch helper
+            worldLineCount: worldLines,
             roundsPerEpoch: 1,
             prizeReleaseRate: 3000,
             voterRewardRate: voterRewardRate,
@@ -232,7 +237,8 @@ contract FuzzTest is Test {
             revealDuration: 2 days,
             stakeAmount: 0.01 ether,
             pollutionRounds: 3,
-            pollutionThreshold: 20
+            pollutionThreshold: 20,
+            contentBaseUrl: ""
         });
 
         // Create novel with specified genesis count
@@ -293,7 +299,8 @@ contract FuzzTest is Test {
             revealDuration: 2 days,
             stakeAmount: 0.01 ether,
             pollutionRounds: 3,
-            pollutionThreshold: 20
+            pollutionThreshold: 20,
+            contentBaseUrl: ""
         });
 
         vm.prank(creatorAddr);

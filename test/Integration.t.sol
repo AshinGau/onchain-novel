@@ -82,7 +82,8 @@ contract IntegrationTest is Test {
             revealDuration: 2 days,
             stakeAmount: 0.01 ether,
             pollutionRounds: 3,
-            pollutionThreshold: 20
+            pollutionThreshold: 20,
+            contentBaseUrl: ""
         });
     }
 
@@ -98,14 +99,12 @@ contract IntegrationTest is Test {
     }
 
     function _multiGenesisHashes() internal pure returns (bytes32[] memory hashes, uint64[] memory lengths) {
-        hashes = new bytes32[](3);
+        hashes = new bytes32[](2);
         hashes[0] = bytes32("genesis1");
         hashes[1] = bytes32("genesis2");
-        hashes[2] = bytes32("genesis3");
-        lengths = new uint64[](3);
+        lengths = new uint64[](2);
         lengths[0] = 200;
         lengths[1] = 300;
-        lengths[2] = 250;
     }
 
     function _createNovel(uint256 ethValue) internal returns (uint256 novelId) {
@@ -151,13 +150,13 @@ contract IntegrationTest is Test {
         uint256 novelId = novelCore.createNovel{value: 2 ether}(defaultConfig, hashes, lengths);
 
         DataTypes.Novel memory novel = novelCore.getNovel(novelId);
-        assertEq(novel.genesisChapterCount, 3);
+        assertEq(novel.genesisChapterCount, 2);
 
         uint256[] memory worldLines = novelCore.getActiveWorldLines(novelId);
-        assertEq(worldLines.length, 3);
+        assertEq(worldLines.length, 2);
 
         // Each genesis chapter exists and is a world line
-        for (uint256 i = 0; i < 3; i++) {
+        for (uint256 i = 0; i < 2; i++) {
             DataTypes.Chapter memory ch = novelCore.getChapter(worldLines[i]);
             assertTrue(ch.isWorldLine);
             assertEq(ch.author, creator);
@@ -303,20 +302,20 @@ contract IntegrationTest is Test {
         assertTrue(chapterNFT.isChapterMinted(novelId, ch1));
 
         // Verify prize pool: 1 ETH * 30% = 0.3 ETH released
-        // Creator royalty: 0.3 * G/(G+C) = 0.3 * 1/(1+0) = 0.3
-        // Remaining: 0.3 - 0.3 = 0
-        // (With G=1 and C=0, creator gets all of epochRelease)
-        // Author reward = 0, voter reward = 0
+        // Creator royalty: G=1, C=1 (incremented before distribution) → 0.3 * 1/(1+1) = 0.15
+        // Remaining: 0.3 - 0.15 = 0.15
+        // Author pool (voterRewardRate=1000=10%): 0.15 * 90% = 0.135
+        // Voter pool: 0.15 * 10% = 0.015
         uint256 remainingPool = prizePool.getPoolBalance(novelId);
         assertEq(remainingPool, 0.7 ether);
 
-        // Creator gets the royalty
+        // Creator gets 50% of epoch release
         uint256 creatorReward = prizePool.getPendingReward(novelId, creator);
-        assertEq(creatorReward, 0.3 ether);
+        assertEq(creatorReward, 0.15 ether);
 
-        // With G=1, C=0: entire release goes to creator, author gets 0
+        // Author gets 90% of remaining (0.15 * 0.9 = 0.135)
         uint256 authorReward = prizePool.getPendingReward(novelId, author1);
-        assertEq(authorReward, 0);
+        assertEq(authorReward, 0.135 ether);
 
         uint256[] memory worldLines = novelCore.getActiveWorldLines(novelId);
         assertEq(worldLines.length, 1);
@@ -336,22 +335,21 @@ contract IntegrationTest is Test {
         vm.prank(creator);
         uint256 novelId = novelCore.createNovel{value: 10 ether}(config, hashes, lengths);
 
-        // Run epoch 1: G=1, C=0 → creatorRoyalty = 100%
+        // Run epoch 1: G=1, C=1 (incremented before distribution) → creatorRoyalty = 50%
         _runEpochForNovel(novelId);
 
         DataTypes.Novel memory novel = novelCore.getNovel(novelId);
         assertEq(novel.cumulativeCanonChapters, 1);
-        // Epoch 1 release: 10 * 30% = 3 ETH, all to creator (G=1, C=0)
-        assertEq(prizePool.getPendingReward(novelId, creator), 3 ether);
+        // Epoch 1 release: 10 * 30% = 3 ETH, creator gets 1/(1+1) = 50% = 1.5 ETH
+        assertEq(prizePool.getPendingReward(novelId, creator), 1.5 ether);
 
-        // Run epoch 2: G=1, C=1 → creatorRoyalty = 50%
+        // Run epoch 2: G=1, C=2 → creatorRoyalty = 1/3
         _runEpochForNovel(novelId);
         novel = novelCore.getNovel(novelId);
         assertEq(novel.cumulativeCanonChapters, 2);
-        // Epoch 2 release: 7 * 30% = 2.1 ETH, creator gets 50% = 1.05 ETH
-        // Author gets remaining 1.05 ETH
-        // Total creator pending: 3 + 1.05 = 4.05 ETH
-        assertEq(prizePool.getPendingReward(novelId, creator), 4.05 ether);
+        // Epoch 2 release: 7 * 30% = 2.1 ETH, creator gets 1/(1+2) = 33.3% = 0.7 ETH
+        // Total creator pending: 1.5 + 0.7 = 2.2 ETH
+        assertEq(prizePool.getPendingReward(novelId, creator), 2.2 ether);
     }
 
     // ============================================================
@@ -369,17 +367,22 @@ contract IntegrationTest is Test {
         vm.prank(author3);
         novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, bytes32("ch3"), 700);
 
+        // Fork fee = stakeAmount (0.01 ETH) goes to original pool, rest to fork pool
+        uint256 originalPoolBefore = prizePool.getPoolBalance(novelId);
         vm.prank(author2);
         uint256 forkedNovelId = novelCore.forkNovel{value: 0.5 ether}(novelId, ch2, defaultConfig);
 
         assertEq(forkedNovelId, 2);
         DataTypes.Novel memory forked = novelCore.getNovel(forkedNovelId);
-        assertEq(forked.creator, author2);
+        assertEq(forked.creator, creator); // Creator royalty goes to original creator, not fork caller
         assertEq(forked.forkSourceNovelId, novelId);
         assertEq(forked.forkSourceChapterId, ch2);
         assertEq(forked.genesisChapterCount, 1);
         assertTrue(forked.active);
-        assertEq(prizePool.getPoolBalance(forkedNovelId), 0.5 ether);
+        // Fork pool = 0.5 - 0.01 (fork fee) = 0.49 ETH
+        assertEq(prizePool.getPoolBalance(forkedNovelId), 0.49 ether);
+        // Original pool received fork fee
+        assertEq(prizePool.getPoolBalance(novelId), originalPoolBefore + 0.01 ether);
     }
 
     // ============================================================
@@ -428,14 +431,14 @@ contract IntegrationTest is Test {
     function test_ClaimPrizeReward() public {
         (uint256 novelId,) = _runFullEpoch();
 
-        // Creator gets 0.3 ETH (G=1, C=0 → 100% to creator)
+        // Creator gets 50% of epoch release: 0.3 * 1/(1+1) = 0.15 ETH
         uint256 reward = prizePool.getPendingReward(novelId, creator);
-        assertEq(reward, 0.3 ether);
+        assertEq(reward, 0.15 ether);
 
         uint256 balBefore = creator.balance;
         vm.prank(creator);
         prizePool.claimReward(novelId);
-        assertEq(creator.balance, balBefore + 0.3 ether);
+        assertEq(creator.balance, balBefore + 0.15 ether);
     }
 
     // ============================================================

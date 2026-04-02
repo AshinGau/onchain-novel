@@ -58,6 +58,9 @@ contract NovelCore is
     /// @notice Novel ID => author => pollution tracking
     mapping(uint256 => mapping(address => DataTypes.PollutionRecord)) private _pollutionRecords;
 
+    /// @notice Novel ID => author => locked stake amount (in-flight, not yet settled)
+    mapping(uint256 => mapping(address => uint256)) private _lockedStakes;
+
     /// @notice Global keeper reward amount (owner-settable, per state transition call)
     uint256 public keeperRewardAmount;
 
@@ -82,6 +85,7 @@ contract NovelCore is
     error ChapterNotInNovel(uint256 chapterId, uint256 novelId);
     error BranchNotRejected(uint256 chapterId);
     error InvalidGenesisInput();
+    error InsufficientForkFee(uint256 sent, uint256 required);
 
     // ============================================================
     //                      INITIALIZER
@@ -174,6 +178,7 @@ contract NovelCore is
         _validateConfig(config);
         if (genesisContentHashes.length == 0) revert InvalidGenesisInput();
         if (genesisContentHashes.length != genesisLengths.length) revert InvalidGenesisInput();
+        if (genesisContentHashes.length > config.worldLineCount) revert InvalidGenesisInput();
 
         novelId = ++_novelCount;
 
@@ -241,13 +246,17 @@ contract NovelCore is
         if (branch.novelId != originalNovelId) revert ChapterNotInNovel(branchChapterId, originalNovelId);
         if (branch.isCanon) revert BranchNotRejected(branchChapterId);
 
+        // Fork fee: must pay at least the original novel's stakeAmount as tribute
+        uint256 forkFee = sourceNovel.config.stakeAmount;
+        if (msg.value < forkFee) revert InsufficientForkFee(msg.value, forkFee);
+
         _validateConfig(config);
 
         novelId = ++_novelCount;
 
         _novels[novelId] = DataTypes.Novel({
             id: novelId,
-            creator: msg.sender,
+            creator: sourceNovel.creator, // Creator royalty flows to original creator
             config: config,
             currentRound: 1,
             currentEpoch: 1,
@@ -260,6 +269,9 @@ contract NovelCore is
             forkSourceNovelId: originalNovelId,
             forkSourceChapterId: branchChapterId
         });
+
+        // Inherit content base URL from original novel (immutable, fork cannot override)
+        _novels[novelId].config.contentBaseUrl = sourceNovel.config.contentBaseUrl;
 
         // Create the fork root chapter
         uint256 forkRootId = ++_chapterCount;
@@ -279,8 +291,13 @@ contract NovelCore is
 
         _activeWorldLines[novelId].push(forkRootId);
 
-        if (msg.value > 0) {
-            prizePool.deposit{value: msg.value}(novelId, "fork_genesis");
+        // Fork fee goes to the original novel's prize pool
+        prizePool.deposit{value: forkFee}(originalNovelId, "fork_fee");
+
+        // Remaining ETH goes to the new novel's prize pool
+        uint256 remaining = msg.value - forkFee;
+        if (remaining > 0) {
+            prizePool.deposit{value: remaining}(novelId, "fork_genesis");
         }
 
         emit NovelForked(novelId, originalNovelId, branchChapterId);
@@ -340,6 +357,7 @@ contract NovelCore is
 
         _roundSubmissions[novelId][novel.currentRound].push(chapterId);
         _stakeBalances[novelId][msg.sender] += msg.value;
+        _lockedStakes[novelId][msg.sender] += msg.value;
 
         emit ChapterSubmitted(novelId, chapterId, msg.sender, parentChapterId);
     }
@@ -510,6 +528,10 @@ contract NovelCore is
         // Mint NFTs for canon chapters
         _mintCanonNFTs(novelId, novel.currentEpoch, canonWorldLineId);
 
+        // Include current epoch's canon chapters in cumulative count BEFORE distribution
+        // so creator royalty formula G/(G+C) gives ~50% at epoch 1 (matching design)
+        novel.cumulativeCanonChapters += uint32(canonAuthors.length);
+
         // Distribute prize pool rewards (three-layer: creator royalty → authors → voters)
         uint256 voterRewardPool = prizePool.distributeEpochRewards(
             novelId,
@@ -533,9 +555,6 @@ contract NovelCore is
             votingRoundIds[roundCount - 1] = epochVotingId;
             votingEngine.depositVoterRewards(novelId, votingRoundIds, voterRewardPool);
         }
-
-        // Update cumulative canon chapters
-        novel.cumulativeCanonChapters += uint32(canonAuthors.length);
 
         // Reset for next epoch
         delete _activeWorldLines[novelId];
@@ -567,21 +586,18 @@ contract NovelCore is
         }
 
         // Must have completed at least 1 round (need world lines for epoch vote)
-        require(novel.currentRound > 1 || novel.config.roundsPerEpoch == 1, "No rounds completed");
+        require(novel.currentRound > 1, "No rounds completed");
 
-        // Return stakes for any in-progress round submissions
-        uint256[] storage submissions = _roundSubmissions[novelId][novel.currentRound];
-        for (uint256 i = 0; i < submissions.length; i++) {
-            // Stakes are already in _stakeBalances, so they're claimable
-            // No need to do anything extra — they can claim via claimStakeRefund
-        }
+        // Revert currentRound to the last completed round so settleEpoch computes
+        // the matching epochVotingId (settleEpoch uses novel.currentRound directly)
+        novel.currentRound--;
 
         // Skip remaining rounds → enter Epoch Committing
         novel.epochPhase = DataTypes.EpochPhase.Committing;
         novel.roundPhase = DataTypes.RoundPhase.Settling;
         novel.phaseStartTime = block.timestamp;
 
-        uint256 epochVotingId = _computeVotingRoundId(novelId, novel.currentEpoch, novel.currentRound - 1, true);
+        uint256 epochVotingId = _computeVotingRoundId(novelId, novel.currentEpoch, novel.currentRound, true);
         votingEngine.initializeVoting(novelId, epochVotingId, _activeWorldLines[novelId]);
 
         emit EarlyEpochTriggered(novelId, novel.currentEpoch);
@@ -594,15 +610,17 @@ contract NovelCore is
 
     /// @inheritdoc INovelCore
     function claimStakeRefund(uint256 novelId) external nonReentrant whenNotPaused {
-        uint256 amount = _stakeBalances[novelId][msg.sender];
-        if (amount == 0) revert NoStakeToRefund();
+        uint256 total = _stakeBalances[novelId][msg.sender];
+        uint256 locked = _lockedStakes[novelId][msg.sender];
+        uint256 claimable = total > locked ? total - locked : 0;
+        if (claimable == 0) revert NoStakeToRefund();
 
-        _stakeBalances[novelId][msg.sender] = 0;
+        _stakeBalances[novelId][msg.sender] -= claimable;
 
-        (bool success,) = msg.sender.call{value: amount}("");
+        (bool success,) = msg.sender.call{value: claimable}("");
         if (!success) revert TransferFailed();
 
-        emit StakeRefunded(novelId, msg.sender, amount);
+        emit StakeRefunded(novelId, msg.sender, claimable);
     }
 
     // ============================================================
@@ -639,6 +657,13 @@ contract NovelCore is
         return _chapterCount;
     }
 
+    /// @notice Get an author's claimable stake (total minus locked in-flight stakes)
+    function getClaimableStake(uint256 novelId, address author) external view returns (uint256) {
+        uint256 total = _stakeBalances[novelId][author];
+        uint256 locked = _lockedStakes[novelId][author];
+        return total > locked ? total - locked : 0;
+    }
+
     /// @notice Accept ETH (voter reward refund from VotingEngine interactions)
     receive() external payable {}
 
@@ -657,8 +682,9 @@ contract NovelCore is
             revert InvalidConfig("roundMinSubmissions must be >= worldLineCount");
         }
         if (config.roundsPerEpoch == 0) revert InvalidConfig("roundsPerEpoch must be > 0");
-        if (config.prizeReleaseRate > 10000) revert InvalidConfig("prizeReleaseRate must be <= 10000");
+        if (config.prizeReleaseRate > 5000) revert InvalidConfig("prizeReleaseRate must be <= 5000");
         if (config.voterRewardRate > 2000) revert InvalidConfig("voterRewardRate must be <= 2000");
+        if (config.stakeAmount == 0) revert InvalidConfig("stakeAmount must be > 0");
         if (config.commitDuration == 0) revert InvalidConfig("commitDuration must be > 0");
         if (config.revealDuration == 0) revert InvalidConfig("revealDuration must be > 0");
     }
@@ -687,6 +713,12 @@ contract NovelCore is
             DataTypes.Chapter storage chapter = _chapters[submissions[i]];
             address author = chapter.author;
 
+            // Unlock this submission's stake
+            if (_lockedStakes[novelId][author] >= config.stakeAmount) {
+                _lockedStakes[novelId][author] -= config.stakeAmount;
+            }
+
+            // Check for pollution-based slashing
             DataTypes.PollutionRecord storage record = _pollutionRecords[novelId][author];
             if (record.consecutiveStrikes >= config.pollutionRounds && config.pollutionRounds > 0) {
                 uint256 slashAmount = config.stakeAmount / 2;
@@ -710,7 +742,9 @@ contract NovelCore is
         }
     }
 
-    /// @dev Skips pollution tracking when fewer than 10 submissions
+    /// @dev Skips pollution tracking when fewer than 10 submissions.
+    ///      Processes each author only once using their best-ranked chapter
+    ///      to prevent gaming via submitting both high and low ranked chapters.
     function _updatePollutionRecords(uint256 novelId, uint32 round, uint256[] memory rankedIds) internal {
         DataTypes.NovelConfig storage config = _novels[novelId].config;
         if (config.pollutionThreshold == 0 || rankedIds.length < 10) return;
@@ -720,23 +754,27 @@ contract NovelCore is
 
         uint256 bottomStartIdx = rankedIds.length - bottomCount;
 
-        for (uint256 i = bottomStartIdx; i < rankedIds.length; i++) {
+        // Single pass from best to worst rank. First occurrence of each author
+        // is their best chapter — skip duplicates to prevent pollution gaming.
+        for (uint256 i = 0; i < rankedIds.length; i++) {
             address author = _chapters[rankedIds[i]].author;
             DataTypes.PollutionRecord storage record = _pollutionRecords[novelId][author];
 
-            if (record.lastRecordedRound == round - 1 || record.lastRecordedRound == 0) {
-                record.consecutiveStrikes++;
+            // Skip if already processed this round (first seen = best rank)
+            if (record.lastRecordedRound == round) continue;
+
+            if (i >= bottomStartIdx) {
+                // Bottom portion: add strike
+                if (record.lastRecordedRound == round - 1 || record.lastRecordedRound == 0) {
+                    record.consecutiveStrikes++;
+                } else {
+                    record.consecutiveStrikes = 1;
+                }
             } else {
-                record.consecutiveStrikes = 1;
-            }
-            record.lastRecordedRound = round;
-        }
-
-        for (uint256 i = 0; i < bottomStartIdx; i++) {
-            address author = _chapters[rankedIds[i]].author;
-            DataTypes.PollutionRecord storage record = _pollutionRecords[novelId][author];
-            if (record.consecutiveStrikes > 0) {
-                record.consecutiveStrikes = 0;
+                // Top portion: reset strikes
+                if (record.consecutiveStrikes > 0) {
+                    record.consecutiveStrikes = 0;
+                }
             }
             record.lastRecordedRound = round;
         }

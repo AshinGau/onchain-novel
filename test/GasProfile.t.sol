@@ -75,7 +75,8 @@ contract GasProfileTest is Test {
             revealDuration: 2 days,
             stakeAmount: 0.01 ether,
             pollutionRounds: 3,
-            pollutionThreshold: 20
+            pollutionThreshold: 20,
+            contentBaseUrl: ""
         });
     }
 
@@ -90,9 +91,9 @@ contract GasProfileTest is Test {
     }
 
     function test_Gas_CreateNovel_MultiGenesis() public {
-        bytes32[] memory hashes = new bytes32[](5);
-        uint64[] memory lengths = new uint64[](5);
-        for (uint256 i = 0; i < 5; i++) {
+        bytes32[] memory hashes = new bytes32[](2);
+        uint64[] memory lengths = new uint64[](2);
+        for (uint256 i = 0; i < 2; i++) {
             hashes[i] = bytes32(bytes(string.concat("g", vm.toString(i))));
             lengths[i] = 200;
         }

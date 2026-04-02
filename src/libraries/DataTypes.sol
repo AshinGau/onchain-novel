@@ -46,6 +46,7 @@ library DataTypes {
         uint256 stakeAmount; // Required stake per chapter submission (wei)
         uint8 pollutionRounds; // M: pollution tracking window (consecutive rounds)
         uint8 pollutionThreshold; // Bottom X percentile counts as pollution (e.g., 20 = bottom 20%)
+        string contentBaseUrl; // Base URL for content storage (e.g., "https://arweave.net/"), immutable after creation
     }
 
     /// @notice Core state of a novel
