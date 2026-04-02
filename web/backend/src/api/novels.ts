@@ -30,6 +30,20 @@ router.get("/", async (req, res) => {
       where += ` AND active = FALSE`;
     }
 
+    const search = (req.query.search as string)?.trim();
+    if (search) {
+      if (/^\d+$/.test(search)) {
+        where += ` AND novels.id = $${paramIdx++}`;
+        params.push(parseInt(search));
+      } else if (/^0x[0-9a-fA-F]+$/i.test(search)) {
+        where += ` AND LOWER(novels.creator) = $${paramIdx++}`;
+        params.push(search.toLowerCase());
+      } else {
+        where += ` AND novels.title ILIKE $${paramIdx++}`;
+        params.push(`%${search}%`);
+      }
+    }
+
     const orderBy = SORT_OPTIONS[sort] || SORT_OPTIONS.latest;
 
     const countRes = await query(`SELECT COUNT(*) FROM novels WHERE ${where}`, params);

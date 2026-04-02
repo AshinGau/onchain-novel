@@ -2,6 +2,7 @@
 
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useAccount, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { parseEther } from "viem";
 import { uploadText, uploadFile } from "@/lib/arweave";
@@ -191,7 +192,8 @@ export default function CreateNovelPage() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 pb-24 md:pb-8">
-      <h1 className="text-2xl font-bold mb-1">Create a Novel</h1>
+      <Link href="/" className="text-sm text-neutral-400 hover:text-white">← Back to Discover</Link>
+      <h1 className="text-2xl font-bold mb-1 mt-4">Create a Novel</h1>
       <p className="text-neutral-400 text-sm mb-8">
         Launch a new collaborative story on-chain.
       </p>
@@ -256,7 +258,7 @@ export default function CreateNovelPage() {
           {/* Chapter */}
           <div className="mb-5">
             <h3 className="text-sm font-medium text-neutral-400 mb-3">Chapter</h3>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className={labelClass}>Min Chapter Length (bytes)</label>
                 <input
@@ -283,7 +285,7 @@ export default function CreateNovelPage() {
           {/* Rounds */}
           <div className="mb-5">
             <h3 className="text-sm font-medium text-neutral-400 mb-3">Rounds</h3>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className={labelClass}>Round Min Duration (seconds)</label>
                 <input
@@ -330,7 +332,7 @@ export default function CreateNovelPage() {
           {/* Voting */}
           <div className="mb-5">
             <h3 className="text-sm font-medium text-neutral-400 mb-3">Voting</h3>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className={labelClass}>Commit Duration (seconds)</label>
                 <input
@@ -357,7 +359,7 @@ export default function CreateNovelPage() {
           {/* Economics */}
           <div className="mb-5">
             <h3 className="text-sm font-medium text-neutral-400 mb-3">Economics</h3>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className={labelClass}>Stake Amount (ETH)</label>
                 <input
@@ -394,7 +396,7 @@ export default function CreateNovelPage() {
           {/* Pollution */}
           <div className="mb-5">
             <h3 className="text-sm font-medium text-neutral-400 mb-3">Pollution</h3>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className={labelClass}>Pollution Rounds</label>
                 <input

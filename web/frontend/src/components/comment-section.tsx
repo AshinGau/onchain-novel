@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useAccount, useSignMessage } from "wagmi";
 import { Button } from "@/components/ui/button";
+import { API_BASE, signedFetch } from "@/lib/api";
 import { shortenAddress, timeAgo } from "@/lib/format";
 
 interface Comment {
@@ -11,8 +12,6 @@ interface Comment {
   content: string;
   created_at: string;
 }
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
 export function CommentSection({
   chapterId,
@@ -40,20 +39,6 @@ export function CommentSection({
     }
   }
 
-  async function signedFetch(url: string, method: string, body: Record<string, unknown>) {
-    const bodyStr = JSON.stringify(body);
-    const signature = await signMessageAsync({ message: bodyStr });
-    return fetch(url, {
-      method,
-      headers: {
-        "Content-Type": "application/json",
-        "x-address": address!,
-        "x-signature": signature,
-      },
-      body: bodyStr,
-    });
-  }
-
   async function handlePost() {
     if (!content.trim() || !address) return;
     setPosting(true);
@@ -62,7 +47,9 @@ export function CommentSection({
       const res = await signedFetch(
         `${API_BASE}/api/chapters/${chapterId}/comments`,
         "POST",
-        { content: content.trim() }
+        { content: content.trim() },
+        address!,
+        signMessageAsync,
       );
       if (!res.ok) {
         const data = await res.json();
@@ -83,7 +70,9 @@ export function CommentSection({
       const res = await signedFetch(
         `${API_BASE}/api/chapters/${chapterId}/comments/${commentId}`,
         "DELETE",
-        {}
+        {},
+        address!,
+        signMessageAsync,
       );
       if (res.ok) {
         await refreshComments();

@@ -1,11 +1,10 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useAccount } from "wagmi";
+import { useAccount, useSignMessage } from "wagmi";
 import Link from "next/link";
+import { API_BASE, signedFetch } from "@/lib/api";
 import { timeAgo } from "@/lib/format";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
 interface Notification {
   id: number;
@@ -21,6 +20,7 @@ interface Notification {
 
 export function NotificationBell() {
   const { address, isConnected } = useAccount();
+  const { signMessageAsync } = useSignMessage();
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -52,11 +52,13 @@ export function NotificationBell() {
   async function markAllRead() {
     if (!address) return;
     try {
-      await fetch(`${API_BASE}/api/notifications/${address}/mark-read`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
-      });
+      await signedFetch(
+        `${API_BASE}/api/notifications/${address}/mark-read`,
+        "POST",
+        {},
+        address,
+        signMessageAsync,
+      );
       setUnreadCount(0);
       setNotifications(prev => prev.map(n => ({ ...n, read: true })));
     } catch {}

@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { fetchApi, type Chapter } from "@/lib/api";
-import { shortenAddress } from "@/lib/format";
+import { shortenAddress, timeAgo } from "@/lib/format";
 import { CommentSection } from "@/components/comment-section";
 import { ReportModal } from "@/components/report-modal";
 
@@ -63,6 +63,12 @@ export default async function ChapterPage({ params }: { params: Promise<{ id: st
           <span className="text-neutral-400">by {shortenAddress(chapter.author)}</span>
           <span className="text-neutral-600">·</span>
           <span className="text-neutral-500">{chapter.vote_count} votes</span>
+          {chapter.created_at && (
+            <>
+              <span className="text-neutral-600">·</span>
+              <span className="text-neutral-500">{timeAgo(chapter.created_at)}</span>
+            </>
+          )}
           {chapter.is_canon && <Badge className="bg-amber-600 text-xs">Canon</Badge>}
           {chapter.is_world_line && !chapter.is_canon && <Badge className="bg-green-700 text-xs">World Line</Badge>}
         </div>

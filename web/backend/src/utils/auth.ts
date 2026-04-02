@@ -1,6 +1,12 @@
 import { type Request, type Response, type NextFunction } from "express";
 import { verifyMessage } from "viem";
 
+declare module "express-serve-static-core" {
+  interface Request {
+    verifiedAddress?: string;
+  }
+}
+
 /**
  * Middleware to verify that the caller owns the claimed address.
  * Expects headers:
@@ -29,7 +35,7 @@ export async function verifyWallet(req: Request, res: Response, next: NextFuncti
       return res.status(401).json({ error: "Invalid signature" });
     }
 
-    (req as any).verifiedAddress = address.toLowerCase();
+    req.verifiedAddress = address.toLowerCase();
     next();
   } catch {
     return res.status(401).json({ error: "Signature verification failed" });

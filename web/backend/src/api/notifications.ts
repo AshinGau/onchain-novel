@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { query } from "../db/index.js";
+import { verifyWallet } from "../utils/auth.js";
 
 const router = Router();
 
@@ -100,9 +101,13 @@ router.get("/:address/unread-count", async (req, res) => {
 });
 
 // POST /api/notifications/:address/mark-read — Mark notifications as read
-router.post("/:address/mark-read", async (req, res) => {
+router.post("/:address/mark-read", verifyWallet, async (req, res) => {
   try {
-    const { address } = req.params;
+    const address = req.params.address as string;
+    const verifiedAddress = req.verifiedAddress as string;
+    if (verifiedAddress !== address.toLowerCase()) {
+      return res.status(403).json({ error: "Address mismatch" });
+    }
     const addr = address.toLowerCase();
     const { ids } = req.body; // optional: specific notification IDs
 

@@ -9,6 +9,7 @@ import { fetchApi, type Novel, type TreeChapter, ROUND_PHASES, EPOCH_PHASES } fr
 import { shortenAddress, formatEth } from "@/lib/format";
 import { computeVotingRoundId } from "@/lib/contracts";
 import { StoryTree } from "@/components/story-tree";
+import { PhaseCountdown } from "@/components/phase-countdown";
 
 export default async function NovelDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -18,6 +19,7 @@ export default async function NovelDetailPage({ params }: { params: Promise<{ id
   let forks: Novel[] = [];
   let worldlines: { id: string }[] = [];
   let roundCandidates: { id: string; author: string; chapter_index: number; vote_count: string; is_world_line: boolean; content_text?: string | null }[] = [];
+  const warnings: string[] = [];
 
   try {
     novel = await fetchApi<Novel>(`/api/novels/${id}`);
@@ -28,25 +30,33 @@ export default async function NovelDetailPage({ params }: { params: Promise<{ id
   try {
     const treeData = await fetchApi<{ chapters: TreeChapter[] }>(`/api/novels/${id}/tree`);
     tree = treeData.chapters;
-  } catch {}
+  } catch {
+    warnings.push("Failed to load story tree.");
+  }
 
   try {
     const forkData = await fetchApi<{ forks: Novel[] }>(`/api/novels/${id}/forks`);
     forks = forkData.forks;
-  } catch {}
+  } catch {
+    warnings.push("Failed to load forks.");
+  }
 
   // Fetch world lines for write button
   try {
     const wlData = await fetchApi<{ worldlines: { id: string }[] }>(`/api/novels/${id}/worldlines`);
     worldlines = wlData.worldlines;
-  } catch {}
+  } catch {
+    warnings.push("Failed to load world lines.");
+  }
 
   // Fetch round candidates for round voting (epoch_phase=0 + round Committing/Revealing)
   if (novel.active && novel.epoch_phase === 0 && (novel.round_phase === 1 || novel.round_phase === 2)) {
     try {
       const roundData = await fetchApi<{ chapters: typeof roundCandidates }>(`/api/novels/${id}/rounds/${novel.current_round}`);
       roundCandidates = roundData.chapters;
-    } catch {}
+    } catch {
+      warnings.push("Failed to load round candidates.");
+    }
   }
 
   // For epoch voting (epoch_phase=1 Committing or epoch_phase=2 Revealing), candidates are worldlines
@@ -81,6 +91,12 @@ export default async function NovelDetailPage({ params }: { params: Promise<{ id
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 pb-24 md:pb-8">
+      {warnings.length > 0 && (
+        <div className="mb-4 rounded-lg bg-yellow-900/20 border border-yellow-800 p-2 text-xs text-yellow-400">
+          {warnings.map((w, i) => <p key={i}>{w}</p>)}
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-start gap-4 mb-6">
         {novel.cover_uri && (
@@ -98,6 +114,18 @@ export default async function NovelDetailPage({ params }: { params: Promise<{ id
             <Badge variant={novel.active ? "default" : "secondary"}>
               {novel.active ? phase : "Completed"}
             </Badge>
+            {novel.active && (
+              <PhaseCountdown
+                phaseStartTime={novel.phase_start_time}
+                roundPhase={novel.round_phase}
+                epochPhase={novel.epoch_phase}
+                config={{
+                  roundMinDuration: novel.config.roundMinDuration,
+                  commitDuration: novel.config.commitDuration,
+                  revealDuration: novel.config.revealDuration,
+                }}
+              />
+            )}
             <span className="text-xs text-neutral-500">
               Round {novel.current_round} · Epoch {novel.current_epoch}
             </span>
