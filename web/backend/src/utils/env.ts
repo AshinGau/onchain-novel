@@ -1,0 +1,27 @@
+import dotenv from "dotenv";
+dotenv.config();
+
+function required(key: string): string {
+  const v = process.env[key];
+  if (!v) throw new Error(`Missing required env: ${key}`);
+  return v;
+}
+
+function optional(key: string, fallback: string): string {
+  return process.env[key] || fallback;
+}
+
+export const env = {
+  DATABASE_URL: required("DATABASE_URL"),
+  RPC_URL: required("RPC_URL"),
+  RPC_FALLBACK_URLS: optional("RPC_FALLBACK_URLS", "").split(",").filter(Boolean),
+  NOVEL_CORE_ADDRESS: required("NOVEL_CORE_ADDRESS") as `0x${string}`,
+  VOTING_ENGINE_ADDRESS: optional("VOTING_ENGINE_ADDRESS", "") as `0x${string}`,
+  PRIZE_POOL_ADDRESS: optional("PRIZE_POOL_ADDRESS", "") as `0x${string}`,
+  CHAPTER_NFT_ADDRESS: optional("CHAPTER_NFT_ADDRESS", "") as `0x${string}`,
+  INDEXER_START_BLOCK: BigInt(optional("INDEXER_START_BLOCK", "0")),
+  INDEXER_BATCH_SIZE: parseInt(optional("INDEXER_BATCH_SIZE", "500")),
+  INDEXER_POLL_INTERVAL_MS: parseInt(optional("INDEXER_POLL_INTERVAL_MS", "5000")),
+  INDEXER_CONFIRMATION_BLOCKS: parseInt(optional("INDEXER_CONFIRMATION_BLOCKS", "12")),
+  PORT: parseInt(optional("PORT", "3001")),
+};

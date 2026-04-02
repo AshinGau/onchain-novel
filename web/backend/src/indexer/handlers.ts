@@ -1,0 +1,339 @@
+import type pg from "pg";
+import { type Log, type PublicClient, decodeEventLog, formatEther } from "viem";
+import { novelCoreAbi, votingEngineAbi, prizePoolAbi, chapterNFTAbi } from "../utils/abi.js";
+import { env } from "../utils/env.js";
+import { fetchChapterContent } from "./content-fetcher.js";
+
+type Client = pg.PoolClient;
+
+export async function handleNovelCoreEvent(log: Log, db: Client, rpc: PublicClient) {
+  let decoded;
+  try {
+    decoded = decodeEventLog({ abi: novelCoreAbi, data: log.data, topics: log.topics });
+  } catch {
+    return; // Not a recognized event
+  }
+
+  const blockNumber = log.blockNumber?.toString() ?? "0";
+
+  switch (decoded.eventName) {
+    case "NovelCreated": {
+      const { novelId, creator, genesisChapterCount } = decoded.args;
+      // Fetch full novel data + metadata from chain
+      const [novel, metadata] = await Promise.all([
+        rpc.readContract({ address: env.NOVEL_CORE_ADDRESS, abi: novelCoreAbi, functionName: "getNovel", args: [novelId] }),
+        rpc.readContract({ address: env.NOVEL_CORE_ADDRESS, abi: novelCoreAbi, functionName: "getNovelMetadata", args: [novelId] }),
+      ]) as [any, any];
+
+      const config = {
+        minChapterLength: novel.config.minChapterLength.toString(),
+        maxChapterLength: novel.config.maxChapterLength.toString(),
+        roundMinDuration: novel.config.roundMinDuration.toString(),
+        roundMinSubmissions: novel.config.roundMinSubmissions,
+        worldLineCount: novel.config.worldLineCount,
+        roundsPerEpoch: novel.config.roundsPerEpoch,
+        prizeReleaseRate: novel.config.prizeReleaseRate,
+        voterRewardRate: novel.config.voterRewardRate,
+        commitDuration: novel.config.commitDuration.toString(),
+        revealDuration: novel.config.revealDuration.toString(),
+        stakeAmount: novel.config.stakeAmount.toString(),
+        pollutionRounds: novel.config.pollutionRounds,
+        pollutionThreshold: novel.config.pollutionThreshold,
+        contentBaseUrl: novel.config.contentBaseUrl,
+      };
+
+      await db.query(
+        `INSERT INTO novels (id, creator, title, description, cover_uri, config, current_round, current_epoch, round_phase, epoch_phase, phase_start_time, genesis_chapter_count, active, block_number)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, TRUE, $13)
+         ON CONFLICT (id) DO NOTHING`,
+        [
+          novelId.toString(), creator, metadata.title, metadata.description, metadata.coverUri,
+          JSON.stringify(config), novel.currentRound, novel.currentEpoch,
+          novel.roundPhase, novel.epochPhase, novel.phaseStartTime.toString(),
+          genesisChapterCount, blockNumber,
+        ]
+      );
+
+      // Index genesis chapters
+      for (let i = 1n; i <= BigInt(genesisChapterCount); i++) {
+        const chapterId = novelId === 1n ? i : undefined; // Need to figure out actual IDs
+      }
+      // Genesis chapters are also emitted as separate events or we need to fetch them
+      // They'll be picked up via the chain state after NovelCreated
+      await indexGenesisChapters(novelId, genesisChapterCount, blockNumber, db, rpc);
+      break;
+    }
+
+    case "NovelForked": {
+      const { novelId, sourceNovelId, sourceChapterId } = decoded.args;
+      const [novel, metadata] = await Promise.all([
+        rpc.readContract({ address: env.NOVEL_CORE_ADDRESS, abi: novelCoreAbi, functionName: "getNovel", args: [novelId] }),
+        rpc.readContract({ address: env.NOVEL_CORE_ADDRESS, abi: novelCoreAbi, functionName: "getNovelMetadata", args: [novelId] }),
+      ]) as [any, any];
+
+      const config = {
+        minChapterLength: novel.config.minChapterLength.toString(),
+        maxChapterLength: novel.config.maxChapterLength.toString(),
+        roundMinDuration: novel.config.roundMinDuration.toString(),
+        roundMinSubmissions: novel.config.roundMinSubmissions,
+        worldLineCount: novel.config.worldLineCount,
+        roundsPerEpoch: novel.config.roundsPerEpoch,
+        prizeReleaseRate: novel.config.prizeReleaseRate,
+        voterRewardRate: novel.config.voterRewardRate,
+        commitDuration: novel.config.commitDuration.toString(),
+        revealDuration: novel.config.revealDuration.toString(),
+        stakeAmount: novel.config.stakeAmount.toString(),
+        pollutionRounds: novel.config.pollutionRounds,
+        pollutionThreshold: novel.config.pollutionThreshold,
+        contentBaseUrl: novel.config.contentBaseUrl,
+      };
+
+      await db.query(
+        `INSERT INTO novels (id, creator, title, description, cover_uri, config, current_round, current_epoch, round_phase, epoch_phase, phase_start_time, genesis_chapter_count, active, fork_source_novel_id, fork_source_chapter_id, block_number)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, TRUE, $13, $14, $15)
+         ON CONFLICT (id) DO NOTHING`,
+        [
+          novelId.toString(), novel.creator, metadata.title, metadata.description, metadata.coverUri,
+          JSON.stringify(config), novel.currentRound, novel.currentEpoch,
+          novel.roundPhase, novel.epochPhase, novel.phaseStartTime.toString(),
+          novel.genesisChapterCount, sourceNovelId.toString(), sourceChapterId.toString(), blockNumber,
+        ]
+      );
+      break;
+    }
+
+    case "NovelCompleted": {
+      const { novelId } = decoded.args;
+      await db.query("UPDATE novels SET active = FALSE WHERE id = $1", [novelId.toString()]);
+      break;
+    }
+
+    case "ChapterSubmitted": {
+      const { novelId, chapterId, author, parentId, chapterIndex } = decoded.args;
+      // Fetch full chapter data
+      const chapter = await rpc.readContract({
+        address: env.NOVEL_CORE_ADDRESS, abi: novelCoreAbi,
+        functionName: "getChapter", args: [chapterId],
+      }) as any;
+
+      await db.query(
+        `INSERT INTO chapters (id, novel_id, parent_id, author, content_hash, declared_length, round, epoch, chapter_index, vote_count, is_world_line, is_canon, block_number)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+         ON CONFLICT (id) DO NOTHING`,
+        [
+          chapterId.toString(), novelId.toString(), parentId.toString(),
+          author, chapter.contentHash, chapter.declaredLength.toString(),
+          chapter.round, chapter.epoch, chapterIndex,
+          "0", chapter.isWorldLine, chapter.isCanon, blockNumber,
+        ]
+      );
+
+      await db.query("UPDATE novels SET last_chapter_at = NOW() WHERE id = $1", [novelId.toString()]);
+
+      // Async content fetch (non-blocking)
+      fetchChapterContent(chapterId, novelId).catch(err =>
+        console.error(`Content fetch failed for chapter ${chapterId}:`, err)
+      );
+      break;
+    }
+
+    case "RoundPhaseChanged": {
+      const { novelId, round, phase } = decoded.args;
+      await db.query(
+        "UPDATE novels SET current_round = $1, round_phase = $2, phase_start_time = $3 WHERE id = $4",
+        [round, phase, log.blockNumber?.toString() ?? "0", novelId.toString()]
+      );
+      break;
+    }
+
+    case "EpochPhaseChanged": {
+      const { novelId, epoch, phase } = decoded.args;
+      await db.query(
+        "UPDATE novels SET current_epoch = $1, epoch_phase = $2, phase_start_time = $3 WHERE id = $4",
+        [epoch, phase, log.blockNumber?.toString() ?? "0", novelId.toString()]
+      );
+      break;
+    }
+
+    case "WorldLinesSelected": {
+      const { novelId, round, selectedChapterIds } = decoded.args;
+      // Reset all chapters in this round, then mark selected ones
+      await db.query(
+        "UPDATE chapters SET is_world_line = FALSE WHERE novel_id = $1 AND round = $2",
+        [novelId.toString(), round]
+      );
+      for (const id of selectedChapterIds) {
+        await db.query("UPDATE chapters SET is_world_line = TRUE WHERE id = $1", [id.toString()]);
+      }
+      break;
+    }
+
+    case "CanonEstablished": {
+      const { novelId, epoch, canonWorldLineId } = decoded.args;
+      // Trace the canon chain back to genesis and mark all chapters
+      await traceAndMarkCanon(canonWorldLineId, db, rpc);
+
+      // Update cumulative count
+      const novel = await rpc.readContract({
+        address: env.NOVEL_CORE_ADDRESS, abi: novelCoreAbi,
+        functionName: "getNovel", args: [novelId],
+      }) as any;
+      await db.query(
+        "UPDATE novels SET cumulative_canon_chapters = $1 WHERE id = $2",
+        [novel.cumulativeCanonChapters, novelId.toString()]
+      );
+      break;
+    }
+
+    case "NovelMetadataUpdated": {
+      const { novelId, title, description, coverUri } = decoded.args;
+      await db.query(
+        "UPDATE novels SET title = $1, description = $2, cover_uri = $3 WHERE id = $4",
+        [title, description, coverUri, novelId.toString()]
+      );
+      break;
+    }
+
+    case "EarlyEpochTriggered":
+    case "StakeRefunded":
+    case "StakeSlashed":
+    case "KeeperRewarded":
+      // Logged but no DB action needed in Phase 1
+      break;
+  }
+}
+
+async function indexGenesisChapters(novelId: bigint, count: number, blockNumber: string, db: Client, rpc: PublicClient) {
+  // Genesis chapters are created before any ChapterSubmitted events.
+  // We fetch them via getActiveWorldLines to find their IDs.
+  const worldLines = await rpc.readContract({
+    address: env.NOVEL_CORE_ADDRESS, abi: novelCoreAbi,
+    functionName: "getActiveWorldLines", args: [novelId],
+  }) as bigint[];
+
+  for (const chapterId of worldLines) {
+    const chapter = await rpc.readContract({
+      address: env.NOVEL_CORE_ADDRESS, abi: novelCoreAbi,
+      functionName: "getChapter", args: [chapterId],
+    }) as any;
+
+    await db.query(
+      `INSERT INTO chapters (id, novel_id, parent_id, author, content_hash, declared_length, round, epoch, chapter_index, vote_count, is_world_line, is_canon, block_number)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+       ON CONFLICT (id) DO NOTHING`,
+      [
+        chapterId.toString(), novelId.toString(), chapter.parentId.toString(),
+        chapter.author, chapter.contentHash, chapter.declaredLength.toString(),
+        chapter.round, chapter.epoch, chapter.chapterIndex,
+        "0", chapter.isWorldLine, chapter.isCanon, blockNumber,
+      ]
+    );
+
+    fetchChapterContent(chapterId, novelId).catch(err =>
+      console.error(`Content fetch failed for genesis chapter ${chapterId}:`, err)
+    );
+  }
+}
+
+async function traceAndMarkCanon(chapterId: bigint, db: Client, rpc: PublicClient) {
+  let currentId = chapterId;
+  while (currentId > 0n) {
+    await db.query("UPDATE chapters SET is_canon = TRUE WHERE id = $1", [currentId.toString()]);
+    const chapter = await rpc.readContract({
+      address: env.NOVEL_CORE_ADDRESS, abi: novelCoreAbi,
+      functionName: "getChapter", args: [currentId],
+    }) as any;
+    currentId = chapter.parentId;
+  }
+}
+
+export async function handleVotingEvent(log: Log, db: Client) {
+  let decoded;
+  try {
+    decoded = decodeEventLog({ abi: votingEngineAbi, data: log.data, topics: log.topics });
+  } catch {
+    return;
+  }
+
+  const blockNumber = log.blockNumber?.toString() ?? "0";
+
+  switch (decoded.eventName) {
+    case "VoteCommitted": {
+      const { novelId, votingRoundId, voter } = decoded.args;
+      await db.query(
+        `INSERT INTO votes (novel_id, voting_round_id, voter, commit_block)
+         VALUES ($1, $2, $3, $4)`,
+        [novelId.toString(), votingRoundId.toString(), voter, blockNumber]
+      );
+      break;
+    }
+    case "VoteRevealed": {
+      const { novelId, votingRoundId, voter, candidateId } = decoded.args;
+      await db.query(
+        `UPDATE votes SET revealed = TRUE, candidate_id = $1, reveal_block = $2
+         WHERE novel_id = $3 AND voting_round_id = $4 AND voter = $5`,
+        [candidateId.toString(), blockNumber, novelId.toString(), votingRoundId.toString(), voter]
+      );
+      break;
+    }
+    case "VotesTallied": {
+      const { novelId, votingRoundId, rankedCandidateIds } = decoded.args;
+      // Update vote counts based on revealed votes
+      for (const candidateId of rankedCandidateIds) {
+        const res = await db.query(
+          "SELECT COUNT(*) as cnt FROM votes WHERE novel_id = $1 AND voting_round_id = $2 AND candidate_id = $3 AND revealed = TRUE",
+          [novelId.toString(), votingRoundId.toString(), candidateId.toString()]
+        );
+        await db.query("UPDATE chapters SET vote_count = $1 WHERE id = $2", [res.rows[0].cnt, candidateId.toString()]);
+      }
+      break;
+    }
+    default:
+      break;
+  }
+}
+
+export async function handlePrizePoolEvent(log: Log, db: Client) {
+  let decoded;
+  try {
+    decoded = decodeEventLog({ abi: prizePoolAbi, data: log.data, topics: log.topics });
+  } catch {
+    return;
+  }
+
+  const blockNumber = log.blockNumber?.toString() ?? "0";
+
+  switch (decoded.eventName) {
+    case "TipReceived": {
+      const { novelId, tipper, amount, timestamp } = decoded.args;
+      await db.query(
+        "INSERT INTO tips (novel_id, tipper, amount, block_timestamp, block_number) VALUES ($1, $2, $3, $4, $5)",
+        [novelId.toString(), tipper, amount.toString(), timestamp.toString(), blockNumber]
+      );
+      await db.query(
+        "UPDATE novels SET total_tipped = total_tipped + $1, total_funded = total_funded + $1 WHERE id = $2",
+        [amount.toString(), novelId.toString()]
+      );
+      break;
+    }
+    default:
+      break;
+  }
+}
+
+export async function handleNFTEvent(log: Log, db: Client) {
+  let decoded;
+  try {
+    decoded = decodeEventLog({ abi: chapterNFTAbi, data: log.data, topics: log.topics });
+  } catch {
+    return;
+  }
+
+  if (decoded.eventName === "ChapterNFTMinted") {
+    const { tokenId, novelId, chapterId, author, epoch } = decoded.args;
+    await db.query(
+      "INSERT INTO chapter_nfts (token_id, novel_id, chapter_id, author, epoch, block_number) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING",
+      [tokenId.toString(), novelId.toString(), chapterId.toString(), author, epoch, log.blockNumber?.toString() ?? "0"]
+    );
+  }
+}
