@@ -54,6 +54,7 @@ contract PrizePool is
     error TransferFailed();
     error NoAuthors();
     error ZeroAmount();
+    error InvalidRate();
 
     // ============================================================
     //                        MODIFIERS
@@ -90,7 +91,7 @@ contract PrizePool is
 
     /// @notice Set protocol fee rate (basis points, max 1000 = 10%)
     function setProtocolFeeRate(uint16 rate) external onlyOwner {
-        require(rate <= 1000, "rate > 10%");
+        if (rate > 1000) revert InvalidRate();
         protocolFeeRate = rate;
     }
 
@@ -198,7 +199,7 @@ contract PrizePool is
         // authorPool = remaining * (10000 - voterRewardRate) / 10000
         uint256 authorPool = (remaining * (10000 - voterRewardRate)) / 10000;
 
-        if (authorPool > 0 && authors.length > 0) {
+        if (authorPool > 0) {
             uint256 perChapterReward = authorPool / authors.length;
             if (perChapterReward > 0) {
                 for (uint256 i = 0; i < authors.length; i++) {

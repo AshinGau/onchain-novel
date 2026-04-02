@@ -27,6 +27,7 @@ contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuard, UUP
         bool initialized;
         bool tallied;
         bool swept; // Whether unrevealed stakes have been swept
+        bool commitsClosed; // Whether commit phase has ended (reveals allowed after this)
         uint256 totalVoters; // Number of voters who revealed
         uint256 winnerCandidateId; // Top voted candidate (set after tally)
         uint256 totalRevealedStake; // Sum of stakes from revealed voters
@@ -66,6 +67,9 @@ contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuard, UUP
     error AlreadySwept();
     error NotRevealed();
     error ZeroStake();
+    error CommitPhaseClosed();
+    error RevealNotOpen();
+    error TransferFailed();
 
     // ============================================================
     //                        MODIFIERS
@@ -111,6 +115,7 @@ contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuard, UUP
         VotingRoundData storage round = _votingRounds[roundKey];
 
         if (!round.initialized) revert VotingNotInitialized();
+        if (round.commitsClosed) revert CommitPhaseClosed();
         if (round.tallied) revert AlreadyTallied();
         if (_voteCommits[roundKey][msg.sender].commitHash != bytes32(0)) revert AlreadyCommitted();
 
@@ -132,6 +137,7 @@ contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuard, UUP
         bytes32 roundKey = _roundKey(novelId, votingRoundId);
         VotingRoundData storage round = _votingRounds[roundKey];
 
+        if (!round.commitsClosed) revert RevealNotOpen();
         if (round.tallied) revert AlreadyTallied();
 
         DataTypes.VoteCommit storage commit = _voteCommits[roundKey][msg.sender];
@@ -205,7 +211,7 @@ contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuard, UUP
 
         if (totalPayout > 0) {
             (bool success,) = msg.sender.call{value: totalPayout}("");
-            if (!success) revert();
+            if (!success) revert TransferFailed();
         }
 
         emit VotingRewardClaimed(novelId, votingRoundId, msg.sender, totalPayout);
@@ -258,6 +264,7 @@ contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuard, UUP
             initialized: true,
             tallied: false,
             swept: false,
+            commitsClosed: false,
             totalVoters: 0,
             winnerCandidateId: 0,
             totalRevealedStake: 0,
@@ -342,6 +349,19 @@ contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuard, UUP
         }
 
         emit VoterRewardsDeposited(novelId, totalAmount, votingRoundIds.length);
+    }
+
+    /// @inheritdoc IVotingEngine
+    function closeCommitPhase(uint256 novelId, uint256 votingRoundId) external onlyNovelCore {
+        bytes32 roundKey = _roundKey(novelId, votingRoundId);
+        VotingRoundData storage round = _votingRounds[roundKey];
+
+        if (!round.initialized) revert VotingNotInitialized();
+        if (round.commitsClosed) revert CommitPhaseClosed();
+
+        round.commitsClosed = true;
+
+        emit CommitPhaseEnded(novelId, votingRoundId);
     }
 
     /// @notice Accept ETH transfers (from PrizePool for voter rewards)

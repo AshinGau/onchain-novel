@@ -26,6 +26,7 @@ export function registerNovelTools(server: McpServer): void {
       stakeAmount: z.string().describe("Required stake per chapter submission in ETH (e.g. '0.01')"),
       pollutionRounds: z.number().describe("Consecutive rounds for pollution tracking"),
       pollutionThreshold: z.number().describe("Bottom X percentile counts as pollution (e.g. 20)"),
+      contentBaseUrl: z.string().default("").describe("Base URL for content storage (e.g. 'https://arweave.net/')"),
       genesisContentHashes: z.array(z.string()).describe("Array of bytes32 content hashes for genesis chapters"),
       genesisLengths: z.array(z.number()).describe("Array of declared content lengths for genesis chapters"),
       initialPrizeEth: z.string().optional().describe("Initial prize pool deposit in ETH (e.g. '1.0')"),
@@ -49,6 +50,7 @@ export function registerNovelTools(server: McpServer): void {
           stakeAmount: parseEther(params.stakeAmount),
           pollutionRounds: params.pollutionRounds,
           pollutionThreshold: params.pollutionThreshold,
+          contentBaseUrl: params.contentBaseUrl,
         };
 
         const value = params.initialPrizeEth
@@ -271,6 +273,7 @@ export function registerNovelTools(server: McpServer): void {
           stakeAmount: parseEther(params.stakeAmount),
           pollutionRounds: params.pollutionRounds,
           pollutionThreshold: params.pollutionThreshold,
+          contentBaseUrl: "", // Inherited from source novel (overridden by contract)
         };
 
         const value = params.initialPrizeEth

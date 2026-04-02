@@ -5,8 +5,8 @@
 
 export const novelCoreAbi = [
   // Novel lifecycle
-  "function createNovel((uint64 minChapterLength, uint64 maxChapterLength, uint64 roundMinDuration, uint32 roundMinSubmissions, uint32 worldLineCount, uint32 roundsPerEpoch, uint16 prizeReleaseRate, uint16 voterRewardRate, uint64 commitDuration, uint64 revealDuration, uint256 stakeAmount, uint8 pollutionRounds, uint8 pollutionThreshold) config, bytes32[] genesisContentHashes, uint64[] genesisLengths) external payable returns (uint256 novelId)",
-  "function forkNovel(uint256 originalNovelId, uint256 branchChapterId, (uint64 minChapterLength, uint64 maxChapterLength, uint64 roundMinDuration, uint32 roundMinSubmissions, uint32 worldLineCount, uint32 roundsPerEpoch, uint16 prizeReleaseRate, uint16 voterRewardRate, uint64 commitDuration, uint64 revealDuration, uint256 stakeAmount, uint8 pollutionRounds, uint8 pollutionThreshold) config) external payable returns (uint256 novelId)",
+  "function createNovel((uint64 minChapterLength, uint64 maxChapterLength, uint64 roundMinDuration, uint32 roundMinSubmissions, uint32 worldLineCount, uint32 roundsPerEpoch, uint16 prizeReleaseRate, uint16 voterRewardRate, uint64 commitDuration, uint64 revealDuration, uint256 stakeAmount, uint8 pollutionRounds, uint8 pollutionThreshold, string contentBaseUrl) config, bytes32[] genesisContentHashes, uint64[] genesisLengths) external payable returns (uint256 novelId)",
+  "function forkNovel(uint256 originalNovelId, uint256 branchChapterId, (uint64 minChapterLength, uint64 maxChapterLength, uint64 roundMinDuration, uint32 roundMinSubmissions, uint32 worldLineCount, uint32 roundsPerEpoch, uint16 prizeReleaseRate, uint16 voterRewardRate, uint64 commitDuration, uint64 revealDuration, uint256 stakeAmount, uint8 pollutionRounds, uint8 pollutionThreshold, string contentBaseUrl) config) external payable returns (uint256 novelId)",
   "function completeNovel(uint256 novelId) external",
 
   // Chapter submission
@@ -26,12 +26,13 @@ export const novelCoreAbi = [
   "function claimStakeRefund(uint256 novelId) external",
 
   // Queries
-  "function getNovel(uint256 novelId) external view returns ((uint256 id, address creator, (uint64 minChapterLength, uint64 maxChapterLength, uint64 roundMinDuration, uint32 roundMinSubmissions, uint32 worldLineCount, uint32 roundsPerEpoch, uint16 prizeReleaseRate, uint16 voterRewardRate, uint64 commitDuration, uint64 revealDuration, uint256 stakeAmount, uint8 pollutionRounds, uint8 pollutionThreshold) config, uint32 currentRound, uint32 currentEpoch, uint8 roundPhase, uint8 epochPhase, uint256 phaseStartTime, uint32 genesisChapterCount, uint32 cumulativeCanonChapters, bool active, uint256 forkSourceNovelId, uint256 forkSourceChapterId))",
+  "function getNovel(uint256 novelId) external view returns ((uint256 id, address creator, (uint64 minChapterLength, uint64 maxChapterLength, uint64 roundMinDuration, uint32 roundMinSubmissions, uint32 worldLineCount, uint32 roundsPerEpoch, uint16 prizeReleaseRate, uint16 voterRewardRate, uint64 commitDuration, uint64 revealDuration, uint256 stakeAmount, uint8 pollutionRounds, uint8 pollutionThreshold, string contentBaseUrl) config, uint32 currentRound, uint32 currentEpoch, uint8 roundPhase, uint8 epochPhase, uint256 phaseStartTime, uint32 genesisChapterCount, uint32 cumulativeCanonChapters, bool active, uint256 forkSourceNovelId, uint256 forkSourceChapterId))",
   "function getChapter(uint256 chapterId) external view returns ((uint256 id, uint256 novelId, uint256 parentId, address author, bytes32 contentHash, uint64 declaredLength, uint32 round, uint32 epoch, uint256 voteCount, bool isWorldLine, bool isCanon))",
   "function getActiveWorldLines(uint256 novelId) external view returns (uint256[])",
   "function getRoundSubmissions(uint256 novelId, uint32 round) external view returns (uint256[])",
   "function getNovelCount() external view returns (uint256)",
   "function getChapterCount() external view returns (uint256)",
+  "function getClaimableStake(uint256 novelId, address author) external view returns (uint256)",
 
   // Events
   "event NovelCreated(uint256 indexed novelId, address indexed creator, uint32 genesisCount)",
@@ -61,12 +62,14 @@ export const votingEngineAbi = [
   "function getCandidates(uint256 novelId, uint256 votingRoundId) external view returns (uint256[])",
 
   // Events
+  "event VoteCommitted(uint256 indexed novelId, uint256 indexed votingRoundId, address indexed voter)",
   "event VoteRevealed(uint256 indexed novelId, uint256 indexed votingRoundId, address indexed voter, uint256 candidateId)",
   "event VotingRewardClaimed(uint256 indexed novelId, uint256 indexed votingRoundId, address indexed voter, uint256 amount)",
   "event UnrevealedStakesSwept(uint256 indexed novelId, uint256 indexed votingRoundId, uint256 totalUnrevealed)",
   "event VotingInitialized(uint256 indexed novelId, uint256 votingRoundId, uint256 candidateCount)",
   "event VotesTallied(uint256 indexed novelId, uint256 votingRoundId, uint256[] rankedIds)",
   "event VoterRewardsDeposited(uint256 indexed novelId, uint256 totalAmount, uint256 roundCount)",
+  "event CommitPhaseEnded(uint256 indexed novelId, uint256 indexed votingRoundId)",
 ] as const;
 
 export const prizePoolAbi = [
