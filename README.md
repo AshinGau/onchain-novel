@@ -94,37 +94,6 @@ PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
 forge script script/Deploy.s.sol --rpc-url http://localhost:8545 --broadcast
 ```
 
-## Project Structure
-
-```
-src/
-├── core/
-│   ├── NovelCore.sol          # Core: novel lifecycle + state machine
-│   ├── VotingEngine.sol       # Commit-Reveal Stake-to-Vote voting engine
-│   ├── PrizePool.sol          # Prize pool management + protocol treasury
-│   ├── ChapterNFT.sol         # ERC-721 + ERC-2981 copyright NFT
-│   └── ReportRegistry.sol     # Bond-based plagiarism/abuse reporting
-├── interfaces/
-│   ├── INovelCore.sol
-│   ├── IVotingEngine.sol
-│   ├── IPrizePool.sol
-│   ├── IChapterNFT.sol
-│   └── IReportRegistry.sol
-└── libraries/
-    └── DataTypes.sol           # Shared data structures & enumerations
-test/
-├── Integration.t.sol           # 21 integration tests
-├── E2E.t.sol                   # 11 multi-role E2E scenarios
-├── Fuzz.t.sol                  # 6 fuzz tests (256 runs each)
-├── Upgrade.t.sol               # 9 UUPS upgrade tests
-├── Reentrancy.t.sol            # 3 reentrancy attack tests
-└── GasProfile.t.sol            # 12 gas profiling tests
-script/
-├── Deploy.s.sol                # UUPS proxy deployment (dev)
-└── DeployProduction.s.sol      # TimelockController + multi-sig deployment
-mcp/                            # TypeScript MCP Server for Agent integration
-```
-
 ## Economic Model
 
 ### Prize Pool Sources
