@@ -13,7 +13,8 @@ interface INovelCore {
     event NovelCreated(uint256 indexed novelId, address indexed creator, uint32 genesisChapterCount);
     event NovelForked(uint256 indexed novelId, uint256 indexed sourceNovelId, uint256 sourceChapterId);
     event ChapterSubmitted(
-        uint256 indexed novelId, uint256 indexed chapterId, address indexed author, uint256 parentId
+        uint256 indexed novelId, uint256 indexed chapterId, address indexed author, uint256 parentId,
+        uint32 chapterIndex
     );
     event RoundPhaseChanged(uint256 indexed novelId, uint32 round, DataTypes.RoundPhase phase);
     event EpochPhaseChanged(uint256 indexed novelId, uint32 epoch, DataTypes.EpochPhase phase);

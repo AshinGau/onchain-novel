@@ -27,7 +27,7 @@ export const novelCoreAbi = [
 
   // Queries
   "function getNovel(uint256 novelId) external view returns ((uint256 id, address creator, (uint64 minChapterLength, uint64 maxChapterLength, uint64 roundMinDuration, uint32 roundMinSubmissions, uint32 worldLineCount, uint32 roundsPerEpoch, uint16 prizeReleaseRate, uint16 voterRewardRate, uint64 commitDuration, uint64 revealDuration, uint256 stakeAmount, uint8 pollutionRounds, uint8 pollutionThreshold, string contentBaseUrl) config, uint32 currentRound, uint32 currentEpoch, uint8 roundPhase, uint8 epochPhase, uint256 phaseStartTime, uint32 genesisChapterCount, uint32 cumulativeCanonChapters, bool active, uint256 forkSourceNovelId, uint256 forkSourceChapterId))",
-  "function getChapter(uint256 chapterId) external view returns ((uint256 id, uint256 novelId, uint256 parentId, address author, bytes32 contentHash, uint64 declaredLength, uint32 round, uint32 epoch, uint256 voteCount, bool isWorldLine, bool isCanon))",
+  "function getChapter(uint256 chapterId) external view returns ((uint256 id, uint256 novelId, uint256 parentId, address author, bytes32 contentHash, uint64 declaredLength, uint32 round, uint32 epoch, uint32 chapterIndex, uint256 voteCount, bool isWorldLine, bool isCanon))",
   "function getActiveWorldLines(uint256 novelId) external view returns (uint256[])",
   "function getRoundSubmissions(uint256 novelId, uint32 round) external view returns (uint256[])",
   "function getNovelCount() external view returns (uint256)",
@@ -38,7 +38,7 @@ export const novelCoreAbi = [
   "event NovelCreated(uint256 indexed novelId, address indexed creator, uint32 genesisCount)",
   "event NovelForked(uint256 indexed novelId, uint256 indexed sourceNovelId, uint256 sourceChapterId)",
   "event NovelCompleted(uint256 indexed novelId)",
-  "event ChapterSubmitted(uint256 indexed novelId, uint256 indexed chapterId, address indexed author, uint256 parentChapterId)",
+  "event ChapterSubmitted(uint256 indexed novelId, uint256 indexed chapterId, address indexed author, uint256 parentChapterId, uint32 chapterIndex)",
   "event RoundPhaseChanged(uint256 indexed novelId, uint32 round, uint8 phase)",
   "event EpochPhaseChanged(uint256 indexed novelId, uint32 epoch, uint8 phase)",
   "event WorldLinesSelected(uint256 indexed novelId, uint32 round, uint256[] selectedIds)",
