@@ -21,6 +21,7 @@ interface IVotingEngine {
     );
     event UnrevealedStakesSwept(uint256 indexed novelId, uint256 indexed votingRoundId, uint256 totalUnrevealed);
     event VoterRewardsDeposited(uint256 indexed novelId, uint256 totalAmount, uint256 roundCount);
+    event CommitPhaseEnded(uint256 indexed novelId, uint256 indexed votingRoundId);
 
     // ============================================================
     //                      VOTER ACTIONS
@@ -51,6 +52,9 @@ interface IVotingEngine {
     /// @notice Record voter accuracy reward allocation for multiple voting rounds in an epoch
     /// @dev ETH is sent separately by PrizePool; this only sets per-round allocation
     function depositVoterRewards(uint256 novelId, uint256[] calldata votingRoundIds, uint256 totalAmount) external;
+
+    /// @notice Close commit phase, preventing further commits and enabling reveals
+    function closeCommitPhase(uint256 novelId, uint256 votingRoundId) external;
 
     // ============================================================
     //                        QUERIES

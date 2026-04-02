@@ -126,7 +126,7 @@ contract ChapterNFT is
 
         tokenId = _nextTokenId++;
 
-        _safeMint(to, tokenId);
+        _mint(to, tokenId);
 
         _chapterMetadata[tokenId] = DataTypes.ChapterNFTMetadata({
             novelId: novelId,

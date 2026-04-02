@@ -3,7 +3,7 @@ import { z } from "zod";
 import { parseEther, formatEther } from "viem";
 import { novelCoreAbi } from "../abi/index.js";
 import { config } from "../config.js";
-import { getPublicClient, getWalletClient } from "../utils/wallet.js";
+import { getPublicClient, getWalletClient, getWalletAddress } from "../utils/wallet.js";
 
 export function registerChapterTools(server: McpServer): void {
   server.tool(
@@ -175,6 +175,47 @@ export function registerChapterTools(server: McpServer): void {
             {
               type: "text" as const,
               text: `Failed to get submissions: ${error instanceof Error ? error.message : String(error)}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  server.tool(
+    "get_claimable_stake",
+    "Get the claimable (unlocked) stake balance for an author in a novel.",
+    {
+      novelId: z.number().describe("Novel ID"),
+      address: z.string().optional().describe("Author address (defaults to wallet address)"),
+    },
+    async (params) => {
+      try {
+        const publicClient = getPublicClient();
+        const addr = (params.address || getWalletAddress()) as `0x${string}`;
+
+        const claimable = (await publicClient.readContract({
+          address: config.novelCoreAddress,
+          abi: novelCoreAbi,
+          functionName: "getClaimableStake",
+          args: [BigInt(params.novelId), addr],
+        })) as bigint;
+
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Claimable stake for ${addr} in Novel #${params.novelId}: ${formatEther(claimable)} ETH`,
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Failed to get claimable stake: ${error instanceof Error ? error.message : String(error)}`,
             },
           ],
           isError: true,

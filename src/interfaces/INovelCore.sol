@@ -106,4 +106,5 @@ interface INovelCore {
     function getRoundSubmissions(uint256 novelId, uint32 round) external view returns (uint256[] memory);
     function getNovelCount() external view returns (uint256);
     function getChapterCount() external view returns (uint256);
+    function getClaimableStake(uint256 novelId, address author) external view returns (uint256);
 }
