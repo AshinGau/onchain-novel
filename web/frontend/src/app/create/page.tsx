@@ -1,11 +1,10 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAccount, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
-import { parseEther } from "viem";
-import { uploadText, uploadFile } from "@/lib/arweave";
+import { parseEther, keccak256, toHex, toBytes } from "viem";
 import { NOVEL_CORE_ADDRESS, novelCoreAbi } from "@/lib/contracts";
 
 interface GenesisChapter {
@@ -26,19 +25,18 @@ const DEFAULT_CONFIG = {
   voterRewardRate: 1000,
   pollutionRounds: 3,
   pollutionThreshold: 20,
-  contentBaseUrl: "https://arweave.net/",
+  contentLocation: 0,
+  contentBaseUrl: "",
 };
 
 export default function CreateNovelPage() {
   const router = useRouter();
   const { isConnected } = useAccount();
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Metadata
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [coverFile, setCoverFile] = useState<File | null>(null);
-  const [coverPreview, setCoverPreview] = useState<string | null>(null);
+  const [coverUri, setCoverUri] = useState("");
 
   // Config
   const [config, setConfig] = useState(DEFAULT_CONFIG);
@@ -60,12 +58,11 @@ export default function CreateNovelPage() {
     setConfig((prev) => ({ ...prev, [key]: value }));
   }
 
-  function handleCoverSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setCoverFile(file);
-    setCoverPreview(URL.createObjectURL(file));
-  }
+  const CONTENT_LOCATIONS = [
+    { value: 0, label: "Onchain" },
+    { value: 1, label: "External" },
+    { value: 2, label: "HTTP" },
+  ];
 
   function addChapter() {
     setChapters((prev) => [...prev, { content: "" }]);
@@ -103,35 +100,21 @@ export default function CreateNovelPage() {
     setStatus("");
 
     try {
-      // Step 1: Upload genesis chapters to Arweave
-      const uploadResults: { contentHash: `0x${string}`; declaredLength: number }[] = [];
-      for (let i = 0; i < chapters.length; i++) {
-        setStatus(`Uploading chapter ${i + 1}/${chapters.length}...`);
-        const result = await uploadText(chapters[i].content, [
-          { name: "App-Name", value: "OnchainNovel" },
-          { name: "Type", value: "genesis-chapter" },
-        ]);
-        uploadResults.push({ contentHash: result.contentHash, declaredLength: result.declaredLength });
-      }
-
-      // Step 2: Upload cover if provided
-      let coverUri = "";
-      if (coverFile) {
-        setStatus("Uploading cover image...");
-        const coverTxId = await uploadFile(coverFile);
-        coverUri = `https://arweave.net/${coverTxId}`;
-      }
-
-      // Step 3: Call createNovel
-      setStatus("Sending transaction...");
-      const hashes = uploadResults.map((r) => r.contentHash);
-      const lengths = uploadResults.map((r) => BigInt(r.declaredLength));
+      // Construct ContentSubmission tuples for genesis chapters
+      setStatus("Preparing submission...");
+      const genesisChapters = chapters.map((ch) => {
+        const contentBytes = toHex(toBytes(ch.content));
+        const contentHash = keccak256(contentBytes);
+        const declaredLength = BigInt(new TextEncoder().encode(ch.content).length);
+        return { contentHash, declaredLength, content: contentBytes };
+      });
 
       let value = BigInt(0);
       if (initialPrize && parseFloat(initialPrize) > 0) {
         value = parseEther(initialPrize);
       }
 
+      setStatus("Sending transaction...");
       const hash = await writeContractAsync({
         address: NOVEL_CORE_ADDRESS,
         abi: novelCoreAbi,
@@ -151,15 +134,15 @@ export default function CreateNovelPage() {
             stakeAmount: parseEther(config.stakeAmount),
             pollutionRounds: config.pollutionRounds,
             pollutionThreshold: config.pollutionThreshold,
+            contentLocation: config.contentLocation,
             contentBaseUrl: config.contentBaseUrl,
           },
           {
             title: title.trim(),
             description: description.trim(),
-            coverUri,
+            coverUri: coverUri.trim(),
           },
-          hashes,
-          lengths,
+          genesisChapters,
         ],
         value,
       });
@@ -225,28 +208,15 @@ export default function CreateNovelPage() {
               />
             </div>
             <div>
-              <label className={labelClass}>Cover Image (optional)</label>
+              <label className={labelClass}>Cover Image URL (optional)</label>
               <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleCoverSelect}
-                className="hidden"
+                type="text"
+                value={coverUri}
+                onChange={(e) => setCoverUri(e.target.value)}
+                placeholder="https://..."
+                className={inputClass}
               />
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="rounded-lg bg-neutral-800 border border-neutral-700 px-4 py-2 text-sm hover:bg-neutral-700 transition-colors"
-                >
-                  {coverFile ? "Change Image" : "Upload Cover"}
-                </button>
-                {coverPreview && (
-                  <img src={coverPreview} alt="Cover preview" className="h-16 w-12 object-cover rounded" />
-                )}
-                {coverFile && <span className="text-sm text-neutral-400">{coverFile.name}</span>}
-              </div>
-              <p className={hintClass}>Uploaded to Arweave for permanent storage.</p>
+              <p className={hintClass}>Direct URL to a cover image.</p>
             </div>
           </div>
         </section>
@@ -420,18 +390,40 @@ export default function CreateNovelPage() {
             </div>
           </div>
 
-          {/* Content Base URL */}
+          {/* Content Storage */}
           <div>
-            <h3 className="text-sm font-medium text-neutral-400 mb-3">Content</h3>
-            <div>
-              <label className={labelClass}>Content Base URL</label>
-              <input
-                type="text"
-                value={config.contentBaseUrl}
-                readOnly
-                className={`${inputClass} opacity-60 cursor-not-allowed`}
-              />
-              <p className={hintClass}>Base URL for resolving chapter content. Read-only.</p>
+            <h3 className="text-sm font-medium text-neutral-400 mb-3">Content Storage</h3>
+            <div className="space-y-4">
+              <div>
+                <label className={labelClass}>Content Location</label>
+                <div className="flex items-center gap-4 mt-1">
+                  {CONTENT_LOCATIONS.map((loc) => (
+                    <label key={loc.value} className="flex items-center gap-2 text-sm text-neutral-300 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="contentLocation"
+                        value={loc.value}
+                        checked={config.contentLocation === loc.value}
+                        onChange={() => updateConfig("contentLocation", loc.value)}
+                        className="accent-white"
+                      />
+                      {loc.label}
+                    </label>
+                  ))}
+                </div>
+                <p className={hintClass}>Where chapter content is stored. Onchain stores content directly in the transaction.</p>
+              </div>
+              <div>
+                <label className={labelClass}>Content Base URL</label>
+                <input
+                  type="text"
+                  value={config.contentBaseUrl}
+                  onChange={(e) => updateConfig("contentBaseUrl", e.target.value)}
+                  placeholder={config.contentLocation === 0 ? "(not needed for Onchain)" : "https://..."}
+                  className={inputClass}
+                />
+                <p className={hintClass}>Base URL for resolving chapter content (used by External and HTTP modes).</p>
+              </div>
             </div>
           </div>
         </section>

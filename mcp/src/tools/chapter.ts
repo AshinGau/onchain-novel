@@ -1,6 +1,6 @@
 import { type McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { parseEther, formatEther } from "viem";
+import { parseEther, formatEther, keccak256, toHex, toBytes } from "viem";
 import { novelCoreAbi } from "../abi/index.js";
 import { config } from "../config.js";
 import { getPublicClient, getWalletClient, getWalletAddress } from "../utils/wallet.js";
@@ -12,8 +12,7 @@ export function registerChapterTools(server: McpServer): void {
     {
       novelId: z.number().describe("Novel ID"),
       parentChapterId: z.number().describe("Parent chapter ID (must be an active world line)"),
-      contentHash: z.string().describe("bytes32 content hash (IPFS/Arweave CID hash)"),
-      declaredLength: z.number().describe("Declared content byte length"),
+      content: z.string().describe("Chapter content text"),
     },
     async (params) => {
       try {
@@ -30,16 +29,19 @@ export function registerChapterTools(server: McpServer): void {
 
         const stakeAmount = novel.config.stakeAmount;
 
+        // Build ContentSubmission from content string
+        const contentBytes = toHex(toBytes(params.content));
+        const submission = {
+          contentHash: keccak256(contentBytes),
+          declaredLength: BigInt(toBytes(params.content).length),
+          content: contentBytes,
+        };
+
         const hash = await walletClient.writeContract({
           address: config.novelCoreAddress,
           abi: novelCoreAbi,
           functionName: "submitChapter",
-          args: [
-            BigInt(params.novelId),
-            BigInt(params.parentChapterId),
-            params.contentHash as `0x${string}`,
-            BigInt(params.declaredLength),
-          ],
+          args: [BigInt(params.novelId), BigInt(params.parentChapterId), submission],
           value: stakeAmount,
         });
 

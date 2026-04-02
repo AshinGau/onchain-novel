@@ -101,13 +101,16 @@ info "Creating novel..."
 # Config: min=100, max=10000, roundMinDuration=2s, roundMinSubmissions=2, worldLineCount=2,
 #         roundsPerEpoch=1, prizeRelease=3000, voterReward=2000, commit=2s, reveal=2s,
 #         stake=0.01 ETH, pollutionRounds=0, pollutionThreshold=0, contentBaseUrl=""
-# Genesis: 1 chapter
-GENESIS_HASH="0x$(echo -n 'Once upon a time in a decentralized world...' | xxd -p | tr -d '\n' | head -c 64)"
+# Genesis: 1 chapter (onchain content)
+GENESIS_CONTENT="Once upon a time in a decentralized world, where stories are written by many and owned by all..."
+GENESIS_HEX="0x$(echo -n "$GENESIS_CONTENT" | xxd -p | tr -d '\n')"
+GENESIS_HASH=$(cast keccak256 "$GENESIS_HEX")
+GENESIS_LEN=$(echo -n "$GENESIS_CONTENT" | wc -c | tr -d ' ')
 CREATE_TX=$(cast send --rpc-url "$RPC" --private-key "$PK_CREATOR" "$NOVEL_CORE" \
-    "createNovel((uint64,uint64,uint64,uint32,uint32,uint32,uint16,uint16,uint64,uint64,uint256,uint8,uint8,string),(string,string,string),bytes32[],uint64[])" \
-    "(100, 10000, 2, 2, 2, 1, 3000, 2000, 2, 2, 10000000000000000, 0, 0, '')" \
+    "createNovel((uint64,uint64,uint64,uint32,uint32,uint32,uint16,uint16,uint64,uint64,uint256,uint8,uint8,uint8,string),(string,string,string),(bytes32,uint64,bytes)[])" \
+    "(100, 10000, 2, 2, 2, 1, 3000, 2000, 2, 2, 10000000000000000, 0, 0, 0, '')" \
     "(Test Novel, A test novel, '')" \
-    "[$GENESIS_HASH]" "[500]" \
+    "[($GENESIS_HASH,$GENESIS_LEN,$GENESIS_HEX)]" \
     --value 0.1ether --json 2>/dev/null)
 
 TX_STATUS=$(echo "$CREATE_TX" | jq -r '.status')
@@ -128,15 +131,21 @@ info "Submitting chapters..."
 WORLD_LINES=$(cast_call "$NOVEL_CORE" "getActiveWorldLines(uint256)(uint256[])" "$NOVEL_ID")
 PARENT_ID=1  # First genesis chapter
 
-CONTENT_A="0x$(echo -n 'Writer A continues the story with great adventure...' | xxd -p | tr -d '\n' | head -c 64)"
+CONTENT_A_TEXT="Writer A continues the story with great adventure and bold new characters entering the fray, each bringing their own secrets and motivations to the unfolding narrative that spans across the decentralized realm..."
+CONTENT_A_HEX="0x$(echo -n "$CONTENT_A_TEXT" | xxd -p | tr -d '\n')"
+CONTENT_A_HASH=$(cast keccak256 "$CONTENT_A_HEX")
+CONTENT_A_LEN=$(echo -n "$CONTENT_A_TEXT" | wc -c | tr -d ' ')
 cast_send "$PK_WRITER_A" "$NOVEL_CORE" \
-    "submitChapter(uint256,uint256,bytes32,uint64)" "$NOVEL_ID" "$PARENT_ID" "$CONTENT_A" "500" \
+    "submitChapter(uint256,uint256,(bytes32,uint64,bytes))" "$NOVEL_ID" "$PARENT_ID" "($CONTENT_A_HASH,$CONTENT_A_LEN,$CONTENT_A_HEX)" \
     --value 0.01ether > /dev/null
 pass "Writer A submitted chapter"
 
-CONTENT_B="0x$(echo -n 'Writer B takes the story in a different direction...' | xxd -p | tr -d '\n' | head -c 64)"
+CONTENT_B_TEXT="Writer B takes the story in a different direction, exploring the darker corners of the decentralized world where rival factions compete for control of the narrative itself, bending reality to their will..."
+CONTENT_B_HEX="0x$(echo -n "$CONTENT_B_TEXT" | xxd -p | tr -d '\n')"
+CONTENT_B_HASH=$(cast keccak256 "$CONTENT_B_HEX")
+CONTENT_B_LEN=$(echo -n "$CONTENT_B_TEXT" | wc -c | tr -d ' ')
 cast_send "$PK_WRITER_B" "$NOVEL_CORE" \
-    "submitChapter(uint256,uint256,bytes32,uint64)" "$NOVEL_ID" "$PARENT_ID" "$CONTENT_B" "600" \
+    "submitChapter(uint256,uint256,(bytes32,uint64,bytes))" "$NOVEL_ID" "$PARENT_ID" "($CONTENT_B_HASH,$CONTENT_B_LEN,$CONTENT_B_HEX)" \
     --value 0.01ether > /dev/null
 pass "Writer B submitted chapter"
 
@@ -262,7 +271,7 @@ pass "Keeper: settleEpoch — Canon established, NFTs minted, rewards distribute
 info "Verifying final state..."
 
 # Novel should be in epoch 2, round 1, Submitting
-NOVEL_EPOCH=$(cast_call "$NOVEL_CORE" "getNovel(uint256)((uint256,address,(uint64,uint64,uint64,uint32,uint32,uint32,uint16,uint16,uint64,uint64,uint256,uint8,uint8,string),uint32,uint32,uint8,uint8,uint256,uint32,uint32,bool,uint256,uint256))" "$NOVEL_ID" 2>/dev/null)
+NOVEL_EPOCH=$(cast_call "$NOVEL_CORE" "getNovel(uint256)((uint256,address,(uint64,uint64,uint64,uint32,uint32,uint32,uint16,uint16,uint64,uint64,uint256,uint8,uint8,uint8,string),uint32,uint32,uint8,uint8,uint256,uint32,uint32,bool,uint256,uint256))" "$NOVEL_ID" 2>/dev/null)
 pass "Novel state after epoch settlement readable"
 
 # Check prize pool balance (should be reduced after distribution)
@@ -320,10 +329,10 @@ info "========================================"
 
 # Create a second novel for MCP tests (novel is still active)
 CREATE_TX2=$(cast send --rpc-url "$RPC" --private-key "$PK_CREATOR" "$NOVEL_CORE" \
-    "createNovel((uint64,uint64,uint64,uint32,uint32,uint32,uint16,uint16,uint64,uint64,uint256,uint8,uint8,string),(string,string,string),bytes32[],uint64[])" \
-    "(100, 10000, 2, 2, 2, 1, 3000, 2000, 2, 2, 10000000000000000, 0, 0, '')" \
+    "createNovel((uint64,uint64,uint64,uint32,uint32,uint32,uint16,uint16,uint64,uint64,uint256,uint8,uint8,uint8,string),(string,string,string),(bytes32,uint64,bytes)[])" \
+    "(100, 10000, 2, 2, 2, 1, 3000, 2000, 2, 2, 10000000000000000, 0, 0, 0, '')" \
     "(MCP Test Novel, MCP test novel, '')" \
-    "[$GENESIS_HASH]" "[500]" \
+    "[($GENESIS_HASH,$GENESIS_LEN,$GENESIS_HEX)]" \
     --value 0.1ether --json 2>/dev/null)
 [ "$(echo "$CREATE_TX2" | jq -r '.status')" = "0x1" ] || fail "createNovel for MCP tests failed"
 MCP_NOVEL_ID=2

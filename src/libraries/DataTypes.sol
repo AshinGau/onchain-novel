@@ -18,6 +18,14 @@ library DataTypes {
 
     }
 
+    /// @notice Content storage location strategy (set per novel at creation)
+    enum ContentLocation {
+        Onchain, // Content passed as calldata, stored in event
+        External, // IPFS/Arweave, contentBaseUrl + contentHash
+        HTTP // HTTP URL, contentBaseUrl + path
+
+    }
+
     /// @notice Phase within an Epoch lifecycle
     enum EpochPhase {
         Rounds, // Conducting K rounds
@@ -46,7 +54,8 @@ library DataTypes {
         uint256 stakeAmount; // Required stake per chapter submission (wei)
         uint8 pollutionRounds; // M: pollution tracking window (consecutive rounds)
         uint8 pollutionThreshold; // Bottom X percentile counts as pollution (e.g., 20 = bottom 20%)
-        string contentBaseUrl; // Base URL for content storage (e.g., "https://arweave.net/"), immutable after creation
+        ContentLocation contentLocation; // Content storage strategy
+        string contentBaseUrl; // Base URL (External/HTTP only, ignored for Onchain)
     }
 
     /// @notice Core state of a novel
@@ -104,6 +113,13 @@ library DataTypes {
     struct PollutionRecord {
         uint8 consecutiveStrikes; // Consecutive rounds in bottom percentile
         uint32 lastRecordedRound; // Last round where pollution was checked
+    }
+
+    /// @notice Unified content submission (replaces separate contentHash + declaredLength params)
+    struct ContentSubmission {
+        bytes32 contentHash; // keccak256(content) for verification
+        uint64 declaredLength; // Content byte length
+        bytes content; // Onchain: actual content; External/HTTP: empty
     }
 
     /// @notice Mutable metadata for display purposes (separate from immutable NovelConfig)

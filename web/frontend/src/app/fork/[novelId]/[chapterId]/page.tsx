@@ -1,11 +1,10 @@
 "use client";
 
-import { use, useState, useRef, useEffect } from "react";
+import { use, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAccount, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { parseEther } from "viem";
-import { uploadFile } from "@/lib/arweave";
 import { NOVEL_CORE_ADDRESS, novelCoreAbi } from "@/lib/contracts";
 import { fetchApi, type Novel } from "@/lib/api";
 import { formatEth } from "@/lib/format";
@@ -24,7 +23,8 @@ const DEFAULT_CONFIG = {
   voterRewardRate: 1000,
   pollutionRounds: 3,
   pollutionThreshold: 20,
-  contentBaseUrl: "https://arweave.net/",
+  contentLocation: 0,
+  contentBaseUrl: "",
 };
 
 export default function ForkNovelPage({
@@ -35,7 +35,6 @@ export default function ForkNovelPage({
   const { novelId, chapterId } = use(params);
   const router = useRouter();
   const { isConnected } = useAccount();
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Source novel
   const [sourceNovel, setSourceNovel] = useState<Novel | null>(null);
@@ -45,8 +44,7 @@ export default function ForkNovelPage({
   // Metadata
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [coverFile, setCoverFile] = useState<File | null>(null);
-  const [coverPreview, setCoverPreview] = useState<string | null>(null);
+  const [coverUri, setCoverUri] = useState("");
 
   // Config
   const [config, setConfig] = useState(DEFAULT_CONFIG);
@@ -84,6 +82,7 @@ export default function ForkNovelPage({
           voterRewardRate: c.voterRewardRate,
           pollutionRounds: c.pollutionRounds,
           pollutionThreshold: c.pollutionThreshold,
+          contentLocation: c.contentLocation,
           contentBaseUrl: c.contentBaseUrl,
         });
 
@@ -102,12 +101,7 @@ export default function ForkNovelPage({
     setConfig((prev) => ({ ...prev, [key]: value }));
   }
 
-  function handleCoverSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setCoverFile(file);
-    setCoverPreview(URL.createObjectURL(file));
-  }
+  const CONTENT_LOCATION_LABELS: Record<number, string> = { 0: "Onchain", 1: "External", 2: "HTTP" };
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -128,14 +122,6 @@ export default function ForkNovelPage({
     setStatus("");
 
     try {
-      // Upload cover if provided
-      let coverUri = "";
-      if (coverFile) {
-        setStatus("Uploading cover image...");
-        const coverTxId = await uploadFile(coverFile);
-        coverUri = `https://arweave.net/${coverTxId}`;
-      }
-
       setStatus("Sending transaction...");
 
       const hash = await writeContractAsync({
@@ -159,12 +145,13 @@ export default function ForkNovelPage({
             stakeAmount: parseEther(config.stakeAmount),
             pollutionRounds: config.pollutionRounds,
             pollutionThreshold: config.pollutionThreshold,
+            contentLocation: config.contentLocation,
             contentBaseUrl: config.contentBaseUrl,
           },
           {
             title: title.trim(),
             description: description.trim(),
-            coverUri,
+            coverUri: coverUri.trim(),
           },
         ],
         value: parseEther(forkFee),
@@ -256,27 +243,14 @@ export default function ForkNovelPage({
               />
             </div>
             <div>
-              <label className={labelClass}>Cover Image (optional)</label>
+              <label className={labelClass}>Cover Image URL (optional)</label>
               <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleCoverSelect}
-                className="hidden"
+                type="text"
+                value={coverUri}
+                onChange={(e) => setCoverUri(e.target.value)}
+                placeholder="https://..."
+                className={inputClass}
               />
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="rounded-lg bg-neutral-800 border border-neutral-700 px-4 py-2 text-sm hover:bg-neutral-700 transition-colors"
-                >
-                  {coverFile ? "Change Image" : "Upload Cover"}
-                </button>
-                {coverPreview && (
-                  <img src={coverPreview} alt="Cover preview" className="h-16 w-12 object-cover rounded" />
-                )}
-                {coverFile && <span className="text-sm text-neutral-400">{coverFile.name}</span>}
-              </div>
             </div>
           </div>
         </section>
@@ -440,17 +414,28 @@ export default function ForkNovelPage({
             </div>
           </div>
 
-          {/* Content Base URL */}
+          {/* Content Storage */}
           <div>
-            <h3 className="text-sm font-medium text-neutral-400 mb-3">Content</h3>
-            <div>
-              <label className={labelClass}>Content Base URL</label>
-              <input
-                type="text"
-                value={config.contentBaseUrl}
-                readOnly
-                className={`${inputClass} opacity-60 cursor-not-allowed`}
-              />
+            <h3 className="text-sm font-medium text-neutral-400 mb-3">Content Storage</h3>
+            <div className="space-y-4">
+              <div>
+                <label className={labelClass}>Content Location (inherited)</label>
+                <input
+                  type="text"
+                  value={CONTENT_LOCATION_LABELS[config.contentLocation] || `Unknown (${config.contentLocation})`}
+                  readOnly
+                  className={`${inputClass} opacity-60 cursor-not-allowed`}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Content Base URL</label>
+                <input
+                  type="text"
+                  value={config.contentBaseUrl}
+                  onChange={(e) => updateConfig("contentBaseUrl", e.target.value)}
+                  className={inputClass}
+                />
+              </div>
             </div>
           </div>
         </section>

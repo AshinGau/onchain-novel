@@ -40,18 +40,19 @@ export async function handleNovelCoreEvent(log: Log, db: Client, rpc: PublicClie
         stakeAmount: novel.config.stakeAmount.toString(),
         pollutionRounds: novel.config.pollutionRounds,
         pollutionThreshold: novel.config.pollutionThreshold,
+        contentLocation: novel.config.contentLocation,
         contentBaseUrl: novel.config.contentBaseUrl,
       };
 
       await db.query(
-        `INSERT INTO novels (id, creator, title, description, cover_uri, config, current_round, current_epoch, round_phase, epoch_phase, phase_start_time, genesis_chapter_count, active, block_number)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, TRUE, $13)
+        `INSERT INTO novels (id, creator, title, description, cover_uri, config, current_round, current_epoch, round_phase, epoch_phase, phase_start_time, genesis_chapter_count, active, block_number, content_location)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, TRUE, $13, $14)
          ON CONFLICT (id) DO NOTHING`,
         [
           novelId.toString(), creator, metadata.title, metadata.description, metadata.coverUri,
           JSON.stringify(config), novel.currentRound, novel.currentEpoch,
           novel.roundPhase, novel.epochPhase, novel.phaseStartTime.toString(),
-          genesisChapterCount, blockNumber,
+          genesisChapterCount, blockNumber, novel.config.contentLocation,
         ]
       );
 
@@ -86,18 +87,20 @@ export async function handleNovelCoreEvent(log: Log, db: Client, rpc: PublicClie
         stakeAmount: novel.config.stakeAmount.toString(),
         pollutionRounds: novel.config.pollutionRounds,
         pollutionThreshold: novel.config.pollutionThreshold,
+        contentLocation: novel.config.contentLocation,
         contentBaseUrl: novel.config.contentBaseUrl,
       };
 
       await db.query(
-        `INSERT INTO novels (id, creator, title, description, cover_uri, config, current_round, current_epoch, round_phase, epoch_phase, phase_start_time, genesis_chapter_count, active, fork_source_novel_id, fork_source_chapter_id, block_number)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, TRUE, $13, $14, $15)
+        `INSERT INTO novels (id, creator, title, description, cover_uri, config, current_round, current_epoch, round_phase, epoch_phase, phase_start_time, genesis_chapter_count, active, fork_source_novel_id, fork_source_chapter_id, block_number, content_location)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, TRUE, $13, $14, $15, $16)
          ON CONFLICT (id) DO NOTHING`,
         [
           novelId.toString(), novel.creator, metadata.title, metadata.description, metadata.coverUri,
           JSON.stringify(config), novel.currentRound, novel.currentEpoch,
           novel.roundPhase, novel.epochPhase, novel.phaseStartTime.toString(),
           novel.genesisChapterCount, sourceNovelId.toString(), sourceChapterId.toString(), blockNumber,
+          novel.config.contentLocation,
         ]
       );
       break;
@@ -285,6 +288,17 @@ export async function handleNovelCoreEvent(log: Log, db: Client, rpc: PublicClie
       await db.query(
         "INSERT INTO stake_events (novel_id, author, event_type, amount, block_number) VALUES ($1, $2, 'slashed', $3, $4)",
         [novelId.toString(), author, amount.toString(), blockNumber]
+      );
+      break;
+    }
+
+    case "ChapterContentStored": {
+      const { novelId, chapterId, content } = decoded.args;
+      // content is hex bytes, decode to UTF-8 string
+      const textContent = Buffer.from((content as string).slice(2), "hex").toString("utf-8");
+      await db.query(
+        "UPDATE chapters SET content_text = $1, content_fetched = TRUE WHERE id = $2",
+        [textContent, chapterId.toString()]
       );
       break;
     }

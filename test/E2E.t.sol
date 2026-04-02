@@ -89,20 +89,13 @@ contract E2ETest is Test {
         novelCore.setKeeperRewardAmount(0.001 ether);
 
         // --- Create novel with 2 genesis chapters ---
-        bytes32[] memory genesisHashes = new bytes32[](2);
-        genesisHashes[0] = bytes32("genesis_ch1");
-        genesisHashes[1] = bytes32("genesis_ch2");
-        uint64[] memory genesisLengths = new uint64[](2);
-        genesisLengths[0] = 200;
-        genesisLengths[1] = 300;
-
         DataTypes.NovelConfig memory config = _defaultConfig();
         config.roundMinSubmissions = 5;
         config.worldLineCount = 2;
         config.roundsPerEpoch = 1;
 
         vm.prank(creatorAddr);
-        uint256 novelId = novelCore.createNovel{value: 10 ether}(config, defaultMetadata, genesisHashes, genesisLengths);
+        uint256 novelId = novelCore.createNovel{value: 10 ether}(config, defaultMetadata, _multiGenesisSubmissions());
 
         DataTypes.Novel memory novel = novelCore.getNovel(novelId);
         assertEq(novel.genesisChapterCount, 2);
@@ -115,10 +108,16 @@ contract E2ETest is Test {
         uint256[] memory chapterIds = new uint256[](5);
         for (uint256 i = 0; i < 5; i++) {
             uint256 parentId = worldLines[i % 2]; // Alternate between genesis chapters
-            vm.prank(authors[i]);
-            chapterIds[i] = novelCore.submitChapter{value: config.stakeAmount}(
-                novelId, parentId, bytes32(bytes(string.concat("chapter_", vm.toString(i)))), 500
+            bytes memory chContent = bytes(
+                string.concat(
+                    "Chapter content from author ",
+                    vm.toString(i),
+                    " that is long enough to meet the minimum chapter length requirement of one hundred bytes for testing"
+                )
             );
+            vm.prank(authors[i]);
+            chapterIds[i] =
+                novelCore.submitChapter{value: config.stakeAmount}(novelId, parentId, _makeSubmission(chContent));
         }
 
         // --- Keeper closes submissions, gets reward ---
@@ -254,15 +253,8 @@ contract E2ETest is Test {
         config.roundMinSubmissions = 3;
         config.worldLineCount = 2;
 
-        bytes32[] memory hashes = new bytes32[](2);
-        hashes[0] = bytes32("gen1");
-        hashes[1] = bytes32("gen2");
-        uint64[] memory lengths = new uint64[](2);
-        lengths[0] = 200;
-        lengths[1] = 200;
-
         vm.prank(creatorAddr);
-        uint256 novelId = novelCore.createNovel{value: 10 ether}(config, defaultMetadata, hashes, lengths);
+        uint256 novelId = novelCore.createNovel{value: 10 ether}(config, defaultMetadata, _multiGenesisSubmissions());
         // G=2
 
         uint256 poolBefore = prizePool.getPoolBalance(novelId);
@@ -314,13 +306,9 @@ contract E2ETest is Test {
         config.worldLineCount = 2;
         config.roundsPerEpoch = 3; // Need multiple rounds for pollution
 
-        bytes32[] memory hashes = new bytes32[](1);
-        hashes[0] = bytes32("genesis");
-        uint64[] memory lengths = new uint64[](1);
-        lengths[0] = 200;
-
         vm.prank(creatorAddr);
-        uint256 novelId = novelCore.createNovel{value: 5 ether}(config, defaultMetadata, hashes, lengths);
+        uint256 novelId =
+            novelCore.createNovel{value: 5 ether}(config, defaultMetadata, _genesisSubmissions(GENESIS_CONTENT));
 
         // Need 10+ unique authors for pollution detection
         address[10] memory manyAuthors;
@@ -330,10 +318,10 @@ contract E2ETest is Test {
         }
 
         // Round 1: author[9] gets fewest votes (bottom 20%)
-        _runPollutionRound(novelId, config, manyAuthors, 1);
+        this.runPollutionRoundExternal(novelId, config, manyAuthors, 1);
 
         // Round 2: author[9] again bottom → now has 2 consecutive strikes
-        _runPollutionRound(novelId, config, manyAuthors, 2);
+        this.runPollutionRoundExternal(novelId, config, manyAuthors, 2);
 
         // After round 2 settlement, author[9] should have been slashed
         // Check: author[9]'s stake balance should be reduced
@@ -341,7 +329,7 @@ contract E2ETest is Test {
         // After slashing, 50% of stake goes to prize pool
 
         // Round 3: not bottom → should have reset
-        _runPollutionRound(novelId, config, manyAuthors, 3);
+        this.runPollutionRoundExternal(novelId, config, manyAuthors, 3);
     }
 
     // ============================================================
@@ -354,13 +342,9 @@ contract E2ETest is Test {
         config.roundMinSubmissions = 3;
         config.worldLineCount = 2;
 
-        bytes32[] memory hashes = new bytes32[](1);
-        hashes[0] = bytes32("genesis");
-        uint64[] memory lengths = new uint64[](1);
-        lengths[0] = 200;
-
         vm.prank(creatorAddr);
-        uint256 novelId = novelCore.createNovel{value: 5 ether}(config, defaultMetadata, hashes, lengths);
+        uint256 novelId =
+            novelCore.createNovel{value: 5 ether}(config, defaultMetadata, _genesisSubmissions(GENESIS_CONTENT));
 
         // Run round 1
         (uint256 ch1,) = _doRoundWithChapters(novelId, config);
@@ -371,7 +355,7 @@ contract E2ETest is Test {
         // Submit some chapters for round 2 (will be abandoned by early epoch)
         uint256[] memory wl = novelCore.getActiveWorldLines(novelId);
         vm.prank(authors[0]);
-        novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], bytes32("r2ch1"), 500);
+        novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], _makeSubmission(CHAPTER1_CONTENT));
 
         // --- Owner triggers early epoch ---
         vm.prank(owner);
@@ -414,13 +398,9 @@ contract E2ETest is Test {
         config.roundMinSubmissions = 3;
         config.worldLineCount = 2;
 
-        bytes32[] memory hashes = new bytes32[](1);
-        hashes[0] = bytes32("genesis");
-        uint64[] memory lengths = new uint64[](1);
-        lengths[0] = 200;
-
         vm.prank(creatorAddr);
-        uint256 novelId = novelCore.createNovel{value: 5 ether}(config, defaultMetadata, hashes, lengths);
+        uint256 novelId =
+            novelCore.createNovel{value: 5 ether}(config, defaultMetadata, _genesisSubmissions(GENESIS_CONTENT));
 
         _doRoundWithChapters(novelId, config);
 
@@ -459,18 +439,14 @@ contract E2ETest is Test {
         config.roundMinSubmissions = 3;
         config.worldLineCount = 2;
 
-        bytes32[] memory hashes = new bytes32[](1);
-        hashes[0] = bytes32("genesis");
-        uint64[] memory lengths = new uint64[](1);
-        lengths[0] = 200;
-
         vm.prank(creatorAddr);
-        uint256 novelId = novelCore.createNovel{value: 1 ether}(config, defaultMetadata, hashes, lengths);
+        uint256 novelId =
+            novelCore.createNovel{value: 1 ether}(config, defaultMetadata, _genesisSubmissions(GENESIS_CONTENT));
         uint256[] memory wl = novelCore.getActiveWorldLines(novelId);
 
         // Author submits — stake is locked
         vm.prank(authors[0]);
-        novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], bytes32("ch1"), 500);
+        novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], _makeSubmission(CHAPTER1_CONTENT));
 
         // Cannot claim while stake is locked (in-flight)
         assertEq(novelCore.getClaimableStake(novelId, authors[0]), 0);
@@ -480,9 +456,9 @@ contract E2ETest is Test {
 
         // After round settles, stake becomes claimable
         vm.prank(authors[1]);
-        novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], bytes32("ch2"), 600);
+        novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], _makeSubmission(CHAPTER2_CONTENT));
         vm.prank(authors[2]);
-        novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], bytes32("ch3"), 700);
+        novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], _makeSubmission(CHAPTER3_CONTENT));
 
         uint256 t0 = block.timestamp;
         vm.warp(t0 + 2 days);
@@ -511,14 +487,9 @@ contract E2ETest is Test {
         config.roundMinSubmissions = 3;
         config.worldLineCount = 2;
 
-        bytes32[] memory hashes = new bytes32[](1);
-        hashes[0] = bytes32("genesis");
-        uint64[] memory lengths = new uint64[](1);
-        lengths[0] = 200;
-
         // No prize pool
         vm.prank(creatorAddr);
-        uint256 novelId = novelCore.createNovel(config, defaultMetadata, hashes, lengths);
+        uint256 novelId = novelCore.createNovel(config, defaultMetadata, _genesisSubmissions(GENESIS_CONTENT));
         assertEq(prizePool.getPoolBalance(novelId), 0);
 
         // Should run without division-by-zero
@@ -534,24 +505,21 @@ contract E2ETest is Test {
         config.roundMinSubmissions = 3;
         config.worldLineCount = 2;
 
-        bytes32[] memory hashes = new bytes32[](1);
-        hashes[0] = bytes32("genesis");
-        uint64[] memory lengths = new uint64[](1);
-        lengths[0] = 200;
-
         vm.prank(creatorAddr);
-        uint256 novelId = novelCore.createNovel{value: 1 ether}(config, defaultMetadata, hashes, lengths);
+        uint256 novelId =
+            novelCore.createNovel{value: 1 ether}(config, defaultMetadata, _genesisSubmissions(GENESIS_CONTENT));
 
         uint256 t0 = block.timestamp;
         uint256[] memory wl = novelCore.getActiveWorldLines(novelId);
 
         // Submit
         vm.prank(authors[0]);
-        uint256 ch1 = novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], bytes32("ch1"), 500);
+        uint256 ch1 =
+            novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], _makeSubmission(CHAPTER1_CONTENT));
         vm.prank(authors[1]);
-        novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], bytes32("ch2"), 600);
+        novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], _makeSubmission(CHAPTER2_CONTENT));
         vm.prank(authors[2]);
-        novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], bytes32("ch3"), 700);
+        novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], _makeSubmission(CHAPTER3_CONTENT));
 
         vm.warp(t0 + 2 days);
         novelCore.closeSubmissions(novelId);
@@ -593,23 +561,20 @@ contract E2ETest is Test {
         config.roundMinSubmissions = 3;
         config.worldLineCount = 2;
 
-        bytes32[] memory hashes = new bytes32[](1);
-        hashes[0] = bytes32("genesis");
-        uint64[] memory lengths = new uint64[](1);
-        lengths[0] = 200;
-
         vm.prank(creatorAddr);
-        uint256 novelId = novelCore.createNovel{value: 1 ether}(config, defaultMetadata, hashes, lengths);
+        uint256 novelId =
+            novelCore.createNovel{value: 1 ether}(config, defaultMetadata, _genesisSubmissions(GENESIS_CONTENT));
 
         uint256 t0 = block.timestamp;
         uint256[] memory wl = novelCore.getActiveWorldLines(novelId);
 
         vm.prank(authors[0]);
-        uint256 ch1 = novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], bytes32("ch1"), 500);
+        uint256 ch1 =
+            novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], _makeSubmission(CHAPTER1_CONTENT));
         vm.prank(authors[1]);
-        novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], bytes32("ch2"), 600);
+        novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], _makeSubmission(CHAPTER2_CONTENT));
         vm.prank(authors[2]);
-        novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], bytes32("ch3"), 700);
+        novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], _makeSubmission(CHAPTER3_CONTENT));
 
         vm.warp(t0 + 2 days);
         novelCore.closeSubmissions(novelId);
@@ -645,22 +610,17 @@ contract E2ETest is Test {
         config.roundMinSubmissions = 3;
         config.worldLineCount = 2;
 
-        bytes32[] memory hashes = new bytes32[](1);
-        hashes[0] = bytes32("genesis");
-        uint64[] memory lengths = new uint64[](1);
-        lengths[0] = 200;
-
         // No prize pool — keeper reward can't be paid
         vm.prank(creatorAddr);
-        uint256 novelId = novelCore.createNovel(config, defaultMetadata, hashes, lengths);
+        uint256 novelId = novelCore.createNovel(config, defaultMetadata, _genesisSubmissions(GENESIS_CONTENT));
 
         uint256[] memory wl = novelCore.getActiveWorldLines(novelId);
         vm.prank(authors[0]);
-        novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], bytes32("ch1"), 500);
+        novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], _makeSubmission(CHAPTER1_CONTENT));
         vm.prank(authors[1]);
-        novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], bytes32("ch2"), 600);
+        novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], _makeSubmission(CHAPTER2_CONTENT));
         vm.prank(authors[2]);
-        novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], bytes32("ch3"), 700);
+        novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], _makeSubmission(CHAPTER3_CONTENT));
 
         vm.warp(block.timestamp + 2 days);
 
@@ -683,13 +643,9 @@ contract E2ETest is Test {
         config.roundMinSubmissions = 3;
         config.worldLineCount = 2;
 
-        bytes32[] memory hashes = new bytes32[](1);
-        hashes[0] = bytes32("genesis");
-        uint64[] memory lengths = new uint64[](1);
-        lengths[0] = 200;
-
         vm.prank(creatorAddr);
-        uint256 novelId = novelCore.createNovel{value: 10 ether}(config, defaultMetadata, hashes, lengths);
+        uint256 novelId =
+            novelCore.createNovel{value: 10 ether}(config, defaultMetadata, _genesisSubmissions(GENESIS_CONTENT));
 
         _runEpochSimple(novelId, config);
 
@@ -701,6 +657,46 @@ contract E2ETest is Test {
     // ============================================================
     //  HELPERS
     // ============================================================
+
+    bytes constant GENESIS_CONTENT =
+        "Genesis chapter content that is long enough to meet the minimum chapter length requirement of one hundred bytes padding";
+    bytes constant CHAPTER1_CONTENT =
+        "Chapter one content that is sufficiently long to meet the minimum chapter length requirement of one hundred bytes padding";
+    bytes constant CHAPTER2_CONTENT =
+        "Chapter two content that is sufficiently long to meet the minimum chapter length requirement of one hundred bytes padding";
+    bytes constant CHAPTER3_CONTENT =
+        "Chapter three content that is sufficiently long to meet the minimum chapter length requirement of hundred bytes padding";
+
+    function _makeSubmission(bytes memory content) internal pure returns (DataTypes.ContentSubmission memory) {
+        return DataTypes.ContentSubmission({
+            contentHash: keccak256(content),
+            declaredLength: uint64(content.length),
+            content: content
+        });
+    }
+
+    function _genesisSubmissions(bytes memory content)
+        internal
+        pure
+        returns (DataTypes.ContentSubmission[] memory subs)
+    {
+        subs = new DataTypes.ContentSubmission[](1);
+        subs[0] = _makeSubmission(content);
+    }
+
+    function _multiGenesisSubmissions() internal pure returns (DataTypes.ContentSubmission[] memory subs) {
+        subs = new DataTypes.ContentSubmission[](2);
+        subs[0] = _makeSubmission(
+            bytes(
+                "Genesis chapter one content that is long enough to meet the minimum length requirement of 100 bytes for testing"
+            )
+        );
+        subs[1] = _makeSubmission(
+            bytes(
+                "Genesis chapter two content that is long enough to meet the minimum length requirement of 100 bytes for this test"
+            )
+        );
+    }
 
     function _defaultConfig() internal pure returns (DataTypes.NovelConfig memory) {
         return DataTypes.NovelConfig({
@@ -717,6 +713,7 @@ contract E2ETest is Test {
             stakeAmount: 0.01 ether,
             pollutionRounds: 3,
             pollutionThreshold: 20,
+            contentLocation: DataTypes.ContentLocation.Onchain,
             contentBaseUrl: ""
         });
     }
@@ -729,11 +726,12 @@ contract E2ETest is Test {
 
         // Submit 3 chapters
         vm.prank(authors[0]);
-        uint256 ch1 = novelCore.submitChapter{value: config.stakeAmount}(novelId, parentId, bytes32("ech1"), 500);
+        uint256 ch1 =
+            novelCore.submitChapter{value: config.stakeAmount}(novelId, parentId, _makeSubmission(CHAPTER1_CONTENT));
         vm.prank(authors[1]);
-        novelCore.submitChapter{value: config.stakeAmount}(novelId, parentId, bytes32("ech2"), 600);
+        novelCore.submitChapter{value: config.stakeAmount}(novelId, parentId, _makeSubmission(CHAPTER2_CONTENT));
         vm.prank(authors[2]);
-        novelCore.submitChapter{value: config.stakeAmount}(novelId, parentId, bytes32("ech3"), 700);
+        novelCore.submitChapter{value: config.stakeAmount}(novelId, parentId, _makeSubmission(CHAPTER3_CONTENT));
 
         // Round voting
         vm.warp(t0 + 2 days);
@@ -781,11 +779,11 @@ contract E2ETest is Test {
         DataTypes.Novel memory novel = novelCore.getNovel(novelId);
 
         vm.prank(authors[0]);
-        ch1 = novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], bytes32("rch1"), 500);
+        ch1 = novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], _makeSubmission(CHAPTER1_CONTENT));
         vm.prank(authors[1]);
-        ch2 = novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], bytes32("rch2"), 600);
+        ch2 = novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], _makeSubmission(CHAPTER2_CONTENT));
         vm.prank(authors[2]);
-        novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], bytes32("rch3"), 700);
+        novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], _makeSubmission(CHAPTER3_CONTENT));
 
         vm.warp(t0 + 2 days);
         novelCore.closeSubmissions(novelId);
@@ -805,13 +803,21 @@ contract E2ETest is Test {
         novelCore.settleRound(novelId);
     }
 
+    function runPollutionRoundExternal(
+        uint256 novelId,
+        DataTypes.NovelConfig memory config,
+        address[10] memory manyAuthors,
+        uint32 roundNum
+    ) external {
+        _runPollutionRound(novelId, config, manyAuthors, roundNum);
+    }
+
     function _runPollutionRound(
         uint256 novelId,
         DataTypes.NovelConfig memory config,
         address[10] memory manyAuthors,
         uint32 roundNum
     ) internal {
-        uint256 t0 = block.timestamp;
         uint256[] memory wl = novelCore.getActiveWorldLines(novelId);
         DataTypes.Novel memory novel = novelCore.getNovel(novelId);
 
@@ -819,12 +825,19 @@ contract E2ETest is Test {
         uint256[] memory chIds = new uint256[](10);
         for (uint256 i = 0; i < 10; i++) {
             vm.prank(manyAuthors[i]);
-            chIds[i] = novelCore.submitChapter{value: config.stakeAmount}(
-                novelId, wl[0], bytes32(bytes(string.concat("poll_r", vm.toString(roundNum), "_", vm.toString(i)))), 500
+            bytes memory pollContent = bytes(
+                string.concat(
+                    "Pollution round ",
+                    vm.toString(roundNum),
+                    " chapter by author ",
+                    vm.toString(i),
+                    " with enough padding to meet the minimum chapter length requirement of one hundred bytes"
+                )
             );
+            chIds[i] = novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], _makeSubmission(pollContent));
         }
 
-        vm.warp(t0 + 2 days);
+        vm.warp(block.timestamp + 2 days);
         novelCore.closeSubmissions(novelId);
 
         // Vote: give votes to first 8, leave last 2 (including author[9]) with fewest
@@ -836,12 +849,12 @@ contract E2ETest is Test {
         vm.prank(voters[0]);
         votingEngine.commitVote{value: 1 ether}(novelId, votingRoundId, keccak256(abi.encodePacked(chIds[0], salt)));
 
-        vm.warp(t0 + 6 days);
+        vm.warp(block.timestamp + 4 days);
         novelCore.closeCommit(novelId);
         vm.prank(voters[0]);
         votingEngine.revealVote(novelId, votingRoundId, chIds[0], salt);
 
-        vm.warp(t0 + 9 days);
+        vm.warp(block.timestamp + 3 days);
         novelCore.settleRound(novelId);
     }
 }

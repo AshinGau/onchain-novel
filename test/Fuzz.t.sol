@@ -66,6 +66,14 @@ contract FuzzTest is Test {
         vm.deal(voter1, 100 ether);
     }
 
+    function _makeSubmission(bytes memory content) internal pure returns (DataTypes.ContentSubmission memory) {
+        return DataTypes.ContentSubmission({
+            contentHash: keccak256(content),
+            declaredLength: uint64(content.length),
+            content: content
+        });
+    }
+
     // ============================================================
     //  FUZZ: Creator royalty formula
     // ============================================================
@@ -163,16 +171,20 @@ contract FuzzTest is Test {
             stakeAmount: 0.01 ether,
             pollutionRounds: 3,
             pollutionThreshold: 20,
+            contentLocation: DataTypes.ContentLocation.Onchain,
             contentBaseUrl: ""
         });
 
-        bytes32[] memory hashes = new bytes32[](1);
-        hashes[0] = bytes32("gen");
-        uint64[] memory lengths = new uint64[](1);
-        lengths[0] = minLen; // Exactly at minimum — should pass
+        // Generate content matching fuzzed minLen
+        bytes memory genContent = new bytes(minLen);
+        for (uint256 i = 0; i < minLen; i++) {
+            genContent[i] = bytes1(uint8(65 + (i % 26)));
+        }
+        DataTypes.ContentSubmission[] memory genesisChapters = new DataTypes.ContentSubmission[](1);
+        genesisChapters[0] = _makeSubmission(genContent);
 
         vm.prank(creatorAddr);
-        uint256 novelId = novelCore.createNovel(config, defaultMetadata, hashes, lengths);
+        uint256 novelId = novelCore.createNovel(config, defaultMetadata, genesisChapters);
         assertTrue(novelId > 0);
     }
 
@@ -197,17 +209,19 @@ contract FuzzTest is Test {
             stakeAmount: 0.01 ether,
             pollutionRounds: 3,
             pollutionThreshold: 20,
+            contentLocation: DataTypes.ContentLocation.Onchain,
             contentBaseUrl: ""
         });
 
-        bytes32[] memory hashes = new bytes32[](1);
-        hashes[0] = bytes32("gen");
-        uint64[] memory lengths = new uint64[](1);
-        lengths[0] = 200;
+        DataTypes.ContentSubmission[] memory genesisChapters = new DataTypes.ContentSubmission[](1);
+        bytes memory genContent = bytes(
+            "A]Genesis chapter content for testing that is definitely longer than one hundred bytes in total length for validation"
+        );
+        genesisChapters[0] = _makeSubmission(genContent);
 
         vm.prank(creatorAddr);
         vm.expectRevert();
-        novelCore.createNovel(config, defaultMetadata, hashes, lengths);
+        novelCore.createNovel(config, defaultMetadata, genesisChapters);
     }
 
     // ============================================================
@@ -242,19 +256,21 @@ contract FuzzTest is Test {
             stakeAmount: 0.01 ether,
             pollutionRounds: 3,
             pollutionThreshold: 20,
+            contentLocation: DataTypes.ContentLocation.Onchain,
             contentBaseUrl: ""
         });
 
         // Create novel with specified genesis count
-        bytes32[] memory hashes = new bytes32[](genesisCount);
-        uint64[] memory lengths = new uint64[](genesisCount);
+        bytes memory genContent = bytes(
+            "A]Genesis chapter content for testing that is definitely longer than one hundred bytes in total length for validation"
+        );
+        DataTypes.ContentSubmission[] memory genesisChapters = new DataTypes.ContentSubmission[](genesisCount);
         for (uint256 i = 0; i < genesisCount; i++) {
-            hashes[i] = bytes32(bytes(string.concat("g", vm.toString(i))));
-            lengths[i] = 200;
+            genesisChapters[i] = _makeSubmission(genContent);
         }
 
         vm.prank(creatorAddr);
-        uint256 novelId = novelCore.createNovel{value: poolAmount}(config, defaultMetadata, hashes, lengths);
+        uint256 novelId = novelCore.createNovel{value: poolAmount}(config, defaultMetadata, genesisChapters);
 
         uint256 poolBefore = prizePool.getPoolBalance(novelId);
         assertEq(poolBefore, poolAmount);
@@ -285,11 +301,6 @@ contract FuzzTest is Test {
     function testFuzz_PoolBalanceInvariant(uint256 tipAmount) public {
         tipAmount = bound(tipAmount, 0.001 ether, 10 ether);
 
-        bytes32[] memory hashes = new bytes32[](1);
-        hashes[0] = bytes32("gen");
-        uint64[] memory lengths = new uint64[](1);
-        lengths[0] = 200;
-
         DataTypes.NovelConfig memory config = DataTypes.NovelConfig({
             minChapterLength: 100,
             maxChapterLength: 10000,
@@ -304,11 +315,18 @@ contract FuzzTest is Test {
             stakeAmount: 0.01 ether,
             pollutionRounds: 3,
             pollutionThreshold: 20,
+            contentLocation: DataTypes.ContentLocation.Onchain,
             contentBaseUrl: ""
         });
 
+        DataTypes.ContentSubmission[] memory genesisChapters = new DataTypes.ContentSubmission[](1);
+        bytes memory genContent = bytes(
+            "A]Genesis chapter content for testing that is definitely longer than one hundred bytes in total length for validation"
+        );
+        genesisChapters[0] = _makeSubmission(genContent);
+
         vm.prank(creatorAddr);
-        uint256 novelId = novelCore.createNovel{value: 5 ether}(config, defaultMetadata, hashes, lengths);
+        uint256 novelId = novelCore.createNovel{value: 5 ether}(config, defaultMetadata, genesisChapters);
 
         // Tip
         vm.prank(creatorAddr);
@@ -338,12 +356,22 @@ contract FuzzTest is Test {
         uint256[] memory wl = novelCore.getActiveWorldLines(novelId);
         DataTypes.Novel memory novel = novelCore.getNovel(novelId);
 
+        bytes memory sub1 = bytes(
+            "First chapter submission content for fuzz testing that is definitely longer than one hundred bytes in total length"
+        );
+        bytes memory sub2 = bytes(
+            "Second chapter submission content for fuzz testing that is definitely longer than one hundred bytes in total length"
+        );
+        bytes memory sub3 = bytes(
+            "Third chapter submission content for fuzz testing that is definitely longer than one hundred bytes in total length!!"
+        );
+
         vm.prank(author1);
-        uint256 ch1 = novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], bytes32("f1"), 500);
+        uint256 ch1 = novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], _makeSubmission(sub1));
         vm.prank(author2);
-        novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], bytes32("f2"), 600);
+        novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], _makeSubmission(sub2));
         vm.prank(author3);
-        novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], bytes32("f3"), 700);
+        novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], _makeSubmission(sub3));
 
         vm.warp(t0 + 2 days);
         novelCore.closeSubmissions(novelId);

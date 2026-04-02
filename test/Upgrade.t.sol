@@ -100,14 +100,15 @@ contract UpgradeTest is Test {
 
     function test_UpgradeNovelCore_PreservesState() public {
         // Create a novel before upgrade
-        bytes32[] memory hashes = new bytes32[](1);
-        hashes[0] = bytes32("gen");
-        uint64[] memory lengths = new uint64[](1);
-        lengths[0] = 200;
+        DataTypes.ContentSubmission[] memory genesisChapters = new DataTypes.ContentSubmission[](1);
+        bytes memory genContent = bytes(
+            "A]Genesis chapter content for testing that is definitely longer than one hundred bytes in total length for validation"
+        );
+        genesisChapters[0] = _makeSubmission(genContent);
 
         DataTypes.NovelConfig memory config = _defaultConfig();
         vm.prank(creatorAddr);
-        uint256 novelId = novelCore.createNovel{value: 1 ether}(config, defaultMetadata, hashes, lengths);
+        uint256 novelId = novelCore.createNovel{value: 1 ether}(config, defaultMetadata, genesisChapters);
 
         // Record pre-upgrade state
         DataTypes.Novel memory novelBefore = novelCore.getNovel(novelId);
@@ -135,8 +136,11 @@ contract UpgradeTest is Test {
 
         // Verify novel still works after upgrade
         uint256[] memory wl = novelCore.getActiveWorldLines(novelId);
+        bytes memory subContent = bytes(
+            "Post upgrade chapter submission content for testing that is definitely longer than one hundred bytes in total length!!"
+        );
         vm.prank(author1);
-        novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], bytes32("post_upgrade"), 500);
+        novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], _makeSubmission(subContent));
     }
 
     // ============================================================
@@ -218,24 +222,34 @@ contract UpgradeTest is Test {
         vm.stopPrank();
 
         // Run full epoch on upgraded contracts
-        bytes32[] memory hashes = new bytes32[](1);
-        hashes[0] = bytes32("gen");
-        uint64[] memory lengths = new uint64[](1);
-        lengths[0] = 200;
+        DataTypes.ContentSubmission[] memory genesisChapters = new DataTypes.ContentSubmission[](1);
+        bytes memory genContent = bytes(
+            "A]Genesis chapter content for testing that is definitely longer than one hundred bytes in total length for validation"
+        );
+        genesisChapters[0] = _makeSubmission(genContent);
 
         DataTypes.NovelConfig memory config = _defaultConfig();
         vm.prank(creatorAddr);
-        uint256 novelId = novelCore.createNovel{value: 5 ether}(config, defaultMetadata, hashes, lengths);
+        uint256 novelId = novelCore.createNovel{value: 5 ether}(config, defaultMetadata, genesisChapters);
 
         uint256 t0 = block.timestamp;
         uint256[] memory wl = novelCore.getActiveWorldLines(novelId);
 
+        bytes memory sub1 = bytes(
+            "First chapter submission content for upgrade testing that is definitely longer than one hundred bytes in total length!"
+        );
+        bytes memory sub2 = bytes(
+            "Second chapter submission content for upgrade testing that is definitely longer than one hundred bytes in total length"
+        );
+        bytes memory sub3 = bytes(
+            "Third chapter submission content for upgrade testing that is definitely longer than one hundred bytes in total length!!"
+        );
         vm.prank(author1);
-        uint256 ch1 = novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], bytes32("ch1"), 500);
+        uint256 ch1 = novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], _makeSubmission(sub1));
         vm.prank(author2);
-        novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], bytes32("ch2"), 600);
+        novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], _makeSubmission(sub2));
         vm.prank(author3);
-        novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], bytes32("ch3"), 700);
+        novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], _makeSubmission(sub3));
 
         vm.warp(t0 + 2 days);
         novelCore.closeSubmissions(novelId);
@@ -277,6 +291,14 @@ contract UpgradeTest is Test {
         assertTrue(chapterNFT.isChapterMinted(novelId, ch1));
     }
 
+    function _makeSubmission(bytes memory content) internal pure returns (DataTypes.ContentSubmission memory) {
+        return DataTypes.ContentSubmission({
+            contentHash: keccak256(content),
+            declaredLength: uint64(content.length),
+            content: content
+        });
+    }
+
     function _defaultConfig() internal pure returns (DataTypes.NovelConfig memory) {
         return DataTypes.NovelConfig({
             minChapterLength: 100,
@@ -292,6 +314,7 @@ contract UpgradeTest is Test {
             stakeAmount: 0.01 ether,
             pollutionRounds: 3,
             pollutionThreshold: 20,
+            contentLocation: DataTypes.ContentLocation.Onchain,
             contentBaseUrl: ""
         });
     }
