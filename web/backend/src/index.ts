@@ -4,6 +4,7 @@ import { env } from "./utils/env.js";
 import { startIndexer } from "./indexer/index.js";
 import novelsRouter from "./api/novels.js";
 import chaptersRouter from "./api/chapters.js";
+import usersRouter from "./api/users.js";
 import { query } from "./db/index.js";
 
 const app = express();
@@ -31,6 +32,7 @@ app.get("/health", async (_req, res) => {
 // API routes
 app.use("/api/novels", novelsRouter);
 app.use("/api/chapters", chaptersRouter);
+app.use("/api/users", usersRouter);
 
 // Start server
 app.listen(env.PORT, () => {

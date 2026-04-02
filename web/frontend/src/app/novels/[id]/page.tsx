@@ -3,6 +3,9 @@ import { notFound } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ComingSoonButton } from "@/components/coming-soon-button";
+import { TipButton } from "@/components/tip-modal";
+import { VotePanel } from "@/components/vote-panel";
+import { RewardsPanel } from "@/components/rewards-panel";
 import { fetchApi, type Novel, type TreeChapter, ROUND_PHASES, EPOCH_PHASES } from "@/lib/api";
 import { shortenAddress, formatEth } from "@/lib/format";
 import { StoryTree } from "@/components/story-tree";
@@ -13,6 +16,7 @@ export default async function NovelDetailPage({ params }: { params: Promise<{ id
   let novel: Novel;
   let tree: TreeChapter[] = [];
   let forks: Novel[] = [];
+  let roundCandidates: { id: string; author: string; chapter_index: number; vote_count: string; is_world_line: boolean; content_text?: string | null }[] = [];
 
   try {
     novel = await fetchApi<Novel>(`/api/novels/${id}`);
@@ -29,6 +33,14 @@ export default async function NovelDetailPage({ params }: { params: Promise<{ id
     const forkData = await fetchApi<{ forks: Novel[] }>(`/api/novels/${id}/forks`);
     forks = forkData.forks;
   } catch {}
+
+  // Fetch round candidates for voting (when in Committing or Revealing phase)
+  if (novel.active && (novel.round_phase === 1 || novel.round_phase === 2)) {
+    try {
+      const roundData = await fetchApi<{ chapters: typeof roundCandidates }>(`/api/novels/${id}/rounds/${novel.current_round}`);
+      roundCandidates = roundData.chapters;
+    } catch {}
+  }
 
   const phase = novel.epoch_phase === 0
     ? ROUND_PHASES[novel.round_phase]
@@ -85,7 +97,7 @@ export default async function NovelDetailPage({ params }: { params: Promise<{ id
       <div className="rounded-lg bg-neutral-900 border border-neutral-800 p-4 mb-6">
         <div className="flex items-center justify-between mb-2">
           <h2 className="font-semibold">Prize Pool</h2>
-          <ComingSoonButton>Tip this Novel</ComingSoonButton>
+          <TipButton novelId={id} />
         </div>
         <div className="grid grid-cols-3 gap-4 text-center">
           <div>
@@ -122,12 +134,26 @@ export default async function NovelDetailPage({ params }: { params: Promise<{ id
         {novel.active && novel.round_phase === 0 && (
           <ComingSoonButton>Write a Chapter</ComingSoonButton>
         )}
-        {novel.active && novel.round_phase === 1 && (
-          <ComingSoonButton>Vote</ComingSoonButton>
-        )}
         <Link href={`/novels/${id}/canon`}>
           <Button variant="secondary">Read Canon</Button>
         </Link>
+      </div>
+
+      {/* Vote Panel */}
+      {novel.active && (novel.round_phase === 1 || novel.round_phase === 2) && roundCandidates.length > 0 && (
+        <div className="mb-6">
+          <VotePanel
+            novelId={id}
+            votingRoundId={`${BigInt(id)}:${novel.current_epoch}:${novel.current_round}`}
+            phase={novel.round_phase === 1 ? "committing" : "revealing"}
+            candidates={roundCandidates}
+          />
+        </div>
+      )}
+
+      {/* Rewards Panel */}
+      <div className="mb-6">
+        <RewardsPanel novelId={id} />
       </div>
 
       {/* Story Tree */}
