@@ -65,6 +65,7 @@ contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuard, UUP
     error NoCandidates();
     error AlreadySwept();
     error NotRevealed();
+    error ZeroStake();
 
     // ============================================================
     //                        MODIFIERS
@@ -104,6 +105,8 @@ contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuard, UUP
 
     /// @inheritdoc IVotingEngine
     function commitVote(uint256 novelId, uint256 votingRoundId, bytes32 commitHash) external payable {
+        if (msg.value == 0) revert ZeroStake();
+
         bytes32 roundKey = _roundKey(novelId, votingRoundId);
         VotingRoundData storage round = _votingRounds[roundKey];
 
@@ -120,6 +123,8 @@ contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuard, UUP
         });
 
         _voters[roundKey].push(msg.sender);
+
+        emit VoteCommitted(novelId, votingRoundId, msg.sender);
     }
 
     /// @inheritdoc IVotingEngine

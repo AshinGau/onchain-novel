@@ -264,11 +264,11 @@ contract E2ETest is Test {
         uint256 poolBefore = prizePool.getPoolBalance(novelId);
         assertEq(poolBefore, 10 ether);
 
-        // --- Epoch 1: G=2, C=0 → creator gets 100% ---
+        // --- Epoch 1: G=2, C=1 (incremented before distribution) → creator gets 2/3 ---
         _runEpochSimple(novelId, config);
         uint256 epoch1CreatorReward = prizePool.getPendingReward(novelId, creatorAddr);
-        // epochRelease = 10 * 0.3 = 3.0, creator = 3.0 * 2/(2+0) = 3.0
-        assertEq(epoch1CreatorReward, 3 ether);
+        // epochRelease = 10 * 0.3 = 3.0, creator = 3.0 * 2/(2+1) = 2.0
+        assertEq(epoch1CreatorReward, 2 ether);
         uint256 poolAfter1 = prizePool.getPoolBalance(novelId);
         assertEq(poolAfter1, 7 ether);
 
@@ -277,21 +277,21 @@ contract E2ETest is Test {
         prizePool.tipNovel{value: 3 ether}(novelId);
         assertEq(prizePool.getPoolBalance(novelId), 10 ether);
 
-        // --- Epoch 2: G=2, C=1 → creator gets 2/3 ---
+        // --- Epoch 2: G=2, C=2 → creator gets 50% ---
         _runEpochSimple(novelId, config);
         DataTypes.Novel memory novel = novelCore.getNovel(novelId);
         assertEq(novel.cumulativeCanonChapters, 2);
-        // epochRelease = 10 * 0.3 = 3.0, creator = 3.0 * 2/(2+1) = 2.0
+        // epochRelease = 10 * 0.3 = 3.0, creator = 3.0 * 2/(2+2) = 1.5
         uint256 totalCreatorReward = prizePool.getPendingReward(novelId, creatorAddr);
-        assertEq(totalCreatorReward, 3 ether + 2 ether); // epoch1 + epoch2
+        assertEq(totalCreatorReward, 2 ether + 1.5 ether); // epoch1 + epoch2
 
-        // --- Epoch 3: G=2, C=2 → creator gets 50% ---
+        // --- Epoch 3: G=2, C=3 → creator gets 2/5 = 40% ---
         _runEpochSimple(novelId, config);
         novel = novelCore.getNovel(novelId);
         assertEq(novel.cumulativeCanonChapters, 3);
-        // pool was 7 after epoch2, epochRelease = 7 * 0.3 = 2.1, creator = 2.1 * 2/(2+2) = 1.05
+        // pool was 7 after epoch2, epochRelease = 7 * 0.3 = 2.1, creator = 2.1 * 2/(2+3) = 0.84
         totalCreatorReward = prizePool.getPendingReward(novelId, creatorAddr);
-        assertEq(totalCreatorReward, 3 ether + 2 ether + 1.05 ether);
+        assertEq(totalCreatorReward, 2 ether + 1.5 ether + 0.84 ether);
 
         // Verify pool exponential decay
         uint256 finalPool = prizePool.getPoolBalance(novelId);
@@ -391,20 +391,115 @@ contract E2ETest is Test {
         uint256 forkedNovelId = novelCore.forkNovel{value: 2 ether}(novelId, ch1, config);
 
         DataTypes.Novel memory forked = novelCore.getNovel(forkedNovelId);
-        assertEq(forked.creator, authors[1]);
+        assertEq(forked.creator, creatorAddr); // Creator royalty flows to original creator
         assertEq(forked.genesisChapterCount, 1);
         assertEq(forked.forkSourceNovelId, novelId);
         assertTrue(forked.active);
-        assertEq(prizePool.getPoolBalance(forkedNovelId), 2 ether);
+        // Fork pool = 2 - 0.01 (fork fee) = 1.99 ETH
+        assertEq(prizePool.getPoolBalance(forkedNovelId), 1.99 ether);
 
         // Forked novel works independently
         uint256[] memory forkWl = novelCore.getActiveWorldLines(forkedNovelId);
         assertEq(forkWl.length, 1);
     }
 
+    /// @notice Verify settleEpoch works correctly AFTER triggerEarlyEpoch
+    function test_E2E_EarlyEpoch_FullSettlement() public {
+        DataTypes.NovelConfig memory config = _defaultConfig();
+        config.roundsPerEpoch = 3;
+        config.roundMinSubmissions = 3;
+        config.worldLineCount = 2;
+
+        bytes32[] memory hashes = new bytes32[](1);
+        hashes[0] = bytes32("genesis");
+        uint64[] memory lengths = new uint64[](1);
+        lengths[0] = 200;
+
+        vm.prank(creatorAddr);
+        uint256 novelId = novelCore.createNovel{value: 5 ether}(config, hashes, lengths);
+
+        _doRoundWithChapters(novelId, config);
+
+        vm.prank(owner);
+        novelCore.triggerEarlyEpoch(novelId);
+
+        DataTypes.Novel memory novel = novelCore.getNovel(novelId);
+        uint256 epochVotingId =
+            uint256(keccak256(abi.encodePacked(novelId, novel.currentEpoch, novel.currentRound, true)));
+
+        uint256[] memory wl = novelCore.getActiveWorldLines(novelId);
+        bytes32 es = bytes32("early_es");
+        vm.prank(voters[0]);
+        votingEngine.commitVote{value: 0.5 ether}(novelId, epochVotingId, keccak256(abi.encodePacked(wl[0], es)));
+
+        vm.warp(block.timestamp + 4 days);
+        novelCore.closeEpochCommit(novelId);
+        vm.prank(voters[0]);
+        votingEngine.revealVote(novelId, epochVotingId, wl[0], es);
+
+        vm.warp(block.timestamp + 3 days);
+        novelCore.settleEpoch(novelId);
+
+        novel = novelCore.getNovel(novelId);
+        assertEq(novel.currentEpoch, 2);
+        assertEq(uint8(novel.epochPhase), uint8(DataTypes.EpochPhase.Rounds));
+    }
+
     // ============================================================
     //  SCENARIO 2.6: Edge Cases
     // ============================================================
+
+    /// @notice Author cannot claim locked stakes before round settles
+    function test_E2E_EdgeCase_StakeLocking() public {
+        DataTypes.NovelConfig memory config = _defaultConfig();
+        config.roundMinSubmissions = 3;
+        config.worldLineCount = 2;
+
+        bytes32[] memory hashes = new bytes32[](1);
+        hashes[0] = bytes32("genesis");
+        uint64[] memory lengths = new uint64[](1);
+        lengths[0] = 200;
+
+        vm.prank(creatorAddr);
+        uint256 novelId = novelCore.createNovel{value: 1 ether}(config, hashes, lengths);
+        uint256[] memory wl = novelCore.getActiveWorldLines(novelId);
+
+        // Author submits — stake is locked
+        vm.prank(authors[0]);
+        novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], bytes32("ch1"), 500);
+
+        // Cannot claim while stake is locked (in-flight)
+        assertEq(novelCore.getClaimableStake(novelId, authors[0]), 0);
+        vm.prank(authors[0]);
+        vm.expectRevert();
+        novelCore.claimStakeRefund(novelId);
+
+        // After round settles, stake becomes claimable
+        vm.prank(authors[1]);
+        novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], bytes32("ch2"), 600);
+        vm.prank(authors[2]);
+        novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], bytes32("ch3"), 700);
+
+        uint256 t0 = block.timestamp;
+        vm.warp(t0 + 2 days);
+        novelCore.closeSubmissions(novelId);
+
+        uint256 rvId = uint256(keccak256(abi.encodePacked(novelId, uint32(1), uint32(1), false)));
+        bytes32 s = bytes32("sl");
+        vm.prank(voters[0]);
+        votingEngine.commitVote{value: 0.1 ether}(novelId, rvId, keccak256(abi.encodePacked(uint256(2), s)));
+        vm.warp(t0 + 6 days);
+        novelCore.closeCommit(novelId);
+        vm.prank(voters[0]);
+        votingEngine.revealVote(novelId, rvId, 2, s);
+        vm.warp(t0 + 9 days);
+        novelCore.settleRound(novelId);
+
+        // Now stake is claimable
+        assertTrue(novelCore.getClaimableStake(novelId, authors[0]) > 0);
+        vm.prank(authors[0]);
+        novelCore.claimStakeRefund(novelId);
+    }
 
     function test_E2E_EdgeCase_ZeroPrizePool() public {
         DataTypes.NovelConfig memory config = _defaultConfig();
@@ -617,7 +712,8 @@ contract E2ETest is Test {
             revealDuration: 2 days,
             stakeAmount: 0.01 ether,
             pollutionRounds: 3,
-            pollutionThreshold: 20
+            pollutionThreshold: 20,
+            contentBaseUrl: ""
         });
     }
 
