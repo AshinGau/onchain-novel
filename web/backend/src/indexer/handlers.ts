@@ -194,11 +194,26 @@ export async function handleNovelCoreEvent(log: Log, db: Client, rpc: PublicClie
       break;
     }
 
+    case "StakeRefunded": {
+      const { novelId, author, amount } = decoded.args;
+      await db.query(
+        "INSERT INTO stake_events (novel_id, author, event_type, amount, block_number) VALUES ($1, $2, 'refunded', $3, $4)",
+        [novelId.toString(), author, amount.toString(), blockNumber]
+      );
+      break;
+    }
+
+    case "StakeSlashed": {
+      const { novelId, author, amount } = decoded.args;
+      await db.query(
+        "INSERT INTO stake_events (novel_id, author, event_type, amount, block_number) VALUES ($1, $2, 'slashed', $3, $4)",
+        [novelId.toString(), author, amount.toString(), blockNumber]
+      );
+      break;
+    }
+
     case "EarlyEpochTriggered":
-    case "StakeRefunded":
-    case "StakeSlashed":
     case "KeeperRewarded":
-      // Logged but no DB action needed in Phase 1
       break;
   }
 }
@@ -278,7 +293,6 @@ export async function handleVotingEvent(log: Log, db: Client) {
     }
     case "VotesTallied": {
       const { novelId, votingRoundId, rankedCandidateIds } = decoded.args;
-      // Update vote counts based on revealed votes
       for (const candidateId of rankedCandidateIds) {
         const res = await db.query(
           "SELECT COUNT(*) as cnt FROM votes WHERE novel_id = $1 AND voting_round_id = $2 AND candidate_id = $3 AND revealed = TRUE",
@@ -286,6 +300,18 @@ export async function handleVotingEvent(log: Log, db: Client) {
         );
         await db.query("UPDATE chapters SET vote_count = $1 WHERE id = $2", [res.rows[0].cnt, candidateId.toString()]);
       }
+      break;
+    }
+    case "VotingRewardClaimed": {
+      const { novelId, votingRoundId, voter, totalAmount } = decoded.args;
+      await db.query(
+        "UPDATE votes SET claimed = TRUE WHERE novel_id = $1 AND voting_round_id = $2 AND voter = $3",
+        [novelId.toString(), votingRoundId.toString(), voter]
+      );
+      await db.query(
+        "INSERT INTO reward_claims (novel_id, claimant, amount, source, voting_round_id, block_number) VALUES ($1, $2, $3, 'voting', $4, $5)",
+        [novelId.toString(), voter, totalAmount.toString(), votingRoundId.toString(), blockNumber]
+      );
       break;
     }
     default:
@@ -313,6 +339,14 @@ export async function handlePrizePoolEvent(log: Log, db: Client) {
       await db.query(
         "UPDATE novels SET total_tipped = total_tipped + $1, total_funded = total_funded + $1 WHERE id = $2",
         [amount.toString(), novelId.toString()]
+      );
+      break;
+    }
+    case "RewardClaimed": {
+      const { novelId, claimant, amount } = decoded.args;
+      await db.query(
+        "INSERT INTO reward_claims (novel_id, claimant, amount, source, block_number) VALUES ($1, $2, $3, 'prize_pool', $4)",
+        [novelId.toString(), claimant, amount.toString(), blockNumber]
       );
       break;
     }
