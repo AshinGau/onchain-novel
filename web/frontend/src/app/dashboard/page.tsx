@@ -6,9 +6,8 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { API_BASE } from "@/lib/api";
 import { shortenAddress, formatEth, timeAgo } from "@/lib/format";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
 interface UserChapter {
   id: string;

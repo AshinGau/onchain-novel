@@ -122,7 +122,7 @@ router.post("/:id/comments", verifyWallet, async (req, res) => {
   try {
     const { id } = req.params;
     const { content } = req.body;
-    const authorAddress = (req as any).verifiedAddress;
+    const authorAddress = req.verifiedAddress;
 
     if (!content || typeof content !== "string" || content.trim().length === 0) {
       return res.status(400).json({ error: "Content is required" });
@@ -153,7 +153,7 @@ router.post("/:id/comments", verifyWallet, async (req, res) => {
 router.delete("/:id/comments/:commentId", verifyWallet, async (req, res) => {
   try {
     const { id, commentId } = req.params;
-    const authorAddress = (req as any).verifiedAddress;
+    const authorAddress = req.verifiedAddress;
 
     const commentRes = await query(
       "SELECT * FROM comments WHERE id = $1 AND chapter_id = $2 AND deleted = FALSE",
@@ -163,7 +163,7 @@ router.delete("/:id/comments/:commentId", verifyWallet, async (req, res) => {
       return res.status(404).json({ error: "Comment not found" });
     }
 
-    if (commentRes.rows[0].author_address?.toLowerCase() !== authorAddress.toLowerCase()) {
+    if (commentRes.rows[0].author_address?.toLowerCase() !== authorAddress?.toLowerCase()) {
       return res.status(403).json({ error: "Only the author can delete this comment" });
     }
 

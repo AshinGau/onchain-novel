@@ -71,6 +71,7 @@ export function VotePanel({ novelId, votingRoundId, phase, candidates, title }: 
 
   function handleCommit() {
     if (!selected) return;
+    if (!votingRoundId) return;
     const salt = generateSalt();
     const commitHash = keccak256(encodePacked(["uint256", "bytes32"], [BigInt(selected), salt]));
 

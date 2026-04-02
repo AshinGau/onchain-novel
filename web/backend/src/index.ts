@@ -1,8 +1,10 @@
 import express from "express";
 import cors from "cors";
+import rateLimit from "express-rate-limit";
 import { env } from "./utils/env.js";
 import { startIndexer } from "./indexer/index.js";
 import { retryUnfetchedContent } from "./indexer/content-fetcher.js";
+import { syncPoolBalances } from "./utils/pool-sync.js";
 import novelsRouter from "./api/novels.js";
 import chaptersRouter from "./api/chapters.js";
 import usersRouter from "./api/users.js";
@@ -11,8 +13,18 @@ import { query } from "./db/index.js";
 
 const app = express();
 
-app.use(cors());
+app.use(cors({
+  origin: process.env.FRONTEND_URL || "*",
+}));
 app.use(express.json());
+
+// Rate limiting
+const apiLimiter = rateLimit({ windowMs: 60000, max: 100, standardHeaders: true, legacyHeaders: false });
+const writeLimiter = rateLimit({ windowMs: 60000, max: 20, standardHeaders: true, legacyHeaders: false });
+
+app.use("/api", apiLimiter);
+app.use("/api/chapters/*/comments", writeLimiter);
+app.use("/api/notifications/*/mark-read", writeLimiter);
 
 // Health check
 app.get("/health", async (_req, res) => {
@@ -54,3 +66,10 @@ setInterval(() => {
     console.error("Content retry error:", err)
   );
 }, 5 * 60 * 1000);
+
+// Sync pool balances every 60 seconds
+setInterval(() => {
+  syncPoolBalances().catch(err =>
+    console.error("Pool balance sync error:", err)
+  );
+}, 60 * 1000);

@@ -23,8 +23,8 @@ export function StoryTree({ chapters, novelId }: StoryTreeProps) {
     <div className="space-y-4">
       {rounds.map((round) => (
         <div key={round}>
-          <p className="text-xs text-neutral-500 mb-1">Round {round}</p>
-          <div className="flex flex-wrap gap-2">
+          <p className="text-xs text-neutral-500 mb-1">{round === 0 ? "Genesis" : `Round ${round}`}</p>
+          <div className="flex flex-col md:flex-row md:flex-wrap gap-2 border-l border-neutral-700 pl-3 md:border-l-0 md:pl-0">
             {byRound.get(round)!.map((ch) => (
               <Link
                 key={ch.id}

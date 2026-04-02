@@ -2,6 +2,7 @@
 
 import { use, useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useAccount, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { parseEther } from "viem";
 import { uploadFile } from "@/lib/arweave";
@@ -206,7 +207,8 @@ export default function ForkNovelPage({
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 pb-24 md:pb-8">
-      <h1 className="text-2xl font-bold mb-1">Fork a Novel</h1>
+      <Link href={`/novels/${novelId}`} className="text-sm text-neutral-400 hover:text-white">← Back to Novel</Link>
+      <h1 className="text-2xl font-bold mb-1 mt-4">Fork a Novel</h1>
       <p className="text-neutral-400 text-sm mb-6">
         Create a new novel branching from an existing chapter.
       </p>
