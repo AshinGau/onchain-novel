@@ -3,6 +3,7 @@ import { type Log, type PublicClient, decodeEventLog, formatEther } from "viem";
 import { novelCoreAbi, votingEngineAbi, prizePoolAbi, chapterNFTAbi } from "../utils/abi.js";
 import { env } from "../utils/env.js";
 import { fetchChapterContent } from "./content-fetcher.js";
+import { createNotification, createRevealReminders } from "../utils/notifications.js";
 
 type Client = pg.PoolClient;
 
@@ -143,6 +144,41 @@ export async function handleNovelCoreEvent(log: Log, db: Client, rpc: PublicClie
         "UPDATE novels SET current_round = $1, round_phase = $2, phase_start_time = $3 WHERE id = $4",
         [round, phase, log.blockNumber?.toString() ?? "0", novelId.toString()]
       );
+
+      // Fetch novel title for notification
+      const novelRow = await db.query("SELECT title FROM novels WHERE id = $1", [novelId.toString()]);
+      const novelTitle = novelRow.rows[0]?.title || `Novel #${novelId}`;
+      const phaseNames = ["Submitting", "Committing", "Revealing", "Settling"];
+      const phaseName = phaseNames[phase] || `Phase ${phase}`;
+
+      // Broadcast phase change notification
+      await createNotification(db, {
+        recipient: null,
+        novelId: novelId.toString(),
+        type: "phase_change",
+        title: `${novelTitle} — Round ${round}`,
+        message: `Phase changed to ${phaseName}.`,
+        link: `/novels/${novelId}`,
+      });
+
+      // If entering Revealing phase, create reveal reminders for committed voters
+      if (phase === 2) {
+        // Need to find the votingRoundId — we query votes for this novel that are unrevealed
+        const unrevealed = await db.query(
+          "SELECT DISTINCT voter, voting_round_id FROM votes WHERE novel_id = $1 AND revealed = FALSE AND claimed = FALSE",
+          [novelId.toString()]
+        );
+        for (const row of unrevealed.rows) {
+          await createNotification(db, {
+            recipient: row.voter,
+            novelId: novelId.toString(),
+            type: "reveal_reminder",
+            title: "Reveal your vote!",
+            message: `Round ${round} of "${novelTitle}" has entered the reveal phase. Reveal your vote to avoid losing your stake.`,
+            link: `/novels/${novelId}`,
+          });
+        }
+      }
       break;
     }
 
@@ -152,6 +188,38 @@ export async function handleNovelCoreEvent(log: Log, db: Client, rpc: PublicClie
         "UPDATE novels SET current_epoch = $1, epoch_phase = $2, phase_start_time = $3 WHERE id = $4",
         [epoch, phase, log.blockNumber?.toString() ?? "0", novelId.toString()]
       );
+
+      const novelRow2 = await db.query("SELECT title FROM novels WHERE id = $1", [novelId.toString()]);
+      const novelTitle2 = novelRow2.rows[0]?.title || `Novel #${novelId}`;
+      const epochPhaseNames = ["Rounds", "Committing", "Revealing", "Settling"];
+      const epochPhaseName = epochPhaseNames[phase] || `Phase ${phase}`;
+
+      await createNotification(db, {
+        recipient: null,
+        novelId: novelId.toString(),
+        type: "phase_change",
+        title: `${novelTitle2} — Epoch ${epoch}`,
+        message: `Epoch phase changed to ${epochPhaseName}.`,
+        link: `/novels/${novelId}`,
+      });
+
+      // Epoch Revealing phase → remind epoch voters to reveal
+      if (phase === 2) {
+        const unrevealed2 = await db.query(
+          "SELECT DISTINCT voter, voting_round_id FROM votes WHERE novel_id = $1 AND revealed = FALSE AND claimed = FALSE",
+          [novelId.toString()]
+        );
+        for (const row of unrevealed2.rows) {
+          await createNotification(db, {
+            recipient: row.voter,
+            novelId: novelId.toString(),
+            type: "reveal_reminder",
+            title: "Reveal your epoch vote!",
+            message: `Epoch ${epoch} of "${novelTitle2}" has entered the reveal phase. Reveal now or lose your stake.`,
+            link: `/novels/${novelId}`,
+          });
+        }
+      }
       break;
     }
 
@@ -170,10 +238,8 @@ export async function handleNovelCoreEvent(log: Log, db: Client, rpc: PublicClie
 
     case "CanonEstablished": {
       const { novelId, epoch, canonWorldLineId } = decoded.args;
-      // Trace the canon chain back to genesis and mark all chapters
       await traceAndMarkCanon(canonWorldLineId, db, rpc);
 
-      // Update cumulative count
       const novel = await rpc.readContract({
         address: env.NOVEL_CORE_ADDRESS, abi: novelCoreAbi,
         functionName: "getNovel", args: [novelId],
@@ -182,6 +248,17 @@ export async function handleNovelCoreEvent(log: Log, db: Client, rpc: PublicClie
         "UPDATE novels SET cumulative_canon_chapters = $1 WHERE id = $2",
         [novel.cumulativeCanonChapters, novelId.toString()]
       );
+
+      const novelRow3 = await db.query("SELECT title FROM novels WHERE id = $1", [novelId.toString()]);
+      const novelTitle3 = novelRow3.rows[0]?.title || `Novel #${novelId}`;
+      await createNotification(db, {
+        recipient: null,
+        novelId: novelId.toString(),
+        type: "canon_established",
+        title: `Canon established — ${novelTitle3}`,
+        message: `Epoch ${epoch} canon has been established. New chapter NFTs minted and rewards distributed.`,
+        link: `/novels/${novelId}/canon`,
+      });
       break;
     }
 

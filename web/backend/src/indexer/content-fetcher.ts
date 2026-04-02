@@ -45,3 +45,20 @@ export async function fetchChapterContent(chapterId: bigint, novelId: bigint) {
 
   console.error(`Failed to fetch content for chapter ${chapterId} after ${maxRetries} attempts`);
 }
+
+/**
+ * Periodically retry fetching content for chapters that failed initial fetch.
+ * Call this on a timer (e.g. every 5 minutes).
+ */
+export async function retryUnfetchedContent() {
+  const res = await query(
+    `SELECT c.id, c.novel_id FROM chapters c
+     JOIN novels n ON n.id = c.novel_id
+     WHERE c.content_fetched = FALSE AND n.config->>'contentBaseUrl' != ''
+     LIMIT 20`
+  );
+
+  for (const row of res.rows) {
+    await fetchChapterContent(BigInt(row.id), BigInt(row.novel_id));
+  }
+}

@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { fetchApi, type Chapter } from "@/lib/api";
 import { shortenAddress } from "@/lib/format";
-import { ComingSoonButton } from "@/components/coming-soon-button";
+import { CommentSection } from "@/components/comment-section";
+import { ReportModal } from "@/components/report-modal";
 
 interface SiblingChapter {
   id: string;
@@ -35,6 +37,12 @@ export default async function ChapterPage({ params }: { params: Promise<{ id: st
   try {
     const childData = await fetchApi<{ children: SiblingChapter[] }>(`/api/chapters/${id}/children`);
     children = childData.children;
+  } catch {}
+
+  let comments: { id: number; author_address: string | null; content: string; created_at: string }[] = [];
+  try {
+    const commentData = await fetchApi<{ comments: typeof comments }>(`/api/chapters/${id}/comments`);
+    comments = commentData.comments;
   } catch {}
 
   return (
@@ -123,16 +131,23 @@ export default async function ChapterPage({ params }: { params: Promise<{ id: st
         </div>
       )}
 
-      {/* Coming Soon actions */}
+      {/* Actions */}
       <div className="flex gap-2 mt-4 border-t border-neutral-800 pt-4">
-        <ComingSoonButton>Continue this story</ComingSoonButton>
-        <ComingSoonButton>Report</ComingSoonButton>
+        <Link href={`/write/${chapter.novel_id}/${chapter.id}`}>
+          <Button variant="outline">Continue this story</Button>
+        </Link>
+        {!chapter.is_canon && (
+          <Link href={`/fork/${chapter.novel_id}/${chapter.id}`}>
+            <Button variant="outline">Fork from here</Button>
+          </Link>
+        )}
+        <ReportModal novelId={chapter.novel_id} chapterId={id} />
       </div>
 
-      {/* Comments placeholder */}
+      {/* Comments */}
       <div className="mt-6 border-t border-neutral-800 pt-4">
         <h2 className="font-semibold mb-2">Comments</h2>
-        <p className="text-neutral-500 text-sm">Comments coming soon.</p>
+        <CommentSection chapterId={id} initialComments={comments} />
       </div>
     </div>
   );

@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { query } from "../db/index.js";
+import { verifyWallet } from "../utils/auth.js";
 
 const router = Router();
 
@@ -112,6 +113,64 @@ router.get("/:id/comments", async (req, res) => {
     res.json({ comments: commentsRes.rows });
   } catch (err) {
     console.error("GET /api/chapters/:id/comments error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /api/chapters/:id/comments — Create a comment (requires wallet signature)
+router.post("/:id/comments", verifyWallet, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { content } = req.body;
+    const authorAddress = (req as any).verifiedAddress;
+
+    if (!content || typeof content !== "string" || content.trim().length === 0) {
+      return res.status(400).json({ error: "Content is required" });
+    }
+    if (content.length > 5000) {
+      return res.status(400).json({ error: "Content must be 5000 characters or less" });
+    }
+
+    // Verify chapter exists
+    const chapterRes = await query("SELECT id FROM chapters WHERE id = $1", [id]);
+    if (chapterRes.rows.length === 0) {
+      return res.status(404).json({ error: "Chapter not found" });
+    }
+
+    const result = await query(
+      "INSERT INTO comments (chapter_id, author_address, content) VALUES ($1, $2, $3) RETURNING *",
+      [id, authorAddress || null, content.trim()]
+    );
+
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    console.error("POST /api/chapters/:id/comments error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// DELETE /api/chapters/:id/comments/:commentId — Soft-delete (requires wallet signature)
+router.delete("/:id/comments/:commentId", verifyWallet, async (req, res) => {
+  try {
+    const { id, commentId } = req.params;
+    const authorAddress = (req as any).verifiedAddress;
+
+    const commentRes = await query(
+      "SELECT * FROM comments WHERE id = $1 AND chapter_id = $2 AND deleted = FALSE",
+      [commentId, id]
+    );
+    if (commentRes.rows.length === 0) {
+      return res.status(404).json({ error: "Comment not found" });
+    }
+
+    if (commentRes.rows[0].author_address?.toLowerCase() !== authorAddress.toLowerCase()) {
+      return res.status(403).json({ error: "Only the author can delete this comment" });
+    }
+
+    await query("UPDATE comments SET deleted = TRUE WHERE id = $1", [commentId]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("DELETE /api/chapters/:id/comments/:commentId error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });
