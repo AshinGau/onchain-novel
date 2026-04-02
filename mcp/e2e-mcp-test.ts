@@ -131,7 +131,8 @@ async function testSubmitChapter(
   label: string
 ) {
   const contentBytes = toBytes(content);
-  const contentHash = keccak256(contentBytes);
+  const contentHex = toHex(contentBytes);
+  const contentHash = keccak256(contentHex);
   const declaredLength = BigInt(contentBytes.length);
 
   // Read stake amount
@@ -142,11 +143,17 @@ async function testSubmitChapter(
     args: [NOVEL_ID],
   })) as any;
 
+  const submission = {
+    contentHash,
+    declaredLength,
+    content: contentHex,
+  };
+
   const hash = await client.wallet.writeContract({
     address: NOVEL_CORE,
     abi: novelCoreAbi,
     functionName: "submitChapter",
-    args: [NOVEL_ID, parentId, contentHash, declaredLength],
+    args: [NOVEL_ID, parentId, submission],
     value: novel.config.stakeAmount,
   });
   await waitTx(client.wallet, hash);

@@ -222,12 +222,15 @@ info "========================================="
 info "Phase 1: Novel creation + indexing"
 info "========================================="
 
-GENESIS_HASH="0x$(echo -n 'Once upon a time in a decentralized world...' | xxd -p | tr -d '\n' | head -c 64)"
+GENESIS_CONTENT="Once upon a time in a decentralized world, where stories are written by many and owned by all..."
+GENESIS_HEX="0x$(echo -n "$GENESIS_CONTENT" | xxd -p | tr -d '\n')"
+GENESIS_HASH=$(cast keccak256 "$GENESIS_HEX")
+GENESIS_LEN=$(echo -n "$GENESIS_CONTENT" | wc -c | tr -d ' ')
 CREATE_RESULT=$(cast send --rpc-url "$RPC" --private-key "$PK_CREATOR" "$NOVEL_CORE" \
-    "createNovel((uint64,uint64,uint64,uint32,uint32,uint32,uint16,uint16,uint64,uint64,uint256,uint8,uint8,string),(string,string,string),bytes32[],uint64[])" \
-    "(100, 10000, 2, 2, 2, 1, 3000, 2000, 2, 2, 10000000000000000, 0, 0, '')" \
+    "createNovel((uint64,uint64,uint64,uint32,uint32,uint32,uint16,uint16,uint64,uint64,uint256,uint8,uint8,uint8,string),(string,string,string),(bytes32,uint64,bytes)[])" \
+    "(100, 10000, 2, 2, 2, 1, 3000, 2000, 2, 2, 10000000000000000, 0, 0, 0, '')" \
     "(Test Novel, A test novel for E2E, '')" \
-    "[$GENESIS_HASH]" "[500]" \
+    "[($GENESIS_HASH,$GENESIS_LEN,$GENESIS_HEX)]" \
     --value 0.1ether --json 2>/dev/null) || true
 STATUS=$(echo "$CREATE_RESULT" | jq -r '.status' 2>/dev/null) || STATUS="0x0"
 [ "$STATUS" = "0x1" ] || { fail "createNovel failed"; exit 1; }
@@ -267,15 +270,21 @@ info "========================================="
 info "Phase 2: Chapters + Voting"
 info "========================================="
 
-CONTENT_A="0x$(echo -n 'Writer A continues the story with adventure...' | xxd -p | tr -d '\n' | head -c 64)"
+CONTENT_A_TEXT="Writer A continues the story with adventure and bold new characters entering the fray, each bringing their own secrets and motivations to the unfolding narrative that spans across the decentralized realm..."
+CONTENT_A_HEX="0x$(echo -n "$CONTENT_A_TEXT" | xxd -p | tr -d '\n')"
+CONTENT_A_HASH=$(cast keccak256 "$CONTENT_A_HEX")
+CONTENT_A_LEN=$(echo -n "$CONTENT_A_TEXT" | wc -c | tr -d ' ')
 cast_send "$PK_WRITER_A" "$NOVEL_CORE" \
-    "submitChapter(uint256,uint256,bytes32,uint64)" 1 1 "$CONTENT_A" 500 \
+    "submitChapter(uint256,uint256,(bytes32,uint64,bytes))" 1 1 "($CONTENT_A_HASH,$CONTENT_A_LEN,$CONTENT_A_HEX)" \
     --value 0.01ether > /dev/null
 pass "Writer A submitted chapter"
 
-CONTENT_B="0x$(echo -n 'Writer B takes a different path entirely...' | xxd -p | tr -d '\n' | head -c 64)"
+CONTENT_B_TEXT="Writer B takes a different path entirely, exploring the darker corners of the decentralized world where rival factions compete for control of the narrative itself, bending reality to their will..."
+CONTENT_B_HEX="0x$(echo -n "$CONTENT_B_TEXT" | xxd -p | tr -d '\n')"
+CONTENT_B_HASH=$(cast keccak256 "$CONTENT_B_HEX")
+CONTENT_B_LEN=$(echo -n "$CONTENT_B_TEXT" | wc -c | tr -d ' ')
 cast_send "$PK_WRITER_B" "$NOVEL_CORE" \
-    "submitChapter(uint256,uint256,bytes32,uint64)" 1 1 "$CONTENT_B" 600 \
+    "submitChapter(uint256,uint256,(bytes32,uint64,bytes))" 1 1 "($CONTENT_B_HASH,$CONTENT_B_LEN,$CONTENT_B_HEX)" \
     --value 0.01ether > /dev/null
 pass "Writer B submitted chapter"
 

@@ -1,6 +1,6 @@
 import { type McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { parseEther, formatEther } from "viem";
+import { parseEther, formatEther, keccak256, toHex, toBytes } from "viem";
 import { novelCoreAbi } from "../abi/index.js";
 import { config } from "../config.js";
 import { getPublicClient, getWalletClient } from "../utils/wallet.js";
@@ -26,12 +26,12 @@ export function registerNovelTools(server: McpServer): void {
       stakeAmount: z.string().describe("Required stake per chapter submission in ETH (e.g. '0.01')"),
       pollutionRounds: z.number().describe("Consecutive rounds for pollution tracking"),
       pollutionThreshold: z.number().describe("Bottom X percentile counts as pollution (e.g. 20)"),
-      contentBaseUrl: z.string().default("").describe("Base URL for content storage (e.g. 'https://arweave.net/')"),
+      contentLocation: z.number().default(0).describe("Content storage mode: 0=Onchain, 1=External (IPFS/Arweave), 2=HTTP"),
+      contentBaseUrl: z.string().default("").describe("Base URL for content storage (External/HTTP only, ignored for Onchain)"),
       title: z.string().describe("Novel title"),
       description: z.string().default("").describe("Novel description / synopsis"),
       coverUri: z.string().default("").describe("Cover image URI (IPFS/Arweave/HTTP)"),
-      genesisContentHashes: z.array(z.string()).describe("Array of bytes32 content hashes for genesis chapters"),
-      genesisLengths: z.array(z.number()).describe("Array of declared content lengths for genesis chapters"),
+      genesisContents: z.array(z.string()).describe("Array of genesis chapter contents (text strings, stored on-chain for Onchain mode)"),
       initialPrizeEth: z.string().optional().describe("Initial prize pool deposit in ETH (e.g. '1.0')"),
     },
     async (params) => {
@@ -53,6 +53,7 @@ export function registerNovelTools(server: McpServer): void {
           stakeAmount: parseEther(params.stakeAmount),
           pollutionRounds: params.pollutionRounds,
           pollutionThreshold: params.pollutionThreshold,
+          contentLocation: params.contentLocation,
           contentBaseUrl: params.contentBaseUrl,
         };
 
@@ -66,16 +67,21 @@ export function registerNovelTools(server: McpServer): void {
           coverUri: params.coverUri,
         };
 
+        // Build ContentSubmission[] from genesis contents
+        const genesisChapters = params.genesisContents.map((text) => {
+          const contentBytes = toHex(toBytes(text));
+          return {
+            contentHash: keccak256(contentBytes),
+            declaredLength: BigInt(toBytes(text).length),
+            content: contentBytes,
+          };
+        });
+
         const hash = await walletClient.writeContract({
           address: config.novelCoreAddress,
           abi: novelCoreAbi,
           functionName: "createNovel",
-          args: [
-            novelConfig,
-            metadata,
-            params.genesisContentHashes as `0x${string}`[],
-            params.genesisLengths.map((l) => BigInt(l)),
-          ],
+          args: [novelConfig, metadata, genesisChapters],
           value,
         });
 
@@ -296,6 +302,7 @@ export function registerNovelTools(server: McpServer): void {
           stakeAmount: parseEther(params.stakeAmount),
           pollutionRounds: params.pollutionRounds,
           pollutionThreshold: params.pollutionThreshold,
+          contentLocation: 0, // Default to Onchain
           contentBaseUrl: "", // Inherited from source novel (overridden by contract)
         };
 

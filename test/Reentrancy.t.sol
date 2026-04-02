@@ -82,8 +82,8 @@ contract StakeReentrancyAttacker {
         novelId = _novelId;
     }
 
-    function submitChapter(uint256 parentId, bytes32 contentHash, uint64 length) external payable {
-        target.submitChapter{value: msg.value}(novelId, parentId, contentHash, length);
+    function submitChapter(uint256 parentId, DataTypes.ContentSubmission memory submission) external payable {
+        target.submitChapter{value: msg.value}(novelId, parentId, submission);
     }
 
     function attack() external {
@@ -227,27 +227,37 @@ contract ReentrancyTest is Test {
         vm.deal(address(attacker), 100 ether);
 
         // Create novel
-        bytes32[] memory hashes = new bytes32[](1);
-        hashes[0] = bytes32("gen");
-        uint64[] memory lengths = new uint64[](1);
-        lengths[0] = 200;
+        DataTypes.ContentSubmission[] memory genesisChapters = new DataTypes.ContentSubmission[](1);
+        bytes memory genContent = bytes(
+            "A]Genesis chapter content for testing that is definitely longer than one hundred bytes in total length for validation"
+        );
+        genesisChapters[0] = _makeSubmission(genContent);
 
         DataTypes.NovelConfig memory config = _defaultConfig();
 
         vm.prank(creatorAddr);
-        uint256 novelId = novelCore.createNovel{value: 1 ether}(config, defaultMetadata, hashes, lengths);
+        uint256 novelId = novelCore.createNovel{value: 1 ether}(config, defaultMetadata, genesisChapters);
         attacker.setNovelId(novelId);
 
         uint256[] memory wl = novelCore.getActiveWorldLines(novelId);
 
         // Attacker submits chapter
-        attacker.submitChapter{value: config.stakeAmount}(wl[0], bytes32("atk_ch"), 500);
+        bytes memory atkContent = bytes(
+            "Attacker chapter submission content for reentrancy testing that is definitely longer than one hundred bytes in length"
+        );
+        attacker.submitChapter{value: config.stakeAmount}(wl[0], _makeSubmission(atkContent));
 
         // Others submit too
+        bytes memory sub1 = bytes(
+            "First chapter submission content for reentrancy testing that is definitely longer than one hundred bytes in length!!"
+        );
+        bytes memory sub2 = bytes(
+            "Second chapter submission content for reentrancy testing that is definitely longer than one hundred bytes in length!"
+        );
         vm.prank(author1);
-        uint256 ch1 = novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], bytes32("ch1"), 500);
+        uint256 ch1 = novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], _makeSubmission(sub1));
         vm.prank(author2);
-        novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], bytes32("ch2"), 600);
+        novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], _makeSubmission(sub2));
 
         // Run round
         uint256 t0 = block.timestamp;
@@ -279,6 +289,14 @@ contract ReentrancyTest is Test {
     //  HELPERS
     // ============================================================
 
+    function _makeSubmission(bytes memory content) internal pure returns (DataTypes.ContentSubmission memory) {
+        return DataTypes.ContentSubmission({
+            contentHash: keccak256(content),
+            declaredLength: uint64(content.length),
+            content: content
+        });
+    }
+
     function _defaultConfig() internal pure returns (DataTypes.NovelConfig memory) {
         return DataTypes.NovelConfig({
             minChapterLength: 100,
@@ -294,49 +312,70 @@ contract ReentrancyTest is Test {
             stakeAmount: 0.01 ether,
             pollutionRounds: 3,
             pollutionThreshold: 20,
+            contentLocation: DataTypes.ContentLocation.Onchain,
             contentBaseUrl: ""
         });
     }
 
     function _createNovelWithSubmissions() internal returns (uint256 novelId) {
-        bytes32[] memory hashes = new bytes32[](1);
-        hashes[0] = bytes32("gen");
-        uint64[] memory lengths = new uint64[](1);
-        lengths[0] = 200;
+        DataTypes.ContentSubmission[] memory genesisChapters = new DataTypes.ContentSubmission[](1);
+        bytes memory genContent = bytes(
+            "A]Genesis chapter content for testing that is definitely longer than one hundred bytes in total length for validation"
+        );
+        genesisChapters[0] = _makeSubmission(genContent);
 
         DataTypes.NovelConfig memory config = _defaultConfig();
         vm.prank(creatorAddr);
-        novelId = novelCore.createNovel{value: 1 ether}(config, defaultMetadata, hashes, lengths);
+        novelId = novelCore.createNovel{value: 1 ether}(config, defaultMetadata, genesisChapters);
 
         uint256[] memory wl = novelCore.getActiveWorldLines(novelId);
+        bytes memory sub1 = bytes(
+            "First chapter submission content for reentrancy testing that is definitely longer than one hundred bytes in length!!"
+        );
+        bytes memory sub2 = bytes(
+            "Second chapter submission content for reentrancy testing that is definitely longer than one hundred bytes in length!"
+        );
+        bytes memory sub3 = bytes(
+            "Third chapter submission content for reentrancy testing that is definitely longer than one hundred bytes in length!!!"
+        );
         vm.prank(author1);
-        novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], bytes32("ch1"), 500);
+        novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], _makeSubmission(sub1));
         vm.prank(author2);
-        novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], bytes32("ch2"), 600);
+        novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], _makeSubmission(sub2));
         vm.prank(author3);
-        novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], bytes32("ch3"), 700);
+        novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], _makeSubmission(sub3));
     }
 
     function _createNovelAndRunEpoch(address rewardRecipient) internal returns (uint256 novelId) {
-        bytes32[] memory hashes = new bytes32[](1);
-        hashes[0] = bytes32("gen");
-        uint64[] memory lengths = new uint64[](1);
-        lengths[0] = 200;
+        DataTypes.ContentSubmission[] memory genesisChapters = new DataTypes.ContentSubmission[](1);
+        bytes memory genContent = bytes(
+            "A]Genesis chapter content for testing that is definitely longer than one hundred bytes in total length for validation"
+        );
+        genesisChapters[0] = _makeSubmission(genContent);
 
         DataTypes.NovelConfig memory config = _defaultConfig();
         // rewardRecipient creates the novel → they get creator royalty
         vm.prank(rewardRecipient);
-        novelId = novelCore.createNovel{value: 10 ether}(config, defaultMetadata, hashes, lengths);
+        novelId = novelCore.createNovel{value: 10 ether}(config, defaultMetadata, genesisChapters);
 
         uint256 t0 = block.timestamp;
         uint256[] memory wl = novelCore.getActiveWorldLines(novelId);
 
+        bytes memory sub1 = bytes(
+            "First chapter submission content for reentrancy testing that is definitely longer than one hundred bytes in length!!"
+        );
+        bytes memory sub2 = bytes(
+            "Second chapter submission content for reentrancy testing that is definitely longer than one hundred bytes in length!"
+        );
+        bytes memory sub3 = bytes(
+            "Third chapter submission content for reentrancy testing that is definitely longer than one hundred bytes in length!!!"
+        );
         vm.prank(author1);
-        uint256 ch1 = novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], bytes32("ch1"), 500);
+        uint256 ch1 = novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], _makeSubmission(sub1));
         vm.prank(author2);
-        novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], bytes32("ch2"), 600);
+        novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], _makeSubmission(sub2));
         vm.prank(author3);
-        novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], bytes32("ch3"), 700);
+        novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], _makeSubmission(sub3));
 
         // Round
         vm.warp(t0 + 2 days);

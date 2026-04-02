@@ -84,6 +84,7 @@ contract IntegrationTest is Test {
             stakeAmount: 0.01 ether,
             pollutionRounds: 3,
             pollutionThreshold: 20,
+            contentLocation: DataTypes.ContentLocation.Onchain,
             contentBaseUrl: ""
         });
 
@@ -94,26 +95,50 @@ contract IntegrationTest is Test {
     //                    HELPERS
     // ============================================================
 
-    function _genesisHashes(bytes32 hash) internal pure returns (bytes32[] memory hashes, uint64[] memory lengths) {
-        hashes = new bytes32[](1);
-        hashes[0] = hash;
-        lengths = new uint64[](1);
-        lengths[0] = 200; // Meets minChapterLength
+    function _makeSubmission(bytes memory content) internal pure returns (DataTypes.ContentSubmission memory) {
+        return DataTypes.ContentSubmission({
+            contentHash: keccak256(content),
+            declaredLength: uint64(content.length),
+            content: content
+        });
     }
 
-    function _multiGenesisHashes() internal pure returns (bytes32[] memory hashes, uint64[] memory lengths) {
-        hashes = new bytes32[](2);
-        hashes[0] = bytes32("genesis1");
-        hashes[1] = bytes32("genesis2");
-        lengths = new uint64[](2);
-        lengths[0] = 200;
-        lengths[1] = 300;
+    function _genesisSubmissions(bytes memory content)
+        internal
+        pure
+        returns (DataTypes.ContentSubmission[] memory subs)
+    {
+        subs = new DataTypes.ContentSubmission[](1);
+        subs[0] = _makeSubmission(content);
     }
+
+    function _multiGenesisSubmissions() internal pure returns (DataTypes.ContentSubmission[] memory subs) {
+        subs = new DataTypes.ContentSubmission[](2);
+        subs[0] = _makeSubmission(
+            bytes(
+                "Genesis chapter one content that is long enough to meet the minimum length requirement of 100 bytes for testing"
+            )
+        );
+        subs[1] = _makeSubmission(
+            bytes(
+                "Genesis chapter two content that is long enough to meet the minimum length requirement of 100 bytes for this test"
+            )
+        );
+    }
+
+    bytes constant GENESIS_CONTENT =
+        "Genesis chapter content that is long enough to meet the minimum chapter length requirement of one hundred bytes padding";
+    bytes constant CHAPTER1_CONTENT =
+        "Chapter one content that is sufficiently long to meet the minimum chapter length requirement of one hundred bytes padding";
+    bytes constant CHAPTER2_CONTENT =
+        "Chapter two content that is sufficiently long to meet the minimum chapter length requirement of one hundred bytes padding";
+    bytes constant CHAPTER3_CONTENT =
+        "Chapter three content that is sufficiently long to meet the minimum chapter length requirement of hundred bytes padding";
 
     function _createNovel(uint256 ethValue) internal returns (uint256 novelId) {
-        (bytes32[] memory hashes, uint64[] memory lengths) = _genesisHashes(bytes32("genesis_hash"));
         vm.prank(creator);
-        novelId = novelCore.createNovel{value: ethValue}(defaultConfig, defaultMetadata, hashes, lengths);
+        novelId =
+            novelCore.createNovel{value: ethValue}(defaultConfig, defaultMetadata, _genesisSubmissions(GENESIS_CONTENT));
     }
 
     // ============================================================
@@ -148,9 +173,9 @@ contract IntegrationTest is Test {
     }
 
     function test_CreateNovelMultiGenesis() public {
-        (bytes32[] memory hashes, uint64[] memory lengths) = _multiGenesisHashes();
         vm.prank(creator);
-        uint256 novelId = novelCore.createNovel{value: 2 ether}(defaultConfig, defaultMetadata, hashes, lengths);
+        uint256 novelId =
+            novelCore.createNovel{value: 2 ether}(defaultConfig, defaultMetadata, _multiGenesisSubmissions());
 
         DataTypes.Novel memory novel = novelCore.getNovel(novelId);
         assertEq(novel.genesisChapterCount, 2);
@@ -179,7 +204,7 @@ contract IntegrationTest is Test {
 
         vm.prank(author1);
         uint256 chapterId =
-            novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, bytes32("chapter1_hash"), 500);
+            novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, _makeSubmission(CHAPTER1_CONTENT));
 
         assertEq(chapterId, 2);
 
@@ -196,7 +221,7 @@ contract IntegrationTest is Test {
 
         vm.prank(author1);
         vm.expectRevert();
-        novelCore.submitChapter{value: 0.005 ether}(novelId, worldLines[0], bytes32("ch_hash"), 500);
+        novelCore.submitChapter{value: 0.005 ether}(novelId, worldLines[0], _makeSubmission(CHAPTER1_CONTENT));
     }
 
     function test_SubmitChapter_RevertContentTooShort() public {
@@ -205,7 +230,7 @@ contract IntegrationTest is Test {
 
         vm.prank(author1);
         vm.expectRevert();
-        novelCore.submitChapter{value: 0.01 ether}(novelId, worldLines[0], bytes32("ch_hash"), 50);
+        novelCore.submitChapter{value: 0.01 ether}(novelId, worldLines[0], _makeSubmission(bytes("too short")));
     }
 
     // ============================================================
@@ -241,11 +266,11 @@ contract IntegrationTest is Test {
 
         // Submit 3 chapters
         vm.prank(author1);
-        uint256 ch1 = novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, bytes32("ch1"), 500);
+        uint256 ch1 = novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, _makeSubmission(CHAPTER1_CONTENT));
         vm.prank(author2);
-        uint256 ch2 = novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, bytes32("ch2"), 600);
+        uint256 ch2 = novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, _makeSubmission(CHAPTER2_CONTENT));
         vm.prank(author3);
-        novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, bytes32("ch3"), 700);
+        novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, _makeSubmission(CHAPTER3_CONTENT));
 
         vm.warp(block.timestamp + 1 days + 1);
         novelCore.closeSubmissions(novelId);
@@ -334,9 +359,9 @@ contract IntegrationTest is Test {
         DataTypes.NovelConfig memory config = defaultConfig;
         config.voterRewardRate = 0;
 
-        (bytes32[] memory hashes, uint64[] memory lengths) = _genesisHashes(bytes32("genesis"));
         vm.prank(creator);
-        uint256 novelId = novelCore.createNovel{value: 10 ether}(config, defaultMetadata, hashes, lengths);
+        uint256 novelId =
+            novelCore.createNovel{value: 10 ether}(config, defaultMetadata, _genesisSubmissions(GENESIS_CONTENT));
 
         // Run epoch 1: G=1, C=1 (incremented before distribution) → creatorRoyalty = 50%
         _runEpochForNovel(novelId);
@@ -364,11 +389,11 @@ contract IntegrationTest is Test {
         uint256 genesisId = novelCore.getActiveWorldLines(novelId)[0];
 
         vm.prank(author1);
-        novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, bytes32("ch1"), 500);
+        novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, _makeSubmission(CHAPTER1_CONTENT));
         vm.prank(author2);
-        uint256 ch2 = novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, bytes32("ch2"), 600);
+        uint256 ch2 = novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, _makeSubmission(CHAPTER2_CONTENT));
         vm.prank(author3);
-        novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, bytes32("ch3"), 700);
+        novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, _makeSubmission(CHAPTER3_CONTENT));
 
         // Fork fee = stakeAmount (0.01 ETH) goes to original pool, rest to fork pool
         uint256 originalPoolBefore = prizePool.getPoolBalance(novelId);
@@ -399,11 +424,11 @@ contract IntegrationTest is Test {
         uint256 balBefore = author1.balance;
 
         vm.prank(author1);
-        uint256 ch1 = novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, bytes32("ch1"), 500);
+        uint256 ch1 = novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, _makeSubmission(CHAPTER1_CONTENT));
         vm.prank(author2);
-        novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, bytes32("ch2"), 600);
+        novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, _makeSubmission(CHAPTER2_CONTENT));
         vm.prank(author3);
-        novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, bytes32("ch3"), 700);
+        novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, _makeSubmission(CHAPTER3_CONTENT));
 
         vm.warp(2 days);
         novelCore.closeSubmissions(novelId);
@@ -453,11 +478,11 @@ contract IntegrationTest is Test {
         uint256 genesisId = novelCore.getActiveWorldLines(novelId)[0];
 
         vm.prank(author1);
-        uint256 ch1 = novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, bytes32("ch1"), 500);
+        uint256 ch1 = novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, _makeSubmission(CHAPTER1_CONTENT));
         vm.prank(author2);
-        uint256 ch2 = novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, bytes32("ch2"), 600);
+        uint256 ch2 = novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, _makeSubmission(CHAPTER2_CONTENT));
         vm.prank(author3);
-        novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, bytes32("ch3"), 700);
+        novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, _makeSubmission(CHAPTER3_CONTENT));
 
         vm.warp(2 days);
         novelCore.closeSubmissions(novelId);
@@ -505,11 +530,11 @@ contract IntegrationTest is Test {
         uint256 genesisId = novelCore.getActiveWorldLines(novelId)[0];
 
         vm.prank(author1);
-        uint256 ch1 = novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, bytes32("ch1"), 500);
+        uint256 ch1 = novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, _makeSubmission(CHAPTER1_CONTENT));
         vm.prank(author2);
-        uint256 ch2 = novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, bytes32("ch2"), 600);
+        uint256 ch2 = novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, _makeSubmission(CHAPTER2_CONTENT));
         vm.prank(author3);
-        novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, bytes32("ch3"), 700);
+        novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, _makeSubmission(CHAPTER3_CONTENT));
 
         vm.warp(2 days);
         novelCore.closeSubmissions(novelId);
@@ -563,11 +588,11 @@ contract IntegrationTest is Test {
         uint256 genesisId = novelCore.getActiveWorldLines(novelId)[0];
 
         vm.prank(author1);
-        novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, bytes32("ch1"), 500);
+        novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, _makeSubmission(CHAPTER1_CONTENT));
         vm.prank(author2);
-        novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, bytes32("ch2"), 600);
+        novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, _makeSubmission(CHAPTER2_CONTENT));
         vm.prank(author3);
-        novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, bytes32("ch3"), 700);
+        novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, _makeSubmission(CHAPTER3_CONTENT));
 
         vm.warp(2 days);
 
@@ -594,11 +619,11 @@ contract IntegrationTest is Test {
         uint256 genesisId = novelCore.getActiveWorldLines(novelId)[0];
 
         vm.prank(author1);
-        uint256 ch1 = novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, bytes32("ch1"), 500);
+        uint256 ch1 = novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, _makeSubmission(CHAPTER1_CONTENT));
         vm.prank(author2);
-        novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, bytes32("ch2"), 600);
+        novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, _makeSubmission(CHAPTER2_CONTENT));
         vm.prank(author3);
-        novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, bytes32("ch3"), 700);
+        novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, _makeSubmission(CHAPTER3_CONTENT));
 
         vm.warp(2 days);
         novelCore.closeSubmissions(novelId);
@@ -633,10 +658,9 @@ contract IntegrationTest is Test {
         DataTypes.NovelConfig memory badConfig = defaultConfig;
         badConfig.voterRewardRate = 3000; // Over 20% limit
 
-        (bytes32[] memory hashes, uint64[] memory lengths) = _genesisHashes(bytes32("genesis"));
         vm.prank(creator);
         vm.expectRevert();
-        novelCore.createNovel(badConfig, defaultMetadata, hashes, lengths);
+        novelCore.createNovel(badConfig, defaultMetadata, _genesisSubmissions(GENESIS_CONTENT));
     }
 
     // ============================================================
@@ -648,9 +672,9 @@ contract IntegrationTest is Test {
         DataTypes.NovelConfig memory config = defaultConfig;
         config.roundsPerEpoch = 3;
 
-        (bytes32[] memory hashes, uint64[] memory lengths) = _genesisHashes(bytes32("genesis"));
         vm.prank(creator);
-        uint256 novelId = novelCore.createNovel{value: 1 ether}(config, defaultMetadata, hashes, lengths);
+        uint256 novelId =
+            novelCore.createNovel{value: 1 ether}(config, defaultMetadata, _genesisSubmissions(GENESIS_CONTENT));
 
         // Complete round 1
         _doRound(novelId);
@@ -672,9 +696,9 @@ contract IntegrationTest is Test {
         DataTypes.NovelConfig memory config = defaultConfig;
         config.roundsPerEpoch = 3;
 
-        (bytes32[] memory hashes, uint64[] memory lengths) = _genesisHashes(bytes32("genesis"));
         vm.prank(creator);
-        uint256 novelId = novelCore.createNovel{value: 1 ether}(config, defaultMetadata, hashes, lengths);
+        uint256 novelId =
+            novelCore.createNovel{value: 1 ether}(config, defaultMetadata, _genesisSubmissions(GENESIS_CONTENT));
 
         _doRound(novelId);
 
@@ -695,11 +719,11 @@ contract IntegrationTest is Test {
         uint32 currentRound = novel.currentRound;
 
         vm.prank(author1);
-        uint256 ch1 = novelCore.submitChapter{value: 0.01 ether}(novelId, parentId, bytes32("ch1"), 500);
+        uint256 ch1 = novelCore.submitChapter{value: 0.01 ether}(novelId, parentId, _makeSubmission(CHAPTER1_CONTENT));
         vm.prank(author2);
-        novelCore.submitChapter{value: 0.01 ether}(novelId, parentId, bytes32("ch2"), 600);
+        novelCore.submitChapter{value: 0.01 ether}(novelId, parentId, _makeSubmission(CHAPTER2_CONTENT));
         vm.prank(author3);
-        novelCore.submitChapter{value: 0.01 ether}(novelId, parentId, bytes32("ch3"), 700);
+        novelCore.submitChapter{value: 0.01 ether}(novelId, parentId, _makeSubmission(CHAPTER3_CONTENT));
 
         vm.warp(block.timestamp + 1 days + 1);
         novelCore.closeSubmissions(novelId);
@@ -735,11 +759,11 @@ contract IntegrationTest is Test {
         uint256 t0 = block.timestamp;
 
         vm.prank(author1);
-        uint256 ch1 = novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, bytes32("ch1"), 500);
+        uint256 ch1 = novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, _makeSubmission(CHAPTER1_CONTENT));
         vm.prank(author2);
-        novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, bytes32("ch2"), 600);
+        novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, _makeSubmission(CHAPTER2_CONTENT));
         vm.prank(author3);
-        novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, bytes32("ch3"), 700);
+        novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, _makeSubmission(CHAPTER3_CONTENT));
 
         // Round voting
         vm.warp(t0 + 2 days);

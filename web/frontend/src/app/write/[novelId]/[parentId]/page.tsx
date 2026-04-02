@@ -4,13 +4,13 @@ import { use, useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAccount, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
+import { keccak256, toHex, toBytes } from "viem";
 import { Button } from "@/components/ui/button";
 import { fetchApi, type Novel, type Chapter } from "@/lib/api";
-import { uploadText } from "@/lib/arweave";
 import { NOVEL_CORE_ADDRESS, novelCoreAbi } from "@/lib/contracts";
 import { shortenAddress, formatEth } from "@/lib/format";
 
-type SubmitStep = "idle" | "uploading" | "submitting" | "done";
+type SubmitStep = "idle" | "submitting" | "done";
 
 export default function WritePage({
   params,
@@ -115,26 +115,22 @@ export default function WritePage({
     resetTx();
 
     try {
-      // Step 1: Upload to Arweave
-      setSubmitStep("uploading");
-      const { contentHash, declaredLength } = await uploadText(content, [
-        { name: "Novel-Id", value: novelId },
-        { name: "Parent-Id", value: parentId },
-      ]);
-
-      // Step 2: Submit on-chain
       setSubmitStep("submitting");
+      const contentBytes = toHex(toBytes(content));
+      const contentHash = keccak256(contentBytes);
+      const declaredLength = BigInt(new TextEncoder().encode(content).length);
+
       writeContract({
         address: NOVEL_CORE_ADDRESS,
         abi: novelCoreAbi,
         functionName: "submitChapter",
-        args: [BigInt(novelId), BigInt(parentId), contentHash, BigInt(declaredLength)],
+        args: [BigInt(novelId), BigInt(parentId), { contentHash, declaredLength, content: contentBytes }],
         value: BigInt(novel.config.stakeAmount) > BigInt(0)
           ? BigInt(novel.config.stakeAmount)
           : undefined,
       });
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Upload failed");
+      setError(err instanceof Error ? err.message : "Submission failed");
       setSubmitStep("idle");
     }
   }, [novel, isConnected, content, novelId, parentId, writeContract, resetTx]);
@@ -255,33 +251,11 @@ export default function WritePage({
       )}
 
       {/* Progress indicator */}
-      {submitStep !== "idle" && submitStep !== "done" && (
+      {submitStep === "submitting" && (
         <div className="mt-4 rounded-lg bg-neutral-900 border border-neutral-800 p-4">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              <StepIndicator active={submitStep === "uploading"} done={submitStep === "submitting"} />
-              <span
-                className={
-                  submitStep === "uploading"
-                    ? "text-sm text-amber-400"
-                    : "text-sm text-neutral-400"
-                }
-              >
-                Uploading to Arweave...
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <StepIndicator active={submitStep === "submitting"} done={false} />
-              <span
-                className={
-                  submitStep === "submitting"
-                    ? "text-sm text-amber-400"
-                    : "text-sm text-neutral-600"
-                }
-              >
-                Submitting on-chain...
-              </span>
-            </div>
+          <div className="flex items-center gap-2">
+            <StepIndicator active={true} done={false} />
+            <span className="text-sm text-amber-400">Submitting on-chain...</span>
           </div>
         </div>
       )}
@@ -299,11 +273,9 @@ export default function WritePage({
           size="lg"
           className="px-6"
         >
-          {submitStep === "uploading"
-            ? "Uploading..."
-            : submitStep === "submitting"
-              ? "Submitting..."
-              : `Upload & Submit (${stakeDisplay} ETH)`}
+          {submitStep === "submitting"
+            ? "Submitting..."
+            : `Submit (${stakeDisplay} ETH)`}
         </Button>
         {!isConnected && (
           <span className="text-xs text-neutral-500">Connect wallet to submit</span>

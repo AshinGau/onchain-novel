@@ -1,10 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { parseEther } from "viem";
+import { parseEther, keccak256, toHex, toBytes } from "viem";
 import { useAccount, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { Button } from "@/components/ui/button";
-import { uploadText } from "@/lib/arweave";
 import { REPORT_REGISTRY_ADDRESS, reportRegistryAbi } from "@/lib/contracts";
 
 const REASONS = ["Plagiarism", "Abuse", "Spam", "Other"] as const;
@@ -15,36 +14,27 @@ export function ReportModal({ novelId, chapterId }: { novelId: string; chapterId
   const [reason, setReason] = useState<string>(REASONS[0]);
   const [evidence, setEvidence] = useState("");
   const [bondAmount, setBondAmount] = useState("0.01");
-  const [uploading, setUploading] = useState(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const { writeContract, data: hash, isPending, error: txError } = useWriteContract();
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
 
   async function handleSubmit() {
     if (!evidence.trim() || !bondAmount) return;
-    setUploading(true);
-    setUploadError(null);
+    setSubmitError(null);
     try {
       const fullEvidence = `Reason: ${reason}\n\n${evidence}`;
-      const { contentHash } = await uploadText(fullEvidence, [
-        { name: "App-Name", value: "OnchainNovel" },
-        { name: "Type", value: "Report" },
-        { name: "Novel-Id", value: novelId },
-        { name: "Chapter-Id", value: chapterId },
-      ]);
+      const evidenceHash = keccak256(toHex(toBytes(fullEvidence)));
 
       writeContract({
         address: REPORT_REGISTRY_ADDRESS,
         abi: reportRegistryAbi,
         functionName: "reportContent",
-        args: [BigInt(novelId), BigInt(chapterId), contentHash],
+        args: [BigInt(novelId), BigInt(chapterId), evidenceHash],
         value: parseEther(bondAmount),
       });
     } catch (err: any) {
-      setUploadError(err.message || "Failed to upload evidence");
-    } finally {
-      setUploading(false);
+      setSubmitError(err.message || "Failed to submit report");
     }
   }
 
@@ -128,11 +118,9 @@ export function ReportModal({ novelId, chapterId }: { novelId: string; chapterId
         variant="outline"
         className="w-full border-red-800 text-red-400 hover:bg-red-950"
         onClick={handleSubmit}
-        disabled={uploading || isPending || isConfirming || !evidence.trim()}
+        disabled={isPending || isConfirming || !evidence.trim()}
       >
-        {uploading
-          ? "Uploading evidence..."
-          : isPending
+        {isPending
             ? "Confirm in wallet..."
             : isConfirming
               ? "Processing..."
@@ -142,7 +130,7 @@ export function ReportModal({ novelId, chapterId }: { novelId: string; chapterId
       {isSuccess && (
         <p className="text-green-400 text-sm">Report submitted successfully!</p>
       )}
-      {uploadError && <p className="text-red-400 text-sm">{uploadError}</p>}
+      {submitError && <p className="text-red-400 text-sm">{submitError}</p>}
       {txError && <p className="text-red-400 text-sm">{txError.message.slice(0, 80)}</p>}
     </div>
   );

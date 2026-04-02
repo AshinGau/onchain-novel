@@ -8,8 +8,11 @@ export async function fetchChapterContent(chapterId: bigint, novelId: bigint) {
   const maxRetries = 5;
 
   // Get content URL parts
-  const novelRes = await query("SELECT config FROM novels WHERE id = $1", [novelId.toString()]);
+  const novelRes = await query("SELECT config, content_location FROM novels WHERE id = $1", [novelId.toString()]);
   if (novelRes.rows.length === 0) return;
+
+  // Onchain content comes from ChapterContentStored event, not external fetch
+  if (novelRes.rows[0].content_location === 0) return;
 
   const config = novelRes.rows[0].config;
   const baseUrl: string = config.contentBaseUrl || "";
@@ -54,7 +57,7 @@ export async function retryUnfetchedContent() {
   const res = await query(
     `SELECT c.id, c.novel_id FROM chapters c
      JOIN novels n ON n.id = c.novel_id
-     WHERE c.content_fetched = FALSE AND n.config->>'contentBaseUrl' != ''
+     WHERE c.content_fetched = FALSE AND n.content_location != 0 AND n.config->>'contentBaseUrl' != ''
      LIMIT 20`
   );
 

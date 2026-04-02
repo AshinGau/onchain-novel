@@ -79,38 +79,51 @@ contract GasProfileTest is Test {
             stakeAmount: 0.01 ether,
             pollutionRounds: 3,
             pollutionThreshold: 20,
+            contentLocation: DataTypes.ContentLocation.Onchain,
             contentBaseUrl: ""
         });
     }
 
+    function _makeSubmission(bytes memory content) internal pure returns (DataTypes.ContentSubmission memory) {
+        return DataTypes.ContentSubmission({
+            contentHash: keccak256(content),
+            declaredLength: uint64(content.length),
+            content: content
+        });
+    }
+
     function test_Gas_CreateNovel_SingleGenesis() public {
-        bytes32[] memory hashes = new bytes32[](1);
-        hashes[0] = bytes32("gen");
-        uint64[] memory lengths = new uint64[](1);
-        lengths[0] = 200;
+        DataTypes.ContentSubmission[] memory genesisChapters = new DataTypes.ContentSubmission[](1);
+        bytes memory genContent = bytes(
+            "A]Genesis chapter content for testing that is definitely longer than one hundred bytes in total length for validation"
+        );
+        genesisChapters[0] = _makeSubmission(genContent);
 
         vm.prank(creatorAddr);
-        novelCore.createNovel{value: 1 ether}(config, defaultMetadata, hashes, lengths);
+        novelCore.createNovel{value: 1 ether}(config, defaultMetadata, genesisChapters);
     }
 
     function test_Gas_CreateNovel_MultiGenesis() public {
-        bytes32[] memory hashes = new bytes32[](2);
-        uint64[] memory lengths = new uint64[](2);
-        for (uint256 i = 0; i < 2; i++) {
-            hashes[i] = bytes32(bytes(string.concat("g", vm.toString(i))));
-            lengths[i] = 200;
-        }
+        bytes memory genContent = bytes(
+            "A]Genesis chapter content for testing that is definitely longer than one hundred bytes in total length for validation"
+        );
+        DataTypes.ContentSubmission[] memory genesisChapters = new DataTypes.ContentSubmission[](2);
+        genesisChapters[0] = _makeSubmission(genContent);
+        genesisChapters[1] = _makeSubmission(genContent);
 
         vm.prank(creatorAddr);
-        novelCore.createNovel{value: 1 ether}(config, defaultMetadata, hashes, lengths);
+        novelCore.createNovel{value: 1 ether}(config, defaultMetadata, genesisChapters);
     }
 
     function test_Gas_SubmitChapter() public {
         _createNovel();
         uint256[] memory wl = novelCore.getActiveWorldLines(novelId);
 
+        bytes memory subContent = bytes(
+            "A submitted chapter content for gas profiling that is definitely longer than one hundred bytes in total length!!"
+        );
         vm.prank(author1);
-        novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], bytes32("ch1"), 500);
+        novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], _makeSubmission(subContent));
     }
 
     function test_Gas_CloseSubmissions() public {
@@ -200,23 +213,33 @@ contract GasProfileTest is Test {
     // ============================================================
 
     function _createNovel() internal {
-        bytes32[] memory hashes = new bytes32[](1);
-        hashes[0] = bytes32("gen");
-        uint64[] memory lengths = new uint64[](1);
-        lengths[0] = 200;
+        DataTypes.ContentSubmission[] memory genesisChapters = new DataTypes.ContentSubmission[](1);
+        bytes memory genContent = bytes(
+            "A]Genesis chapter content for testing that is definitely longer than one hundred bytes in total length for validation"
+        );
+        genesisChapters[0] = _makeSubmission(genContent);
         vm.prank(creatorAddr);
-        novelId = novelCore.createNovel{value: 5 ether}(config, defaultMetadata, hashes, lengths);
+        novelId = novelCore.createNovel{value: 5 ether}(config, defaultMetadata, genesisChapters);
     }
 
     function _createNovelAndSubmit3() internal {
         _createNovel();
         uint256[] memory wl = novelCore.getActiveWorldLines(novelId);
+        bytes memory sub1 = bytes(
+            "First chapter submission content for gas testing that is definitely longer than one hundred bytes in total length!!"
+        );
+        bytes memory sub2 = bytes(
+            "Second chapter submission content for gas testing that is definitely longer than one hundred bytes in total length!"
+        );
+        bytes memory sub3 = bytes(
+            "Third chapter submission content for gas testing that is definitely longer than one hundred bytes in total length!!!"
+        );
         vm.prank(author1);
-        novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], bytes32("ch1"), 500);
+        novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], _makeSubmission(sub1));
         vm.prank(author2);
-        novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], bytes32("ch2"), 600);
+        novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], _makeSubmission(sub2));
         vm.prank(author3);
-        novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], bytes32("ch3"), 700);
+        novelCore.submitChapter{value: config.stakeAmount}(novelId, wl[0], _makeSubmission(sub3));
     }
 
     function _createNovelAndStartVoting() internal {

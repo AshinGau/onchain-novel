@@ -165,7 +165,7 @@ stop_frontend() {
 do_start() {
     mkdir -p "$DATA_DIR"
 
-    # Check if already running
+    # Check if already runnings
     if is_running "anvil" && is_running "backend" && is_running "frontend"; then
         ok "All services already running"
         do_status

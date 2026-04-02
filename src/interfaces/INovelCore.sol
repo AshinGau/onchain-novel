@@ -29,6 +29,7 @@ interface INovelCore {
     event EarlyEpochTriggered(uint256 indexed novelId, uint32 epoch);
     event NovelCompleted(uint256 indexed novelId);
     event NovelMetadataUpdated(uint256 indexed novelId, string title, string description, string coverUri);
+    event ChapterContentStored(uint256 indexed novelId, uint256 indexed chapterId, bytes content);
 
     // ============================================================
     //                     NOVEL LIFECYCLE
@@ -36,14 +37,13 @@ interface INovelCore {
 
     /// @notice Create a new novel with multi-chapter genesis and optional initial prize pool
     /// @param config Novel configuration parameters
-    /// @param genesisContentHashes Array of CIDs for genesis chapters
-    /// @param genesisLengths Declared byte lengths for each genesis chapter
+    /// @param metadata Novel display metadata (title, description, cover)
+    /// @param genesisChapters Array of content submissions for genesis chapters
     /// @return novelId The ID of the newly created novel
     function createNovel(
         DataTypes.NovelConfig calldata config,
         DataTypes.NovelMetadata calldata metadata,
-        bytes32[] calldata genesisContentHashes,
-        uint64[] calldata genesisLengths
+        DataTypes.ContentSubmission[] calldata genesisChapters
     ) external payable returns (uint256 novelId);
 
     /// @notice Fork a novel from a rejected branch
@@ -63,7 +63,7 @@ interface INovelCore {
     // ============================================================
 
     /// @notice Submit a chapter continuation (requires stake deposit)
-    function submitChapter(uint256 novelId, uint256 parentChapterId, bytes32 contentHash, uint64 declaredLength)
+    function submitChapter(uint256 novelId, uint256 parentChapterId, DataTypes.ContentSubmission calldata submission)
         external
         payable
         returns (uint256 chapterId);

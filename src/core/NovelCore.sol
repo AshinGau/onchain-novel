@@ -90,6 +90,9 @@ contract NovelCore is
     error InsufficientForkFee(uint256 sent, uint256 required);
     error NotNovelCreator(uint256 novelId, address caller);
     error InvalidMetadata(string reason);
+    error ContentHashMismatch(bytes32 expected, bytes32 actual);
+    error OnchainContentRequired();
+    error OnchainContentForbidden();
 
     // ============================================================
     //                      INITIALIZER
@@ -188,14 +191,12 @@ contract NovelCore is
     function createNovel(
         DataTypes.NovelConfig calldata config,
         DataTypes.NovelMetadata calldata metadata,
-        bytes32[] calldata genesisContentHashes,
-        uint64[] calldata genesisLengths
+        DataTypes.ContentSubmission[] calldata genesisChapters
     ) external payable whenNotPaused returns (uint256 novelId) {
         _validateConfig(config);
         _validateMetadata(metadata);
-        if (genesisContentHashes.length == 0) revert InvalidGenesisInput();
-        if (genesisContentHashes.length != genesisLengths.length) revert InvalidGenesisInput();
-        if (genesisContentHashes.length > config.worldLineCount) revert InvalidGenesisInput();
+        if (genesisChapters.length == 0) revert InvalidGenesisInput();
+        if (genesisChapters.length > config.worldLineCount) revert InvalidGenesisInput();
 
         novelId = ++_novelCount;
         _novelMetadata[novelId] = metadata;
@@ -209,7 +210,7 @@ contract NovelCore is
             roundPhase: DataTypes.RoundPhase.Submitting,
             epochPhase: DataTypes.EpochPhase.Rounds,
             phaseStartTime: block.timestamp,
-            genesisChapterCount: uint32(genesisContentHashes.length),
+            genesisChapterCount: uint32(genesisChapters.length),
             cumulativeCanonChapters: 0,
             active: true,
             forkSourceNovelId: 0,
@@ -217,10 +218,8 @@ contract NovelCore is
         });
 
         // Create genesis chapters — each becomes an initial active world line
-        for (uint256 i = 0; i < genesisContentHashes.length; i++) {
-            if (genesisLengths[i] < config.minChapterLength || genesisLengths[i] > config.maxChapterLength) {
-                revert ContentLengthOutOfRange(genesisLengths[i], config.minChapterLength, config.maxChapterLength);
-            }
+        for (uint256 i = 0; i < genesisChapters.length; i++) {
+            _validateSubmission(config, genesisChapters[i]);
 
             uint256 genesisChapterId = ++_chapterCount;
             _chapters[genesisChapterId] = DataTypes.Chapter({
@@ -228,8 +227,8 @@ contract NovelCore is
                 novelId: novelId,
                 parentId: 0,
                 author: msg.sender,
-                contentHash: genesisContentHashes[i],
-                declaredLength: genesisLengths[i],
+                contentHash: genesisChapters[i].contentHash,
+                declaredLength: genesisChapters[i].declaredLength,
                 round: 0,
                 epoch: 0,
                 chapterIndex: 0,
@@ -237,6 +236,10 @@ contract NovelCore is
                 isWorldLine: true,
                 isCanon: false
             });
+
+            if (config.contentLocation == DataTypes.ContentLocation.Onchain) {
+                emit ChapterContentStored(novelId, genesisChapterId, genesisChapters[i].content);
+            }
 
             _activeWorldLines[novelId].push(genesisChapterId);
         }
@@ -246,7 +249,7 @@ contract NovelCore is
             prizePool.deposit{value: msg.value}(novelId, "genesis");
         }
 
-        emit NovelCreated(novelId, msg.sender, uint32(genesisContentHashes.length));
+        emit NovelCreated(novelId, msg.sender, uint32(genesisChapters.length));
     }
 
     /// @inheritdoc INovelCore
@@ -290,7 +293,8 @@ contract NovelCore is
             forkSourceChapterId: branchChapterId
         });
 
-        // Inherit content base URL from original novel (immutable, fork cannot override)
+        // Inherit content config from original novel (immutable, fork cannot override)
+        _novels[novelId].config.contentLocation = sourceNovel.config.contentLocation;
         _novels[novelId].config.contentBaseUrl = sourceNovel.config.contentBaseUrl;
 
         // Create the fork root chapter
@@ -330,7 +334,7 @@ contract NovelCore is
     // ============================================================
 
     /// @inheritdoc INovelCore
-    function submitChapter(uint256 novelId, uint256 parentChapterId, bytes32 contentHash, uint64 declaredLength)
+    function submitChapter(uint256 novelId, uint256 parentChapterId, DataTypes.ContentSubmission calldata submission)
         external
         payable
         whenNotPaused
@@ -353,9 +357,7 @@ contract NovelCore is
         if (!_isActiveWorldLine(novelId, parentChapterId)) revert NotWorldLine(parentChapterId);
 
         DataTypes.NovelConfig storage config = novel.config;
-        if (declaredLength < config.minChapterLength || declaredLength > config.maxChapterLength) {
-            revert ContentLengthOutOfRange(declaredLength, config.minChapterLength, config.maxChapterLength);
-        }
+        _validateSubmission(config, submission);
 
         if (msg.value != config.stakeAmount) {
             revert InvalidStakeAmount(msg.value, config.stakeAmount);
@@ -369,8 +371,8 @@ contract NovelCore is
             novelId: novelId,
             parentId: parentChapterId,
             author: msg.sender,
-            contentHash: contentHash,
-            declaredLength: declaredLength,
+            contentHash: submission.contentHash,
+            declaredLength: submission.declaredLength,
             round: novel.currentRound,
             epoch: novel.currentEpoch,
             chapterIndex: newChapterIndex,
@@ -382,6 +384,10 @@ contract NovelCore is
         _roundSubmissions[novelId][novel.currentRound].push(chapterId);
         _stakeBalances[novelId][msg.sender] += msg.value;
         _lockedStakes[novelId][msg.sender] += msg.value;
+
+        if (config.contentLocation == DataTypes.ContentLocation.Onchain) {
+            emit ChapterContentStored(novelId, chapterId, submission.content);
+        }
 
         emit ChapterSubmitted(novelId, chapterId, msg.sender, parentChapterId, newChapterIndex);
     }
@@ -733,11 +739,36 @@ contract NovelCore is
         if (config.stakeAmount == 0) revert InvalidConfig("stakeAmount must be > 0");
         if (config.commitDuration == 0) revert InvalidConfig("commitDuration must be > 0");
         if (config.revealDuration == 0) revert InvalidConfig("revealDuration must be > 0");
+        if (config.contentLocation != DataTypes.ContentLocation.Onchain && bytes(config.contentBaseUrl).length == 0) {
+            revert InvalidConfig("contentBaseUrl required for External/HTTP");
+        }
     }
 
     function _validateMetadata(DataTypes.NovelMetadata calldata metadata) internal pure {
         if (bytes(metadata.title).length == 0) revert InvalidMetadata("title must not be empty");
         if (bytes(metadata.title).length > 256) revert InvalidMetadata("title must be <= 256 bytes");
+    }
+
+    function _validateSubmission(DataTypes.NovelConfig memory config, DataTypes.ContentSubmission calldata sub)
+        internal
+        pure
+    {
+        if (sub.declaredLength < config.minChapterLength || sub.declaredLength > config.maxChapterLength) {
+            revert ContentLengthOutOfRange(sub.declaredLength, config.minChapterLength, config.maxChapterLength);
+        }
+
+        if (config.contentLocation == DataTypes.ContentLocation.Onchain) {
+            if (sub.content.length == 0) revert OnchainContentRequired();
+            if (uint64(sub.content.length) != sub.declaredLength) {
+                revert ContentLengthOutOfRange(
+                    uint64(sub.content.length), config.minChapterLength, config.maxChapterLength
+                );
+            }
+            bytes32 computed = keccak256(sub.content);
+            if (computed != sub.contentHash) revert ContentHashMismatch(sub.contentHash, computed);
+        } else {
+            if (sub.content.length != 0) revert OnchainContentForbidden();
+        }
     }
 
     function _isActiveWorldLine(uint256 novelId, uint256 chapterId) internal view returns (bool) {
