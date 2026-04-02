@@ -76,6 +76,7 @@ library DataTypes {
         uint64 declaredLength; // Declared content byte length
         uint32 round; // Round when submitted
         uint32 epoch; // Epoch when submitted
+        uint32 chapterIndex; // Sequential position in story chain (genesis=0, each continuation=parent+1)
         uint256 voteCount; // Accumulated votes after reveal
         bool isWorldLine; // Selected as world line in a round
         bool isCanon; // Selected as canon in an epoch

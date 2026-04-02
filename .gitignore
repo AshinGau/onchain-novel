@@ -16,6 +16,7 @@ out/
 .idea/
 .claude/
 .agent/
+CLAUDE.md
 *.swp
 *.swo
 *~
@@ -27,6 +28,7 @@ Thumbs.db
 # Node (mcp/)
 node_modules/
 dist/
+lib/
 *.tsbuildinfo
 
 # Foundry coverage

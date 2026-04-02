@@ -91,6 +91,7 @@ export function registerChapterTools(server: McpServer): void {
           declaredLength: bigint;
           round: number;
           epoch: number;
+          chapterIndex: number;
           voteCount: bigint;
           isWorldLine: boolean;
           isCanon: boolean;
@@ -111,6 +112,7 @@ export function registerChapterTools(server: McpServer): void {
           `Author: ${chapter.author}`,
           `Content Hash: ${chapter.contentHash}`,
           `Declared Length: ${chapter.declaredLength} bytes`,
+          `Chapter Index: ${chapter.chapterIndex} (story position, genesis=0)`,
           `Round: ${chapter.round}, Epoch: ${chapter.epoch}`,
           `Vote Count: ${chapter.voteCount}`,
           `World Line: ${chapter.isWorldLine}`,

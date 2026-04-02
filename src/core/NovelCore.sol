@@ -224,6 +224,7 @@ contract NovelCore is
                 declaredLength: genesisLengths[i],
                 round: 0,
                 epoch: 0,
+                chapterIndex: 0,
                 voteCount: 0,
                 isWorldLine: true,
                 isCanon: false
@@ -293,6 +294,7 @@ contract NovelCore is
             declaredLength: branch.declaredLength,
             round: 0,
             epoch: 0,
+            chapterIndex: 0,
             voteCount: 0,
             isWorldLine: true,
             isCanon: false
@@ -349,6 +351,8 @@ contract NovelCore is
             revert InvalidStakeAmount(msg.value, config.stakeAmount);
         }
 
+        uint32 newChapterIndex = parent.chapterIndex + 1;
+
         chapterId = ++_chapterCount;
         _chapters[chapterId] = DataTypes.Chapter({
             id: chapterId,
@@ -359,6 +363,7 @@ contract NovelCore is
             declaredLength: declaredLength,
             round: novel.currentRound,
             epoch: novel.currentEpoch,
+            chapterIndex: newChapterIndex,
             voteCount: 0,
             isWorldLine: false,
             isCanon: false
@@ -368,7 +373,7 @@ contract NovelCore is
         _stakeBalances[novelId][msg.sender] += msg.value;
         _lockedStakes[novelId][msg.sender] += msg.value;
 
-        emit ChapterSubmitted(novelId, chapterId, msg.sender, parentChapterId);
+        emit ChapterSubmitted(novelId, chapterId, msg.sender, parentChapterId, newChapterIndex);
     }
 
     // ============================================================
