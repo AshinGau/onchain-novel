@@ -3,6 +3,14 @@ import { query } from "../db/index.js";
 
 const router = Router();
 
+const SORT_OPTIONS: Record<string, string> = {
+  hot: "view_count DESC",
+  pool: "pool_balance DESC",
+  tipped: "total_funded DESC",
+  active: "last_chapter_at DESC NULLS LAST",
+  latest: "created_at DESC",
+};
+
 // GET /api/novels — List novels with pagination, sorting, filtering
 router.get("/", async (req, res) => {
   try {
@@ -22,15 +30,7 @@ router.get("/", async (req, res) => {
       where += ` AND active = FALSE`;
     }
 
-    let orderBy: string;
-    switch (sort) {
-      case "hot": orderBy = "view_count DESC"; break;
-      case "pool": orderBy = "pool_balance DESC"; break;
-      case "tipped": orderBy = "total_funded DESC"; break;
-      case "active": orderBy = "last_chapter_at DESC NULLS LAST"; break;
-      case "latest":
-      default: orderBy = "created_at DESC"; break;
-    }
+    const orderBy = SORT_OPTIONS[sort] || SORT_OPTIONS.latest;
 
     const countRes = await query(`SELECT COUNT(*) FROM novels WHERE ${where}`, params);
     const total = parseInt(countRes.rows[0].count);
@@ -64,15 +64,7 @@ router.get("/ranking", async (req, res) => {
     const sort = (req.query.sort as string) || "hot";
     const limit = Math.min(50, parseInt(req.query.limit as string) || 10);
 
-    let orderBy: string;
-    switch (sort) {
-      case "pool": orderBy = "pool_balance DESC"; break;
-      case "tipped": orderBy = "total_funded DESC"; break;
-      case "latest": orderBy = "created_at DESC"; break;
-      case "active": orderBy = "last_chapter_at DESC NULLS LAST"; break;
-      case "hot":
-      default: orderBy = "view_count DESC"; break;
-    }
+    const orderBy = SORT_OPTIONS[sort] || SORT_OPTIONS.hot;
 
     const novelsRes = await query(
       `SELECT id, creator, title, description, cover_uri, active,

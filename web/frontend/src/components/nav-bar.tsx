@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
+import { NotificationBell } from "@/components/notification-bell";
 
 export function NavBar() {
   const pathname = usePathname();
@@ -18,9 +19,13 @@ export function NavBar() {
           <Link href="/" className={pathname === "/" ? "text-white" : "text-neutral-400 hover:text-white"}>
             Discover
           </Link>
+          <Link href="/create" className={pathname === "/create" ? "text-white" : "text-neutral-400 hover:text-white"}>
+            Create Novel
+          </Link>
           <Link href="/dashboard" className={pathname === "/dashboard" ? "text-white" : "text-neutral-400 hover:text-white"}>
             My Dashboard
           </Link>
+          <NotificationBell />
           <ConnectButton showBalance={false} chainStatus="icon" accountStatus="avatar" />
         </nav>
       </header>
@@ -31,14 +36,10 @@ export function NavBar() {
           <span className="text-lg">📖</span>
           <span>Discover</span>
         </Link>
-        <button className="flex flex-col items-center text-xs text-neutral-500" onClick={() => alert("Coming Soon")}>
-          <span className="text-lg">🗳️</span>
-          <span>Vote</span>
-        </button>
-        <button className="flex flex-col items-center text-xs text-neutral-500" onClick={() => alert("Coming Soon")}>
+        <Link href="/create" className={`flex flex-col items-center text-xs ${pathname === "/create" ? "text-white" : "text-neutral-500"}`}>
           <span className="text-lg">✍️</span>
-          <span>Write</span>
-        </button>
+          <span>Create</span>
+        </Link>
         <Link href="/dashboard" className={`flex flex-col items-center text-xs ${pathname === "/dashboard" ? "text-white" : "text-neutral-500"}`}>
           <span className="text-lg">👤</span>
           <span>Me</span>

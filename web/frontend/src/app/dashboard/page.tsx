@@ -123,6 +123,9 @@ export default function DashboardPage() {
             <TabsTrigger value="rewards" className="text-xs data-[state=active]:bg-neutral-700">
               Rewards
             </TabsTrigger>
+            <TabsTrigger value="drafts" className="text-xs data-[state=active]:bg-neutral-700">
+              Drafts
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="chapters" className="mt-4">
@@ -236,8 +239,60 @@ export default function DashboardPage() {
               </div>
             )}
           </TabsContent>
+
+          <TabsContent value="drafts" className="mt-4">
+            <DraftsTab />
+          </TabsContent>
         </Tabs>
       )}
+    </div>
+  );
+}
+
+function DraftsTab() {
+  const [drafts, setDrafts] = useState<{ key: string; novelId: string; parentId: string; preview: string }[]>([]);
+
+  useEffect(() => {
+    const found: typeof drafts = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith("draft:")) {
+        const parts = key.split(":");
+        const novelId = parts[1];
+        const parentId = parts[2];
+        const content = localStorage.getItem(key) || "";
+        found.push({ key, novelId, parentId, preview: content.slice(0, 100) });
+      }
+    }
+    setDrafts(found);
+  }, []);
+
+  function deleteDraft(key: string) {
+    if (!window.confirm("Delete this draft? This cannot be undone.")) return;
+    localStorage.removeItem(key);
+    setDrafts(prev => prev.filter(d => d.key !== key));
+  }
+
+  if (drafts.length === 0) {
+    return <p className="text-neutral-500 text-sm">No drafts saved.</p>;
+  }
+
+  return (
+    <div className="space-y-2">
+      {drafts.map(d => (
+        <div key={d.key} className="flex items-center justify-between rounded-md bg-neutral-900 border border-neutral-800 p-3 text-sm">
+          <div className="min-w-0 flex-1">
+            <Link href={`/write/${d.novelId}/${d.parentId}`} className="font-medium hover:text-white">
+              Novel #{d.novelId} → Parent #{d.parentId}
+            </Link>
+            <p className="text-neutral-500 text-xs truncate mt-0.5">{d.preview}...</p>
+          </div>
+          <div className="flex gap-2 ml-2">
+            <Link href={`/write/${d.novelId}/${d.parentId}`} className="text-blue-400 text-xs hover:underline">Edit</Link>
+            <button onClick={() => deleteDraft(d.key)} className="text-red-400 text-xs hover:underline">Delete</button>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

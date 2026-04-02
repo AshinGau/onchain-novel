@@ -2,12 +2,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ComingSoonButton } from "@/components/coming-soon-button";
 import { TipButton } from "@/components/tip-modal";
 import { VotePanel } from "@/components/vote-panel";
 import { RewardsPanel } from "@/components/rewards-panel";
 import { fetchApi, type Novel, type TreeChapter, ROUND_PHASES, EPOCH_PHASES } from "@/lib/api";
 import { shortenAddress, formatEth } from "@/lib/format";
+import { computeVotingRoundId } from "@/lib/contracts";
 import { StoryTree } from "@/components/story-tree";
 
 export default async function NovelDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -16,6 +16,7 @@ export default async function NovelDetailPage({ params }: { params: Promise<{ id
   let novel: Novel;
   let tree: TreeChapter[] = [];
   let forks: Novel[] = [];
+  let worldlines: { id: string }[] = [];
   let roundCandidates: { id: string; author: string; chapter_index: number; vote_count: string; is_world_line: boolean; content_text?: string | null }[] = [];
 
   try {
@@ -34,13 +35,38 @@ export default async function NovelDetailPage({ params }: { params: Promise<{ id
     forks = forkData.forks;
   } catch {}
 
-  // Fetch round candidates for voting (when in Committing or Revealing phase)
-  if (novel.active && (novel.round_phase === 1 || novel.round_phase === 2)) {
+  // Fetch world lines for write button
+  try {
+    const wlData = await fetchApi<{ worldlines: { id: string }[] }>(`/api/novels/${id}/worldlines`);
+    worldlines = wlData.worldlines;
+  } catch {}
+
+  // Fetch round candidates for round voting (epoch_phase=0 + round Committing/Revealing)
+  if (novel.active && novel.epoch_phase === 0 && (novel.round_phase === 1 || novel.round_phase === 2)) {
     try {
       const roundData = await fetchApi<{ chapters: typeof roundCandidates }>(`/api/novels/${id}/rounds/${novel.current_round}`);
       roundCandidates = roundData.chapters;
     } catch {}
   }
+
+  // For epoch voting (epoch_phase=1 Committing or epoch_phase=2 Revealing), candidates are worldlines
+  let epochCandidates: typeof roundCandidates = [];
+  if (novel.active && (novel.epoch_phase === 1 || novel.epoch_phase === 2)) {
+    epochCandidates = worldlines.map(wl => {
+      const treeChapter = tree.find(c => c.id === wl.id);
+      return {
+        id: wl.id,
+        author: treeChapter?.author || "",
+        chapter_index: treeChapter?.chapter_index ?? 0,
+        vote_count: treeChapter?.vote_count || "0",
+        is_world_line: true,
+      };
+    });
+  }
+
+  // Compute votingRoundIds
+  const roundVotingId = computeVotingRoundId(BigInt(id), novel.current_epoch, novel.current_round, false);
+  const epochVotingId = computeVotingRoundId(BigInt(id), novel.current_epoch, novel.current_round, true);
 
   const phase = novel.epoch_phase === 0
     ? ROUND_PHASES[novel.round_phase]
@@ -131,22 +157,42 @@ export default async function NovelDetailPage({ params }: { params: Promise<{ id
 
       {/* Action buttons */}
       <div className="flex flex-wrap gap-2 mb-6">
-        {novel.active && novel.round_phase === 0 && (
-          <ComingSoonButton>Write a Chapter</ComingSoonButton>
+        {novel.active && novel.round_phase === 0 && worldlines.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {worldlines.map(wl => (
+              <Link key={wl.id} href={`/write/${id}/${wl.id}`}>
+                <Button variant="outline">Write on World Line #{wl.id}</Button>
+              </Link>
+            ))}
+          </div>
         )}
         <Link href={`/novels/${id}/canon`}>
           <Button variant="secondary">Read Canon</Button>
         </Link>
       </div>
 
-      {/* Vote Panel */}
-      {novel.active && (novel.round_phase === 1 || novel.round_phase === 2) && roundCandidates.length > 0 && (
+      {/* Round Vote Panel */}
+      {novel.active && novel.epoch_phase === 0 && (novel.round_phase === 1 || novel.round_phase === 2) && roundCandidates.length > 0 && (
         <div className="mb-6">
           <VotePanel
             novelId={id}
-            votingRoundId={`${BigInt(id)}:${novel.current_epoch}:${novel.current_round}`}
+            votingRoundId={roundVotingId}
             phase={novel.round_phase === 1 ? "committing" : "revealing"}
             candidates={roundCandidates}
+            title={`Round ${novel.current_round} Vote — ${novel.round_phase === 1 ? "Commit" : "Reveal"}`}
+          />
+        </div>
+      )}
+
+      {/* Epoch Vote Panel */}
+      {novel.active && (novel.epoch_phase === 1 || novel.epoch_phase === 2) && epochCandidates.length > 0 && (
+        <div className="mb-6">
+          <VotePanel
+            novelId={id}
+            votingRoundId={epochVotingId}
+            phase={novel.epoch_phase === 1 ? "committing" : "revealing"}
+            candidates={epochCandidates}
+            title={`Epoch ${novel.current_epoch} Vote — Choose Canon — ${novel.epoch_phase === 1 ? "Commit" : "Reveal"}`}
           />
         </div>
       )}

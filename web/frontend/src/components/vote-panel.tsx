@@ -22,6 +22,7 @@ interface VotePanelProps {
   votingRoundId: string;
   phase: "committing" | "revealing";
   candidates: VoteCandidate[];
+  title?: string;
 }
 
 function generateSalt(): `0x${string}` {
@@ -43,7 +44,7 @@ function loadVoteData(novelId: string, votingRoundId: string): { candidateId: st
   return raw ? JSON.parse(raw) : null;
 }
 
-export function VotePanel({ novelId, votingRoundId, phase, candidates }: VotePanelProps) {
+export function VotePanel({ novelId, votingRoundId, phase, candidates, title }: VotePanelProps) {
   const { isConnected } = useAccount();
   const [selected, setSelected] = useState<string | null>(null);
   const [stakeAmount, setStakeAmount] = useState("0.01");
@@ -98,7 +99,7 @@ export function VotePanel({ novelId, votingRoundId, phase, candidates }: VotePan
   return (
     <div className="rounded-lg bg-neutral-900 border border-neutral-800 p-4">
       <h3 className="font-semibold mb-3">
-        {phase === "committing" ? "Cast Your Vote" : "Reveal Your Vote"}
+        {title || (phase === "committing" ? "Cast Your Vote" : "Reveal Your Vote")}
       </h3>
 
       {phase === "committing" && (
