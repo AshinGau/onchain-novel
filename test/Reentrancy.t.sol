@@ -112,6 +112,8 @@ contract ReentrancyTest is Test {
     address public author2 = makeAddr("author2");
     address public author3 = makeAddr("author3");
 
+    DataTypes.NovelMetadata defaultMetadata;
+
     function setUp() public {
         NovelCore ncImpl = new NovelCore();
         VotingEngine veImpl = new VotingEngine();
@@ -140,6 +142,8 @@ contract ReentrancyTest is Test {
         novelCore.setPrizePool(address(prizePool));
         novelCore.setChapterNFT(address(chapterNFT));
         vm.stopPrank();
+
+        defaultMetadata = DataTypes.NovelMetadata({title: "Test Novel", description: "A test novel", coverUri: ""});
 
         vm.deal(creatorAddr, 100 ether);
         vm.deal(author1, 100 ether);
@@ -231,7 +235,7 @@ contract ReentrancyTest is Test {
         DataTypes.NovelConfig memory config = _defaultConfig();
 
         vm.prank(creatorAddr);
-        uint256 novelId = novelCore.createNovel{value: 1 ether}(config, hashes, lengths);
+        uint256 novelId = novelCore.createNovel{value: 1 ether}(config, defaultMetadata, hashes, lengths);
         attacker.setNovelId(novelId);
 
         uint256[] memory wl = novelCore.getActiveWorldLines(novelId);
@@ -302,7 +306,7 @@ contract ReentrancyTest is Test {
 
         DataTypes.NovelConfig memory config = _defaultConfig();
         vm.prank(creatorAddr);
-        novelId = novelCore.createNovel{value: 1 ether}(config, hashes, lengths);
+        novelId = novelCore.createNovel{value: 1 ether}(config, defaultMetadata, hashes, lengths);
 
         uint256[] memory wl = novelCore.getActiveWorldLines(novelId);
         vm.prank(author1);
@@ -322,7 +326,7 @@ contract ReentrancyTest is Test {
         DataTypes.NovelConfig memory config = _defaultConfig();
         // rewardRecipient creates the novel → they get creator royalty
         vm.prank(rewardRecipient);
-        novelId = novelCore.createNovel{value: 10 ether}(config, hashes, lengths);
+        novelId = novelCore.createNovel{value: 10 ether}(config, defaultMetadata, hashes, lengths);
 
         uint256 t0 = block.timestamp;
         uint256[] memory wl = novelCore.getActiveWorldLines(novelId);

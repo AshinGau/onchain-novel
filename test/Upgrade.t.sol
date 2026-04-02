@@ -54,6 +54,8 @@ contract UpgradeTest is Test {
     address public author3 = makeAddr("author3");
     address public voter1 = makeAddr("voter1");
 
+    DataTypes.NovelMetadata defaultMetadata;
+
     function setUp() public {
         NovelCore ncImpl = new NovelCore();
         VotingEngine veImpl = new VotingEngine();
@@ -83,6 +85,8 @@ contract UpgradeTest is Test {
         novelCore.setChapterNFT(address(chapterNFT));
         vm.stopPrank();
 
+        defaultMetadata = DataTypes.NovelMetadata({title: "Test Novel", description: "A test novel", coverUri: ""});
+
         vm.deal(creatorAddr, 100 ether);
         vm.deal(author1, 100 ether);
         vm.deal(author2, 100 ether);
@@ -103,7 +107,7 @@ contract UpgradeTest is Test {
 
         DataTypes.NovelConfig memory config = _defaultConfig();
         vm.prank(creatorAddr);
-        uint256 novelId = novelCore.createNovel{value: 1 ether}(config, hashes, lengths);
+        uint256 novelId = novelCore.createNovel{value: 1 ether}(config, defaultMetadata, hashes, lengths);
 
         // Record pre-upgrade state
         DataTypes.Novel memory novelBefore = novelCore.getNovel(novelId);
@@ -221,7 +225,7 @@ contract UpgradeTest is Test {
 
         DataTypes.NovelConfig memory config = _defaultConfig();
         vm.prank(creatorAddr);
-        uint256 novelId = novelCore.createNovel{value: 5 ether}(config, hashes, lengths);
+        uint256 novelId = novelCore.createNovel{value: 5 ether}(config, defaultMetadata, hashes, lengths);
 
         uint256 t0 = block.timestamp;
         uint256[] memory wl = novelCore.getActiveWorldLines(novelId);

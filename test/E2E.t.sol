@@ -25,6 +25,8 @@ contract E2ETest is Test {
     address public keeper = makeAddr("keeper");
     address public reader = makeAddr("reader");
 
+    DataTypes.NovelMetadata defaultMetadata;
+
     function setUp() public {
         // Create named addresses
         for (uint256 i = 0; i < 5; i++) {
@@ -64,6 +66,8 @@ contract E2ETest is Test {
         novelCore.setChapterNFT(address(chapterNFT));
         vm.stopPrank();
 
+        defaultMetadata = DataTypes.NovelMetadata({title: "Test Novel", description: "A test novel", coverUri: ""});
+
         // Fund all accounts
         vm.deal(creatorAddr, 100 ether);
         vm.deal(keeper, 10 ether);
@@ -98,7 +102,7 @@ contract E2ETest is Test {
         config.roundsPerEpoch = 1;
 
         vm.prank(creatorAddr);
-        uint256 novelId = novelCore.createNovel{value: 10 ether}(config, genesisHashes, genesisLengths);
+        uint256 novelId = novelCore.createNovel{value: 10 ether}(config, defaultMetadata, genesisHashes, genesisLengths);
 
         DataTypes.Novel memory novel = novelCore.getNovel(novelId);
         assertEq(novel.genesisChapterCount, 2);
@@ -258,7 +262,7 @@ contract E2ETest is Test {
         lengths[1] = 200;
 
         vm.prank(creatorAddr);
-        uint256 novelId = novelCore.createNovel{value: 10 ether}(config, hashes, lengths);
+        uint256 novelId = novelCore.createNovel{value: 10 ether}(config, defaultMetadata, hashes, lengths);
         // G=2
 
         uint256 poolBefore = prizePool.getPoolBalance(novelId);
@@ -316,7 +320,7 @@ contract E2ETest is Test {
         lengths[0] = 200;
 
         vm.prank(creatorAddr);
-        uint256 novelId = novelCore.createNovel{value: 5 ether}(config, hashes, lengths);
+        uint256 novelId = novelCore.createNovel{value: 5 ether}(config, defaultMetadata, hashes, lengths);
 
         // Need 10+ unique authors for pollution detection
         address[10] memory manyAuthors;
@@ -356,7 +360,7 @@ contract E2ETest is Test {
         lengths[0] = 200;
 
         vm.prank(creatorAddr);
-        uint256 novelId = novelCore.createNovel{value: 5 ether}(config, hashes, lengths);
+        uint256 novelId = novelCore.createNovel{value: 5 ether}(config, defaultMetadata, hashes, lengths);
 
         // Run round 1
         (uint256 ch1,) = _doRoundWithChapters(novelId, config);
@@ -388,7 +392,7 @@ contract E2ETest is Test {
         assertFalse(ch1Data.isCanon);
 
         vm.prank(authors[1]);
-        uint256 forkedNovelId = novelCore.forkNovel{value: 2 ether}(novelId, ch1, config);
+        uint256 forkedNovelId = novelCore.forkNovel{value: 2 ether}(novelId, ch1, config, defaultMetadata);
 
         DataTypes.Novel memory forked = novelCore.getNovel(forkedNovelId);
         assertEq(forked.creator, creatorAddr); // Creator royalty flows to original creator
@@ -416,7 +420,7 @@ contract E2ETest is Test {
         lengths[0] = 200;
 
         vm.prank(creatorAddr);
-        uint256 novelId = novelCore.createNovel{value: 5 ether}(config, hashes, lengths);
+        uint256 novelId = novelCore.createNovel{value: 5 ether}(config, defaultMetadata, hashes, lengths);
 
         _doRoundWithChapters(novelId, config);
 
@@ -461,7 +465,7 @@ contract E2ETest is Test {
         lengths[0] = 200;
 
         vm.prank(creatorAddr);
-        uint256 novelId = novelCore.createNovel{value: 1 ether}(config, hashes, lengths);
+        uint256 novelId = novelCore.createNovel{value: 1 ether}(config, defaultMetadata, hashes, lengths);
         uint256[] memory wl = novelCore.getActiveWorldLines(novelId);
 
         // Author submits — stake is locked
@@ -514,7 +518,7 @@ contract E2ETest is Test {
 
         // No prize pool
         vm.prank(creatorAddr);
-        uint256 novelId = novelCore.createNovel(config, hashes, lengths);
+        uint256 novelId = novelCore.createNovel(config, defaultMetadata, hashes, lengths);
         assertEq(prizePool.getPoolBalance(novelId), 0);
 
         // Should run without division-by-zero
@@ -536,7 +540,7 @@ contract E2ETest is Test {
         lengths[0] = 200;
 
         vm.prank(creatorAddr);
-        uint256 novelId = novelCore.createNovel{value: 1 ether}(config, hashes, lengths);
+        uint256 novelId = novelCore.createNovel{value: 1 ether}(config, defaultMetadata, hashes, lengths);
 
         uint256 t0 = block.timestamp;
         uint256[] memory wl = novelCore.getActiveWorldLines(novelId);
@@ -595,7 +599,7 @@ contract E2ETest is Test {
         lengths[0] = 200;
 
         vm.prank(creatorAddr);
-        uint256 novelId = novelCore.createNovel{value: 1 ether}(config, hashes, lengths);
+        uint256 novelId = novelCore.createNovel{value: 1 ether}(config, defaultMetadata, hashes, lengths);
 
         uint256 t0 = block.timestamp;
         uint256[] memory wl = novelCore.getActiveWorldLines(novelId);
@@ -648,7 +652,7 @@ contract E2ETest is Test {
 
         // No prize pool — keeper reward can't be paid
         vm.prank(creatorAddr);
-        uint256 novelId = novelCore.createNovel(config, hashes, lengths);
+        uint256 novelId = novelCore.createNovel(config, defaultMetadata, hashes, lengths);
 
         uint256[] memory wl = novelCore.getActiveWorldLines(novelId);
         vm.prank(authors[0]);
@@ -685,7 +689,7 @@ contract E2ETest is Test {
         lengths[0] = 200;
 
         vm.prank(creatorAddr);
-        uint256 novelId = novelCore.createNovel{value: 10 ether}(config, hashes, lengths);
+        uint256 novelId = novelCore.createNovel{value: 10 ether}(config, defaultMetadata, hashes, lengths);
 
         _runEpochSimple(novelId, config);
 

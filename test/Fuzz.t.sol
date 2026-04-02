@@ -25,6 +25,8 @@ contract FuzzTest is Test {
     address public author3 = makeAddr("author3");
     address public voter1 = makeAddr("voter1");
 
+    DataTypes.NovelMetadata defaultMetadata;
+
     function setUp() public {
         NovelCore novelCoreImpl = new NovelCore();
         VotingEngine votingEngineImpl = new VotingEngine();
@@ -54,6 +56,8 @@ contract FuzzTest is Test {
         novelCore.setPrizePool(address(prizePool));
         novelCore.setChapterNFT(address(chapterNFT));
         vm.stopPrank();
+
+        defaultMetadata = DataTypes.NovelMetadata({title: "Test Novel", description: "A test novel", coverUri: ""});
 
         vm.deal(creatorAddr, 1000 ether);
         vm.deal(author1, 100 ether);
@@ -168,7 +172,7 @@ contract FuzzTest is Test {
         lengths[0] = minLen; // Exactly at minimum — should pass
 
         vm.prank(creatorAddr);
-        uint256 novelId = novelCore.createNovel(config, hashes, lengths);
+        uint256 novelId = novelCore.createNovel(config, defaultMetadata, hashes, lengths);
         assertTrue(novelId > 0);
     }
 
@@ -203,7 +207,7 @@ contract FuzzTest is Test {
 
         vm.prank(creatorAddr);
         vm.expectRevert();
-        novelCore.createNovel(config, hashes, lengths);
+        novelCore.createNovel(config, defaultMetadata, hashes, lengths);
     }
 
     // ============================================================
@@ -250,7 +254,7 @@ contract FuzzTest is Test {
         }
 
         vm.prank(creatorAddr);
-        uint256 novelId = novelCore.createNovel{value: poolAmount}(config, hashes, lengths);
+        uint256 novelId = novelCore.createNovel{value: poolAmount}(config, defaultMetadata, hashes, lengths);
 
         uint256 poolBefore = prizePool.getPoolBalance(novelId);
         assertEq(poolBefore, poolAmount);
@@ -304,7 +308,7 @@ contract FuzzTest is Test {
         });
 
         vm.prank(creatorAddr);
-        uint256 novelId = novelCore.createNovel{value: 5 ether}(config, hashes, lengths);
+        uint256 novelId = novelCore.createNovel{value: 5 ether}(config, defaultMetadata, hashes, lengths);
 
         // Tip
         vm.prank(creatorAddr);

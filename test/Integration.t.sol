@@ -28,6 +28,7 @@ contract IntegrationTest is Test {
     address public reader2 = address(0x6060);
 
     DataTypes.NovelConfig defaultConfig;
+    DataTypes.NovelMetadata defaultMetadata;
 
     function setUp() public {
         // Deploy implementations
@@ -85,6 +86,8 @@ contract IntegrationTest is Test {
             pollutionThreshold: 20,
             contentBaseUrl: ""
         });
+
+        defaultMetadata = DataTypes.NovelMetadata({title: "Test Novel", description: "A test novel", coverUri: ""});
     }
 
     // ============================================================
@@ -110,7 +113,7 @@ contract IntegrationTest is Test {
     function _createNovel(uint256 ethValue) internal returns (uint256 novelId) {
         (bytes32[] memory hashes, uint64[] memory lengths) = _genesisHashes(bytes32("genesis_hash"));
         vm.prank(creator);
-        novelId = novelCore.createNovel{value: ethValue}(defaultConfig, hashes, lengths);
+        novelId = novelCore.createNovel{value: ethValue}(defaultConfig, defaultMetadata, hashes, lengths);
     }
 
     // ============================================================
@@ -147,7 +150,7 @@ contract IntegrationTest is Test {
     function test_CreateNovelMultiGenesis() public {
         (bytes32[] memory hashes, uint64[] memory lengths) = _multiGenesisHashes();
         vm.prank(creator);
-        uint256 novelId = novelCore.createNovel{value: 2 ether}(defaultConfig, hashes, lengths);
+        uint256 novelId = novelCore.createNovel{value: 2 ether}(defaultConfig, defaultMetadata, hashes, lengths);
 
         DataTypes.Novel memory novel = novelCore.getNovel(novelId);
         assertEq(novel.genesisChapterCount, 2);
@@ -333,7 +336,7 @@ contract IntegrationTest is Test {
 
         (bytes32[] memory hashes, uint64[] memory lengths) = _genesisHashes(bytes32("genesis"));
         vm.prank(creator);
-        uint256 novelId = novelCore.createNovel{value: 10 ether}(config, hashes, lengths);
+        uint256 novelId = novelCore.createNovel{value: 10 ether}(config, defaultMetadata, hashes, lengths);
 
         // Run epoch 1: G=1, C=1 (incremented before distribution) → creatorRoyalty = 50%
         _runEpochForNovel(novelId);
@@ -370,7 +373,7 @@ contract IntegrationTest is Test {
         // Fork fee = stakeAmount (0.01 ETH) goes to original pool, rest to fork pool
         uint256 originalPoolBefore = prizePool.getPoolBalance(novelId);
         vm.prank(author2);
-        uint256 forkedNovelId = novelCore.forkNovel{value: 0.5 ether}(novelId, ch2, defaultConfig);
+        uint256 forkedNovelId = novelCore.forkNovel{value: 0.5 ether}(novelId, ch2, defaultConfig, defaultMetadata);
 
         assertEq(forkedNovelId, 2);
         DataTypes.Novel memory forked = novelCore.getNovel(forkedNovelId);
@@ -633,7 +636,7 @@ contract IntegrationTest is Test {
         (bytes32[] memory hashes, uint64[] memory lengths) = _genesisHashes(bytes32("genesis"));
         vm.prank(creator);
         vm.expectRevert();
-        novelCore.createNovel(badConfig, hashes, lengths);
+        novelCore.createNovel(badConfig, defaultMetadata, hashes, lengths);
     }
 
     // ============================================================
@@ -647,7 +650,7 @@ contract IntegrationTest is Test {
 
         (bytes32[] memory hashes, uint64[] memory lengths) = _genesisHashes(bytes32("genesis"));
         vm.prank(creator);
-        uint256 novelId = novelCore.createNovel{value: 1 ether}(config, hashes, lengths);
+        uint256 novelId = novelCore.createNovel{value: 1 ether}(config, defaultMetadata, hashes, lengths);
 
         // Complete round 1
         _doRound(novelId);
@@ -671,7 +674,7 @@ contract IntegrationTest is Test {
 
         (bytes32[] memory hashes, uint64[] memory lengths) = _genesisHashes(bytes32("genesis"));
         vm.prank(creator);
-        uint256 novelId = novelCore.createNovel{value: 1 ether}(config, hashes, lengths);
+        uint256 novelId = novelCore.createNovel{value: 1 ether}(config, defaultMetadata, hashes, lengths);
 
         _doRound(novelId);
 

@@ -27,6 +27,9 @@ export function registerNovelTools(server: McpServer): void {
       pollutionRounds: z.number().describe("Consecutive rounds for pollution tracking"),
       pollutionThreshold: z.number().describe("Bottom X percentile counts as pollution (e.g. 20)"),
       contentBaseUrl: z.string().default("").describe("Base URL for content storage (e.g. 'https://arweave.net/')"),
+      title: z.string().describe("Novel title"),
+      description: z.string().default("").describe("Novel description / synopsis"),
+      coverUri: z.string().default("").describe("Cover image URI (IPFS/Arweave/HTTP)"),
       genesisContentHashes: z.array(z.string()).describe("Array of bytes32 content hashes for genesis chapters"),
       genesisLengths: z.array(z.number()).describe("Array of declared content lengths for genesis chapters"),
       initialPrizeEth: z.string().optional().describe("Initial prize pool deposit in ETH (e.g. '1.0')"),
@@ -57,12 +60,19 @@ export function registerNovelTools(server: McpServer): void {
           ? parseEther(params.initialPrizeEth)
           : 0n;
 
+        const metadata = {
+          title: params.title,
+          description: params.description,
+          coverUri: params.coverUri,
+        };
+
         const hash = await walletClient.writeContract({
           address: config.novelCoreAddress,
           abi: novelCoreAbi,
           functionName: "createNovel",
           args: [
             novelConfig,
+            metadata,
             params.genesisContentHashes as `0x${string}`[],
             params.genesisLengths.map((l) => BigInt(l)),
           ],
@@ -103,12 +113,20 @@ export function registerNovelTools(server: McpServer): void {
       try {
         const publicClient = getPublicClient();
 
-        const novel = (await publicClient.readContract({
-          address: config.novelCoreAddress,
-          abi: novelCoreAbi,
-          functionName: "getNovel",
-          args: [BigInt(params.novelId)],
-        })) as Record<string, unknown>;
+        const [novel, metadata] = await Promise.all([
+          publicClient.readContract({
+            address: config.novelCoreAddress,
+            abi: novelCoreAbi,
+            functionName: "getNovel",
+            args: [BigInt(params.novelId)],
+          }) as Promise<Record<string, unknown>>,
+          publicClient.readContract({
+            address: config.novelCoreAddress,
+            abi: novelCoreAbi,
+            functionName: "getNovelMetadata",
+            args: [BigInt(params.novelId)],
+          }) as Promise<{ title: string; description: string; coverUri: string }>,
+        ]);
 
         if ((novel as { id: bigint }).id === 0n) {
           return {
@@ -149,7 +167,9 @@ export function registerNovelTools(server: McpServer): void {
         };
 
         const info = [
-          `Novel #${n.id}`,
+          `Novel #${n.id}: ${metadata.title}`,
+          metadata.description ? `Description: ${metadata.description}` : "",
+          metadata.coverUri ? `Cover: ${metadata.coverUri}` : "",
           `Creator: ${n.creator}`,
           `Active: ${n.active}`,
           `Current Round: ${n.currentRound} (${ROUND_PHASE_NAMES[n.roundPhase]})`,
@@ -252,6 +272,9 @@ export function registerNovelTools(server: McpServer): void {
       stakeAmount: z.string().describe("Required stake per submission in ETH"),
       pollutionRounds: z.number().describe("Pollution tracking window"),
       pollutionThreshold: z.number().describe("Bottom percentile for pollution"),
+      title: z.string().describe("Novel title for the forked novel"),
+      description: z.string().default("").describe("Novel description"),
+      coverUri: z.string().default("").describe("Cover image URI"),
       initialPrizeEth: z.string().optional().describe("Initial prize pool in ETH"),
     },
     async (params) => {
@@ -280,6 +303,12 @@ export function registerNovelTools(server: McpServer): void {
           ? parseEther(params.initialPrizeEth)
           : 0n;
 
+        const forkMetadata = {
+          title: params.title,
+          description: params.description,
+          coverUri: params.coverUri,
+        };
+
         const hash = await walletClient.writeContract({
           address: config.novelCoreAddress,
           abi: novelCoreAbi,
@@ -288,6 +317,7 @@ export function registerNovelTools(server: McpServer): void {
             BigInt(params.originalNovelId),
             BigInt(params.branchChapterId),
             novelConfig,
+            forkMetadata,
           ],
           value,
         });
@@ -308,6 +338,54 @@ export function registerNovelTools(server: McpServer): void {
             {
               type: "text" as const,
               text: `Failed to fork novel: ${error instanceof Error ? error.message : String(error)}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  server.tool(
+    "update_novel_metadata",
+    "Update a novel's metadata (title, description, cover). Only callable by the novel creator.",
+    {
+      novelId: z.number().describe("Novel ID"),
+      title: z.string().describe("Novel title"),
+      description: z.string().default("").describe("Novel description"),
+      coverUri: z.string().default("").describe("Cover image URI"),
+    },
+    async (params) => {
+      try {
+        const walletClient = getWalletClient();
+        const publicClient = getPublicClient();
+
+        const hash = await walletClient.writeContract({
+          address: config.novelCoreAddress,
+          abi: novelCoreAbi,
+          functionName: "updateNovelMetadata",
+          args: [
+            BigInt(params.novelId),
+            { title: params.title, description: params.description, coverUri: params.coverUri },
+          ],
+        });
+
+        const receipt = await publicClient.waitForTransactionReceipt({ hash });
+
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Novel #${params.novelId} metadata updated.\nTitle: ${params.title}\nTransaction: ${hash}\nBlock: ${receipt.blockNumber}`,
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Failed to update metadata: ${error instanceof Error ? error.message : String(error)}`,
             },
           ],
           isError: true,

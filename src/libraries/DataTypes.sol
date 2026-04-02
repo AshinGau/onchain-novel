@@ -105,4 +105,11 @@ library DataTypes {
         uint8 consecutiveStrikes; // Consecutive rounds in bottom percentile
         uint32 lastRecordedRound; // Last round where pollution was checked
     }
+
+    /// @notice Mutable metadata for display purposes (separate from immutable NovelConfig)
+    struct NovelMetadata {
+        string title; // Novel title (max 256 bytes)
+        string description; // Novel description / synopsis
+        string coverUri; // Cover image URI (IPFS/Arweave/HTTP)
+    }
 }
