@@ -104,8 +104,9 @@ info "Creating novel..."
 # Genesis: 1 chapter
 GENESIS_HASH="0x$(echo -n 'Once upon a time in a decentralized world...' | xxd -p | tr -d '\n' | head -c 64)"
 CREATE_TX=$(cast send --rpc-url "$RPC" --private-key "$PK_CREATOR" "$NOVEL_CORE" \
-    "createNovel((uint64,uint64,uint64,uint32,uint32,uint32,uint16,uint16,uint64,uint64,uint256,uint8,uint8,string),bytes32[],uint64[])" \
+    "createNovel((uint64,uint64,uint64,uint32,uint32,uint32,uint16,uint16,uint64,uint64,uint256,uint8,uint8,string),(string,string,string),bytes32[],uint64[])" \
     "(100, 10000, 2, 2, 2, 1, 3000, 2000, 2, 2, 10000000000000000, 0, 0, '')" \
+    "(Test Novel, A test novel, '')" \
     "[$GENESIS_HASH]" "[500]" \
     --value 0.1ether --json 2>/dev/null)
 
@@ -319,8 +320,9 @@ info "========================================"
 
 # Create a second novel for MCP tests (novel is still active)
 CREATE_TX2=$(cast send --rpc-url "$RPC" --private-key "$PK_CREATOR" "$NOVEL_CORE" \
-    "createNovel((uint64,uint64,uint64,uint32,uint32,uint32,uint16,uint16,uint64,uint64,uint256,uint8,uint8,string),bytes32[],uint64[])" \
+    "createNovel((uint64,uint64,uint64,uint32,uint32,uint32,uint16,uint16,uint64,uint64,uint256,uint8,uint8,string),(string,string,string),bytes32[],uint64[])" \
     "(100, 10000, 2, 2, 2, 1, 3000, 2000, 2, 2, 10000000000000000, 0, 0, '')" \
+    "(MCP Test Novel, MCP test novel, '')" \
     "[$GENESIS_HASH]" "[500]" \
     --value 0.1ether --json 2>/dev/null)
 [ "$(echo "$CREATE_TX2" | jq -r '.status')" = "0x1" ] || fail "createNovel for MCP tests failed"

@@ -5,9 +5,10 @@
 
 export const novelCoreAbi = [
   // Novel lifecycle
-  "function createNovel((uint64 minChapterLength, uint64 maxChapterLength, uint64 roundMinDuration, uint32 roundMinSubmissions, uint32 worldLineCount, uint32 roundsPerEpoch, uint16 prizeReleaseRate, uint16 voterRewardRate, uint64 commitDuration, uint64 revealDuration, uint256 stakeAmount, uint8 pollutionRounds, uint8 pollutionThreshold, string contentBaseUrl) config, bytes32[] genesisContentHashes, uint64[] genesisLengths) external payable returns (uint256 novelId)",
-  "function forkNovel(uint256 originalNovelId, uint256 branchChapterId, (uint64 minChapterLength, uint64 maxChapterLength, uint64 roundMinDuration, uint32 roundMinSubmissions, uint32 worldLineCount, uint32 roundsPerEpoch, uint16 prizeReleaseRate, uint16 voterRewardRate, uint64 commitDuration, uint64 revealDuration, uint256 stakeAmount, uint8 pollutionRounds, uint8 pollutionThreshold, string contentBaseUrl) config) external payable returns (uint256 novelId)",
+  "function createNovel((uint64 minChapterLength, uint64 maxChapterLength, uint64 roundMinDuration, uint32 roundMinSubmissions, uint32 worldLineCount, uint32 roundsPerEpoch, uint16 prizeReleaseRate, uint16 voterRewardRate, uint64 commitDuration, uint64 revealDuration, uint256 stakeAmount, uint8 pollutionRounds, uint8 pollutionThreshold, string contentBaseUrl) config, (string title, string description, string coverUri) metadata, bytes32[] genesisContentHashes, uint64[] genesisLengths) external payable returns (uint256 novelId)",
+  "function forkNovel(uint256 originalNovelId, uint256 branchChapterId, (uint64 minChapterLength, uint64 maxChapterLength, uint64 roundMinDuration, uint32 roundMinSubmissions, uint32 worldLineCount, uint32 roundsPerEpoch, uint16 prizeReleaseRate, uint16 voterRewardRate, uint64 commitDuration, uint64 revealDuration, uint256 stakeAmount, uint8 pollutionRounds, uint8 pollutionThreshold, string contentBaseUrl) config, (string title, string description, string coverUri) metadata) external payable returns (uint256 novelId)",
   "function completeNovel(uint256 novelId) external",
+  "function updateNovelMetadata(uint256 novelId, (string title, string description, string coverUri) metadata) external",
 
   // Chapter submission
   "function submitChapter(uint256 novelId, uint256 parentChapterId, bytes32 contentHash, uint64 declaredLength) external payable returns (uint256 chapterId)",
@@ -33,6 +34,7 @@ export const novelCoreAbi = [
   "function getNovelCount() external view returns (uint256)",
   "function getChapterCount() external view returns (uint256)",
   "function getClaimableStake(uint256 novelId, address author) external view returns (uint256)",
+  "function getNovelMetadata(uint256 novelId) external view returns ((string title, string description, string coverUri))",
 
   // Events
   "event NovelCreated(uint256 indexed novelId, address indexed creator, uint32 genesisCount)",
@@ -47,6 +49,7 @@ export const novelCoreAbi = [
   "event StakeRefunded(uint256 indexed novelId, address indexed author, uint256 amount)",
   "event StakeSlashed(uint256 indexed novelId, address indexed author, uint256 amount)",
   "event KeeperRewarded(uint256 indexed novelId, address indexed keeper, uint256 amount)",
+  "event NovelMetadataUpdated(uint256 indexed novelId, string title, string description, string coverUri)",
 ] as const;
 
 export const votingEngineAbi = [

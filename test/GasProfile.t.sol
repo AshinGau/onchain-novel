@@ -27,6 +27,7 @@ contract GasProfileTest is Test {
     address public voter2 = makeAddr("voter2");
 
     DataTypes.NovelConfig config;
+    DataTypes.NovelMetadata defaultMetadata;
     uint256 novelId;
 
     function setUp() public {
@@ -62,6 +63,8 @@ contract GasProfileTest is Test {
         vm.deal(voter1, 100 ether);
         vm.deal(voter2, 100 ether);
 
+        defaultMetadata = DataTypes.NovelMetadata({title: "Test Novel", description: "A test novel", coverUri: ""});
+
         config = DataTypes.NovelConfig({
             minChapterLength: 100,
             maxChapterLength: 10000,
@@ -87,7 +90,7 @@ contract GasProfileTest is Test {
         lengths[0] = 200;
 
         vm.prank(creatorAddr);
-        novelCore.createNovel{value: 1 ether}(config, hashes, lengths);
+        novelCore.createNovel{value: 1 ether}(config, defaultMetadata, hashes, lengths);
     }
 
     function test_Gas_CreateNovel_MultiGenesis() public {
@@ -99,7 +102,7 @@ contract GasProfileTest is Test {
         }
 
         vm.prank(creatorAddr);
-        novelCore.createNovel{value: 1 ether}(config, hashes, lengths);
+        novelCore.createNovel{value: 1 ether}(config, defaultMetadata, hashes, lengths);
     }
 
     function test_Gas_SubmitChapter() public {
@@ -202,7 +205,7 @@ contract GasProfileTest is Test {
         uint64[] memory lengths = new uint64[](1);
         lengths[0] = 200;
         vm.prank(creatorAddr);
-        novelId = novelCore.createNovel{value: 5 ether}(config, hashes, lengths);
+        novelId = novelCore.createNovel{value: 5 ether}(config, defaultMetadata, hashes, lengths);
     }
 
     function _createNovelAndSubmit3() internal {

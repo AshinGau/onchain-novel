@@ -61,6 +61,9 @@ contract NovelCore is
     /// @notice Novel ID => author => locked stake amount (in-flight, not yet settled)
     mapping(uint256 => mapping(address => uint256)) private _lockedStakes;
 
+    /// @notice Novel ID => mutable metadata (title, description, cover)
+    mapping(uint256 => DataTypes.NovelMetadata) private _novelMetadata;
+
     /// @notice Global keeper reward amount (owner-settable, per state transition call)
     uint256 public keeperRewardAmount;
 
@@ -85,6 +88,8 @@ contract NovelCore is
     error BranchNotRejected(uint256 chapterId);
     error InvalidGenesisInput();
     error InsufficientForkFee(uint256 sent, uint256 required);
+    error NotNovelCreator(uint256 novelId, address caller);
+    error InvalidMetadata(string reason);
 
     // ============================================================
     //                      INITIALIZER
@@ -182,15 +187,18 @@ contract NovelCore is
     /// @inheritdoc INovelCore
     function createNovel(
         DataTypes.NovelConfig calldata config,
+        DataTypes.NovelMetadata calldata metadata,
         bytes32[] calldata genesisContentHashes,
         uint64[] calldata genesisLengths
     ) external payable whenNotPaused returns (uint256 novelId) {
         _validateConfig(config);
+        _validateMetadata(metadata);
         if (genesisContentHashes.length == 0) revert InvalidGenesisInput();
         if (genesisContentHashes.length != genesisLengths.length) revert InvalidGenesisInput();
         if (genesisContentHashes.length > config.worldLineCount) revert InvalidGenesisInput();
 
         novelId = ++_novelCount;
+        _novelMetadata[novelId] = metadata;
 
         _novels[novelId] = DataTypes.Novel({
             id: novelId,
@@ -242,12 +250,12 @@ contract NovelCore is
     }
 
     /// @inheritdoc INovelCore
-    function forkNovel(uint256 originalNovelId, uint256 branchChapterId, DataTypes.NovelConfig calldata config)
-        external
-        payable
-        whenNotPaused
-        returns (uint256 novelId)
-    {
+    function forkNovel(
+        uint256 originalNovelId,
+        uint256 branchChapterId,
+        DataTypes.NovelConfig calldata config,
+        DataTypes.NovelMetadata calldata metadata
+    ) external payable whenNotPaused returns (uint256 novelId) {
         DataTypes.Novel storage sourceNovel = _novels[originalNovelId];
         if (sourceNovel.id == 0) revert NovelNotFound(originalNovelId);
 
@@ -261,8 +269,10 @@ contract NovelCore is
         if (msg.value < forkFee) revert InsufficientForkFee(msg.value, forkFee);
 
         _validateConfig(config);
+        _validateMetadata(metadata);
 
         novelId = ++_novelCount;
+        _novelMetadata[novelId] = metadata;
 
         _novels[novelId] = DataTypes.Novel({
             id: novelId,
@@ -683,6 +693,26 @@ contract NovelCore is
         return total > locked ? total - locked : 0;
     }
 
+    /// @inheritdoc INovelCore
+    function getNovelMetadata(uint256 novelId) external view returns (DataTypes.NovelMetadata memory) {
+        return _novelMetadata[novelId];
+    }
+
+    // ============================================================
+    //                   METADATA MANAGEMENT
+    // ============================================================
+
+    /// @inheritdoc INovelCore
+    function updateNovelMetadata(uint256 novelId, DataTypes.NovelMetadata calldata metadata) external {
+        DataTypes.Novel storage novel = _novels[novelId];
+        if (novel.id == 0) revert NovelNotFound(novelId);
+        if (novel.creator != msg.sender) revert NotNovelCreator(novelId, msg.sender);
+        _validateMetadata(metadata);
+
+        _novelMetadata[novelId] = metadata;
+        emit NovelMetadataUpdated(novelId, metadata.title, metadata.description, metadata.coverUri);
+    }
+
     // ============================================================
     //                    INTERNAL HELPERS
     // ============================================================
@@ -703,6 +733,11 @@ contract NovelCore is
         if (config.stakeAmount == 0) revert InvalidConfig("stakeAmount must be > 0");
         if (config.commitDuration == 0) revert InvalidConfig("commitDuration must be > 0");
         if (config.revealDuration == 0) revert InvalidConfig("revealDuration must be > 0");
+    }
+
+    function _validateMetadata(DataTypes.NovelMetadata calldata metadata) internal pure {
+        if (bytes(metadata.title).length == 0) revert InvalidMetadata("title must not be empty");
+        if (bytes(metadata.title).length > 256) revert InvalidMetadata("title must be <= 256 bytes");
     }
 
     function _isActiveWorldLine(uint256 novelId, uint256 chapterId) internal view returns (bool) {

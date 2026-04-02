@@ -13,7 +13,10 @@ interface INovelCore {
     event NovelCreated(uint256 indexed novelId, address indexed creator, uint32 genesisChapterCount);
     event NovelForked(uint256 indexed novelId, uint256 indexed sourceNovelId, uint256 sourceChapterId);
     event ChapterSubmitted(
-        uint256 indexed novelId, uint256 indexed chapterId, address indexed author, uint256 parentId,
+        uint256 indexed novelId,
+        uint256 indexed chapterId,
+        address indexed author,
+        uint256 parentId,
         uint32 chapterIndex
     );
     event RoundPhaseChanged(uint256 indexed novelId, uint32 round, DataTypes.RoundPhase phase);
@@ -25,6 +28,7 @@ interface INovelCore {
     event KeeperRewarded(uint256 indexed novelId, address indexed keeper, uint256 amount);
     event EarlyEpochTriggered(uint256 indexed novelId, uint32 epoch);
     event NovelCompleted(uint256 indexed novelId);
+    event NovelMetadataUpdated(uint256 indexed novelId, string title, string description, string coverUri);
 
     // ============================================================
     //                     NOVEL LIFECYCLE
@@ -37,6 +41,7 @@ interface INovelCore {
     /// @return novelId The ID of the newly created novel
     function createNovel(
         DataTypes.NovelConfig calldata config,
+        DataTypes.NovelMetadata calldata metadata,
         bytes32[] calldata genesisContentHashes,
         uint64[] calldata genesisLengths
     ) external payable returns (uint256 novelId);
@@ -46,10 +51,12 @@ interface INovelCore {
     /// @param branchChapterId Chapter to fork from
     /// @param config Configuration for the new novel
     /// @return novelId The ID of the forked novel
-    function forkNovel(uint256 originalNovelId, uint256 branchChapterId, DataTypes.NovelConfig calldata config)
-        external
-        payable
-        returns (uint256 novelId);
+    function forkNovel(
+        uint256 originalNovelId,
+        uint256 branchChapterId,
+        DataTypes.NovelConfig calldata config,
+        DataTypes.NovelMetadata calldata metadata
+    ) external payable returns (uint256 novelId);
 
     // ============================================================
     //                   CHAPTER SUBMISSION
@@ -108,4 +115,12 @@ interface INovelCore {
     function getNovelCount() external view returns (uint256);
     function getChapterCount() external view returns (uint256);
     function getClaimableStake(uint256 novelId, address author) external view returns (uint256);
+    function getNovelMetadata(uint256 novelId) external view returns (DataTypes.NovelMetadata memory);
+
+    // ============================================================
+    //                    METADATA MANAGEMENT
+    // ============================================================
+
+    /// @notice Update novel metadata (only callable by novel creator)
+    function updateNovelMetadata(uint256 novelId, DataTypes.NovelMetadata calldata metadata) external;
 }
