@@ -70,6 +70,14 @@ Other economic mechanisms:
 - **Multi-Chapter Genesis**: Novel can start with multiple genesis chapters, each becoming an initial world line
 - **Keeper**: Anyone who calls state transition functions, earning small rewards from the prize pool
 
+## Design Principles
+
+All contract changes MUST follow these three rules:
+
+1. **Simple** — Prefer straightforward logic over clever optimization. Fewer branches, fewer state variables, fewer cross-contract calls. If a mechanism can be expressed in one formula, don't split it into three.
+2. **Reliable** — Every ETH transfer must be safe (CEI pattern, ReentrancyGuard, pull-over-push). Every state transition must be atomic. Edge cases (zero balances, no voters, single submission) must be handled explicitly, not assumed away.
+3. **Easy to upgrade** — UUPS proxy with `__gap[50]` slots in every contract. New features go in new functions; avoid changing existing storage layout. Keep contracts under 24KB. Design for additive evolution, not breaking changes.
+
 ## Formatting
 
 Line length 120, tab width 4, no bracket spacing (configured in `foundry.toml [fmt]`).

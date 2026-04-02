@@ -15,6 +15,7 @@ out/
 .vscode/
 .idea/
 .claude/
+.agent/
 *.swp
 *.swo
 *~
