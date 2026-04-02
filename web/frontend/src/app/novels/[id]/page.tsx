@@ -1,0 +1,160 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { ComingSoonButton } from "@/components/coming-soon-button";
+import { fetchApi, type Novel, type TreeChapter, ROUND_PHASES, EPOCH_PHASES } from "@/lib/api";
+import { shortenAddress, formatEth } from "@/lib/format";
+import { StoryTree } from "@/components/story-tree";
+
+export default async function NovelDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+
+  let novel: Novel;
+  let tree: TreeChapter[] = [];
+  let forks: Novel[] = [];
+
+  try {
+    novel = await fetchApi<Novel>(`/api/novels/${id}`);
+  } catch {
+    notFound();
+  }
+
+  try {
+    const treeData = await fetchApi<{ chapters: TreeChapter[] }>(`/api/novels/${id}/tree`);
+    tree = treeData.chapters;
+  } catch {}
+
+  try {
+    const forkData = await fetchApi<{ forks: Novel[] }>(`/api/novels/${id}/forks`);
+    forks = forkData.forks;
+  } catch {}
+
+  const phase = novel.epoch_phase === 0
+    ? ROUND_PHASES[novel.round_phase]
+    : `Epoch ${EPOCH_PHASES[novel.epoch_phase]}`;
+
+  const stakeEth = formatEth(novel.config.stakeAmount);
+  const poolEth = formatEth(novel.pool_balance);
+  const tippedEth = formatEth(novel.total_tipped);
+  const estimatedRelease = Number(novel.pool_balance) > 0
+    ? formatEth(String(BigInt(novel.pool_balance) * BigInt(novel.config.prizeReleaseRate) / BigInt(10000)))
+    : "0";
+
+  return (
+    <div className="mx-auto max-w-5xl px-4 py-8 pb-24 md:pb-8">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-start gap-4 mb-6">
+        {novel.cover_uri && (
+          <img src={novel.cover_uri} alt="" className="w-24 h-32 object-cover rounded-lg bg-neutral-800" />
+        )}
+        <div className="flex-1 min-w-0">
+          <h1 className="text-2xl font-bold">{novel.title || `Novel #${novel.id}`}</h1>
+          <p className="text-neutral-400 text-sm mt-1">
+            by {shortenAddress(novel.creator)} · Novel #{novel.id}
+          </p>
+          {novel.description && (
+            <p className="text-neutral-300 text-sm mt-2">{novel.description}</p>
+          )}
+          <div className="flex flex-wrap items-center gap-2 mt-3">
+            <Badge variant={novel.active ? "default" : "secondary"}>
+              {novel.active ? phase : "Completed"}
+            </Badge>
+            <span className="text-xs text-neutral-500">
+              Round {novel.current_round} · Epoch {novel.current_epoch}
+            </span>
+            <span className="text-xs text-neutral-500">
+              {novel.chapter_count ?? 0} chapters · {novel.author_count ?? 0} authors
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Fork info */}
+      {novel.fork_source_novel_id && (
+        <div className="mb-4 rounded-lg bg-neutral-900 border border-neutral-800 p-3 text-sm">
+          Forked from{" "}
+          <Link href={`/novels/${novel.fork_source_novel_id}`} className="text-blue-400 hover:underline">
+            Novel #{novel.fork_source_novel_id}
+          </Link>
+          {" "}Chapter #{novel.fork_source_chapter_id}
+        </div>
+      )}
+
+      {/* Prize Pool Module */}
+      <div className="rounded-lg bg-neutral-900 border border-neutral-800 p-4 mb-6">
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="font-semibold">Prize Pool</h2>
+          <ComingSoonButton>Tip this Novel</ComingSoonButton>
+        </div>
+        <div className="grid grid-cols-3 gap-4 text-center">
+          <div>
+            <p className="text-2xl font-bold text-amber-400">{poolEth} ETH</p>
+            <p className="text-xs text-neutral-500">Current Balance</p>
+          </div>
+          <div>
+            <p className="text-lg font-semibold">{tippedEth} ETH</p>
+            <p className="text-xs text-neutral-500">Total Tipped</p>
+          </div>
+          <div>
+            <p className="text-lg font-semibold">{estimatedRelease} ETH</p>
+            <p className="text-xs text-neutral-500">Next Epoch Release</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Config collapsible */}
+      <details className="rounded-lg bg-neutral-900 border border-neutral-800 p-4 mb-6">
+        <summary className="font-semibold cursor-pointer">Configuration</summary>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-3 text-sm">
+          <div><span className="text-neutral-500">Stake:</span> {stakeEth} ETH</div>
+          <div><span className="text-neutral-500">World Lines:</span> {novel.config.worldLineCount}</div>
+          <div><span className="text-neutral-500">Rounds/Epoch:</span> {novel.config.roundsPerEpoch}</div>
+          <div><span className="text-neutral-500">Min Submissions:</span> {novel.config.roundMinSubmissions}</div>
+          <div><span className="text-neutral-500">Prize Release:</span> {novel.config.prizeReleaseRate / 100}%</div>
+          <div><span className="text-neutral-500">Voter Reward:</span> {novel.config.voterRewardRate / 100}%</div>
+          <div><span className="text-neutral-500">Chapter Length:</span> {novel.config.minChapterLength}–{novel.config.maxChapterLength} bytes</div>
+        </div>
+      </details>
+
+      {/* Action buttons */}
+      <div className="flex flex-wrap gap-2 mb-6">
+        {novel.active && novel.round_phase === 0 && (
+          <ComingSoonButton>Write a Chapter</ComingSoonButton>
+        )}
+        {novel.active && novel.round_phase === 1 && (
+          <ComingSoonButton>Vote</ComingSoonButton>
+        )}
+        <Link href={`/novels/${id}/canon`}>
+          <Button variant="secondary">Read Canon</Button>
+        </Link>
+      </div>
+
+      {/* Story Tree */}
+      {tree.length > 0 && (
+        <div className="mb-6">
+          <h2 className="font-semibold mb-3">Story Tree</h2>
+          <StoryTree chapters={tree} novelId={id} />
+        </div>
+      )}
+
+      {/* Fork children */}
+      {forks.length > 0 && (
+        <div className="mb-6">
+          <h2 className="font-semibold mb-3">Forks</h2>
+          <div className="space-y-2">
+            {forks.map(f => (
+              <Link key={f.id} href={`/novels/${f.id}`} className="block rounded-lg bg-neutral-900 border border-neutral-800 p-3 hover:border-neutral-600 transition-colors">
+                <span className="font-medium">{f.title || `Novel #${f.id}`}</span>
+                <span className="text-neutral-500 text-sm ml-2">from Chapter #{f.fork_source_chapter_id}</span>
+                <Badge variant={f.active ? "default" : "secondary"} className="ml-2 text-xs">
+                  {f.active ? "Active" : "Completed"}
+                </Badge>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
