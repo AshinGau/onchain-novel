@@ -195,17 +195,20 @@ export async function startIndexer() {
       );
 
       if (logs.length > 0) {
-        console.log(`Processing ${logs.length} logs from block ${fromBlock} to ${endBlock}`);
+        console.log(`[indexer] Processing ${logs.length} logs from block ${fromBlock} to ${endBlock}`);
+        const batchStart = Date.now();
+        await processBatch(logs, endBlock, endBlockHash, client);
+        console.log(`[indexer] Batch committed in ${Date.now() - batchStart}ms (blocks ${fromBlock}–${endBlock})`);
+      } else {
+        await processBatch(logs, endBlock, endBlockHash, client);
       }
-
-      await processBatch(logs, endBlock, endBlockHash, client);
 
       // If we're caught up, slow down
       if (endBlock >= chainHead) {
         await sleep(env.INDEXER_POLL_INTERVAL_MS);
       }
     } catch (err) {
-      console.error("Indexer error:", err instanceof Error ? err.message : err);
+      console.error("[indexer] Error:", err instanceof Error ? err.stack || err.message : err);
       await sleep(5000);
       // Recreate client in case of connection issues
       client = createClient();

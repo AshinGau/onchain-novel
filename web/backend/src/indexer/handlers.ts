@@ -16,10 +16,12 @@ export async function handleNovelCoreEvent(log: Log, db: Client, rpc: PublicClie
   }
 
   const blockNumber = log.blockNumber?.toString() ?? "0";
+  const handlerStart = Date.now();
 
   switch (decoded.eventName) {
     case "NovelCreated": {
       const { novelId, creator, genesisChapterCount } = decoded.args;
+      console.log(`[event] NovelCreated novelId=${novelId} creator=${creator} genesis=${genesisChapterCount} block=${blockNumber}`);
       // Fetch full novel data + metadata from chain
       const [novel, metadata] = await Promise.all([
         rpc.readContract({ address: env.NOVEL_CORE_ADDRESS, abi: novelCoreAbi, functionName: "getNovel", args: [novelId] }),
@@ -63,11 +65,13 @@ export async function handleNovelCoreEvent(log: Log, db: Client, rpc: PublicClie
       // Genesis chapters are also emitted as separate events or we need to fetch them
       // They'll be picked up via the chain state after NovelCreated
       await indexGenesisChapters(novelId, genesisChapterCount, blockNumber, db, rpc, log);
+      console.log(`[event] NovelCreated novelId=${novelId} done in ${Date.now() - handlerStart}ms`);
       break;
     }
 
     case "NovelForked": {
       const { novelId, sourceNovelId, sourceChapterId } = decoded.args;
+      console.log(`[event] NovelForked novelId=${novelId} source=${sourceNovelId}#${sourceChapterId} block=${blockNumber}`);
       const [novel, metadata] = await Promise.all([
         rpc.readContract({ address: env.NOVEL_CORE_ADDRESS, abi: novelCoreAbi, functionName: "getNovel", args: [novelId] }),
         rpc.readContract({ address: env.NOVEL_CORE_ADDRESS, abi: novelCoreAbi, functionName: "getNovelMetadata", args: [novelId] }),
@@ -114,6 +118,7 @@ export async function handleNovelCoreEvent(log: Log, db: Client, rpc: PublicClie
 
     case "ChapterSubmitted": {
       const { novelId, chapterId, author, parentId, chapterIndex } = decoded.args;
+      console.log(`[event] ChapterSubmitted chapterId=${chapterId} novelId=${novelId} author=${author} block=${blockNumber}`);
       // Fetch full chapter data
       const chapter = await rpc.readContract({
         address: env.NOVEL_CORE_ADDRESS, abi: novelCoreAbi,
@@ -157,6 +162,7 @@ export async function handleNovelCoreEvent(log: Log, db: Client, rpc: PublicClie
           console.error(`Content fetch failed for chapter ${chapterId}:`, err)
         );
       }
+      console.log(`[event] ChapterSubmitted chapterId=${chapterId} done in ${Date.now() - handlerStart}ms`);
       break;
     }
 
@@ -247,6 +253,7 @@ export async function handleNovelCoreEvent(log: Log, db: Client, rpc: PublicClie
 
     case "WorldLinesSelected": {
       const { novelId, round, selectedChapterIds } = decoded.args;
+      console.log(`[event] WorldLinesSelected novelId=${novelId} round=${round} selected=[${selectedChapterIds}] block=${blockNumber}`);
       // Reset all chapters in this round, then mark selected ones
       await db.query(
         "UPDATE chapters SET is_world_line = FALSE WHERE novel_id = $1 AND round = $2",
@@ -260,6 +267,7 @@ export async function handleNovelCoreEvent(log: Log, db: Client, rpc: PublicClie
 
     case "CanonEstablished": {
       const { novelId, epoch, canonWorldLineId } = decoded.args;
+      console.log(`[event] CanonEstablished novelId=${novelId} epoch=${epoch} canonId=${canonWorldLineId} block=${blockNumber}`);
       await traceAndMarkCanon(canonWorldLineId, db, rpc);
 
       const novel = await rpc.readContract({
@@ -318,6 +326,7 @@ export async function handleNovelCoreEvent(log: Log, db: Client, rpc: PublicClie
 }
 
 async function indexGenesisChapters(novelId: bigint, count: number, blockNumber: string, db: Client, rpc: PublicClient, log: Log) {
+  const t0 = Date.now();
   // Genesis chapters are created before any ChapterSubmitted events.
   // We fetch them via getActiveWorldLines to find their IDs.
   const worldLines = await rpc.readContract({
@@ -368,12 +377,14 @@ async function indexGenesisChapters(novelId: bigint, count: number, blockNumber:
         "UPDATE chapters SET content_text = $1, content_fetched = TRUE WHERE id = $2",
         [genesisContents[i], chapterId.toString()]
       );
+      console.log(`[genesis] Chapter ${chapterId} content stored (${genesisContents[i].length} chars)`);
     } else if (!isOnchain) {
       fetchChapterContent(chapterId, novelId).catch(err =>
         console.error(`Content fetch failed for genesis chapter ${chapterId}:`, err)
       );
     }
   }
+  console.log(`[genesis] Indexed ${worldLines.length} genesis chapters for novel ${novelId} in ${Date.now() - t0}ms`);
 }
 
 async function traceAndMarkCanon(chapterId: bigint, db: Client, rpc: PublicClient) {

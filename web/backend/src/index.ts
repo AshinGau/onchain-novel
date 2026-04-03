@@ -19,6 +19,18 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// Request logging
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on("finish", () => {
+    const ms = Date.now() - start;
+    // Skip noisy health checks
+    if (req.path === "/health") return;
+    console.log(`[api] ${req.method} ${req.path} ${res.statusCode} ${ms}ms`);
+  });
+  next();
+});
+
 // Rate limiting
 const apiLimiter = rateLimit({ windowMs: 60000, max: 100, standardHeaders: true, legacyHeaders: false });
 const writeLimiter = rateLimit({ windowMs: 60000, max: 20, standardHeaders: true, legacyHeaders: false });
