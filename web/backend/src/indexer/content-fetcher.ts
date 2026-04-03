@@ -11,7 +11,7 @@ export async function fetchChapterContent(chapterId: bigint, novelId: bigint) {
   const novelRes = await query("SELECT config, content_location FROM novels WHERE id = $1", [novelId.toString()]);
   if (novelRes.rows.length === 0) return;
 
-  // Onchain content comes from ChapterContentStored event, not external fetch
+  // Onchain content is decoded from tx calldata in the event handler, not external fetch
   if (novelRes.rows[0].content_location === 0) return;
 
   const config = novelRes.rows[0].config;

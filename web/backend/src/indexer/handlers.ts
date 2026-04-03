@@ -1,5 +1,5 @@
 import type pg from "pg";
-import { type Log, type PublicClient, decodeEventLog, formatEther } from "viem";
+import { type Log, type PublicClient, decodeEventLog, decodeFunctionData, formatEther } from "viem";
 import { novelCoreAbi, votingEngineAbi, prizePoolAbi, chapterNFTAbi } from "../utils/abi.js";
 import { env } from "../utils/env.js";
 import { fetchChapterContent } from "./content-fetcher.js";
@@ -62,7 +62,7 @@ export async function handleNovelCoreEvent(log: Log, db: Client, rpc: PublicClie
       }
       // Genesis chapters are also emitted as separate events or we need to fetch them
       // They'll be picked up via the chain state after NovelCreated
-      await indexGenesisChapters(novelId, genesisChapterCount, blockNumber, db, rpc);
+      await indexGenesisChapters(novelId, genesisChapterCount, blockNumber, db, rpc, log);
       break;
     }
 
@@ -134,10 +134,29 @@ export async function handleNovelCoreEvent(log: Log, db: Client, rpc: PublicClie
 
       await db.query("UPDATE novels SET last_chapter_at = NOW() WHERE id = $1", [novelId.toString()]);
 
-      // Async content fetch (non-blocking)
-      fetchChapterContent(chapterId, novelId).catch(err =>
-        console.error(`Content fetch failed for chapter ${chapterId}:`, err)
-      );
+      // For onchain content, decode from tx calldata; for external, fetch from URL
+      const novelRes = await db.query("SELECT content_location FROM novels WHERE id = $1", [novelId.toString()]);
+      if (novelRes.rows.length > 0 && novelRes.rows[0].content_location === 0) {
+        // Onchain: extract content from transaction calldata
+        try {
+          const tx = await rpc.getTransaction({ hash: log.transactionHash! });
+          const { args } = decodeFunctionData({ abi: novelCoreAbi, data: tx.input });
+          const submission = (args as any)[2]; // 3rd arg: ContentSubmission
+          const contentBytes = submission.content as `0x${string}`;
+          const textContent = Buffer.from(contentBytes.slice(2), "hex").toString("utf-8");
+          await db.query(
+            "UPDATE chapters SET content_text = $1, content_fetched = TRUE WHERE id = $2",
+            [textContent, chapterId.toString()]
+          );
+        } catch (err) {
+          console.error(`Failed to decode calldata for chapter ${chapterId}:`, err);
+        }
+      } else {
+        // External/HTTP: async content fetch
+        fetchChapterContent(chapterId, novelId).catch(err =>
+          console.error(`Content fetch failed for chapter ${chapterId}:`, err)
+        );
+      }
       break;
     }
 
@@ -292,24 +311,13 @@ export async function handleNovelCoreEvent(log: Log, db: Client, rpc: PublicClie
       break;
     }
 
-    case "ChapterContentStored": {
-      const { novelId, chapterId, content } = decoded.args;
-      // content is hex bytes, decode to UTF-8 string
-      const textContent = Buffer.from((content as string).slice(2), "hex").toString("utf-8");
-      await db.query(
-        "UPDATE chapters SET content_text = $1, content_fetched = TRUE WHERE id = $2",
-        [textContent, chapterId.toString()]
-      );
-      break;
-    }
-
     case "EarlyEpochTriggered":
     case "KeeperRewarded":
       break;
   }
 }
 
-async function indexGenesisChapters(novelId: bigint, count: number, blockNumber: string, db: Client, rpc: PublicClient) {
+async function indexGenesisChapters(novelId: bigint, count: number, blockNumber: string, db: Client, rpc: PublicClient, log: Log) {
   // Genesis chapters are created before any ChapterSubmitted events.
   // We fetch them via getActiveWorldLines to find their IDs.
   const worldLines = await rpc.readContract({
@@ -317,7 +325,27 @@ async function indexGenesisChapters(novelId: bigint, count: number, blockNumber:
     functionName: "getActiveWorldLines", args: [novelId],
   }) as bigint[];
 
-  for (const chapterId of worldLines) {
+  // Try to decode genesis content from createNovel calldata
+  let genesisContents: string[] | null = null;
+  const novelRes = await db.query("SELECT content_location FROM novels WHERE id = $1", [novelId.toString()]);
+  const isOnchain = novelRes.rows.length > 0 && novelRes.rows[0].content_location === 0;
+
+  if (isOnchain && log.transactionHash) {
+    try {
+      const tx = await rpc.getTransaction({ hash: log.transactionHash });
+      const { args } = decodeFunctionData({ abi: novelCoreAbi, data: tx.input });
+      const genesisChapters = (args as any)[2] as any[]; // 3rd arg: ContentSubmission[]
+      genesisContents = genesisChapters.map((sub: any) => {
+        const contentBytes = sub.content as `0x${string}`;
+        return Buffer.from(contentBytes.slice(2), "hex").toString("utf-8");
+      });
+    } catch (err) {
+      console.error(`Failed to decode createNovel calldata for novel ${novelId}:`, err);
+    }
+  }
+
+  for (let i = 0; i < worldLines.length; i++) {
+    const chapterId = worldLines[i];
     const chapter = await rpc.readContract({
       address: env.NOVEL_CORE_ADDRESS, abi: novelCoreAbi,
       functionName: "getChapter", args: [chapterId],
@@ -335,9 +363,16 @@ async function indexGenesisChapters(novelId: bigint, count: number, blockNumber:
       ]
     );
 
-    fetchChapterContent(chapterId, novelId).catch(err =>
-      console.error(`Content fetch failed for genesis chapter ${chapterId}:`, err)
-    );
+    if (isOnchain && genesisContents && i < genesisContents.length) {
+      await db.query(
+        "UPDATE chapters SET content_text = $1, content_fetched = TRUE WHERE id = $2",
+        [genesisContents[i], chapterId.toString()]
+      );
+    } else if (!isOnchain) {
+      fetchChapterContent(chapterId, novelId).catch(err =>
+        console.error(`Content fetch failed for genesis chapter ${chapterId}:`, err)
+      );
+    }
   }
 }
 

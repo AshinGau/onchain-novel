@@ -49,7 +49,6 @@ export const novelCoreAbi = [
   "event StakeRefunded(uint256 indexed novelId, address indexed author, uint256 amount)",
   "event StakeSlashed(uint256 indexed novelId, address indexed author, uint256 amount)",
   "event KeeperRewarded(uint256 indexed novelId, address indexed keeper, uint256 amount)",
-  "event ChapterContentStored(uint256 indexed novelId, uint256 indexed chapterId, bytes content)",
   "event NovelMetadataUpdated(uint256 indexed novelId, string title, string description, string coverUri)",
 ] as const;
 
