@@ -188,10 +188,10 @@ do_start() {
     info "Starting Anvil..."
     if [ -f "$ANVIL_STATE" ]; then
         info "Loading saved state from $ANVIL_STATE"
-        anvil --block-time 1 --state "$ANVIL_STATE" --silent &
+        anvil --block-time 1 --state "$ANVIL_STATE" > "$DATA_DIR/anvil.log" 2>&1 &
     else
         info "Fresh Anvil instance"
-        anvil --block-time 1 --state "$ANVIL_STATE" --silent &
+        anvil --block-time 1 --state "$ANVIL_STATE" > "$DATA_DIR/anvil.log" 2>&1 &
     fi
     local anvil_pid=$!
     save_pid "anvil" "$anvil_pid"
@@ -344,6 +344,7 @@ EOF
     echo ""
     echo -e "${CYAN}──────────────────────────────────────────────────────────────${NC}"
     echo "  Logs:"
+    echo "    Anvil:    tail -f $DATA_DIR/anvil.log"
     echo "    Backend:  tail -f $DATA_DIR/backend.log"
     echo "    Frontend: tail -f $DATA_DIR/frontend.log"
     echo ""
