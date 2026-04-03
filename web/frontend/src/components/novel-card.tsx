@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import type { Novel } from "@/lib/api";
 import { ROUND_PHASES, EPOCH_PHASES } from "@/lib/api";
 import { shortenAddress, formatEth, timeAgo } from "@/lib/format";
+import { TOKEN_SYMBOL } from "@/lib/config";
 
 export function NovelCard({ novel }: { novel: Novel }) {
   const phase = novel.epoch_phase === 0
@@ -23,7 +24,7 @@ export function NovelCard({ novel }: { novel: Novel }) {
             </Badge>
             {Number(novel.pool_balance) > 0 && (
               <span className="text-xs font-medium text-amber-400">
-                Pool: {formatEth(novel.pool_balance)} ETH
+                Pool: {formatEth(novel.pool_balance)} {TOKEN_SYMBOL}
               </span>
             )}
           </div>

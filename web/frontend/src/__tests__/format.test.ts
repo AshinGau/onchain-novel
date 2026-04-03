@@ -18,15 +18,16 @@ describe("formatEth", () => {
   });
 
   it("formats small amounts", () => {
-    expect(formatEth("10000000000000000")).toBe("0.0100"); // 0.01 ETH
+    expect(formatEth("10000000000000000")).toBe("0.01"); // 0.01 ETH
   });
 
   it("returns 0 for zero", () => {
     expect(formatEth("0")).toBe("0");
   });
 
-  it("returns <0.001 for dust", () => {
-    expect(formatEth("100000000000")).toBe("<0.001");
+  it("shows exact value for small amounts", () => {
+    expect(formatEth("100000000000")).toBe("0.0000001");
+    expect(formatEth("10000000000000")).toBe("0.00001");
   });
 });
 

@@ -1,4 +1,5 @@
 import { query } from "../db/index.js";
+import { ContentLocation } from "../utils/validate.js";
 
 async function sleep(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -12,7 +13,7 @@ export async function fetchChapterContent(chapterId: bigint, novelId: bigint) {
   if (novelRes.rows.length === 0) return;
 
   // Onchain content is decoded from tx calldata in the event handler, not external fetch
-  if (novelRes.rows[0].content_location === 0) return;
+  if (novelRes.rows[0].content_location === ContentLocation.Onchain) return;
 
   const config = novelRes.rows[0].config;
   const baseUrl: string = config.contentBaseUrl || "";
@@ -57,7 +58,7 @@ export async function retryUnfetchedContent() {
   const res = await query(
     `SELECT c.id, c.novel_id FROM chapters c
      JOIN novels n ON n.id = c.novel_id
-     WHERE c.content_fetched = FALSE AND n.content_location != 0 AND n.config->>'contentBaseUrl' != ''
+     WHERE c.content_fetched = FALSE AND n.content_location != ${ContentLocation.Onchain} AND n.config->>'contentBaseUrl' != ''
      LIMIT 20`
   );
 

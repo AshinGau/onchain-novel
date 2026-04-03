@@ -6,6 +6,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { TOKEN_SYMBOL } from "@/lib/config";
 import { API_BASE } from "@/lib/api";
 import { shortenAddress, formatEth, timeAgo } from "@/lib/format";
 
@@ -55,20 +56,25 @@ export default function DashboardPage() {
   const [nfts, setNfts] = useState<UserNFT[]>([]);
   const [rewards, setRewards] = useState<RewardSummary | null>(null);
   const [loading, setLoading] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!address) return;
     setLoading(true);
+    setFetchError(null);
     Promise.all([
-      fetch(`${API_BASE}/api/users/${address}/chapters`).then(r => r.json()).catch(() => ({ chapters: [] })),
-      fetch(`${API_BASE}/api/users/${address}/votes`).then(r => r.json()).catch(() => ({ votes: [] })),
-      fetch(`${API_BASE}/api/users/${address}/nfts`).then(r => r.json()).catch(() => ({ nfts: [] })),
-      fetch(`${API_BASE}/api/users/${address}/rewards`).then(r => r.json()).catch(() => null),
+      fetch(`${API_BASE}/api/users/${address}/chapters`).then(r => { if (!r.ok) throw new Error("chapters"); return r.json(); }),
+      fetch(`${API_BASE}/api/users/${address}/votes`).then(r => { if (!r.ok) throw new Error("votes"); return r.json(); }),
+      fetch(`${API_BASE}/api/users/${address}/nfts`).then(r => { if (!r.ok) throw new Error("nfts"); return r.json(); }),
+      fetch(`${API_BASE}/api/users/${address}/rewards`).then(r => { if (!r.ok) throw new Error("rewards"); return r.json(); }),
     ]).then(([chData, voteData, nftData, rewardData]) => {
       setChapters(chData.chapters || []);
       setVotes(voteData.votes || []);
       setNfts(nftData.nfts || []);
       setRewards(rewardData);
+    }).catch((err) => {
+      setFetchError(`Failed to load dashboard data: ${err.message}`);
+    }).finally(() => {
       setLoading(false);
     });
   }, [address]);
@@ -89,6 +95,10 @@ export default function DashboardPage() {
     <div className="mx-auto max-w-5xl px-4 py-8 pb-24 md:pb-8">
       <h1 className="text-2xl font-bold mb-1">My Dashboard</h1>
       <p className="text-neutral-400 text-sm mb-6">{shortenAddress(address!)}</p>
+
+      {fetchError && (
+        <div className="rounded-lg border border-red-800 bg-red-950 p-3 text-sm text-red-300 mb-6">{fetchError}</div>
+      )}
 
       {/* Urgent: pending reveals */}
       {pendingReveals.length > 0 && (
@@ -213,7 +223,7 @@ export default function DashboardPage() {
                       <div key={i} className="text-sm flex justify-between">
                         <span>{se.novel_title || `Novel #${se.novel_id}`} — {se.event_type}</span>
                         <span className={se.event_type === "refunded" ? "text-green-400" : "text-red-400"}>
-                          {formatEth(se.total_amount)} ETH
+                          {formatEth(se.total_amount)} {TOKEN_SYMBOL}
                         </span>
                       </div>
                     ))}
@@ -226,7 +236,7 @@ export default function DashboardPage() {
                     {rewards.rewardClaims.map((rc, i) => (
                       <div key={i} className="text-sm flex justify-between">
                         <span>{rc.novel_title || `Novel #${rc.novel_id}`} — {rc.source}</span>
-                        <span className="text-green-400">{formatEth(rc.total_amount)} ETH</span>
+                        <span className="text-green-400">{formatEth(rc.total_amount)} {TOKEN_SYMBOL}</span>
                       </div>
                     ))}
                   </div>

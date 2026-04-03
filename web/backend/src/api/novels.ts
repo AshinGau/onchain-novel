@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { query } from "../db/index.js";
+import { safeInt } from "../utils/validate.js";
 
 const router = Router();
 
@@ -14,11 +15,14 @@ const SORT_OPTIONS: Record<string, string> = {
 // GET /api/novels — List novels with pagination, sorting, filtering
 router.get("/", async (req, res) => {
   try {
-    const page = Math.max(1, parseInt(req.query.page as string) || 1);
-    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string) || 20));
+    const page = safeInt(req.query.page, 1, 1, 1000);
+    const limit = safeInt(req.query.limit, 20, 1, 50);
     const offset = (page - 1) * limit;
     const sort = (req.query.sort as string) || "latest";
-    const filter = req.query.filter as string; // "active" | "completed"
+    if (!SORT_OPTIONS[sort]) {
+      return res.status(400).json({ error: `Invalid sort. Options: ${Object.keys(SORT_OPTIONS).join(", ")}` });
+    }
+    const filter = req.query.filter as string;
 
     let where = "1=1";
     const params: unknown[] = [];
@@ -76,7 +80,10 @@ router.get("/", async (req, res) => {
 router.get("/ranking", async (req, res) => {
   try {
     const sort = (req.query.sort as string) || "hot";
-    const limit = Math.min(50, parseInt(req.query.limit as string) || 10);
+    if (!SORT_OPTIONS[sort]) {
+      return res.status(400).json({ error: `Invalid sort. Options: ${Object.keys(SORT_OPTIONS).join(", ")}` });
+    }
+    const limit = safeInt(req.query.limit, 10, 1, 50);
 
     const orderBy = SORT_OPTIONS[sort] || SORT_OPTIONS.hot;
 
@@ -238,8 +245,8 @@ router.get("/:id/stats", async (req, res) => {
 router.get("/:id/tips", async (req, res) => {
   try {
     const { id } = req.params;
-    const page = Math.max(1, parseInt(req.query.page as string) || 1);
-    const limit = Math.min(50, parseInt(req.query.limit as string) || 20);
+    const page = safeInt(req.query.page, 1, 1, 1000);
+    const limit = safeInt(req.query.limit, 20, 1, 50);
     const offset = (page - 1) * limit;
 
     const tipsRes = await query(

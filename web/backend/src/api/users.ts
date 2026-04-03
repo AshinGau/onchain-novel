@@ -1,15 +1,20 @@
 import { Router } from "express";
 import { query } from "../db/index.js";
+import { validateAddress, safeInt } from "../utils/validate.js";
 
 const router = Router();
+
+// Validate address on all routes
+router.use("/:address", validateAddress);
+router.use("/:address/*", validateAddress);
 
 // GET /api/users/:address/votes — User voting history
 router.get("/:address/votes", async (req, res) => {
   try {
     const { address } = req.params;
     const addr = address.toLowerCase();
-    const page = Math.max(1, parseInt(req.query.page as string) || 1);
-    const limit = Math.min(50, parseInt(req.query.limit as string) || 20);
+    const page = safeInt(req.query.page, 1, 1, 1000);
+    const limit = safeInt(req.query.limit, 20, 1, 50);
     const offset = (page - 1) * limit;
 
     const votesRes = await query(

@@ -2,10 +2,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { fetchApi, type Chapter } from "@/lib/api";
+import { fetchApi, type Chapter, type Novel } from "@/lib/api";
 import { shortenAddress, timeAgo } from "@/lib/format";
+import { computeVotingRoundId } from "@/lib/contracts";
 import { CommentSection } from "@/components/comment-section";
 import { ReportModal } from "@/components/report-modal";
+import { VoteButton } from "@/components/vote-button";
 
 interface SiblingChapter {
   id: string;
@@ -22,12 +24,17 @@ export default async function ChapterPage({ params }: { params: Promise<{ id: st
   let chapter: Chapter;
   let siblings: SiblingChapter[] = [];
   let children: SiblingChapter[] = [];
+  let novel: Novel | null = null;
 
   try {
     chapter = await fetchApi<Chapter>(`/api/chapters/${id}`);
   } catch {
     notFound();
   }
+
+  try {
+    novel = await fetchApi<Novel>(`/api/novels/${chapter.novel_id}`);
+  } catch {}
 
   try {
     const sibData = await fetchApi<{ siblings: SiblingChapter[] }>(`/api/chapters/${id}/siblings`);
@@ -44,6 +51,15 @@ export default async function ChapterPage({ params }: { params: Promise<{ id: st
     const commentData = await fetchApi<{ comments: typeof comments }>(`/api/chapters/${id}/comments`);
     comments = commentData.comments;
   } catch {}
+
+  // Can vote for this chapter if it's in the current voting round
+  const isRoundVoting = novel && novel.active && novel.epoch_phase === 0
+    && (novel.round_phase === 1 || novel.round_phase === 2)
+    && chapter.round === novel.current_round;
+
+  const votingRoundId = novel && isRoundVoting
+    ? computeVotingRoundId(BigInt(chapter.novel_id), novel.current_epoch, novel.current_round, false)
+    : "";
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 pb-24 md:pb-8">
@@ -99,6 +115,21 @@ export default async function ChapterPage({ params }: { params: Promise<{ id: st
         )}
       </article>
 
+      {/* Vote for this chapter */}
+      {isRoundVoting && novel && (
+        <div className="rounded-lg bg-neutral-900 border border-neutral-800 p-4 mb-6">
+          <h3 className="font-semibold text-sm mb-2">
+            Round {novel.current_round} — {novel.round_phase === 1 ? "Commit Phase" : "Reveal Phase"}
+          </h3>
+          <VoteButton
+            novelId={chapter.novel_id}
+            chapterId={id}
+            votingRoundId={votingRoundId}
+            phase={novel.round_phase === 1 ? "committing" : "revealing"}
+          />
+        </div>
+      )}
+
       {/* Children (next chapters) */}
       {children.length > 0 && (
         <div className="mb-6">
@@ -121,7 +152,7 @@ export default async function ChapterPage({ params }: { params: Promise<{ id: st
       {/* Siblings */}
       {siblings.length > 0 && (
         <div className="mb-6">
-          <h2 className="font-semibold mb-2 text-sm text-neutral-400">Other continuations from the same point ({siblings.length})</h2>
+          <h2 className="font-semibold mb-2 text-sm text-neutral-400">Parallel Universes ({siblings.length})</h2>
           <div className="space-y-1">
             {siblings.map(s => (
               <Link key={s.id} href={`/chapters/${s.id}`} className="flex items-center justify-between rounded-md bg-neutral-900 border border-neutral-800 p-2 hover:border-neutral-600 text-sm">
@@ -139,9 +170,11 @@ export default async function ChapterPage({ params }: { params: Promise<{ id: st
 
       {/* Actions */}
       <div className="flex gap-2 mt-4 border-t border-neutral-800 pt-4">
-        <Link href={`/write/${chapter.novel_id}/${chapter.id}`}>
-          <Button variant="outline">Continue this story</Button>
-        </Link>
+        {chapter.is_world_line && novel?.active && novel.epoch_phase === 0 && novel.round_phase === 0 && (
+          <Link href={`/write/${chapter.novel_id}/${chapter.id}`}>
+            <Button variant="outline">Continue this story</Button>
+          </Link>
+        )}
         {!chapter.is_canon && (
           <Link href={`/fork/${chapter.novel_id}/${chapter.id}`}>
             <Button variant="outline">Fork from here</Button>

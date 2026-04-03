@@ -1,16 +1,21 @@
 import { Router } from "express";
 import { query } from "../db/index.js";
 import { verifyWallet } from "../utils/auth.js";
+import { validateAddress, safeInt } from "../utils/validate.js";
 
 const router = Router();
+
+// Validate address on all routes
+router.use("/:address", validateAddress);
+router.use("/:address/*", validateAddress);
 
 // GET /api/notifications/:address — Get user's notifications (personal + broadcasts for their novels)
 router.get("/:address", async (req, res) => {
   try {
     const { address } = req.params;
     const addr = address.toLowerCase();
-    const page = Math.max(1, parseInt(req.query.page as string) || 1);
-    const limit = Math.min(50, parseInt(req.query.limit as string) || 20);
+    const page = safeInt(req.query.page, 1, 1, 1000);
+    const limit = safeInt(req.query.limit, 20, 1, 50);
     const offset = (page - 1) * limit;
     const unreadOnly = req.query.unread === "true";
 
@@ -111,17 +116,33 @@ router.post("/:address/mark-read", verifyWallet, async (req, res) => {
     const addr = address.toLowerCase();
     const { ids } = req.body; // optional: specific notification IDs
 
-    if (ids && Array.isArray(ids)) {
+    if (ids && Array.isArray(ids) && ids.length > 0) {
+      // Mark specific notifications by ID (works for both personal and broadcast)
       await query(
-        "UPDATE notifications SET read = TRUE WHERE id = ANY($1) AND LOWER(recipient) = $2",
-        [ids, addr]
+        "UPDATE notifications SET read = TRUE WHERE id = ANY($1) AND read = FALSE",
+        [ids]
       );
     } else {
-      // Mark all as read (personal ones only — broadcasts stay)
+      // Mark all: personal by recipient + broadcast by novel participation
+      const participatedRes = await query(
+        `SELECT DISTINCT novel_id FROM (
+           SELECT novel_id FROM chapters WHERE LOWER(author) = $1
+           UNION SELECT novel_id FROM votes WHERE LOWER(voter) = $1
+           UNION SELECT novel_id FROM tips WHERE LOWER(tipper) = $1
+         ) t`, [addr]
+      );
+      const novelIds = participatedRes.rows.map(r => r.novel_id);
+
       await query(
         "UPDATE notifications SET read = TRUE WHERE LOWER(recipient) = $1 AND read = FALSE",
         [addr]
       );
+      if (novelIds.length > 0) {
+        await query(
+          "UPDATE notifications SET read = TRUE WHERE recipient IS NULL AND novel_id = ANY($1) AND read = FALSE",
+          [novelIds]
+        );
+      }
     }
 
     res.json({ success: true });
