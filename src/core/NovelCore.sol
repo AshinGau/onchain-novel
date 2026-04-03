@@ -237,10 +237,6 @@ contract NovelCore is
                 isCanon: false
             });
 
-            if (config.contentLocation == DataTypes.ContentLocation.Onchain) {
-                emit ChapterContentStored(novelId, genesisChapterId, genesisChapters[i].content);
-            }
-
             _activeWorldLines[novelId].push(genesisChapterId);
         }
 
@@ -384,10 +380,6 @@ contract NovelCore is
         _roundSubmissions[novelId][novel.currentRound].push(chapterId);
         _stakeBalances[novelId][msg.sender] += msg.value;
         _lockedStakes[novelId][msg.sender] += msg.value;
-
-        if (config.contentLocation == DataTypes.ContentLocation.Onchain) {
-            emit ChapterContentStored(novelId, chapterId, submission.content);
-        }
 
         emit ChapterSubmitted(novelId, chapterId, msg.sender, parentChapterId, newChapterIndex);
     }

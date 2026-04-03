@@ -29,7 +29,6 @@ interface INovelCore {
     event EarlyEpochTriggered(uint256 indexed novelId, uint32 epoch);
     event NovelCompleted(uint256 indexed novelId);
     event NovelMetadataUpdated(uint256 indexed novelId, string title, string description, string coverUri);
-    event ChapterContentStored(uint256 indexed novelId, uint256 indexed chapterId, bytes content);
 
     // ============================================================
     //                     NOVEL LIFECYCLE
