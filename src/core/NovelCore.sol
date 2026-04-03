@@ -556,7 +556,7 @@ contract NovelCore is
         _mintCanonNFTs(novelId, novel.currentEpoch, canonWorldLineId);
 
         // Include current epoch's canon chapters in cumulative count BEFORE distribution
-        // so creator royalty formula G/(G+C) gives ~50% at epoch 1 (matching design)
+        // so creator royalty formula 1/(1+C) gives 50% at epoch 1 (matching design)
         novel.cumulativeCanonChapters += uint32(canonAuthors.length);
 
         // Distribute prize pool rewards (three-layer: creator royalty → authors → voters)

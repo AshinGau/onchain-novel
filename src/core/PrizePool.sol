@@ -181,12 +181,12 @@ contract PrizePool is
         }
 
         // === Layer 1: Creator Royalty ===
-        // creatorRoyalty = totalRelease * G / (G + C)
+        // creatorRoyalty = totalRelease * 1 / (1 + C)
+        // Fixed G=1 regardless of genesis count to prevent inflation exploit
         uint256 creatorRoyalty = 0;
-        uint256 g = uint256(genesisChapterCount);
         uint256 c = uint256(cumulativeCanonChapters);
-        if (g > 0) {
-            creatorRoyalty = (totalRelease * g) / (g + c);
+        {
+            creatorRoyalty = totalRelease / (1 + c);
             if (creatorRoyalty > 0) {
                 _pendingRewards[novelId][creator] += creatorRoyalty;
                 emit CreatorRoyaltyDistributed(novelId, epoch, creator, creatorRoyalty);

@@ -85,16 +85,16 @@ contract FuzzTest is Test {
         poolAmount = bound(poolAmount, 1 ether, 100 ether);
 
         uint256 epochRelease = (poolAmount * 3000) / 10000; // 30%
-        uint256 g = uint256(genesisCount);
         uint256 c = uint256(canonCount);
-        uint256 creatorRoyalty = (epochRelease * g) / (g + c);
+        // Fixed G=1 regardless of genesis count (prevents inflation exploit)
+        uint256 creatorRoyalty = epochRelease / (1 + c);
 
         // Invariant: creator royalty <= epoch release
         assertTrue(creatorRoyalty <= epochRelease);
 
         // Invariant: creator royalty decreases as canon count increases
         if (c > 0) {
-            uint256 prevRoyalty = (epochRelease * g) / (g + c - 1);
+            uint256 prevRoyalty = epochRelease / (1 + c - 1);
             assertTrue(creatorRoyalty <= prevRoyalty);
         }
 
@@ -102,6 +102,10 @@ contract FuzzTest is Test {
         if (c == 0) {
             assertEq(creatorRoyalty, epochRelease);
         }
+
+        // Invariant: genesis count does NOT affect royalty
+        uint256 royaltyWithMoreGenesis = epochRelease / (1 + c);
+        assertEq(creatorRoyalty, royaltyWithMoreGenesis);
     }
 
     // ============================================================
