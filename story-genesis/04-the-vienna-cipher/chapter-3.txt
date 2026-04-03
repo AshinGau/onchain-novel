@@ -1,0 +1,123 @@
+Kaspar Reinhardt was not at the Cafe Central.
+
+He was at the Cafe Sperl on Gumpendorfer Strasse, which told Lena something about him before they'd spoken a word. The Central was for tourists. The Sperl was for people who used coffeehouses the way they were intended -- as offices, confessionals, and refuges from apartments that had become unbearable. He was in a corner booth beneath a chandelier that needed cleaning, surrounded by papers, a half-empty bottle of Zweigelt anchoring one corner. Early forties, lean, with dark hair that needed cutting and the sharp, concave face of a man who treated meals as interruptions.
+
+"Kaspar Reinhardt?" She held up her credentials. "Inspector Lena Schiller, Bundeskriminalamt. I need to speak with you about Professor Emil Zerndl."
+
+Something crossed his face -- not surprise but recognition, as though a note he'd been expecting had finally sounded.
+
+"Sit down," he said. He didn't clear the papers. "What has Emil done?"
+
+"He's disappeared. This afternoon. His coat, wallet, keys -- everything left behind. There are indicators of force."
+
+"Indicators of force." Reinhardt repeated the phrase as though parsing it for hidden content. Around them, the Sperl murmured -- an old woman with a Kleiner Brauner, a waitress navigating marble-topped tables. On the wall, a faded photograph showed the cafe in 1900. It looked exactly the same.
+
+"He called you yesterday morning," Lena said. "What did you discuss?"
+
+Reinhardt was quiet long enough that the silence became its own answer. "Emil called me in a state I'd never heard from him. He told me someone had been providing him with manuscript pages. Old ones. That he'd found a cipher embedded in a musical composition."
+
+"The Eroica."
+
+His gray eyes sharpened. "How do you know that?"
+
+"The manuscript was in his desk. Annotations provisionally attributed to Beethoven by Dr. Margarethe Voss."
+
+She watched what happened to his face. It was like watching ice crack -- the same pale surface, but beneath it, the entire structure shifting. He wanted this to be true. The vindication he'd been denied by every tenure committee that dismissed his work.
+
+"If Voss says it's Beethoven's hand, it's Beethoven's hand," he said. "She's the only one I'd trust."
+
+"Then help me understand what Zerndl found."
+
+Reinhardt squared his papers. "The numbers above the notes aren't a substitution cipher. They're a key to reading the message, which is encoded in the musical intervals -- the distances between notes. Only the intervals at positions the numerical key indicates carry meaning. Everything else is genuine music. You could play the piece and it would sound right. But extract the marked intervals, convert them, and you get text."
+
+"Steganography," Lena said.
+
+"Exactly. Beethoven didn't encrypt a message. He composed one."
+
+"And the message says?"
+
+"Emil decoded one fragment." Reinhardt's voice dropped. "'Der Weg fuhrt unter die Kirche, wo die Toten ihre Geheimnisse bewahren.'"
+
+The way leads under the church, where the dead keep their secrets.
+
+"He was frightened," Reinhardt continued. "He said the person sending the manuscript -- Diabelli -- was not an academic. He used the phrase Bruderschaft der Partitur. The Brotherhood of the Score. An organization appearing in footnotes of Viennese history since the Congress of Vienna. Always peripheral. Always deniable. But persistent."
+
+"A secret society."
+
+"A continuity. There's a difference. Secret societies are theatrical nonsense. A continuity is a purpose that outlives its originators. A lock guarded for two hundred years, waiting for someone to find the key." He looked down at his wine. "Emil told me to be careful. I told him he was being theatrical. I was wrong."
+
+Lena showed him the text messages. ZERNDL=0. DIE PARTITUR ZEIGT DEN WEG.
+
+"Zeroed out," he said quietly. "Like a term canceled from an equation." He looked up. "The second message is for you. They want you to follow the score."
+
+"You've been researching numerical patterns in the Eroica independently," Lena said. "Before any of this."
+
+"For six years. The work that ended my marriage." He pulled a large sheet from his papers. "I mapped every interval in the first two hundred bars against standard distributions for the period. Forty-seven anomalies. Intervals that deviate from tonal conventions with no musical explanation." He pulled out a graph, points in red ink. "When you apply the numerical key from the manuscript to select clusters and convert the intervals to letters --" He turned the paper.
+
+Block capitals in red ink:
+
+DER NACHSTE IST DER, DER DIE PARTITUR LIEST.
+
+The next one is the one who reads the score.
+
+Lena looked at Reinhardt. She watched him arrive at the understanding -- that by decoding the message, by reading the score, he had fulfilled the cipher's prophecy. He had made himself exactly what it described.
+
+The next victim.
+
+"Pack your things," she said. "You're not staying here tonight."
+
+They left the Sperl and walked toward the Wieden. The Karlskirche rose ahead, its baroque dome and twin columns lit against the blackness. A church built to fulfill a vow against plague.
+
+Under the church, where the dead keep their secrets.
+
+"Reinhardt. Could it be this church? The Karlskirche?"
+
+"It has a crypt. And Beethoven lived in this neighborhood when composing the Eroica. The connection is possible."
+
+"Tomorrow. Right now --"
+
+The lights went out.
+
+Not just the streetlights. The Karlskirche vanished, its floodlights killed simultaneously. The apartment windows went black. The electrical hum of the city -- the undertone you never noticed until it was gone -- ceased. In its place: snow falling in perfect silence, and the absolute dark of a city that had been switched off.
+
+Lena drew her weapon. She put herself between Reinhardt and the street.
+
+From the stairwell of Reinhardt's building, visible through the glass panel of the front door, came a single point of light. A flashlight, ascending. Toward the third floor. Toward Reinhardt's flat.
+
+Someone was already inside.
+
+"Do they have a key?" she whispered.
+
+"No one has a key except --" His breath caught. "Emil. I gave Emil a spare last year."
+
+Emil Zerndl's keys. In his briefcase. In his office. Where anyone who had taken him could have found them.
+
+The light reappeared behind Reinhardt's window. Whoever it was had let themselves in and was searching.
+
+Lena called Haas. "Safe house for a witness. Tonight. Forensic team to Reinhardt's address -- someone's inside, entered with a stolen key."
+
+"Twenty minutes."
+
+She guided Reinhardt away, into the lanes behind the Naschmarkt. Their footprints in the fresh snow were a trail anyone could follow. After four blocks, she pulled him into the arched entrance of a closed Heuriger.
+
+"The decoded message," she said. "Is it a warning or a prophecy?"
+
+"In cipher design, there's something called a trap function -- a secondary message that activates when someone unauthorized attempts decryption. A dead man's switch." He looked at her in the darkness. "I didn't turn back."
+
+"No. And now we deal with what follows."
+
+"Inspector. There's something else." He hesitated. "The fragment Emil decoded came from the private manuscript. But the warning I found tonight is in the publicly available score -- a separate layer. Two messages. Two systems. And the Eroica has four movements. If each contains a steganographic layer, there could be an entire document hidden in the music. A map to whatever is under the church."
+
+"To whatever someone thought was worth hiding inside one of the greatest compositions in human history."
+
+From somewhere beyond the rooftops came a sound. A violin. A single instrument, playing with the deliberate pacing of a funeral procession.
+
+The second movement of the Eroica. The Marcia funebre.
+
+It was not a recording. It was live, played with technical command and emotional coldness -- a message not in code but in music's original language. Someone perched above them in the frozen dark, letting them know: you are being watched, and the composition that began two centuries ago has not yet reached its final bar.
+
+The sirens grew closer. The violin played on.
+
+Reinhardt stood in the archway with his satchel pressed to his chest, listening with the total absorption of a man hearing the answer to the question that had consumed his life. And Lena understood that protecting him would be the most difficult part of the case -- not because the danger was exceptional, but because Kaspar Reinhardt did not want to be protected.
+
+He wanted to read the score. All of it. Whatever the cost.

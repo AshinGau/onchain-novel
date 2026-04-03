@@ -54,11 +54,11 @@ export default async function ChapterPage({ params }: { params: Promise<{ id: st
             {chapter.novel_title || `Novel #${chapter.novel_id}`}
           </Link>
           <span>·</span>
-          <span>Chapter Index {chapter.chapter_index}</span>
+          <span>Chapter #{chapter.chapter_index}</span>
           <span>·</span>
           <span>Round {chapter.round} / Epoch {chapter.epoch}</span>
         </div>
-        <h1 className="text-xl font-bold">Chapter #{chapter.id}</h1>
+        <h1 className="text-xl font-bold">Candidate(ID.{chapter.id})</h1>
         <div className="flex items-center gap-2 mt-1 text-sm">
           <span className="text-neutral-400">by {shortenAddress(chapter.author)}</span>
           <span className="text-neutral-600">·</span>
@@ -106,7 +106,7 @@ export default async function ChapterPage({ params }: { params: Promise<{ id: st
           <div className="space-y-1">
             {children.map(c => (
               <Link key={c.id} href={`/chapters/${c.id}`} className="flex items-center justify-between rounded-md bg-neutral-900 border border-neutral-800 p-2 hover:border-neutral-600 text-sm">
-                <span>Chapter #{c.id} by {shortenAddress(c.author)}</span>
+                <span>Candidate(ID.{c.id}) by {shortenAddress(c.author)}</span>
                 <div className="flex items-center gap-2">
                   <span className="text-neutral-500">{c.vote_count} votes</span>
                   {c.is_canon && <Badge className="bg-amber-600 text-xs">Canon</Badge>}
@@ -125,7 +125,7 @@ export default async function ChapterPage({ params }: { params: Promise<{ id: st
           <div className="space-y-1">
             {siblings.map(s => (
               <Link key={s.id} href={`/chapters/${s.id}`} className="flex items-center justify-between rounded-md bg-neutral-900 border border-neutral-800 p-2 hover:border-neutral-600 text-sm">
-                <span>Chapter #{s.id} by {shortenAddress(s.author)}</span>
+                <span>Candidate(ID.{s.id}) by {shortenAddress(s.author)}</span>
                 <div className="flex items-center gap-2">
                   <span className="text-neutral-500">{s.vote_count} votes</span>
                   {s.is_canon && <Badge className="bg-amber-600 text-xs">Canon</Badge>}

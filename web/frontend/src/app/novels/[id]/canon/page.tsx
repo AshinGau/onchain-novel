@@ -37,7 +37,7 @@ export default async function CanonPage({ params }: { params: Promise<{ id: stri
           {canonChapters.map((ch, i) => (
             <article key={ch.id} className="border-l-2 border-amber-600 pl-4">
               <div className="flex items-center gap-2 mb-2 text-sm text-neutral-400">
-                <span className="font-medium text-amber-400">Chapter {ch.chapter_index}</span>
+                <span className="font-medium text-amber-400">Chapter #{ch.chapter_index}</span>
                 <span>·</span>
                 <span>{shortenAddress(ch.author)}</span>
                 <span>·</span>

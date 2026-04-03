@@ -1,0 +1,109 @@
+The coffee was still warm. The cream was still turning.
+
+That was what made Inspector Lena Schiller stop breathing for a moment -- not the overturned chair, not the equations pulsing on the monitor, but the small Viennese melange sitting on the desk in its traditional glass, the spiral of cream unwinding through dark liquid like a clock running backward. Professor Emil Zerndl had been here four minutes ago, maybe five. She could almost feel the displacement of air where his body had been.
+
+"No one saw him leave," said Sergeant Haas from the doorway. He filled it, as he filled most spaces, with the stolid presence of a man who trusted mass over subtlety. "The building has one entrance. The porter was at his desk all afternoon. Swears on it."
+
+Lena didn't respond. She had a habit -- it irritated colleagues and unsettled witnesses -- of going silent when she was thinking, sometimes for minutes at a time, her eyes moving across a scene with the fixed, systematic sweep of a scanner. Her ex-husband had called it her "absence." Her therapist called it dissociation. Lena called it reading.
+
+She read the room.
+
+Dark wood paneling, bowed shelves: Schneier, Katz, Lindell, Shannon's original papers in yellowed folders. A framed photograph of Kurt Godel beside the window -- not a university-issued portrait but a candid shot, Godel smiling, which was rare enough to be worth noting. Through the window, the twin spires of the Votivkirche rose into a sky the color of old pewter. January in Vienna. The light was already failing at half past three, as though the city itself preferred to operate in the dark.
+
+"His coat is still here," Lena said. She touched the heavy wool overcoat draped on the back of the door. Cashmere blend, well-worn at the cuffs, a habit of quality maintained on an academic salary. "His scarf. His briefcase." She opened the briefcase. Wallet with eighty euros and a Billa loyalty card. Keys on a Schonbrunn Palace keyring -- a gift, not a purchase. University ID with a photograph in which Zerndl looked startled, as all faculty did in their ID photos. "He didn't plan to leave."
+
+"So what happened? He evaporated?"
+
+Lena crouched beside the overturned chair. It was an antique, oak with leather upholstery, the kind the university passed down through generations of tenured faculty like an inheritance no one wanted. It hadn't fallen. The force pattern was wrong for a fall -- the legs were pointing away from the desk, toward the door. It had been thrown, or someone standing had been slammed backward into it. The leather seat bore a scratch, thin and precise, as though made by the tip of a knife that hadn't been used to cut -- only to threaten.
+
+"Get forensics," she said. "And pull everything on Zerndl's last twenty-four hours."
+
+"He's a mathematician, Inspector. What's he going to be mixed up in?"
+
+"He's a cryptographer. People who break codes tend to break things they shouldn't."
+
+She stood and examined the monitor. The screen showed a dense grid of numbers and symbols -- not a standard proof, not coursework, but something structured with a deliberation that made the hair on her forearms rise. She recognized the format. Three years at the Bundesamt fur Verfassungsschutz before she'd transferred to criminal investigation. Three years she didn't discuss. This was not academic work. This was the architecture of a live cipher.
+
+Her phone buzzed. She took it from her pocket with her left hand -- she was left-handed, a fact she'd learned to weaponize in interrogations, sitting on the wrong side, forcing subjects to adjust -- already sensing, the way you sense a shift in air pressure before a storm, that whatever was on the screen would change the shape of the case.
+
+An SMS from an unknown number. Eight characters.
+
+ZERNDL=0
+
+She stared at it. In mathematics, in the formal logic that Zerndl had spent his life navigating, equating a variable to zero was annihilation. The variable ceases to exist. It is removed from the equation. Zerndl equals zero. Zerndl is nothing.
+
+Zerndl is gone.
+
+"Inspector?" Haas was watching her. "You look like someone walked over your grave."
+
+She pocketed the phone without showing him. Not yet. "Who else has a key to this office?"
+
+"Zerndl and the department secretary. Frau Lindner."
+
+"Get her."
+
+While Haas made the call, Lena moved through the room with the deliberate attention she'd learned not from police training but from her grandmother, who had survived the war by noticing what others overlooked. She opened drawers. She checked the undersides of shelves. She was looking for the anomaly -- the element that didn't belong to the pattern.
+
+She found it in the bottom drawer, beneath a stack of graded exams on which Zerndl had written comments in red ink that were more thorough than most of his students probably deserved. A small leather-bound notebook, very old, its cover cracked and darkened with the particular patina that comes from being held by many hands over many years. She opened it carefully. The pages were covered in handwriting -- not Zerndl's precise, angular script, but something earlier, more ornate. The text was in German, but a German of formal constructions and archaic spellings. Dense. Studded with diagrams and what appeared to be musical notation.
+
+On the inside cover, in pencil, in Zerndl's hand:
+
+"Eroica ms. -- provenance unverified. Connection to B's Heiligenstadt letter? See K. re: frequency analysis."
+
+Eroica. Beethoven's Third Symphony. The Heiligenstadt Testament -- the letter Beethoven wrote in 1802 when he was going deaf, a document of such despair that he ordered it sealed until after his death. But cryptography?
+
+Lena turned the pages. The diagrams showed grids overlaid on musical staves, as though someone had tried to marry mathematics to melody. Numbers appeared above certain notes -- not performance markings, not dynamics. Something else. Some passages were circled in red ink that had oxidized to the brown of old blood. It looked like someone, centuries ago, had been weaving messages into the fabric of composed music.
+
+"Frau Lindner is coming up," Haas said. Then he saw what she was holding. "What's that?"
+
+"Possibly the answer. Possibly the question." She showed him the inside cover. "Does the name Eroica mean anything to you?"
+
+"Beethoven. My wife's the one with culture. She drags me to the Musikverein every Christmas. I usually sleep through the second half."
+
+"A man of refinement."
+
+"I'm a man of function, Inspector."
+
+She placed the notebook in an evidence bag with the care it demanded -- not as evidence, she realized, but as an object that had survived two centuries and deserved not to be damaged by the urgencies of the present.
+
+The door opened on Frau Lindner -- small, nervous, sixty-something, the kind of university secretary who knew where everything was and wished she didn't. Her eyes found the overturned chair and her hand went to her throat.
+
+"When did you last see Professor Zerndl?" Lena asked.
+
+"This morning. Around ten. He collected his mail." Her voice was thin, a sound made for echoing in institutional corridors. "He was agitated. He asked if anyone had been inquiring about him."
+
+"Had they?"
+
+"A man came yesterday. Didn't give a name. He asked which office was Professor Zerndl's and how late the building stayed open. I took him for a prospective doctoral student." She frowned at the memory, as though revising it. "He had an accent. Not Austrian. German, I think. Northern."
+
+"Describe him."
+
+"Tall. Dark coat, very good quality. He wore glasses -- round, with silver frames. Extremely polite. He carried a leather portfolio, the kind architects use." She paused, and her frown deepened. "There was a pin on his lapel. Small. Gold. A lyre."
+
+A lyre. Apollo's instrument. The classical symbol of music, of poetry, of hidden knowledge. Or just a pin.
+
+"Anything else unusual about Zerndl recently?"
+
+Frau Lindner hesitated -- the kind of hesitation Lena had learned to wait out, because what followed it was almost always the thing that mattered most.
+
+"He canceled his office hours last month. Told students to email. And he asked me about the security cameras. Which doors they covered. Where the gaps were." She looked again at the overturned chair. "I thought he was being eccentric. Brilliant people sometimes are. But now I think he was being afraid."
+
+After she left, Lena stood alone in the office. Snow had begun to fall on the Ringstrasse, softening the neo-Gothic edges of the Votivkirche. A tram passed, its windows briefly painting the room in moving light, then gone. In the corridor outside, a door closed, and the echo settled into the old stone like a held breath.
+
+She took out her phone and looked at the message. ZERNDL=0.
+
+Another buzz. Same number.
+
+DIE PARTITUR ZEIGT DEN WEG.
+
+The score shows the way.
+
+Lena looked at the evidence bag in her hand -- the cracked leather, the faded ink, the grids of music and numbers that someone had inscribed two hundred years ago and someone else had killed to possess today.
+
+Not killed. She corrected herself with the discipline of someone who had once ruined a case by assuming too early. She only knew that a man had vanished from a warm room in the space between one sip of coffee and the next, and that whoever had taken him was speaking to her now, in the language of mathematics, in the grammar of erasure.
+
+The score shows the way. But the way to what?
+
+Somewhere in Vienna, in the dark that was falling fast over the old capital of an empire that had made secrecy into an art form, the answer was waiting. And Lena Schiller -- who had spent three years learning that codes exist to protect things people will die for -- understood, with the instinct that had survived her transfer and her divorce and her years of reading rooms for their hidden messages, that this was not a case.
+
+It was a composition. And she had just been given her part.

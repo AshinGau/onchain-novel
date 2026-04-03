@@ -136,7 +136,7 @@ export default function DashboardPage() {
                   <Link key={ch.id} href={`/chapters/${ch.id}`} className="flex items-center justify-between rounded-md bg-neutral-900 border border-neutral-800 p-3 hover:border-neutral-600 text-sm">
                     <div>
                       <span className="font-medium">{ch.novel_title || `Novel #${ch.novel_id}`}</span>
-                      <span className="text-neutral-500 ml-2">Chapter #{ch.id} (index {ch.chapter_index})</span>
+                      <span className="text-neutral-500 ml-2">Candidate(ID.{ch.id}) · Chapter #{ch.chapter_index}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-neutral-500">{ch.vote_count} votes</span>
@@ -160,7 +160,7 @@ export default function DashboardPage() {
                       <Link href={`/novels/${v.novel_id}`} className="font-medium hover:text-white">
                         {v.novel_title || `Novel #${v.novel_id}`}
                       </Link>
-                      {v.candidate_id && <span className="text-neutral-500 ml-2">→ Chapter #{v.candidate_id}</span>}
+                      {v.candidate_id && <span className="text-neutral-500 ml-2">→ Candidate(ID.{v.candidate_id})</span>}
                     </div>
                     <div className="flex items-center gap-2">
                       {!v.revealed && <Badge variant="destructive" className="text-xs">Unrevealed</Badge>}
@@ -182,7 +182,7 @@ export default function DashboardPage() {
                   <div key={nft.token_id} className="rounded-lg bg-neutral-900 border border-amber-700 p-4">
                     <p className="text-amber-400 font-semibold">Token #{nft.token_id}</p>
                     <p className="text-sm text-neutral-400">
-                      {nft.novel_title || `Novel #${nft.novel_id}`} · Chapter #{nft.chapter_id} · Epoch {nft.epoch}
+                      {nft.novel_title || `Novel #${nft.novel_id}`} · Candidate(ID.{nft.chapter_id}) · Epoch {nft.epoch}
                     </p>
                   </div>
                 ))}

@@ -1,0 +1,124 @@
+Chapter 2: Trial of Intent
+
+The quest details unfolded:
+
+==============================
+QUEST: Trial of Intent
+==============================
+Rank: E (Combat Trial)
+Objective: Neutralize hostile entity at
+  Phoenix Metro Recycling Center
+  (2891 W. Buckeye Road).
+Time Limit: 24 hours
+Reward: Level Up, +5 free stat points,
+        Skill Unlock
+Penalty: HP reduced to 1 for 72 hours.
+------
+Entity: Rift Spawn (classification)
+Threat: Low (E-Rank), Level 2-3
+Note: Crossed into local reality
+  6 hours ago. Currently dormant.
+  Will not remain dormant.
+==============================
+
+A hostile entity. At a recycling center. In Phoenix.
+
+The rational part of his brain -- the part that paid rent on time and never jaywalked -- pointed out that he had no weapons, no training, and that driving across town to fight a monster because floating text told him to was the behavior of someone who needed medication.
+
+The other part -- the part that had watched STR jump from 7 to 10, that could see stress fractures in every surface -- said: the system is real, and if you don't go, something walks out of that facility into a city of 1.6 million people.
+
+Marcus told his boss he had a dental emergency. Dave Hendricks didn't look up. "Take the afternoon," he said, with the profound indifference of a man who managed fourteen adjusters and couldn't remember which one Marcus was.
+
+He found the entity in the recycling center's sorting warehouse -- a long, open building with dead overhead lights and conveyor belts running down the center. The Rift Spawn was crouched on the far belt. It was the size of a large dog but shaped wrong: a body like a skinned cat, all exposed muscle and too many joints, its head dominated by a mouth that split its skull from temple to temple. The teeth were metallic -- corrugated, sharp, and growing. It was eating a conveyor motor. Sparks dripped from its jaw like saliva.
+
+==============================
+ENTITY: Rift Spawn (Scrapjaw)
+Level: 2
+Type: Material Absorber
+HP: 150/150
+Trait: Consumes metal to regenerate
+  HP and harden exterior.
+Weakness: [Activate Structural
+  Analysis to reveal]
+==============================
+
+Marcus pressed against the wall and activated the scan. Five MP drained and the creature lit up like an X-ray -- consumed metal incorporated into its body like rebar in concrete. Dense, hardened, reinforced. But there, at the base of its skull where the jaw hinged: a gap. Unarmored organic tissue. The joint pulsed red, brighter than anything else in the building.
+
+He grabbed a two-foot steel pry bar from a maintenance bench. Structural Analysis gave it a clean read -- no fractures, good steel. It wasn't a sword. It would do.
+
+The Scrapjaw finished the motor and dropped to the floor, moving toward the workbench. Toward him. No eyes -- it navigated by vibration or scent, drawn to the metal in his hands.
+
+Marcus stepped into the open and walked toward it. The creature's head snapped to the sound. It shrieked -- a noise like sheet metal being torn -- and the system flickered:
+
+[Status Effect Resisted: Fear Howl (WIS 9 vs. threshold 8)]
+
+The fear was real but didn't root him. It washed through and out, leaving his hands shaking and his feet still moving.
+
+The Scrapjaw charged. It was fast, its too-many limbs skittering in a horrible gallop. Marcus swung. The creature ducked with insectile flexibility and slammed into his legs.
+
+[HP: 100 --> 78]
+
+Real pain. Real impact. But the system quantified it, and somehow that helped. Seventy-eight percent. Workable.
+
+The Scrapjaw scrambled over him, mouth gaping. Marcus jammed the pry bar sideways into its jaw. Metal teeth ground on steel -- sparks showered his face -- but the bar held. The creature's weight pinned him, jaw working, trying to chew through.
+
+Marcus let go with his right hand and drove his fist -- STR 10, newly earned -- into the left jaw hinge. The exact spot. The weakness.
+
+[Critical Hit! Damage: 47]
+
+The Scrapjaw convulsed. Jaw locked open, pry bar falling free. Marcus scrambled out, grabbed the bar, and swung a two-handed overhead at the right hinge.
+
+[Critical Hit! Damage: 52]
+
+The jaw detached. The creature collapsed, its body dissolving into particles like iron filings caught in a magnetic field, swirling upward into nothing.
+
+[ENTITY NEUTRALIZED]
+
+Marcus stood in the empty warehouse, pry bar in hand, breathing hard. His hip throbbed. His face stung from sparks. He was alive.
+
+==============================
+QUEST COMPLETE: Trial of Intent
+==============================
+  Damage Taken: 22 HP
+  Performance Rating: B+
+
+  LEVEL UP! 1 --> 2
+  +5 Stat Points Available
+  Skill Unlocked: [Danger Sense]
+==============================
+
+The level-up hit like a wave of warm water -- internal, cellular, a sensation of being optimized from the inside out. His bruised hip stopped hurting. The burns sealed. He felt tuned, like an instrument brought into proper pitch.
+
+He allocated: +2 AGI, +2 STR, +1 WIS.
+
+======================
+HOST PROFILE (Updated)
+======================
+Marcus Cole -- Level 2
+HP: 120/120  MP: 60/60
+STR: 12 / AGI: 8 / VIT: 8
+INT: 12 / WIS: 10 / LUK: 5
+Skills: Structural Analysis (Lv.1),
+        Danger Sense (Lv.1)
+
+DANGER SENSE (Lv.1)
+  Passive. Perceive imminent threats
+  within 15 meters. Vague directional
+  awareness of hostile intent.
+======================
+
+Marcus walked out into the Phoenix heat. His Civic sat in the lot. The chain-link fence. Mountains of crushed aluminum. Everything normal. Except him.
+
+He sat in his car and looked at his hands. They didn't look different. But when he gripped the steering wheel, the leather creaked under pressure he hadn't possessed that morning.
+
+A notification waited:
+
+[ALERT: Rift activity detected.]
+[Multiple signatures. Greater Phoenix.]
+[3-7 entities estimated within 48 hours.]
+
+Three to seven. He'd nearly died fighting one.
+
+His phone buzzed. A text from Sunridge Care: "Reminder: Sunday visit with Patricia Cole, 2:00 PM." His mother. Who didn't know her son had just killed a monster in a recycling center. Who might not recognize him when he walked through the door. Who needed him to keep paying the bills, keep showing up, keep being alive.
+
+Marcus started the car. He had leveling to do.
