@@ -143,7 +143,7 @@ export default async function NovelDetailPage({ params }: { params: Promise<{ id
           <Link href={`/novels/${novel.fork_source_novel_id}`} className="text-blue-400 hover:underline">
             Novel #{novel.fork_source_novel_id}
           </Link>
-          {" "}Chapter #{novel.fork_source_chapter_id}
+          {" "}Candidate(ID.{novel.fork_source_chapter_id})
         </div>
       )}
 
@@ -246,7 +246,7 @@ export default async function NovelDetailPage({ params }: { params: Promise<{ id
             {forks.map(f => (
               <Link key={f.id} href={`/novels/${f.id}`} className="block rounded-lg bg-neutral-900 border border-neutral-800 p-3 hover:border-neutral-600 transition-colors">
                 <span className="font-medium">{f.title || `Novel #${f.id}`}</span>
-                <span className="text-neutral-500 text-sm ml-2">from Chapter #{f.fork_source_chapter_id}</span>
+                <span className="text-neutral-500 text-sm ml-2">from Candidate(ID.{f.fork_source_chapter_id})</span>
                 <Badge variant={f.active ? "default" : "secondary"} className="ml-2 text-xs">
                   {f.active ? "Active" : "Completed"}
                 </Badge>

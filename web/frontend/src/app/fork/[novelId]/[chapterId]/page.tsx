@@ -209,7 +209,7 @@ export default function ForkNovelPage({
             Novel #{novelId}
             {sourceNovel?.title ? ` - ${sourceNovel.title}` : ""}
           </span>
-          {" "}Chapter #{chapterId}
+          {" "}Candidate(ID.{chapterId})
         </p>
         {sourceNovel?.description && (
           <p className="text-xs text-neutral-500 mt-1">{sourceNovel.description}</p>

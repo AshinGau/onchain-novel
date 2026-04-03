@@ -1,0 +1,192 @@
+Chapter 3: Dominance Hierarchy
+
+Marcus spent the next thirty-one hours grinding.
+
+The system rewarded any sustained effort above his baseline -- push-ups, sprints, even focused study generated ambient XP. Small amounts, fractions of a quest reward, but consistent. He trained in the parking garage behind his apartment at 2 AM, the only witnesses a security camera and a stray cat that watched him with weary judgment.
+
+By dawn, he'd hit Level 3. The level-up came mid-sprint and nearly dropped him -- that warm-water wave, every cell vibrating at a frequency that felt like purpose. He allocated: +2 AGI, +2 STR, +1 VIT.
+
+======================
+Marcus Cole -- Level 3
+HP: 150/150  MP: 75/75
+STR: 14 / AGI: 10 / VIT: 9
+INT: 12 / WIS: 10 / LUK: 5
+Skills: Structural Analysis (Lv.2),
+        Danger Sense (Lv.1)
+======================
+
+The quest arrived at 7:12 AM while he ate peanut butter from the jar.
+
+==============================
+QUEST: Rift Breach -- South Mountain
+==============================
+Rank: D (Combat, Multi-Target)
+Targets: 4 Rift Spawn
+  - 2x Scrapjaw (Lv.2)
+  - 1x Dustwalker (Lv.3)
+  - 1x Ironhide (Lv.4)
+Reward: Level Up, Skill Unlock,
+  Title: [First Responder]
+Penalty: Rift expands. Entity count
+  doubles every 12 hours.
+SPECIAL: Rift visible to civilians
+  within 200m. Casualties = permanent
+  quest chain penalties.
+==============================
+
+South Mountain Park -- 16,000 acres of desert trails, popular with hikers. On a Wednesday in June, the heat would keep most people away. Not all.
+
+Marcus parked at Pima Canyon trailhead. Two other cars in the lot. He ran the 1.3 miles to the rift location in under eight minutes -- AGI 10 made the trail feel effortless, his feet finding the terrain without thought, creosote bushes filling the air with phantom rain.
+
+He saw the rift before the system marked it. A vertical tear in the air above a wash, six feet tall, its edges shimmering with wrong-cold -- not temperature but absence. Through it: void-dark, the absolute negation of light, and things moving inside without silhouettes.
+
+Danger Sense screamed.
+
+The two Scrapjaws came first, skittering from the wash on either side. Smaller than the one at the recycling center -- freshly spawned, still accumulating material. Marcus closed distance on the nearest before it could orient. The breaker bar he'd bought at a hardware store that morning came down on its jaw hinge with STR 14 authority. The joint shattered on the first strike. He pivoted to the second and drove the bar's tip under its skull like a spear.
+
+[Rift Spawn (Scrapjaw) neutralized. x2]
+
+Too easy. The system wasn't testing him with Scrapjaws. They were the warm-up.
+
+The Dustwalker pulled itself from the rift like a man climbing through a window -- humanoid, six feet tall, composed of compressed sand and rock. Two dark hollows for eyes. A lipless permanent grimace. It moved with unsettling fluidity, as though a sandcastle had been given terrible life.
+
+==============================
+ENTITY: Dustwalker (Lv.3)
+HP: 200/200
+Trait: Desert Adaptation -- regenerates
+  from ambient mineral content.
+Weakness: Core node, center mass.
+  Crystallized rift energy. Destroy
+  core = instant kill. Must crack
+  mineral shell first.
+==============================
+
+Regenerating from the desert itself. Sixteen thousand acres of food source.
+
+The Dustwalker's arm extended -- literally stretched two extra feet in a whip-crack that Danger Sense barely flagged. Marcus ducked. The arm shattered a saguaro behind him.
+
+He scanned the torso: the core glowed violet, buried deep. The shell was thick but uneven -- a thin section below the left collarbone, stress lines from its passage through the rift.
+
+Marcus feinted right, stepped inside its reach, and drove the bar into the thin section. The shell cracked. Not enough. The other arm caught him across the ribs.
+
+[HP: 150 --> 108]
+
+He hit the ground rolling, came up on one knee. The Dustwalker was already regenerating, sand flowing up its legs to fill the gap. He charged before it could seal, drove the bar into the same spot. This time the shell caved. The bar hit something that hummed through the steel and into his teeth. He twisted. The core shattered.
+
+The Dustwalker came apart all at once -- a cascade of mineral dust that coated him from head to waist.
+
+[Dustwalker neutralized.]
+
+Three down. The Ironhide emerged slowly, deliberately. The size of a grizzly bear, encased in overlapping dark metal plates that looked organic -- grown, not added. Each plate was scarred with old combat damage. This thing had fought before. Somewhere on the other side of the void.
+
+==============================
+ENTITY: Ironhide (Lv.4)
+HP: 350/350
+Trait: Reactive Plating -- armor
+  hardens where repeatedly struck.
+  Varied attacks required.
+Weakness: Ventral plating (underside)
+  thinnest. Spinal gap between 3rd/4th
+  dorsal plate visible in motion.
+  Thermal vents open 1.5 sec after
+  sustained exertion.
+==============================
+
+Three weaknesses, all requiring precision. A creature that adapted to repeated attacks. Level 4 against his Level 3.
+
+The Ironhide charged -- faster than its bulk suggested, four legs driving with mechanical efficiency. Marcus dove sideways. It blew past and skidded, claws gouging the trail.
+
+Second charge. Marcus waited, counting heartbeats, watching the plates shift -- and sidestepped at the last second, bringing the bar down on the spinal gap. Two millimeters of exposed tissue between armored segments.
+
+[Damage: 31. Weak point struck.]
+
+The Ironhide spun. One forelimb swept out and ripped the bar from his hands. It sailed thirty feet and clanged against rock.
+
+Unarmed. The spinal plates were already hardening -- reactive armor sealing the gap. That attack wouldn't work twice.
+
+The creature stalked forward. Low, plates locked. Learning.
+
+Marcus saw his chance in the terrain: twenty feet behind him, the wash dropped into a four-foot gully carved by flash floods. If the Ironhide charged and he was in the gully, it would pass over him. Exposing its underside.
+
+At his feet, half-buried in gravel: three feet of rebar, washed downstream from a construction site. Structural Analysis read it automatically -- core integrity 94%. It would hold.
+
+He grabbed it and ran for the gully. The Ironhide charged. Marcus heard the drumming limbs, the grinding plates, and dropped flat into the gully.
+
+The creature sailed over him. For one and a half seconds, its underside passed above his face -- thin ventral plating, pale, visibly weak. He drove the rebar straight up with both hands.
+
+[Critical Hit! Damage: 89. Ventral breach.]
+
+The Ironhide crashed on the far side, stumbling, dark fluid leaking. The reactive plating only responded to exterior impacts -- the interior wound wouldn't close.
+
+It charged again, slower, limping. Marcus sidestepped and drove the rebar into the belly wound a second time.
+
+[Critical Hit! Damage: 94.]
+
+The creature collapsed. Its legs buckled. Marcus walked to its exposed side, saw the pulsing node of dark energy inside, and drove the rebar through it.
+
+[Ironhide HP: 0/350]
+[Rift Spawn (Ironhide) neutralized.]
+
+The rift contracted -- edges pulling inward like a wound healing in fast-forward. In thirty seconds: gone.
+
+==============================
+QUEST COMPLETE: Rift Breach
+==============================
+  Entities: 4/4  Casualties: 0
+  Performance: A-
+
+  LEVEL UP! 3 --> 4
+  +5 Stat Points
+  Skill: [System Sense]
+  Title: [First Responder]
+    +10% XP from rift quests.
+    Rift locations revealed 1hr early.
+
+SYSTEM SENSE (Lv.1)
+  Passive. Detect other System-linked
+  hosts within 500 meters.
+  Note: You are not the only host.
+==============================
+
+You are not the only host.
+
+The sentence sat in his vision like a crack in a foundation -- small, precise, and the kind of thing that changes what a structure can bear. Marcus stood on the trail, covered in dust and sweat, holding rebar, and for the first time since the system had appeared, he felt genuinely uncertain. Fighting monsters was dangerous, but it was simple. Other hosts meant politics, alliances, competition. It meant the system had an ecosystem, not just a user.
+
+A second line appeared beneath the first, in text that flickered slightly -- the system's equivalent of hesitation, or the closest thing to it Marcus had seen:
+
+[Some hosts build. Some hosts break. The system does not choose sides. The system observes.]
+
+Cold comfort from an entity that had already demonstrated it was willing to punish failure permanently.
+
+He allocated: +2 AGI, +1 STR, +1 VIT, +1 WIS.
+
+======================
+Marcus Cole -- Level 4
+HP: 180/180  MP: 90/90
+STR: 15 / AGI: 12 / VIT: 10
+INT: 12 / WIS: 11 / LUK: 5
+Skills: Structural Analysis (Lv.2),
+  Danger Sense (Lv.1),
+  System Sense (Lv.1)
+Title: [First Responder]
+======================
+
+System Sense activated immediately:
+
+[Host detected: 1]
+[Range: 487 meters. Northwest.]
+[Level: Unknown. Disposition: Unknown.]
+
+Someone was on the mountain. Someone like him. And they had been there during the fight -- within 500 meters the entire time. Watching.
+
+Marcus looked up the trail. The desert sun threw everything into sharp relief. He couldn't see anyone. But the system could feel them, and the feeling was mutual.
+
+Behind him, voices -- hikers approaching from the trailhead. Normal people in a world that didn't know it had been invaded. He was still holding rebar, still covered in mineral dust, standing in a wash littered with claw marks and a shattered saguaro.
+
+His phone buzzed. News alert:
+
+BREAKING: Unexplained sinkhole closes South Phoenix recycling center. Second anomaly near South Mountain. Phoenix PD investigating.
+
+The world was starting to notice. And somewhere on this mountain, another host was already ahead of him.
+
+Marcus pocketed his phone, adjusted his grip on the rebar, and started climbing.

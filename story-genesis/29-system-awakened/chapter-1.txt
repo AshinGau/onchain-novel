@@ -1,0 +1,138 @@
+Chapter 1: Boot Sequence
+
+The fluorescent lights in the break room of Hendricks & Associates Insurance had been buzzing at 60 hertz for as long as Marcus Cole had worked there. He knew this because he'd always heard them -- not as sound, exactly, but as a pressure behind his left eye, a low-grade wrongness that two years of cubicle life had taught him to ignore.
+
+At 9:13 AM on a Tuesday in June, the buzzing stopped. And the blue text appeared.
+
+It materialized in the air two feet from his face -- crisp sans-serif font hovering over the coffee machine like a subtitle nobody had asked for. He was mid-pour, wearing a tie he hated, holding a mug that read WORLD'S MOST ADEQUATE EMPLOYEE.
+
+[SYSTEM INITIALIZING...]
+[HOST DETECTED: MARCUS COLE]
+[SYNCHRONIZATION: 3%... 14%... 58%...]
+
+Marcus set the coffee down. He pressed his palms against his eyes. The text was still there -- visible through his eyelids, glowing against the dark like an afterimage burned too deep.
+
+The migraine felt structural, as though someone were renovating the inside of his skull -- knocking out walls, running new wiring. He gripped the counter. The fluorescent lights flickered, buzzed, and died. In the sudden dark, the blue text was the only light source.
+
+[SYNCHRONIZATION: 100%]
+[SYSTEM ONLINE]
+[WELCOME, HOST]
+
+The lights returned. The migraine vanished -- not faded, vanished, like a circuit completing. A new window opened in the air:
+
+======================
+HOST PROFILE
+======================
+Name: Marcus Cole
+Age: 28
+Class: Unassigned
+Level: 1
+HP: 100/100
+MP: 50/50
+
+STR: 7  AGI: 6  VIT: 8
+INT: 12  WIS: 9  LUK: 5
+
+Skills: None
+Titles: None
+Quests: [1 Available]
+======================
+
+Marcus read it twice. His hands were steady, which surprised him, and then the surprise itself felt distant, buffered, as though the system were managing his emotional responses to keep him functional. He noted this clinically: it was already altering him.
+
+A small line of text appeared at the bottom of the profile, easy to miss:
+
+[Compatibility Index: 97.3%]
+[Selection Basis: Pattern Recognition (innate)]
+[You have always seen what others miss. Now we give it a name.]
+
+The buzzing. The thing he'd always heard in the lights, the stress fractures he'd always almost-noticed in old buildings, the way he could look at a spreadsheet and feel where the numbers were wrong before he could explain why. Not a superpower. A tendency. The system hadn't chosen him at random -- it had chosen him because some part of him had already been doing what it offered, just without the interface.
+
+He focused on Quests. A new panel opened:
+
+==============================
+QUEST: First Steps
+==============================
+Rank: F (Tutorial)
+Objective: 50 push-ups within 60 min.
+Reward: +3 STR, Skill Unlock
+Penalty for Failure: Permanent -2 STR
+Time Remaining: 59:58
+==============================
+
+Permanent. Not "try again later." Permanent minus two on a base of seven. The system wasn't offering. It was threatening, in game UI.
+
+Marcus had not done fifty consecutive push-ups since high school, and he hadn't done them well then. He was the kind of lean that came from skipping meals, not from discipline. His mother had called it the Cole family build -- "made for thinking, not lifting" -- before the stroke took her ability to comment on much of anything. He visited her at Sunridge Care every Sunday. She recognized him about half the time.
+
+He loosened his tie. Took it off. Rolled his sleeves.
+
+"Marcus?" His cubicle neighbor Priya appeared in the doorway, holding her own mug. She looked at him on the floor with his palms flat on the linoleum. "What are you doing?"
+
+"Physical therapy."
+
+"On the break room floor?"
+
+"Doctor's orders."
+
+He did the first ten. Fine. By fifteen, his arms were filing formal complaints. At twenty, the system displayed:
+
+[VIT bonus active: +5% stamina recovery]
+
+He didn't feel it exactly. But at push-up twenty-five, when he expected failure, his arms held -- shaking, burning, but holding. Like finding a reserve tank he hadn't known existed.
+
+Thirty. Thirty-five. His shirt stuck to his back. The linoleum smelled like industrial cleaner and old coffee. He could see dust under the vending machine -- a grey landscape of crumbs and a single lost pen cap.
+
+Forty. He paused at the top of a rep, arms locked, breathing hard.
+
+[Stamina: 23%. WARNING: Muscle failure imminent.]
+[Recommendation: Rest intervals of 10-15 seconds between sets.]
+
+It was coaching him. The system wanted him to succeed -- or at least, it had placed a bet on him and was protecting its investment. Marcus filed that thought away. A system with preferences was a system with motives, and motives could be leveraged. Or feared.
+
+Three more. Rest. Three more. Rest. Three more.
+
+Forty-nine. His arms gave out on the fiftieth attempt. He collapsed flat, face down, breathing like he'd been pulled from deep water.
+
+[Push-up attempt failed. Count: 49/50]
+[Time remaining: 44:31]
+
+One more. Marcus put his palms flat. Pushed. His arms screamed. His shoulders felt packed with broken glass. He pushed through it -- not because he was brave, but because PERMANENT was burning in his vision and he thought about his mother in that care facility, about the bills, about what it would mean to get weaker in a world that already took everything it could from people who couldn't fight back.
+
+He locked out at the top.
+
+[50/50 -- QUEST COMPLETE]
+
+Gold light washed over him -- actual light, warm and brief. Priya, still in the doorway, didn't react. She hadn't seen it. Hadn't seen any of it.
+
+==============================
+QUEST COMPLETE: First Steps
+==============================
+Rewards:
+  STR: 7 --> 10 (+3)
+  Skill Unlocked: [Structural Analysis]
+
+STRUCTURAL ANALYSIS (Lv. 1)
+  Passive/Active
+  Perceive structural weaknesses in
+  physical objects. Higher levels reveal
+  weak points in living targets,
+  systems, and abstract structures.
+  Active scan: 5 MP per use.
+==============================
+
+Marcus rolled onto his back. The fluorescent tubes glowed above him, and for the first time he could see the hairline crack in the nearest fixture's mounting bracket -- a stress fracture, highlighted in faint red. The fixture was going to fall. Maybe in a month. Maybe in a year. But the system showed him exactly where and why.
+
+He sat up. His arms ached, but the ache was receding faster than it should. He flexed his hands and felt the difference: STR 10 was tangible, a quiet recalibration, like a machine running the way it was always supposed to.
+
+He walked back to his cubicle. The office looked the same -- beige partitions, dead plants, the hum of the HVAC -- but now everything was annotated. Hairline cracks in the drywall glowed faint red. The loose screw in his desk chair pulsed. The structural integrity of the building whispered to him in a language of light.
+
+A new quest waited at the edge of his vision:
+
+[QUEST AVAILABLE: Trial of Intent]
+[Rank: E]
+[Cannot be previewed. Accept to reveal.]
+[WARNING: Declining removes this quest permanently.]
+
+Marcus looked at his monitor. Insurance spreadsheets. Rows of numbers he'd been arranging for two years while his mother's care bills climbed and his savings account shrank and every morning felt like the one before it, stretching forward into a future that looked exactly like this cubicle, forever.
+
+He selected Yes.

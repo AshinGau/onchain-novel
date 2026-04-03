@@ -161,7 +161,7 @@ export default function WritePage({
       <h1 className="text-2xl font-bold mb-1">Write Chapter</h1>
       <p className="text-neutral-400 text-sm mb-6">
         {novel?.title ? `Novel: ${novel.title}` : `Novel #${novelId}`}
-        {" "}&middot; Continuing from Chapter #{parentId}
+        {" "}&middot; Continuing from Candidate(ID.{parentId})
         {novel && <> &middot; Stake: {stakeDisplay} ETH</>}
       </p>
 
@@ -169,7 +169,7 @@ export default function WritePage({
       {parentChapter?.content_text && (
         <details className="rounded-lg bg-neutral-900 border border-neutral-800 p-4 mb-6" open>
           <summary className="font-semibold cursor-pointer text-sm text-neutral-300">
-            Parent Chapter #{parentId} by {shortenAddress(parentChapter.author)}
+            Parent Candidate(ID.{parentId}) by {shortenAddress(parentChapter.author)}
           </summary>
           <div className="mt-3 text-sm text-neutral-400 whitespace-pre-wrap max-h-48 overflow-y-auto leading-relaxed">
             {parentChapter.content_text}

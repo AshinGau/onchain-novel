@@ -1,0 +1,101 @@
+Dr. Margarethe Voss held the manuscript the way a surgeon holds a heart that might still beat -- with reverence, terror, and the absolute precision of someone who knows that the next movement could be the one that destroys it. She had not spoken for eleven minutes. Lena counted.
+
+They were in a private reading room at the Osterreichische Nationalbibliothek, the vaulted ceiling painted with allegories that, at this hour past eight, seemed to lean down from their clouds like eavesdroppers. Voss had come immediately, abandoning a dinner at the Sacher Hotel with what she described only as "people who owe me more than I owe them." She was in her early fifties, tall, with steel-gray hair cut close and the permanent squint of someone who had spent thirty years deciphering handwriting never meant to be read.
+
+"Well?" said Lena.
+
+Voss set down her loupe. "The paper is handmade. Laid paper -- you can see the chain lines against the light. Consistent with Austrian or southern German production, late eighteenth to early nineteenth century. The ink is iron gall, standard for the period. The binding is later -- mid-nineteenth century, possibly rebound by a private collector." She touched the edge of a page with her cotton-gloved finger the way someone might touch the rim of a wound. "The handwriting is not Beethoven's."
+
+"You're certain."
+
+"I have spent twenty years with his manuscripts. I know his hand better than I know my own children's. This is someone else -- a contemporary, judging by the conventions. A scribe, perhaps, or a student." She opened the notebook to a specific page. "But look at this."
+
+Between the staves of music, in a cramped, urgent script, someone had added annotations. These were in a different ink -- darker, thicker -- and the hand was unmistakable even to Lena's untrained eye. Jagged. Emphatic. The pen pressed so hard it had nearly punctured the paper, as though the writer were furious at the inadequacy of ink to carry what he meant.
+
+"Those annotations," Voss said, and her voice had dropped to something close to a whisper. "Those are Beethoven's."
+
+The reading room contracted around them. The painted figures on the ceiling held still.
+
+"What do they say?" Lena asked.
+
+"They're not words. They're numbers." Voss pointed. "Above certain notes -- 7, 14, 3, 21, 9, 16... At first glance, it resembles figured bass notation, which would be conventional for a working score. But figured bass follows harmonic logic. These numbers have no harmonic relationship to the notes beneath them. They're arbitrary."
+
+"Or systematic."
+
+Voss looked at her. "You think it's a cipher."
+
+"Professor Zerndl thought so. He referenced frequency analysis on the inside cover -- that's a standard technique for breaking substitution codes. He was treating this as an operational problem, not a musicological one."
+
+"The Eroica was completed in 1804," Voss said. She checked her watch -- a tic, Lena realized, not a consultation. "The Heiligenstadt Testament was written in 1802. If this manuscript dates from that period, we're talking about a Beethoven in crisis. Going deaf. Isolated. Politically radical in a city where political radicalism was a capital crime." She paused. "There is no historical evidence that Beethoven engaged in cryptography."
+
+"Is there evidence he didn't?"
+
+"That's not how my discipline works, Inspector."
+
+"It's how mine does. Absence of evidence in the record means either it didn't happen or someone ensured it wouldn't be recorded. Given that Beethoven lived under Metternich's secret police -- a surveillance state that employed more informants per capita than any regime in European history -- the second possibility seems worth considering."
+
+Voss was silent for a moment. Then she almost smiled -- a rare expression on a face built for scrutiny. "You've done your reading."
+
+"I spent three years at the BVT." Lena photographed the annotated page. "Beethoven had connections to Freemasons, to political radicals, to the democratic underground Metternich spent his career crushing. A man like that, going deaf, unable to trust spoken conversation, with beliefs that could get him imprisoned --"
+
+"Might develop a private communication system," Voss finished. "Hidden in the one medium he controlled absolutely. Music." She looked at the manuscript with new eyes -- not the eyes of a conservator assessing age and provenance, but something older, sharper. "My God. If this is what it appears to be --"
+
+"Then someone was willing to abduct a university professor to get it. Which brings me to my question. Zerndl wrote a reference on the inside cover: 'See K. re: frequency analysis.' The initial K. Does it suggest anyone to you?"
+
+The change in Voss was subtle but unmistakable -- a contraction around the eyes, a stiffening of the shoulders. Recognition controlled. "Kaspar Reinhardt. He's a musicologist at the Universitat fur Musik. He's published on mathematical patterns in Beethoven's late works -- specifically on numerical structures that he believes are intentional encodings."
+
+"Believes?"
+
+"The academic consensus is that he's wrong. Pareidolic -- seeing patterns where there are none. He's been denied tenure twice." Voss hesitated, and Lena waited, because hesitation was where truth lived. "He and Zerndl were friends. I've seen them together at the Cafe Central, arguing for hours over melange. I assumed it was intellectual companionship."
+
+"And now?"
+
+"Now I think they may have been collaborating on something neither of them told anyone about."
+
+"What kind of man is Reinhardt?"
+
+Voss considered this. "Brilliant. Obsessive. His wife left him two years ago -- he barely noticed. He drinks, but not the way academics usually drink; he drinks the way monks used to, as fuel for prolonged concentration. He believes the establishment is suppressing his ideas, and the worst part is, he may not be entirely wrong." She paused. "He is also the kind of man who, if he believed he'd found a genuine Beethoven cipher, would sacrifice almost anything -- career, relationships, safety -- to be the one who solved it."
+
+"Including a friend?"
+
+Voss met her eyes. "I didn't say that. But I wouldn't rule it out."
+
+Lena left the library and walked into the Josefsplatz. The equestrian statue of Joseph II wore a mantle of snow. The Hofburg glowed amber under floodlights. From somewhere above -- an open window, a courtyard -- came a Schubert impromptu, hesitant and searching, the kind of music that sounds like someone thinking out loud.
+
+She scrolled through the photographs on her phone. The numbers above the notes: 7, 14, 3, 21, 9, 16, 5, 22, 11, 8, 19, 2...
+
+Simple substitution, A=1: G, N, C, U, I... Nothing.
+
+Reverse alphabet, A=26: T, M... Nothing.
+
+But Zerndl had specified frequency analysis, which meant the cipher wasn't monoalphabetic. It was polyalphabetic or positional -- the key changed depending on context. And if the music itself was part of the system, then the numbers alone were insufficient. You needed the notes. You needed the intervals. You needed to hear the architecture.
+
+Her phone rang.
+
+"We cracked his email," Haas said. "Most of it's university business -- committee meetings, student complaints, a running argument with a colleague in Prague about prime number distribution. But there's a thread from the last two weeks that you need to see. He was corresponding with a ProtonMail address. No real name. The handle is DIABELLI."
+
+"Diabelli. The music publisher. Beethoven wrote thirty-three variations on a Diabelli waltz."
+
+"That's the one. This Diabelli was sending Zerndl scanned pages -- more manuscript material, similar to the notebook. And Zerndl was replying with analysis. Frequency tables, probability matrices, pattern extraction. He was building a systematic decryption."
+
+"Tone?"
+
+"Starts professional. Formal. Two scholars comparing notes. But in the last three messages, Zerndl changes. He writes about 'ethical boundaries' and 'the line between scholarship and exploitation.' His final email, sent yesterday morning at 11:32, says this." Haas read it carefully: "'I will not be party to this. What you are describing is not scholarship. It is the violation of something that was hidden for a reason. I am going to the police.'"
+
+"And Diabelli's response?"
+
+"One line. 'Then you have chosen your zero.'"
+
+Lena stopped walking. The Schubert had ended. The Josefsplatz was empty, the snow falling through lamplight in long vertical lines, each flake catching the amber glow of the Hofburg and carrying it to the ground like a small extinguished signal.
+
+Chosen your zero. ZERNDL=0. The threat had been explicit. And Zerndl had not gone to the police. He had called Reinhardt instead.
+
+"Haas, route the ProtonMail address through BVT cybercrime. I want whatever they can get -- IP traces, account creation data, anything. And pull Zerndl's phone records."
+
+"Already running. That's the other thing. His last outgoing call was at 11:47 yesterday, fifteen minutes after the email. Four minutes long. The number belongs to a mobile registered to Kaspar Reinhardt."
+
+Lena stood surrounded by the facades of empire -- library, palace, riding school. She thought about Beethoven, deaf and defiant, writing numbers above notes in a city where the walls had ears. And she thought: whoever Diabelli is, they are not a scholar. Scholars threaten you with bad reviews. This person threatens you with annihilation.
+
+She turned toward the Innere Stadt, toward the narrow streets where the cafes still held their evening populations and a man named Reinhardt might be sitting in one of them, working through a bottle of Zweigelt and a lifetime of obsession, not yet knowing that the cipher he'd spent his career chasing had just turned its attention to him.
+
+The snow thickened. Vienna drew its curtains, bolted its doors, folded itself into the habitual discretion of a city that had spent centuries perfecting the art of looking beautiful while saying nothing at all.

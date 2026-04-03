@@ -117,7 +117,7 @@ export function VotePanel({ novelId, votingRoundId, phase, candidates, title }: 
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <span>Chapter #{c.id} by {shortenAddress(c.author)}</span>
+                  <span>Candidate(ID.{c.id}) by {shortenAddress(c.author)}</span>
                   <span className="text-neutral-500">{c.vote_count} votes</span>
                 </div>
               </button>
@@ -144,7 +144,7 @@ export function VotePanel({ novelId, votingRoundId, phase, candidates, title }: 
 
           {savedVote && (
             <p className="text-green-400 text-sm mt-2">
-              Vote saved locally for Chapter #{savedVote.candidateId}. Keep this page data safe for the reveal phase.
+              Vote saved locally for Candidate(ID.{savedVote.candidateId}). Keep this page data safe for the reveal phase.
             </p>
           )}
         </>
@@ -155,7 +155,7 @@ export function VotePanel({ novelId, votingRoundId, phase, candidates, title }: 
           {savedVote ? (
             <div>
               <p className="text-sm text-neutral-300 mb-3">
-                You voted for <span className="text-amber-400">Chapter #{savedVote.candidateId}</span>. Reveal to make your vote count.
+                You voted for <span className="text-amber-400">Candidate(ID.{savedVote.candidateId})</span>. Reveal to make your vote count.
               </p>
               <Button onClick={handleReveal} disabled={isPending || isConfirming}>
                 {isPending ? "Signing..." : isConfirming ? "Confirming..." : "Reveal Vote"}
