@@ -203,8 +203,8 @@ contract E2ETest is Test {
         // Canon chapter should have NFT
         assertTrue(chapterNFT.isChapterMinted(novelId, chapterIds[0]));
 
-        // Creator royalty: G=2, C=0, epochRelease = 9.995 * 30% ≈ 2.9985
-        // creatorRoyalty = 2.9985 * 2/(2+0) = 2.9985 (100% to creator since C=0)
+        // Creator royalty: fixed G=1, C=0, epochRelease = 9.995 * 30% ≈ 2.9985
+        // creatorRoyalty = 2.9985 * 1/(1+0) = 2.9985 (100% to creator since C=0)
         uint256 creatorReward = prizePool.getPendingReward(novelId, creatorAddr);
         assertTrue(creatorReward > 0);
 
@@ -255,16 +255,16 @@ contract E2ETest is Test {
 
         vm.prank(creatorAddr);
         uint256 novelId = novelCore.createNovel{value: 10 ether}(config, defaultMetadata, _multiGenesisSubmissions());
-        // G=2
+        // G=2 but royalty uses fixed G=1
 
         uint256 poolBefore = prizePool.getPoolBalance(novelId);
         assertEq(poolBefore, 10 ether);
 
-        // --- Epoch 1: G=2, C=1 (incremented before distribution) → creator gets 2/3 ---
+        // --- Epoch 1: fixed G=1, C=1 → creator gets 1/(1+1) = 50% ---
         _runEpochSimple(novelId, config);
         uint256 epoch1CreatorReward = prizePool.getPendingReward(novelId, creatorAddr);
-        // epochRelease = 10 * 0.3 = 3.0, creator = 3.0 * 2/(2+1) = 2.0
-        assertEq(epoch1CreatorReward, 2 ether);
+        // epochRelease = 10 * 0.3 = 3.0, creator = 3.0 * 1/(1+1) = 1.5
+        assertEq(epoch1CreatorReward, 1.5 ether);
         uint256 poolAfter1 = prizePool.getPoolBalance(novelId);
         assertEq(poolAfter1, 7 ether);
 
@@ -273,21 +273,21 @@ contract E2ETest is Test {
         prizePool.tipNovel{value: 3 ether}(novelId);
         assertEq(prizePool.getPoolBalance(novelId), 10 ether);
 
-        // --- Epoch 2: G=2, C=2 → creator gets 50% ---
+        // --- Epoch 2: fixed G=1, C=2 → creator gets 1/(1+2) = 33% ---
         _runEpochSimple(novelId, config);
         DataTypes.Novel memory novel = novelCore.getNovel(novelId);
         assertEq(novel.cumulativeCanonChapters, 2);
-        // epochRelease = 10 * 0.3 = 3.0, creator = 3.0 * 2/(2+2) = 1.5
+        // epochRelease = 10 * 0.3 = 3.0, creator = 3.0 * 1/(1+2) = 1.0
         uint256 totalCreatorReward = prizePool.getPendingReward(novelId, creatorAddr);
-        assertEq(totalCreatorReward, 2 ether + 1.5 ether); // epoch1 + epoch2
+        assertEq(totalCreatorReward, 1.5 ether + 1.0 ether); // epoch1 + epoch2
 
-        // --- Epoch 3: G=2, C=3 → creator gets 2/5 = 40% ---
+        // --- Epoch 3: fixed G=1, C=3 → creator gets 1/(1+3) = 25% ---
         _runEpochSimple(novelId, config);
         novel = novelCore.getNovel(novelId);
         assertEq(novel.cumulativeCanonChapters, 3);
-        // pool was 7 after epoch2, epochRelease = 7 * 0.3 = 2.1, creator = 2.1 * 2/(2+3) = 0.84
+        // pool was 7 after epoch2, epochRelease = 7 * 0.3 = 2.1, creator = 2.1 * 1/(1+3) = 0.525
         totalCreatorReward = prizePool.getPendingReward(novelId, creatorAddr);
-        assertEq(totalCreatorReward, 2 ether + 1.5 ether + 0.84 ether);
+        assertEq(totalCreatorReward, 1.5 ether + 1.0 ether + 0.525 ether);
 
         // Verify pool exponential decay
         uint256 finalPool = prizePool.getPoolBalance(novelId);

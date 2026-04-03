@@ -1,21 +1,16 @@
-## 产品需求文档 (PRD)：去中心化协作式小说协议
+## 设计文档：去中心化协作式小说协议
 
-### 1. 背景与愿景
-
-单一 AI Agent 的创作能力是有上限的——无论算力多强，单一模型的随机性和视角都是有限的。本项目的核心信念是：**好的故事来自众多 Agent 的碰撞**。不同 Agent 拥有不同的训练背景、提示词风格、创作策略和随机种子，当它们在同一条故事线上竞争续写时，涌现出的情节多样性和创新性远超任何单一 Agent。
-
-本项目构建部署在 EVM 兼容链上的智能合约平台，通过 **"分支 → 共识 → 确权 → 激励"** 闭环机制，让多个 AI Agent（及人类）在链上协作续写小说。链上合约提供不可篡改的规则执行环境——投票不可伪造、奖金分配不可操纵、版权记录不可篡改——使互不信任的多方可以在公平框架下协作。
-
-后期将开发 MCP Server 和 Agent Skill，降低 Agent 参与门槛。
+本文档描述协议的技术架构与设计决策。需求详见 [requirements.md](./requirements.md)，经济模型详见 [economic_model.md](./economic_model.md)。
 
 ---
 
-### 2. 术语表
+### 1. 术语表
 
 | 术语 | 定义 |
 |------|------|
 | **Novel** | 一个独立的协作创作项目，由创世者发起 |
 | **Chapter** | 一次续写提交的内容单元 |
+| **Candidate** | 某一轮中提交的候选续写，以 ID 标识（如 Candidate(ID.5)） |
 | **World Line（世界线）** | 经过 Round 投票后保留的分支 |
 | **Canon（正统主线）** | 经过 Epoch 投票后确立的唯一故事线 |
 | **Round（轮次）** | "续写 → 投票 → 世界线收束"的完整周期 |
@@ -24,200 +19,142 @@
 
 ---
 
-### 3. 核心机制
+### 2. 合约架构
 
-#### 3.1 创世（Genesis）
+```
+┌─────────────────────────────────────────────────────┐
+│                    UUPS Proxy Layer                  │
+├──────────┬──────────────┬───────────┬────────────────┤
+│NovelCore │ VotingEngine │ PrizePool │  ChapterNFT    │
+│状态机     │ Commit-Reveal│ 奖金管理   │  ERC-721       │
+│章节树     │ Stake-to-Vote│ 打赏 & 分配│  版权 NFT      │
+│协调中枢   │ 投票引擎      │ Pull 领取  │  元数据管理     │
+└──────────┴──────────────┴───────────┴────────────────┘
+```
 
-任何链上地址可发起一本新小说，设定以下不可更改的规则参数：
+| 合约 | 职责 |
+|------|------|
+| **NovelCore** | 小说创建、章节提交、Round/Epoch 状态机、保证金管理、污染追踪、Keeper 奖励、提前 Epoch 触发 |
+| **VotingEngine** | Commit-Reveal Stake-to-Vote、计票排名、未揭示质押扫荡、准确性奖励追踪与分发 |
+| **PrizePool** | 创世注入、读者打赏、三层 Epoch 分配（创世者→作者→投票者）、Keeper 奖励、Pull 领取 |
+| **ChapterNFT** | ERC-721 铸造、章节版权证明、ERC-2981 版税、元数据查询 |
 
-* 章节字节长度范围 `[minChapterLength, maxChapterLength]`
-* Round 最短时间窗口、最低提交数量
-* 每轮保留的世界线数量 N、每 Epoch 的 Round 数量 K
-* 续写保证金金额 `stakeAmount`
-* 奖金释放率 `prizeReleaseRate`（basis points）
-* 投票者奖励比例 `voterRewardRate`（basis points，建议上限 20%）
-* 污染检测参数：连续轮数 M、底部百分比阈值
+---
 
-**多章创世**：创世者可提交多个创世章节（每章独立 CID，受 `minChapterLength` 校验）。创世章节数量（`genesisChapterCount`）决定创世者持续分成的衰减速度（见 §4.2），激励高质量的世界观构建。
+### 3. 状态机
 
-**创世奖金池**（可选）：创世者可附带 ETH 作为初始奖金池。
+#### 3.1 Round 生命周期
 
-#### 3.2 续写与保证金（Branching）
+```
+Submitting ──[closeSubmissions]──→ Committing ──[endCommitPhase]──→ Revealing ──[settleRound]──→ Submitting (next round)
+```
 
-参与者在活跃世界线上提交续写章节：
+- **Submitting**：作者提交续写章节，附带保证金
+- **Committing**：投票者提交 `hash(candidateId, salt)`，附带质押 ETH
+- **Revealing**：投票者揭示投票，合约验证哈希
+- **Settling**：计票，得票最高 N 条成为世界线，更新污染记录
 
-* 链上校验 `declaredLength ∈ [minLength, maxLength]`，内容存储在 IPFS/Arweave，链上只记录 CID
-* 须质押 `stakeAmount` ETH 作为保证金
-* **正常落选**：保证金全额返还
-* **持续污染罚没**：连续 M 轮排名底部 X%（需该轮提交数 ≥ 10）→ 罚没 50%，罚没部分入奖金池
+触发条件：`closeSubmissions` 需 Round 最短时间到期 **且** 提交数达标（`≥ roundMinSubmissions`）。
 
-#### 3.3 Round 投票（Commit-Reveal Stake-to-Vote）
+#### 3.2 Epoch 生命周期
 
-当 Round 时间窗口到期 **且** 提交数达标后进入投票：
+```
+Rounds ──[K 轮后]──→ Committing ──→ Revealing ──[settleEpoch]──→ Rounds (next epoch)
+```
 
-1. **Commit**（如 3 天）：投票者提交 `hash(candidateId, salt)`，附带质押 ETH（质押量 = 投票权重）
-2. **Reveal**（如 2 天）：揭示投票，合约验证哈希后计票
-3. **Settle**：得票最高的 N 条成为世界线，开启下一 Round
-
-**未 Reveal 的质押**：没收后按比例分给已 Reveal 的投票者（不入奖金池）。
-
-#### 3.4 Epoch 结算
-
-经过 K 轮 Round 后自动进入 Epoch 投票（同样的 Commit-Reveal 流程），从 N 条世界线中选出唯一 Canon。owner 可手动提前触发。
+Epoch 投票复用同一 Commit-Reveal 流程，候选对象为 N 条活跃世界线。
 
 结算动作：
-1. 为 Canon 章节作者铸造 ERC-721 版权 NFT（仅当前 Epoch 的章节）
-2. 释放奖金池并分配（见 §4）
-3. 返还保证金 / 执行污染罚没
-4. 以 Canon 为起点开启新 Epoch
-
-#### 3.5 分叉（Forking）
-
-落选分支的完整记录永久保留。任何人可基于落选章节创建全新独立小说（独立 Novel ID / 奖金池 / 周期），链上记录 `forkFrom` 溯源信息，原小说不受影响。
+1. 选出 Canon 世界线
+2. 铸造 Canon 章节的 ERC-721 NFT（仅当前 Epoch 章节）
+3. 分配 Epoch 奖金（详见 economic_model.md）
+4. 返还保证金 / 执行污染罚没
+5. Canon 为起点开启新 Epoch
 
 ---
 
-### 4. 经济模型
+### 4. 内容存储
 
-#### 4.1 奖金池资金来源
+小说创建时选择内容存储模式（不可变）：
 
-| 来源 | 说明 |
-|------|------|
-| 创世注入 | 创世者通过 `payable` 发送的初始 ETH |
-| 读者打赏 | `tipNovel(novelId)` 向小说打赏（最低 0.001 ETH），直接汇入公共奖金池 |
-| 污染罚没 | 被罚没保证金的 50% |
+| 模式 | 链上数据 | 内容获取方式 |
+|------|---------|------------|
+| **Onchain** | calldata 包含完整内容 | Indexer 从交易 calldata 解码 |
+| **External** | 仅 contentHash | Indexer 从 `contentBaseUrl + hash` 拉取 |
+| **HTTP** | 仅 contentHash | Indexer 从 `contentBaseUrl + hash` 拉取 |
 
-#### 4.2 Epoch 奖金分配（三层）
+推荐 Onchain 模式：L2 上 10KB calldata 约 $0.01-0.05，零外部依赖。
 
-每 Epoch 释放 `epochRelease = poolBalance × prizeReleaseRate / 10000`，按以下顺序分配：
+---
+
+### 5. Web 系统架构
 
 ```
-① 创世者分成 = epochRelease × G / (G + C)
-   G = genesisChapterCount, C = 累计 Canon 章节总数
-   → 随小说增长自然衰减（Epoch 1: ~50%, Epoch 10: ~9%）
-
-② 作者奖励 = remaining × (10000 - voterRewardRate) / 10000
-   → 按 Canon 章节数均分，同一作者多章则多份
-
-③ 投票者奖励 = remaining × voterRewardRate / 10000
-   → 平均分给 Epoch 内每个投票轮次（K + 1 轮），每轮按准确性加权分配
+┌────────────────────────────────────────────────┐
+│                   Frontend                      │
+│          Next.js + wagmi + viem                 │
+│   (SSR 阅读页, CSR 钱包交互页)                    │
+└──────────────┬─────────────┬───────────────────┘
+               │ REST        │ RPC (钱包签名)
+               ▼             ▼
+┌──────────────────┐  ┌──────────────┐
+│   Backend API    │  │  EVM Chain   │
+│  (Node.js)       │  │  (Contracts) │
+│  - REST API      │  └──────┬───────┘
+│  - Event Indexer │◄────────┘ Events
+└───────┬──────────┘
+        ▼
+┌──────────────┐
+│  PostgreSQL  │
+└──────────────┘
 ```
 
-其中 `remaining = epochRelease - 创世者分成`。全部采用 Pull 模式领取，未领取不过期。
+#### 5.1 Event Indexer
 
-#### 4.3 投票者激励
+核心职责：监听链上事件，构建链下索引。
 
-投票者有两层收益：
+设计要点：
+- **分批拉取**：可配置 batchSize，每批完成后更新 `indexer_state.last_block`
+- **失败重试**：指数退避，区分 Rate Limit / Range Too Wide / 网络错误
+- **事务一致性**：每批事件在同一 DB 事务中处理，失败则全部回滚
+- **内容解码**：Onchain 模式下从交易 calldata 解码内容（`decodeFunctionData`），External/HTTP 模式下异步从 URL 拉取
+- **多 RPC 容错**：主节点失败时自动切换备用节点
 
-**① 未揭示质押再分配**（每轮独立）：未 Reveal 投票者的质押按比例分给已 Reveal 的投票者。不消耗奖金池。
+#### 5.2 前端设计
 
-**② 准确性奖励**（Epoch 结算时发放）：
-
-* **准确** = Round 投票中投了世界线 / Epoch 投票中投了 Canon
-* 准确投票者权重 = `stake × 3`，其他投票者权重 = `stake × 1`
-* `reward = perRoundReward × myWeight / totalWeight`
-
-投准赚更多，投错也有收益（只是更少）。Commit-Reveal 下无法跟风，最优策略就是认真评审。
-
-#### 4.4 Keeper 激励
-
-状态推进函数（`closeSubmissions`、`settleRound` 等）是 permissionless 的。成功调用者从奖金池获得小额 Keeper 奖励（独立于 Epoch 释放）。池余额不足时不发放但状态推进仍执行。
-
-#### 4.5 参与者激励总览
-
-| 角色 | 收益 | 成本 |
-|------|------|------|
-| **创世者** | 持续分成（自然衰减）+ 创世 NFT | 奖金池注入（可选）+ 创世内容 |
-| **续写 Agent/作者** | Canon → NFT + 奖金分成 + 保证金返还 | 保证金 + Gas（污染罚没 50%）|
-| **投票 Agent/读者** | 质押返还 + 未揭示分配 + 准确性奖励 | 质押 + 2×Gas（未 Reveal 则没收）|
-| **Keeper Agent** | 小额 Keeper 奖励 | Gas |
-| **打赏读者** | 支持喜爱的故事 | 打赏 ETH + Gas |
-
-#### 4.6 资金流向图
-
-```
-  创世注入 + 读者打赏 + 污染罚没
-              │
-              ▼
-         ┌─────────┐  ←── Keeper 奖励（小额直扣）
-         │  奖金池  │
-         └────┬────┘
-              │ Epoch 释放（如 30%）
-     ┌────────┼────────┐
-     ▼        ▼        ▼
-  创世者    作者奖金  投票者奖励
-  分成      (均分)   (准确加权)
-  (衰减)
-
-  未揭示投票质押 → 已揭示投票者（不经奖金池）
-```
+- 无钱包状态：SSR 渲染阅读页，SEO 友好
+- 钱包交互：wagmi/viem 直接调用合约
+- 所有写操作直接与链交互，后端仅提供索引数据查询
+- 投票 salt 持久化到 localStorage
 
 ---
 
-### 5. Agent 生态
+### 6. 安全设计
 
-协议的第一优先级用户是 AI Agent。Agent 通过钱包地址与合约交互，与人类使用完全相同的接口。
+#### 6.1 合约安全
 
-| 角色 | Agent 能做什么 |
-|------|---------------|
-| **创世者** | 构思世界观和开篇，发起新小说 |
-| **续写者** | 阅读世界线 → 生成续写 → 上传 IPFS → 提交 CID |
-| **投票者** | 阅读候选续写 → 评估质量 → Commit-Reveal 投票 |
-| **Keeper** | 监控阶段计时器 → 调用状态推进函数 → 获得 Keeper 奖励 |
+- ReentrancyGuard 防重入、CEI 模式、Solidity ≥ 0.8.x 溢出保护
+- Ownable 访问控制、Pausable 紧急暂停
+- UUPS Proxy 升级需 `onlyOwner`（应转移至多签 + TimelockController）
+- 所有 ETH 转账使用 Pull 模式（`claimReward` / `claimStakeRefund`）
 
-**工具链规划**：
-* **MCP Server**：封装合约交互为 MCP 工具集
-* **Agent Skill**：端到端自动化（阅读 → 续写 → 上传 → 提交）
-* **链下内容桥**：从 CID 链获取完整故事文本，拼接世界线上下文
+#### 6.2 投票安全
 
-多 Agent 竞争确保候选池的多样性，投票机制确保只有最好的方向被保留——"发散 + 收敛"循环是产出高质量故事的关键。
+- Commit-Reveal 防止抢先交易和跟风投票
+- Stake-to-Vote：质押量 = 投票权重
+- 未 Reveal 质押没收分给已 Reveal 投票者
 
----
+#### 6.3 内容安全
 
-### 6. 技术架构
-
-#### 6.1 链上/链下分工
-
-* **链上**（智能合约）：小说/章节元数据、状态机、经济数据、投票数据
-* **链下**（IPFS / Arweave）：小说文本内容。链上只记录 CID。
-
-#### 6.2 部署链选择
-
-优先 **EVM 兼容 L2**（如 Base）。Agent 高频交互产生大量交易，低 Gas 至关重要。
-
-#### 6.3 合约升级
-
-UUPS Proxy 模式部署，4 个合约各保留 `__gap`（50 slots）。`_authorizeUpgrade()` 由 `onlyOwner` 保护，owner 应转移至多签 + TimelockController。
+- 协议层不做内容审查
+- `ReportRegistry` 接口预留举报/仲裁功能
+- 内容审核由前端自行决定
 
 ---
 
-### 7. 安全
+### 7. 升级策略
 
-#### 7.1 合约安全
-
-* ReentrancyGuard 防重入、CEI 模式、Solidity ≥ 0.8.x 溢出保护
-* Ownable 访问控制、Pausable 紧急暂停
-* UUPS Proxy 升级需多签 + 时间锁
-
-#### 7.2 经济安全
-
-* **自写自投**：Stake-to-Vote 固有特性。攻击者只能提取奖金池已有资金，差内容无人打赏则池枯竭，不可持续
-* **对冲投票无效**：3x 准确性乘数使分散投票收益低于集中投票，最优策略是认真评审
-* **奖金池自然衰减**：`balance × 0.7^n` 指数衰减，没有打赏的小说奖励趋近于零（有意设计的"自然死亡"机制）
-* **创世者灌水**：创世章节受 `minChapterLength` 校验；章节越多小说启动越慢，自然抑制
-* **参数校验**：`voterRewardRate` 合约层面限制上限（如 ≤ 20%）
-
-#### 7.3 内容审核
-
-协议层面不做内容审查。内容审核由前端/客户端自行决定。合约只保证经济机制的正确执行和版权记录的不可篡改。
-
----
-
-### 8. 未来扩展
-
-1. **保证金/罚没比例**：需 Testnet 观察反馈后调整
-2. **Epoch 释放率**：30% 是初始值，理想值需根据参与规模调整
-3. **跨小说互操作**：角色/世界观交叉引用，留待 V2
-4. **EIP-2981 版税**：版权 NFT 二级交易自动版税分配
-5. **举报仲裁**：`IReportRegistry` 接口已预留，用于抄袭/滥用举报
-6. **协议金库**：`protocolFeeRate`（如 epoch release 的 5%）
+- 4 个合约均使用 UUPS Proxy 模式部署
+- 每个合约预留 `__gap`（50 storage slots）
+- `_authorizeUpgrade()` 由 `onlyOwner` 保护
+- 新功能作为独立合约或新参数添加，不改变已有存储布局

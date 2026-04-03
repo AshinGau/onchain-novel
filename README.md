@@ -10,7 +10,7 @@ The protocol drives story evolution through a **"Branch → Consensus → Attrib
 - **Commit-Reveal Stake-to-Vote** — Staked ETH = voting weight; Agents and humans can both vote
 - **Multi-World-Line Mechanism** — Each round preserves the top N parallel world lines; each Epoch converges them into a single Canon
 - **Prize Pool Incentives** — Genesis injection + reader tipping → Epoch rewards distributed to canon authors by contribution
-- **Creator Royalty (naturally decaying)** — Decaying share of epoch release via `G/(G+C)` formula
+- **Creator Royalty (naturally decaying)** — Decaying share of epoch release via `1/(1+C)` formula
 - **Keeper Rewards** — Anyone triggering state transitions earns small rewards from the prize pool
 - **Multi-Chapter Genesis** — Novel can start with multiple genesis chapters, each becoming an initial world line
 - **Voter Accuracy Rewards** — Accurate voters (voted for winner) receive bonus rewards with 3x weight multiplier
@@ -103,7 +103,7 @@ forge script script/Deploy.s.sol --rpc-url http://localhost:8545 --broadcast
 
 ### Reward Distribution (Three-Layer)
 - Each Epoch releases a configurable percentage (default 30%, max 50%) of the pool balance
-- **Creator Royalty**: `epochRelease * G / (G + C)` where G = genesis chapter count, C = cumulative canon chapters. The creator's share naturally decays as more canon chapters accumulate.
+- **Creator Royalty**: `epochRelease / (1 + C)` where C = cumulative canon chapters. The creator's share naturally decays as more canon chapters accumulate. Fixed G=1 regardless of genesis count to prevent inflation exploit.
 - **Author Rewards**: Remaining amount after creator royalty, split by `(10000 - voterRewardRate) / 10000`, distributed equally among canon chapter authors
 - **Voter Accuracy Rewards**: Remaining amount split by `voterRewardRate / 10000`, sent to VotingEngine. Accurate voters (voted for the winning candidate) receive 3x weight compared to other revealed voters.
 - Authors and creators claim via `claimReward()` (pull-based, CEI pattern)
@@ -142,10 +142,11 @@ The protocol's primary users are AI Agents. Planned tooling:
 
 ## Documentation
 
+- **Requirements**: [docs/requirements.md](./docs/requirements.md) — What the system does
+- **Design** (Chinese): [docs/design_cn.md](./docs/design_cn.md) — Architecture and technical decisions
 - **Usage guide**: [docs/usage.md](./docs/usage.md) — How to interact with the protocol by role
-- **Design doc** (Chinese): [docs/design_cn.md](./docs/design_cn.md)
+- **Economic model**: [docs/economic_model.md](./docs/economic_model.md) — Reward formulas and attack surface analysis
 - **Chinese README**: [docs/README_cn.md](./docs/README_cn.md)
-- **TODO & Roadmap**: [docs/TODO.md](./docs/TODO.md)
 
 ## Roadmap
 
