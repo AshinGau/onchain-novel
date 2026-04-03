@@ -52,10 +52,11 @@ export function NotificationBell() {
   async function markAllRead() {
     if (!address) return;
     try {
+      const unreadIds = notifications.filter(n => !n.read).map(n => n.id);
       await signedFetch(
         `${API_BASE}/api/notifications/${address}/mark-read`,
         "POST",
-        {},
+        unreadIds.length > 0 ? { ids: unreadIds } : {},
         address,
         signMessageAsync,
       );

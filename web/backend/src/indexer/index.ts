@@ -126,7 +126,13 @@ async function processBatch(logs: Log[], endBlock: bigint, endBlockHash: string 
     await dbClient.query("BEGIN");
 
     for (const log of logs) {
-      await processLog(log, dbClient, client);
+      try {
+        await processLog(log, dbClient, client);
+      } catch (err) {
+        // Log and skip individual event failures to avoid rolling back the entire batch
+        const topic0 = log.topics[0]?.slice(0, 10) ?? "unknown";
+        console.error(`[indexer] Event processing failed (topic=${topic0} block=${log.blockNumber} tx=${log.transactionHash}):`, err instanceof Error ? err.message : err);
+      }
     }
 
     await dbClient.query(

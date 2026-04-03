@@ -6,10 +6,12 @@ import { TipButton } from "@/components/tip-modal";
 import { VotePanel } from "@/components/vote-panel";
 import { RewardsPanel } from "@/components/rewards-panel";
 import { fetchApi, type Novel, type TreeChapter, ROUND_PHASES, EPOCH_PHASES } from "@/lib/api";
+import { TOKEN_SYMBOL } from "@/lib/config";
 import { shortenAddress, formatEth } from "@/lib/format";
 import { computeVotingRoundId } from "@/lib/contracts";
 import { StoryTree } from "@/components/story-tree";
 import { PhaseCountdown } from "@/components/phase-countdown";
+import { PhaseTransition } from "@/components/phase-transition";
 
 export default async function NovelDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -41,12 +43,14 @@ export default async function NovelDetailPage({ params }: { params: Promise<{ id
     warnings.push("Failed to load forks.");
   }
 
-  // Fetch world lines for write button
-  try {
-    const wlData = await fetchApi<{ worldlines: { id: string }[] }>(`/api/novels/${id}/worldlines`);
-    worldlines = wlData.worldlines;
-  } catch {
-    warnings.push("Failed to load world lines.");
+  // Fetch world lines (needed for epoch voting candidates)
+  if (novel.active && (novel.epoch_phase === 1 || novel.epoch_phase === 2)) {
+    try {
+      const wlData = await fetchApi<{ worldlines: { id: string }[] }>(`/api/novels/${id}/worldlines`);
+      worldlines = wlData.worldlines;
+    } catch {
+      warnings.push("Failed to load world lines.");
+    }
   }
 
   // Fetch round candidates for round voting (epoch_phase=0 + round Committing/Revealing)
@@ -155,15 +159,15 @@ export default async function NovelDetailPage({ params }: { params: Promise<{ id
         </div>
         <div className="grid grid-cols-3 gap-4 text-center">
           <div>
-            <p className="text-2xl font-bold text-amber-400">{poolEth} ETH</p>
+            <p className="text-2xl font-bold text-amber-400">{poolEth} {TOKEN_SYMBOL}</p>
             <p className="text-xs text-neutral-500">Current Balance</p>
           </div>
           <div>
-            <p className="text-lg font-semibold">{tippedEth} ETH</p>
+            <p className="text-lg font-semibold">{tippedEth} {TOKEN_SYMBOL}</p>
             <p className="text-xs text-neutral-500">Total Tipped</p>
           </div>
           <div>
-            <p className="text-lg font-semibold">{estimatedRelease} ETH</p>
+            <p className="text-lg font-semibold">{estimatedRelease} {TOKEN_SYMBOL}</p>
             <p className="text-xs text-neutral-500">Next Epoch Release</p>
           </div>
         </div>
@@ -173,7 +177,7 @@ export default async function NovelDetailPage({ params }: { params: Promise<{ id
       <details className="rounded-lg bg-neutral-900 border border-neutral-800 p-4 mb-6">
         <summary className="font-semibold cursor-pointer">Configuration</summary>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-3 text-sm">
-          <div><span className="text-neutral-500">Stake:</span> {stakeEth} ETH</div>
+          <div><span className="text-neutral-500">Stake:</span> {stakeEth} {TOKEN_SYMBOL}</div>
           <div><span className="text-neutral-500">World Lines:</span> {novel.config.worldLineCount}</div>
           <div><span className="text-neutral-500">Rounds/Epoch:</span> {novel.config.roundsPerEpoch}</div>
           <div><span className="text-neutral-500">Min Submissions:</span> {novel.config.roundMinSubmissions}</div>
@@ -185,19 +189,27 @@ export default async function NovelDetailPage({ params }: { params: Promise<{ id
 
       {/* Action buttons */}
       <div className="flex flex-wrap gap-2 mb-6">
-        {novel.active && novel.round_phase === 0 && worldlines.length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            {worldlines.map(wl => (
-              <Link key={wl.id} href={`/write/${id}/${wl.id}`}>
-                <Button variant="outline">Write on World Line #{wl.id}</Button>
-              </Link>
-            ))}
-          </div>
-        )}
         <Link href={`/novels/${id}/canon`}>
-          <Button variant="secondary">Read Canon</Button>
+          <Button className="bg-amber-600 text-black font-semibold hover:bg-amber-500">Read the Story</Button>
         </Link>
       </div>
+
+      {/* Phase transition — shown when phase timer has expired */}
+      {novel.active && (
+        <PhaseTransition
+          novelId={id}
+          roundPhase={novel.round_phase}
+          epochPhase={novel.epoch_phase}
+          phaseStartTime={novel.phase_start_time}
+          config={{
+            roundMinDuration: novel.config.roundMinDuration,
+            commitDuration: novel.config.commitDuration,
+            revealDuration: novel.config.revealDuration,
+            roundMinSubmissions: novel.config.roundMinSubmissions,
+          }}
+          currentRoundSubmissions={tree.filter(c => c.round === novel.current_round).length}
+        />
+      )}
 
       {/* Round Vote Panel */}
       {novel.active && novel.epoch_phase === 0 && (novel.round_phase === 1 || novel.round_phase === 2) && roundCandidates.length > 0 && (
@@ -234,7 +246,7 @@ export default async function NovelDetailPage({ params }: { params: Promise<{ id
       {tree.length > 0 && (
         <div className="mb-6">
           <h2 className="font-semibold mb-3">Story Tree</h2>
-          <StoryTree chapters={tree} novelId={id} />
+          <StoryTree chapters={tree} novelId={id} votingRoundId={novel.active && (novel.round_phase === 1 || novel.round_phase === 2) ? roundVotingId : undefined} />
         </div>
       )}
 

@@ -359,11 +359,44 @@ EOF
 # =============================================================================
 # MAIN
 # =============================================================================
+do_timewarp() {
+    local input="${2:-}"
+    if [ -z "$input" ]; then
+        echo "Usage: $0 timewarp <duration>"
+        echo ""
+        echo "  Duration examples:"
+        echo "    30s     30 seconds"
+        echo "    5m      5 minutes"
+        echo "    2h      2 hours"
+        echo "    1d      1 day"
+        echo "    86400   raw seconds"
+        exit 1
+    fi
+
+    # Parse duration to seconds
+    local seconds
+    case "$input" in
+        *d) seconds=$(( ${input%d} * 86400 )) ;;
+        *h) seconds=$(( ${input%h} * 3600 )) ;;
+        *m) seconds=$(( ${input%m} * 60 )) ;;
+        *s) seconds=${input%s} ;;
+        *)  seconds=$input ;;
+    esac
+
+    local before=$(cast rpc eth_getBlockByNumber latest false --rpc-url "$RPC" 2>/dev/null | jq -r '.timestamp' | xargs printf '%d\n')
+    cast rpc evm_increaseTime "$seconds" --rpc-url "$RPC" > /dev/null 2>&1
+    cast rpc evm_mine --rpc-url "$RPC" > /dev/null 2>&1
+    local after=$(cast rpc eth_getBlockByNumber latest false --rpc-url "$RPC" 2>/dev/null | jq -r '.timestamp' | xargs printf '%d\n')
+
+    ok "Warped ${seconds}s forward ($(date -r $before '+%H:%M:%S') → $(date -r $after '+%H:%M:%S'))"
+}
+
 case "${1:-}" in
     start)            do_start ;;
     stop)             do_stop ;;
     reset)            do_reset ;;
     status)           do_status ;;
+    timewarp)         do_timewarp "$@" ;;
     start-frontend)   start_frontend ;;
     stop-frontend)    stop_frontend ;;
     restart-frontend) stop_frontend; sleep 1; start_frontend ;;
@@ -374,6 +407,7 @@ case "${1:-}" in
         echo "  stop              Stop all services (preserves data)"
         echo "  reset             Clear all data and stop services"
         echo "  status            Show running services"
+        echo "  timewarp <dur>    Fast-forward Anvil time (e.g. 1d, 2h, 30m, 60s)"
         echo "  start-frontend    Start frontend only"
         echo "  stop-frontend     Stop frontend only"
         echo "  restart-frontend  Restart frontend (useful after code changes)"

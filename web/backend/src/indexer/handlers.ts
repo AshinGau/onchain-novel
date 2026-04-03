@@ -2,6 +2,7 @@ import type pg from "pg";
 import { type Log, type PublicClient, decodeEventLog, decodeFunctionData, formatEther } from "viem";
 import { novelCoreAbi, votingEngineAbi, prizePoolAbi, chapterNFTAbi } from "../utils/abi.js";
 import { env } from "../utils/env.js";
+import { ContentLocation } from "../utils/validate.js";
 import { fetchChapterContent } from "./content-fetcher.js";
 import { createNotification, createRevealReminders } from "../utils/notifications.js";
 
@@ -141,7 +142,7 @@ export async function handleNovelCoreEvent(log: Log, db: Client, rpc: PublicClie
 
       // For onchain content, decode from tx calldata; for external, fetch from URL
       const novelRes = await db.query("SELECT content_location FROM novels WHERE id = $1", [novelId.toString()]);
-      if (novelRes.rows.length > 0 && novelRes.rows[0].content_location === 0) {
+      if (novelRes.rows.length > 0 && novelRes.rows[0].content_location === ContentLocation.Onchain) {
         // Onchain: extract content from transaction calldata
         try {
           const tx = await rpc.getTransaction({ hash: log.transactionHash! });
@@ -254,10 +255,10 @@ export async function handleNovelCoreEvent(log: Log, db: Client, rpc: PublicClie
     case "WorldLinesSelected": {
       const { novelId, round, selectedChapterIds } = decoded.args;
       console.log(`[event] WorldLinesSelected novelId=${novelId} round=${round} selected=[${selectedChapterIds}] block=${blockNumber}`);
-      // Reset all chapters in this round, then mark selected ones
+      // Reset ALL world line flags for this novel (previous rounds + current), then mark new ones
       await db.query(
-        "UPDATE chapters SET is_world_line = FALSE WHERE novel_id = $1 AND round = $2",
-        [novelId.toString(), round]
+        "UPDATE chapters SET is_world_line = FALSE WHERE novel_id = $1 AND is_world_line = TRUE",
+        [novelId.toString()]
       );
       for (const id of selectedChapterIds) {
         await db.query("UPDATE chapters SET is_world_line = TRUE WHERE id = $1", [id.toString()]);
@@ -269,6 +270,16 @@ export async function handleNovelCoreEvent(log: Log, db: Client, rpc: PublicClie
       const { novelId, epoch, canonWorldLineId } = decoded.args;
       console.log(`[event] CanonEstablished novelId=${novelId} epoch=${epoch} canonId=${canonWorldLineId} block=${blockNumber}`);
       await traceAndMarkCanon(canonWorldLineId, db, rpc);
+
+      // Epoch settle resets active world lines to canon only — clear all, set canon
+      await db.query(
+        "UPDATE chapters SET is_world_line = FALSE WHERE novel_id = $1 AND is_world_line = TRUE",
+        [novelId.toString()]
+      );
+      await db.query(
+        "UPDATE chapters SET is_world_line = TRUE WHERE id = $1",
+        [canonWorldLineId.toString()]
+      );
 
       const novel = await rpc.readContract({
         address: env.NOVEL_CORE_ADDRESS, abi: novelCoreAbi,
@@ -337,7 +348,7 @@ async function indexGenesisChapters(novelId: bigint, count: number, blockNumber:
   // Try to decode genesis content from createNovel calldata
   let genesisContents: string[] | null = null;
   const novelRes = await db.query("SELECT content_location FROM novels WHERE id = $1", [novelId.toString()]);
-  const isOnchain = novelRes.rows.length > 0 && novelRes.rows[0].content_location === 0;
+  const isOnchain = novelRes.rows.length > 0 && novelRes.rows[0].content_location === ContentLocation.Onchain;
 
   if (isOnchain && log.transactionHash) {
     try {

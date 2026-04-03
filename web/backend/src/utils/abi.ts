@@ -27,7 +27,7 @@ export const novelCoreAbi = parseAbi([
 export const votingEngineAbi = parseAbi([
   "event VoteCommitted(uint256 indexed novelId, uint256 indexed votingRoundId, address indexed voter)",
   "event VoteRevealed(uint256 indexed novelId, uint256 indexed votingRoundId, address indexed voter, uint256 candidateId)",
-  "event VotesTallied(uint256 indexed novelId, uint256 votingRoundId, uint256[] rankedCandidateIds)",
+  "event VotesTallied(uint256 indexed novelId, uint256 indexed votingRoundId, uint256[] rankedCandidateIds)",
   "event VotingRewardClaimed(uint256 indexed novelId, uint256 indexed votingRoundId, address indexed voter, uint256 totalAmount)",
   "event UnrevealedStakesSwept(uint256 indexed novelId, uint256 indexed votingRoundId, uint256 totalUnrevealed)",
   "event CommitPhaseEnded(uint256 indexed novelId, uint256 indexed votingRoundId)",

@@ -8,6 +8,7 @@ import { keccak256, toHex, toBytes } from "viem";
 import { Button } from "@/components/ui/button";
 import { fetchApi, type Novel, type Chapter } from "@/lib/api";
 import { NOVEL_CORE_ADDRESS, novelCoreAbi } from "@/lib/contracts";
+import { TOKEN_SYMBOL } from "@/lib/config";
 import { shortenAddress, formatEth } from "@/lib/format";
 
 type SubmitStep = "idle" | "submitting" | "done";
@@ -41,6 +42,11 @@ export default function WritePage({
   const minLen = novel ? Number(novel.config.minChapterLength) : 0;
   const maxLen = novel ? Number(novel.config.maxChapterLength) : Infinity;
   const bytesInRange = byteCount >= minLen && byteCount <= maxLen;
+  const [editorBlurred, setEditorBlurred] = useState(false);
+  const tooShort = byteCount > 0 && byteCount < minLen;
+  const tooLong = byteCount > maxLen;
+  // Show "too short" only after blur; show "too long" immediately
+  const showLengthError = tooLong || (tooShort && editorBlurred);
 
   // Fetch novel and parent context on mount
   useEffect(() => {
@@ -162,7 +168,7 @@ export default function WritePage({
       <p className="text-neutral-400 text-sm mb-6">
         {novel?.title ? `Novel: ${novel.title}` : `Novel #${novelId}`}
         {" "}&middot; Continuing from Candidate(ID.{parentId})
-        {novel && <> &middot; Stake: {stakeDisplay} ETH</>}
+        {novel && <> &middot; Stake: {stakeDisplay} {TOKEN_SYMBOL}</>}
       </p>
 
       {/* Parent context */}
@@ -201,7 +207,8 @@ export default function WritePage({
       {!preview ? (
         <textarea
           value={content}
-          onChange={(e) => setContent(e.target.value)}
+          onChange={(e) => { setContent(e.target.value); setEditorBlurred(false); }}
+          onBlur={() => setEditorBlurred(true)}
           placeholder="Write your chapter here..."
           className="w-full min-h-[400px] rounded-lg bg-neutral-900 border border-neutral-800 p-4 text-sm text-neutral-100 leading-relaxed placeholder:text-neutral-600 focus:outline-none focus:border-neutral-600 resize-y"
         />
@@ -217,9 +224,9 @@ export default function WritePage({
           className={
             byteCount === 0
               ? "text-neutral-500"
-              : bytesInRange
-                ? "text-neutral-400"
-                : "text-red-400"
+              : showLengthError
+                ? "text-red-400"
+                : "text-neutral-400"
           }
         >
           {byteCount.toLocaleString()} bytes
@@ -235,9 +242,9 @@ export default function WritePage({
       </div>
 
       {/* Byte range warning */}
-      {byteCount > 0 && !bytesInRange && (
+      {showLengthError && (
         <p className="mt-2 text-xs text-red-400">
-          {byteCount < minLen
+          {tooShort
             ? `Content is too short. Minimum is ${minLen.toLocaleString()} bytes.`
             : `Content is too long. Maximum is ${maxLen.toLocaleString()} bytes.`}
         </p>
@@ -275,7 +282,7 @@ export default function WritePage({
         >
           {submitStep === "submitting"
             ? "Submitting..."
-            : `Submit (${stakeDisplay} ETH)`}
+            : `Submit (${stakeDisplay} ${TOKEN_SYMBOL})`}
         </Button>
         {!isConnected && (
           <span className="text-xs text-neutral-500">Connect wallet to submit</span>

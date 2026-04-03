@@ -5,14 +5,15 @@ import { parseEther } from "viem";
 import { useWriteContract, useWaitForTransactionReceipt, useAccount } from "wagmi";
 import { Button } from "@/components/ui/button";
 import { PRIZE_POOL_ADDRESS, prizePoolAbi } from "@/lib/contracts";
+import { TOKEN_SYMBOL, DEFAULT_STAKE } from "@/lib/config";
 
 export function TipButton({ novelId }: { novelId: string }) {
   const { isConnected } = useAccount();
   const [open, setOpen] = useState(false);
-  const [amount, setAmount] = useState("0.01");
+  const [amount, setAmount] = useState(DEFAULT_STAKE);
 
   const { writeContract, data: hash, isPending, error } = useWriteContract();
-  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash, query: { enabled: !!hash } });
 
   function handleTip() {
     writeContract({
@@ -51,7 +52,7 @@ export function TipButton({ novelId }: { novelId: string }) {
         className="w-24 rounded-md bg-neutral-800 border border-neutral-700 px-2 py-1 text-sm"
         disabled={isPending || isConfirming}
       />
-      <span className="text-sm text-neutral-400">ETH</span>
+      <span className="text-sm text-neutral-400">{TOKEN_SYMBOL}</span>
       <Button
         size="sm"
         onClick={handleTip}

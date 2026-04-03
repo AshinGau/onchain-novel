@@ -32,7 +32,7 @@ app.use((req, res, next) => {
 });
 
 // Rate limiting
-const apiLimiter = rateLimit({ windowMs: 60000, max: 100, standardHeaders: true, legacyHeaders: false });
+const apiLimiter = rateLimit({ windowMs: 60000, max: 600, standardHeaders: true, legacyHeaders: false });
 const writeLimiter = rateLimit({ windowMs: 60000, max: 20, standardHeaders: true, legacyHeaders: false });
 
 app.use("/api", apiLimiter);

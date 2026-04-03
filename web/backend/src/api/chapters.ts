@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { query } from "../db/index.js";
 import { verifyWallet } from "../utils/auth.js";
+import { safeInt } from "../utils/validate.js";
 
 const router = Router();
 
@@ -102,8 +103,8 @@ router.get("/:id/context", async (req, res) => {
 router.get("/:id/comments", async (req, res) => {
   try {
     const { id } = req.params;
-    const page = Math.max(1, parseInt(req.query.page as string) || 1);
-    const limit = Math.min(50, parseInt(req.query.limit as string) || 20);
+    const page = safeInt(req.query.page, 1, 1, 1000);
+    const limit = safeInt(req.query.limit, 20, 1, 50);
     const offset = (page - 1) * limit;
 
     const commentsRes = await query(
@@ -155,19 +156,14 @@ router.delete("/:id/comments/:commentId", verifyWallet, async (req, res) => {
     const { id, commentId } = req.params;
     const authorAddress = req.verifiedAddress;
 
-    const commentRes = await query(
-      "SELECT * FROM comments WHERE id = $1 AND chapter_id = $2 AND deleted = FALSE",
-      [commentId, id]
+    // Atomic: delete only if owned by this address
+    const result = await query(
+      "UPDATE comments SET deleted = TRUE WHERE id = $1 AND chapter_id = $2 AND deleted = FALSE AND LOWER(author_address) = LOWER($3) RETURNING id",
+      [commentId, id, authorAddress]
     );
-    if (commentRes.rows.length === 0) {
-      return res.status(404).json({ error: "Comment not found" });
+    if (result.rows.length === 0) {
+      return res.status(403).json({ error: "Comment not found or not owned by you" });
     }
-
-    if (commentRes.rows[0].author_address?.toLowerCase() !== authorAddress?.toLowerCase()) {
-      return res.status(403).json({ error: "Only the author can delete this comment" });
-    }
-
-    await query("UPDATE comments SET deleted = TRUE WHERE id = $1", [commentId]);
     res.json({ success: true });
   } catch (err) {
     console.error("DELETE /api/chapters/:id/comments/:commentId error:", err);
