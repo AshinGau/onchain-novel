@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { NovelCard } from "@/components/novel-card";
 import { API_BASE } from "@/lib/api";
@@ -17,29 +17,36 @@ const TABS = [
 export function DiscoverTabs({ initialNovels }: { initialNovels: Novel[] }) {
   const [novels, setNovels] = useState<Novel[]>(initialNovels);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [currentTab, setCurrentTab] = useState("hot");
   const [filter, setFilter] = useState<"all" | "active" | "completed">("all");
 
+  const fetchId = useRef(0);
+
   async function fetchNovels(sort: string, f: string) {
+    const id = ++fetchId.current;
     setLoading(true);
+    setError(null);
     try {
       let url = `${API_BASE}/api/novels?limit=20&sort=${sort}`;
       if (f !== "all") url += `&filter=${f}`;
       const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      setNovels(data.novels || []);
+      if (id === fetchId.current) setNovels(data.novels || []);
     } catch {
-      // keep current
+      if (id === fetchId.current) setError("Failed to load novels.");
+    } finally {
+      if (id === fetchId.current) setLoading(false);
     }
-    setLoading(false);
   }
 
-  async function onTabChange(value: string) {
+  function onTabChange(value: string) {
     setCurrentTab(value);
     fetchNovels(value, filter);
   }
 
-  async function onFilterChange(value: "all" | "active" | "completed") {
+  function onFilterChange(value: "all" | "active" | "completed") {
     setFilter(value);
     fetchNovels(currentTab, value);
   }
@@ -74,6 +81,8 @@ export function DiscoverTabs({ initialNovels }: { initialNovels: Novel[] }) {
       <div className="mt-4">
         {loading ? (
           <p className="text-neutral-500 text-sm py-8 text-center">Loading...</p>
+        ) : error ? (
+          <p className="text-red-400 text-sm py-8 text-center">{error}</p>
         ) : novels.length === 0 ? (
           <p className="text-neutral-500 text-sm py-8 text-center">No novels found. Be the first to create one!</p>
         ) : (

@@ -4,7 +4,7 @@ const ADDR_RE = /^0x[0-9a-fA-F]{40}$/;
 
 /** Express middleware: validates :address param is a valid hex address */
 export function validateAddress(req: Request, res: Response, next: NextFunction) {
-  const addr = req.params.address;
+  const addr = req.params.address as string | undefined;
   if (!addr || !ADDR_RE.test(addr)) {
     return res.status(400).json({ error: "Invalid address format" });
   }
