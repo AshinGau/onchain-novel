@@ -21,9 +21,6 @@ router.get("/:id", async (req, res) => {
       return res.status(404).json({ error: "Chapter not found" });
     }
 
-    // Increment novel view count
-    await query("UPDATE novels SET view_count = view_count + 1 WHERE id = $1", [chapterRes.rows[0].novel_id]);
-
     res.json(chapterRes.rows[0]);
   } catch (err) {
     console.error("GET /api/chapters/:id error:", err);
@@ -76,23 +73,23 @@ router.get("/:id/children", async (req, res) => {
 router.get("/:id/context", async (req, res) => {
   try {
     const { id } = req.params;
-    const ancestors: any[] = [];
-    let currentId = id;
 
-    // Walk up the parent chain (max 100 to prevent infinite loops)
-    for (let i = 0; i < 100; i++) {
-      const chRes = await query(
-        `SELECT id, parent_id, author, chapter_index, content_text, content_fetched, is_canon
-         FROM chapters WHERE id = $1`,
-        [currentId]
-      );
-      if (chRes.rows.length === 0) break;
-      ancestors.unshift(chRes.rows[0]);
-      if (chRes.rows[0].parent_id === "0" || chRes.rows[0].parent_id === 0) break;
-      currentId = chRes.rows[0].parent_id;
-    }
+    const ancestorsRes = await query(
+      `WITH RECURSIVE chain AS (
+         SELECT id, parent_id, author, chapter_index, content_text, content_fetched, is_canon, 0 AS depth
+         FROM chapters WHERE id = $1
+         UNION ALL
+         SELECT c.id, c.parent_id, c.author, c.chapter_index, c.content_text, c.content_fetched, c.is_canon, chain.depth + 1
+         FROM chapters c
+         INNER JOIN chain ON c.id = chain.parent_id
+         WHERE chain.parent_id != '0' AND chain.parent_id::bigint > 0 AND chain.depth < 100
+       )
+       SELECT id, parent_id, author, chapter_index, content_text, content_fetched, is_canon
+       FROM chain ORDER BY depth DESC`,
+      [id]
+    );
 
-    res.json({ ancestors });
+    res.json({ ancestors: ancestorsRes.rows });
   } catch (err) {
     console.error("GET /api/chapters/:id/context error:", err);
     res.status(500).json({ error: "Internal server error" });

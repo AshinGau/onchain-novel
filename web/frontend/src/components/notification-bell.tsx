@@ -32,6 +32,7 @@ export function NotificationBell() {
         fetch(`${API_BASE}/api/notifications/${address}/unread-count`),
         fetch(`${API_BASE}/api/notifications/${address}?limit=10`),
       ]);
+      if (!countRes.ok || !listRes.ok) return;
       const countData = await countRes.json();
       const listData = await listRes.json();
       setUnreadCount(countData.count || 0);

@@ -3,15 +3,14 @@
 import { use, useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useAccount, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
+import { useAccount } from "wagmi";
 import { keccak256, toHex, toBytes } from "viem";
 import { Button } from "@/components/ui/button";
 import { fetchApi, type Novel, type Chapter } from "@/lib/api";
 import { NOVEL_CORE_ADDRESS, novelCoreAbi } from "@/lib/contracts";
 import { TOKEN_SYMBOL } from "@/lib/config";
 import { shortenAddress, formatEth } from "@/lib/format";
-
-type SubmitStep = "idle" | "submitting" | "done";
+import { useTxAction, txStatusLabel } from "@/hooks/use-tx-action";
 
 export default function WritePage({
   params,
@@ -26,7 +25,6 @@ export default function WritePage({
   const [parentChapter, setParentChapter] = useState<Chapter | null>(null);
   const [content, setContent] = useState("");
   const [preview, setPreview] = useState(false);
-  const [submitStep, setSubmitStep] = useState<SubmitStep>("idle");
   const [error, setError] = useState<string | null>(null);
   const [loadingContext, setLoadingContext] = useState(true);
 
@@ -34,8 +32,12 @@ export default function WritePage({
   const autoSaveTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastSavedContent = useRef("");
 
-  const { writeContract, data: txHash, error: txError, reset: resetTx } = useWriteContract();
-  const { isSuccess: txConfirmed } = useWaitForTransactionReceipt({ hash: txHash });
+  const tx = useTxAction({
+    onSuccess: () => {
+      localStorage.removeItem(draftKey);
+      router.push(`/novels/${novelId}`);
+    },
+  });
 
   // Byte count via TextEncoder
   const byteCount = new TextEncoder().encode(content).length;
@@ -55,10 +57,12 @@ export default function WritePage({
       try {
         const [novelData, contextData] = await Promise.all([
           fetchApi<Novel>(`/api/novels/${novelId}`),
-          fetchApi<{ chapter: Chapter }>(`/api/chapters/${parentId}/context`),
+          fetchApi<{ ancestors: Chapter[] }>(`/api/chapters/${parentId}/context`),
         ]);
         setNovel(novelData);
-        setParentChapter(contextData.chapter);
+        // Context API returns ancestor chain ordered root→leaf; last element is the parent chapter itself
+        const ancestors = contextData.ancestors || [];
+        setParentChapter(ancestors.length > 0 ? ancestors[ancestors.length - 1] : null);
       } catch (err: unknown) {
         setError(err instanceof Error ? err.message : "Failed to load context");
       } finally {
@@ -98,35 +102,16 @@ export default function WritePage({
     };
   }, [content, draftKey]);
 
-  // Handle tx confirmation
-  useEffect(() => {
-    if (txConfirmed && submitStep === "submitting") {
-      setSubmitStep("done");
-      localStorage.removeItem(draftKey);
-      router.push(`/novels/${novelId}`);
-    }
-  }, [txConfirmed, submitStep, draftKey, novelId, router]);
-
-  // Handle tx error
-  useEffect(() => {
-    if (txError) {
-      setError(txError.message.slice(0, 200));
-      setSubmitStep("idle");
-    }
-  }, [txError]);
-
-  const handleSubmit = useCallback(async () => {
+  const handleSubmit = useCallback(() => {
     if (!novel || !isConnected) return;
     setError(null);
-    resetTx();
 
     try {
-      setSubmitStep("submitting");
       const contentBytes = toHex(toBytes(content));
       const contentHash = keccak256(contentBytes);
       const declaredLength = BigInt(new TextEncoder().encode(content).length);
 
-      writeContract({
+      tx.writeContract({
         address: NOVEL_CORE_ADDRESS,
         abi: novelCoreAbi,
         functionName: "submitChapter",
@@ -137,9 +122,8 @@ export default function WritePage({
       });
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Submission failed");
-      setSubmitStep("idle");
     }
-  }, [novel, isConnected, content, novelId, parentId, writeContract, resetTx]);
+  }, [novel, isConnected, content, novelId, parentId, tx]);
 
   // --- Rendering ---
 
@@ -251,19 +235,27 @@ export default function WritePage({
       )}
 
       {/* Error */}
-      {error && (
+      {(error || tx.isError) && (
         <div className="mt-4 rounded-lg bg-red-950/50 border border-red-900 p-3 text-sm text-red-300">
-          {error}
+          {error || tx.error}
         </div>
       )}
 
       {/* Progress indicator */}
-      {submitStep === "submitting" && (
+      {tx.isBusy && (
         <div className="mt-4 rounded-lg bg-neutral-900 border border-neutral-800 p-4">
           <div className="flex items-center gap-2">
             <StepIndicator active={true} done={false} />
-            <span className="text-sm text-amber-400">Submitting on-chain...</span>
+            <span className="text-sm text-amber-400">
+              {tx.isPending ? "Waiting for signature..." : "Confirming on-chain..."}
+            </span>
           </div>
+        </div>
+      )}
+
+      {tx.isSuccess && (
+        <div className="mt-4 rounded-lg bg-green-950/50 border border-green-900 p-3 text-sm text-green-300">
+          Chapter submitted! Redirecting...
         </div>
       )}
 
@@ -275,13 +267,14 @@ export default function WritePage({
             !isConnected ||
             !bytesInRange ||
             byteCount === 0 ||
-            submitStep !== "idle"
+            tx.isBusy ||
+            tx.isSuccess
           }
           size="lg"
           className="px-6"
         >
-          {submitStep === "submitting"
-            ? "Submitting..."
+          {tx.isBusy
+            ? txStatusLabel(tx.status, "Submit")
             : `Submit (${stakeDisplay} ${TOKEN_SYMBOL})`}
         </Button>
         {!isConnected && (

@@ -39,7 +39,8 @@ export default async function CanonPage({
   }
 
   // Determine which chapter to show
-  const chapterIndex = ch ? parseInt(ch, 10) : 0;
+  const parsed = ch ? parseInt(ch, 10) : 0;
+  const chapterIndex = isNaN(parsed) ? 0 : parsed;
   const currentIdx = Math.max(0, Math.min(chapterIndex, canonChapters.length - 1));
   const current = canonChapters[currentIdx];
   const prevIdx = currentIdx > 0 ? currentIdx - 1 : null;

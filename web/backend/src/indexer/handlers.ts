@@ -8,6 +8,12 @@ import { createNotification, createRevealReminders } from "../utils/notification
 
 type Client = pg.PoolClient;
 
+async function getBlockTimestamp(rpc: PublicClient, blockNumber: bigint | null): Promise<string> {
+  if (!blockNumber) return Math.floor(Date.now() / 1000).toString();
+  const block = await rpc.getBlock({ blockNumber });
+  return block.timestamp.toString();
+}
+
 export async function handleNovelCoreEvent(log: Log, db: Client, rpc: PublicClient) {
   let decoded;
   try {
@@ -169,9 +175,10 @@ export async function handleNovelCoreEvent(log: Log, db: Client, rpc: PublicClie
 
     case "RoundPhaseChanged": {
       const { novelId, round, phase } = decoded.args;
+      const roundPhaseTimestamp = await getBlockTimestamp(rpc, log.blockNumber ?? null);
       await db.query(
         "UPDATE novels SET current_round = $1, round_phase = $2, phase_start_time = $3 WHERE id = $4",
-        [round, phase, log.blockNumber?.toString() ?? "0", novelId.toString()]
+        [round, phase, roundPhaseTimestamp, novelId.toString()]
       );
 
       // Fetch novel title for notification
@@ -213,9 +220,10 @@ export async function handleNovelCoreEvent(log: Log, db: Client, rpc: PublicClie
 
     case "EpochPhaseChanged": {
       const { novelId, epoch, phase } = decoded.args;
+      const epochPhaseTimestamp = await getBlockTimestamp(rpc, log.blockNumber ?? null);
       await db.query(
         "UPDATE novels SET current_epoch = $1, epoch_phase = $2, phase_start_time = $3 WHERE id = $4",
-        [epoch, phase, log.blockNumber?.toString() ?? "0", novelId.toString()]
+        [epoch, phase, epochPhaseTimestamp, novelId.toString()]
       );
 
       const novelRow2 = await db.query("SELECT title FROM novels WHERE id = $1", [novelId.toString()]);
@@ -423,10 +431,12 @@ export async function handleVotingEvent(log: Log, db: Client) {
   switch (decoded.eventName) {
     case "VoteCommitted": {
       const { novelId, votingRoundId, voter } = decoded.args;
+      const voterLower = voter.toLowerCase();
       await db.query(
         `INSERT INTO votes (novel_id, voting_round_id, voter, commit_block)
-         VALUES ($1, $2, $3, $4)`,
-        [novelId.toString(), votingRoundId.toString(), voter, blockNumber]
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT DO NOTHING`,
+        [novelId.toString(), votingRoundId.toString(), voterLower, blockNumber]
       );
       break;
     }
@@ -434,7 +444,7 @@ export async function handleVotingEvent(log: Log, db: Client) {
       const { novelId, votingRoundId, voter, candidateId } = decoded.args;
       await db.query(
         `UPDATE votes SET revealed = TRUE, candidate_id = $1, reveal_block = $2
-         WHERE novel_id = $3 AND voting_round_id = $4 AND voter = $5`,
+         WHERE novel_id = $3 AND voting_round_id = $4 AND LOWER(voter) = LOWER($5)`,
         [candidateId.toString(), blockNumber, novelId.toString(), votingRoundId.toString(), voter]
       );
       break;
@@ -453,7 +463,7 @@ export async function handleVotingEvent(log: Log, db: Client) {
     case "VotingRewardClaimed": {
       const { novelId, votingRoundId, voter, totalAmount } = decoded.args;
       await db.query(
-        "UPDATE votes SET claimed = TRUE WHERE novel_id = $1 AND voting_round_id = $2 AND voter = $3",
+        "UPDATE votes SET claimed = TRUE WHERE novel_id = $1 AND voting_round_id = $2 AND LOWER(voter) = LOWER($3)",
         [novelId.toString(), votingRoundId.toString(), voter]
       );
       await db.query(
@@ -514,7 +524,7 @@ export async function handleNFTEvent(log: Log, db: Client) {
   if (decoded.eventName === "ChapterNFTMinted") {
     const { tokenId, novelId, chapterId, author, epoch } = decoded.args;
     await db.query(
-      "INSERT INTO chapter_nfts (token_id, novel_id, chapter_id, author, epoch, block_number) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING",
+      "INSERT INTO chapter_nfts (token_id, novel_id, chapter_id, author, epoch, block_number) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (token_id) DO NOTHING",
       [tokenId.toString(), novelId.toString(), chapterId.toString(), author, epoch, log.blockNumber?.toString() ?? "0"]
     );
   }
