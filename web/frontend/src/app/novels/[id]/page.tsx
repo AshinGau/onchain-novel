@@ -9,7 +9,7 @@ import { fetchApi, type Novel, type TreeChapter, ROUND_PHASES, EPOCH_PHASES } fr
 import { TOKEN_SYMBOL } from "@/lib/config";
 import { shortenAddress, formatEth } from "@/lib/format";
 import { computeVotingRoundId } from "@/lib/contracts";
-import { StoryTree } from "@/components/story-tree";
+import { ConnectedStoryTree } from "@/components/connected-story-tree";
 import { PhaseCountdown } from "@/components/phase-countdown";
 import { PhaseTransition } from "@/components/phase-transition";
 
@@ -247,7 +247,7 @@ export default async function NovelDetailPage({ params }: { params: Promise<{ id
       {tree.length > 0 && (
         <div className="mb-6">
           <h2 className="font-semibold mb-3">Story Tree</h2>
-          <StoryTree chapters={tree} novelId={id} votingRoundId={novel.active && (novel.round_phase === 1 || novel.round_phase === 2) ? roundVotingId : undefined} />
+          <ConnectedStoryTree chapters={tree} novelId={id} votingRoundId={novel.active && (novel.round_phase === 1 || novel.round_phase === 2) ? roundVotingId : undefined} />
         </div>
       )}
 

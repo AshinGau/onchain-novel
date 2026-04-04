@@ -6,6 +6,7 @@ import { useWriteContract, useWaitForTransactionReceipt, useAccount } from "wagm
 import { Button } from "@/components/ui/button";
 import { PRIZE_POOL_ADDRESS, prizePoolAbi } from "@/lib/contracts";
 import { TOKEN_SYMBOL, DEFAULT_STAKE } from "@/lib/config";
+import { parseTxError } from "@/lib/parse-tx-error";
 
 export function TipButton({ novelId }: { novelId: string }) {
   const { isConnected } = useAccount();
@@ -62,7 +63,7 @@ export function TipButton({ novelId }: { novelId: string }) {
       </Button>
       <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
       {isSuccess && <span className="text-green-400 text-sm">Tip sent!</span>}
-      {error && <span className="text-red-400 text-sm">{error.message.slice(0, 60)}</span>}
+      {error && <span className="text-red-400 text-sm">{parseTxError(error).message}</span>}
     </div>
   );
 }

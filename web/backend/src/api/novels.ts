@@ -137,7 +137,7 @@ router.get("/:id/tree", async (req, res) => {
     const { id } = req.params;
     const chaptersRes = await query(
       `SELECT id, parent_id, author, chapter_index, round, epoch, vote_count,
-              is_world_line, is_canon, declared_length, content_hash
+              is_world_line, is_canon, declared_length, content_hash, created_at
        FROM chapters WHERE novel_id = $1
        ORDER BY id ASC`,
       [id]
