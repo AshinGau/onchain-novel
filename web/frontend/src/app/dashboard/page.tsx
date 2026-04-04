@@ -9,6 +9,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { TOKEN_SYMBOL } from "@/lib/config";
 import { API_BASE } from "@/lib/api";
 import { shortenAddress, formatEth, timeAgo } from "@/lib/format";
+import { RewardsPanel } from "@/components/rewards-panel";
 
 interface UserChapter {
   id: string;
@@ -46,7 +47,7 @@ interface RewardSummary {
   unclaimedVotes: { novel_id: string; voting_round_id: string; novel_title: string }[];
   stakeEvents: { novel_id: string; event_type: string; total_amount: string; novel_title: string }[];
   rewardClaims: { novel_id: string; source: string; total_amount: string; novel_title: string }[];
-  participatedNovelIds: string[];
+  participatedNovels: { novel_id: string; novel_title: string }[];
 }
 
 export default function DashboardPage() {
@@ -130,7 +131,7 @@ export default function DashboardPage() {
               My NFTs ({nfts.length})
             </TabsTrigger>
             <TabsTrigger value="rewards" className="text-xs data-[state=active]:bg-neutral-700">
-              Rewards
+              Rewards ({rewards?.participatedNovels.length ?? 0})
             </TabsTrigger>
             <TabsTrigger value="drafts" className="text-xs data-[state=active]:bg-neutral-700">
               Drafts
@@ -205,45 +206,58 @@ export default function DashboardPage() {
               <p className="text-neutral-500 text-sm">Loading rewards...</p>
             ) : (
               <div className="space-y-4">
-                {rewards.unclaimedVotes.length > 0 && (
-                  <div>
-                    <h3 className="font-semibold text-sm mb-2">Unclaimed Voting Rewards</h3>
-                    {rewards.unclaimedVotes.map((v, i) => (
-                      <Link key={i} href={`/novels/${v.novel_id}`} className="block text-sm text-blue-400 hover:underline">
-                        {v.novel_title || `Novel #${v.novel_id}`} — Claim on novel page
-                      </Link>
-                    ))}
-                  </div>
-                )}
-
-                {rewards.stakeEvents.length > 0 && (
-                  <div>
-                    <h3 className="font-semibold text-sm mb-2">Stake History</h3>
-                    {rewards.stakeEvents.map((se, i) => (
-                      <div key={i} className="text-sm flex justify-between">
-                        <span>{se.novel_title || `Novel #${se.novel_id}`} — {se.event_type}</span>
-                        <span className={se.event_type === "refunded" ? "text-green-400" : "text-red-400"}>
-                          {formatEth(se.total_amount)} {TOKEN_SYMBOL}
-                        </span>
+                {/* Per-novel claimable rewards (reads on-chain state) */}
+                {rewards.participatedNovels.length > 0 ? (
+                  <>
+                    <p className="text-xs text-neutral-400">Showing claimable rewards for each novel you participated in.</p>
+                    {rewards.participatedNovels.map((pn) => (
+                      <div key={pn.novel_id}>
+                        <div className="flex items-center gap-2 mb-1">
+                          <Link href={`/novels/${pn.novel_id}`} className="text-sm font-medium text-blue-400 hover:underline">
+                            {pn.novel_title || `Novel #${pn.novel_id}`}
+                          </Link>
+                        </div>
+                        <RewardsPanel novelId={pn.novel_id} />
                       </div>
                     ))}
-                  </div>
+                  </>
+                ) : (
+                  <p className="text-neutral-500 text-sm">No reward activity yet. Participate in a novel to earn rewards.</p>
                 )}
 
-                {rewards.rewardClaims.length > 0 && (
-                  <div>
-                    <h3 className="font-semibold text-sm mb-2">Claimed Rewards</h3>
-                    {rewards.rewardClaims.map((rc, i) => (
-                      <div key={i} className="text-sm flex justify-between">
-                        <span>{rc.novel_title || `Novel #${rc.novel_id}`} — {rc.source}</span>
-                        <span className="text-green-400">{formatEth(rc.total_amount)} {TOKEN_SYMBOL}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {rewards.unclaimedVotes.length === 0 && rewards.stakeEvents.length === 0 && rewards.rewardClaims.length === 0 && (
-                  <p className="text-neutral-500 text-sm">No reward activity yet.</p>
+                {/* Historical records */}
+                {(rewards.stakeEvents.length > 0 || rewards.rewardClaims.length > 0) && (
+                  <details className="rounded-md border border-neutral-700 bg-neutral-800/40 text-xs">
+                    <summary className="px-3 py-2 cursor-pointer text-neutral-400 hover:text-neutral-300 select-none text-sm">
+                      History ({rewards.stakeEvents.length + rewards.rewardClaims.length} events)
+                    </summary>
+                    <div className="px-3 pb-3 space-y-3">
+                      {rewards.stakeEvents.length > 0 && (
+                        <div>
+                          <h4 className="font-semibold text-xs mb-1 text-neutral-300">Stake Events</h4>
+                          {rewards.stakeEvents.map((se, i) => (
+                            <div key={i} className="text-sm flex justify-between">
+                              <span>{se.novel_title || `Novel #${se.novel_id}`} — {se.event_type}</span>
+                              <span className={se.event_type === "refunded" ? "text-green-400" : "text-red-400"}>
+                                {formatEth(se.total_amount)} {TOKEN_SYMBOL}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {rewards.rewardClaims.length > 0 && (
+                        <div>
+                          <h4 className="font-semibold text-xs mb-1 text-neutral-300">Claimed Rewards</h4>
+                          {rewards.rewardClaims.map((rc, i) => (
+                            <div key={i} className="text-sm flex justify-between">
+                              <span>{rc.novel_title || `Novel #${rc.novel_id}`} — {rc.source}</span>
+                              <span className="text-green-400">{formatEth(rc.total_amount)} {TOKEN_SYMBOL}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </details>
                 )}
               </div>
             )}

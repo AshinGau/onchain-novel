@@ -16,6 +16,8 @@ interface VoteCandidate {
   chapter_index: number;
   vote_count: string;
   is_world_line: boolean;
+  content_text?: string | null;
+  comment_count?: string | number;
 }
 
 interface VotePanelProps {
@@ -39,6 +41,7 @@ export function VotePanel({ novelId, votingRoundId, phase, candidates, title }: 
   const [saltMode, setSaltMode] = useState<"auto" | "custom">("auto");
   const [customSalt, setCustomSalt] = useState("");
   const [justCommittedId, setJustCommittedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   // Always check on-chain commit status for this address + round
   const { data: onChainCommit, refetch: refetchCommit } = useReadContract({
@@ -67,6 +70,7 @@ export function VotePanel({ novelId, votingRoundId, phase, candidates, title }: 
         saveVote(novelId, votingRoundId, pendingCommit.candidateId, pendingCommit.userSalt);
         setLocalVotes((prev) => ({ ...prev, [pendingCommit!.candidateId]: pendingCommit!.userSalt }));
         setJustCommittedId(pendingCommit.candidateId);
+        setSelectedId(null);
         setPendingCommit(null);
         refetchCommit();
       }
@@ -109,8 +113,15 @@ export function VotePanel({ novelId, votingRoundId, phase, candidates, title }: 
     });
   }
 
+  function handleSubmitVote() {
+    if (!selectedId) return;
+    handleCommit(selectedId);
+  }
+
   // Determine if user can still vote (not committed on-chain, not pending)
   const canVote = isConnected && phase === "committing" && !alreadyCommittedOnChain && !commitTx.isBusy && !justCommittedId;
+
+  const selectedCandidate = candidates.find((c) => c.id === selectedId);
 
   return (
     <div className="rounded-lg bg-neutral-900 border border-neutral-800 p-4">
@@ -118,18 +129,51 @@ export function VotePanel({ novelId, votingRoundId, phase, candidates, title }: 
         {title || (phase === "committing" ? "Cast Your Vote" : "Reveal Your Vote")}
       </h3>
 
-      {/* Candidate list */}
+      {/* Candidate list — clickable to select */}
       <div className="space-y-2 mb-4">
         {candidates.map((c) => {
           const isVotedLocally = votedCandidateIds.includes(c.id);
+          const isSelected = selectedId === c.id;
+          const commentCount = Number(c.comment_count || 0);
+
           return (
-            <div key={c.id} className={`rounded-md border p-3 text-sm transition-colors ${
-              isVotedLocally ? "border-green-700 bg-green-950/20" : "border-neutral-700 bg-neutral-800"
-            }`}>
+            <div
+              key={c.id}
+              onClick={() => {
+                if (canVote && !isVotedLocally) {
+                  setSelectedId(isSelected ? null : c.id);
+                }
+              }}
+              className={`rounded-md border p-3 text-sm transition-all duration-150 ${isVotedLocally
+                  ? "border-green-700 bg-green-950/20"
+                  : isSelected
+                    ? "border-amber-500 bg-amber-950/25 shadow-[0_0_8px_rgba(245,158,11,0.1)]"
+                    : canVote
+                      ? "border-neutral-700 bg-neutral-800 hover:border-neutral-500 cursor-pointer"
+                      : "border-neutral-700 bg-neutral-800"
+                }`}
+            >
               <div className="flex items-center justify-between">
-                <span>Candidate(ID.{c.id}) by {shortenAddress(c.author)}</span>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span>Candidate(ID.{c.id}) by {shortenAddress(c.author)}</span>
+                  {isSelected && (
+                    <a
+                      href={`/chapters/${c.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="text-blue-400 hover:text-blue-300 text-xs underline underline-offset-2 flex-shrink-0"
+                    >
+                      View full
+                    </a>
+                  )}
+                </div>
+                <div className="flex items-center gap-3 flex-shrink-0 ml-2">
                   {isVotedLocally && <span className="text-green-400 text-xs">&#10003; Voted</span>}
+                  <span className="text-neutral-500 text-xs flex items-center gap-1" title="Comments">
+                    <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="currentColor"><path d="M2.5 2A1.5 1.5 0 001 3.5v7A1.5 1.5 0 002.5 12h1v2.5l3.5-2.5h6A1.5 1.5 0 0015 10.5v-7A1.5 1.5 0 0013.5 2h-11z" /></svg>
+                    {commentCount}
+                  </span>
                   {Number(c.vote_count) > 0 && <span className="text-neutral-500 text-xs">{c.vote_count} votes</span>}
                 </div>
               </div>
@@ -173,15 +217,25 @@ export function VotePanel({ novelId, votingRoundId, phase, candidates, title }: 
           {canVote && (
             <div className="space-y-3 border-t border-neutral-700 pt-3">
               <p className="text-xs text-neutral-400">Select a candidate above to read, then vote here. One vote per address per round.</p>
-              <div className="flex items-center gap-2 flex-wrap">
-                {candidates.map((c) => (
-                  <button key={c.id} onClick={() => handleCommit(c.id)}
-                    disabled={commitTx.isBusy}
-                    className="rounded-md border border-neutral-600 px-3 py-1.5 text-xs hover:border-amber-500 hover:bg-amber-950/20 transition-colors disabled:opacity-50">
-                    Vote #{c.id}
-                  </button>
-                ))}
-              </div>
+
+              {/* Content preview of selected candidate */}
+              {selectedCandidate && (
+                <div className="rounded-md border border-neutral-700 bg-neutral-800/60 p-3">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-xs text-neutral-400 font-medium">Selected: Candidate(ID.{selectedCandidate.id})</span>
+                  </div>
+                  {selectedCandidate.content_text ? (
+                    <p className="text-sm text-neutral-300 leading-relaxed">
+                      {selectedCandidate.content_text.length > 100
+                        ? selectedCandidate.content_text.slice(0, 100) + "…"
+                        : selectedCandidate.content_text}
+                    </p>
+                  ) : (
+                    <p className="text-sm text-neutral-500 italic">Content not yet fetched.</p>
+                  )}
+                </div>
+              )}
+
               <div className="flex items-center gap-2">
                 <label className="text-sm text-neutral-400">Stake:</label>
                 <input type="number" step="0.001" min="0.001" value={stakeAmount}
@@ -189,6 +243,29 @@ export function VotePanel({ novelId, votingRoundId, phase, candidates, title }: 
                   className="w-24 rounded-md bg-neutral-800 border border-neutral-700 px-2 py-1 text-sm" />
                 <span className="text-sm text-neutral-400">{TOKEN_SYMBOL}</span>
               </div>
+              <details className="rounded-md border border-neutral-700 bg-neutral-800/40 text-xs">
+                <summary className="px-3 py-2 cursor-pointer text-neutral-400 hover:text-neutral-300 select-none">
+                  How voting works (commit-reveal)
+                </summary>
+                <div className="px-3 pb-3 space-y-2 text-neutral-400 leading-relaxed">
+                  <div>
+                    <span className="text-neutral-300 font-medium">1. Stake</span>
+                    <p>You deposit a small amount of {TOKEN_SYMBOL} as a stake to cast your vote. This prevents spam and ensures voters have skin in the game. Your stake is returned when you reveal.</p>
+                  </div>
+                  <div>
+                    <span className="text-neutral-300 font-medium">2. Secret Key</span>
+                    <p>A secret key is generated (or you provide your own) and combined with your vote to create a hidden commitment. <span className="text-amber-400">Keep this key safe</span> — you need it to reveal your vote later. It is saved in your browser automatically, but back it up if you may switch devices or clear data.</p>
+                  </div>
+                  <div>
+                    <span className="text-neutral-300 font-medium">3. Reveal</span>
+                    <p>After the commit phase ends, a reveal phase begins. You must reveal your vote during this window by submitting your secret key on-chain. This proves your vote without allowing others to copy it beforehand.</p>
+                  </div>
+                  <div>
+                    <span className="text-neutral-300 font-medium">4. Rewards</span>
+                    <p>If you voted for the winning candidate and revealed on time, you recover your full stake plus a share of the voter reward pool. Unrevealed votes forfeit their stake. You can claim rewards from the Rewards panel below.</p>
+                  </div>
+                </div>
+              </details>
               <div className="text-xs space-y-1">
                 <div className="flex items-center gap-3">
                   <label className="flex items-center gap-1.5 cursor-pointer">
@@ -206,6 +283,17 @@ export function VotePanel({ novelId, votingRoundId, phase, candidates, title }: 
                     className="w-full rounded-md bg-neutral-800 border border-neutral-700 px-2 py-1 text-sm" />
                 )}
               </div>
+              <Button
+                onClick={handleSubmitVote}
+                disabled={!selectedId || commitTx.isBusy}
+                className="bg-amber-600 text-black font-semibold hover:bg-amber-500 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {commitTx.isBusy
+                  ? (commitTx.isPending ? "Signing..." : "Confirming...")
+                  : selectedId
+                    ? `Submit Vote ID.${selectedId}`
+                    : "Select a Candidate Above"}
+              </Button>
             </div>
           )}
         </>
