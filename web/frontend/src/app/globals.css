@@ -128,15 +128,3 @@
     @apply font-sans;
   }
 }
-
-/* Hide number input spinners */
-input[type="number"] {
-  -moz-appearance: textfield !important;
-  appearance: textfield !important;
-}
-input[type="number"]::-webkit-inner-spin-button,
-input[type="number"]::-webkit-outer-spin-button {
-  -webkit-appearance: none !important;
-  margin: 0 !important;
-  display: none !important;
-}

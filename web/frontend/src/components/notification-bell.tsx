@@ -62,7 +62,7 @@ export function NotificationBell() {
         signMessageAsync,
       );
       setUnreadCount(0);
-      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+      setNotifications(prev => prev.filter(n => n.read));
     } catch {}
   }
 

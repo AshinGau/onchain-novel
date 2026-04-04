@@ -1,19 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { parseEther, keccak256, encodePacked, toHex } from "viem";
+import { parseEther, keccak256, encodePacked } from "viem";
 import { useAccount, useReadContract } from "wagmi";
 import { Button } from "@/components/ui/button";
 import { VOTING_ENGINE_ADDRESS, votingEngineAbi } from "@/lib/contracts";
 import { TOKEN_SYMBOL, DEFAULT_STAKE } from "@/lib/config";
 import { saveVote, hasVotedFor, loadVote, toBytes32Salt } from "@/lib/vote-storage";
 import { useTxAction } from "@/hooks/use-tx-action";
-
-function generateRandomSalt(): string {
-  const bytes = new Uint8Array(32);
-  crypto.getRandomValues(bytes);
-  return toHex(bytes);
-}
 
 interface VoteButtonProps {
   novelId: string;
@@ -25,8 +19,8 @@ interface VoteButtonProps {
 export function VoteButton({ novelId, chapterId, votingRoundId, phase }: VoteButtonProps) {
   const { isConnected, address } = useAccount();
   const [stakeAmount, setStakeAmount] = useState(DEFAULT_STAKE);
-  const [saltMode, setSaltMode] = useState<"auto" | "custom">("auto");
-  const [customSalt, setCustomSalt] = useState("");
+  const [secretKey, setSecretKey] = useState("");
+  const [revealSecretKey, setRevealSecretKey] = useState("");
   const [committed, setCommitted] = useState(false);
   const [pendingSalt, setPendingSalt] = useState<string | null>(null);
 
@@ -60,7 +54,8 @@ export function VoteButton({ novelId, chapterId, votingRoundId, phase }: VoteBut
   const revealTx = useTxAction({ onSuccess: () => refetch() });
 
   function handleCommit() {
-    const userSalt = (saltMode === "custom" && customSalt.trim()) ? customSalt.trim() : generateRandomSalt();
+    const userSalt = secretKey.trim();
+    if (!userSalt) return;
     const bytes32 = toBytes32Salt(userSalt);
     const commitHash = keccak256(encodePacked(["uint256", "bytes32"], [BigInt(chapterId), bytes32]));
     setPendingSalt(userSalt);
@@ -73,9 +68,15 @@ export function VoteButton({ novelId, chapterId, votingRoundId, phase }: VoteBut
     });
   }
 
+  // Pre-fill reveal secret key from localStorage
+  useEffect(() => {
+    if (localSalt && !revealSecretKey) setRevealSecretKey(localSalt);
+  }, [localSalt]); // eslint-disable-line react-hooks/exhaustive-deps
+
   function handleReveal() {
-    if (!localSalt) return;
-    const bytes32 = toBytes32Salt(localSalt);
+    const salt = revealSecretKey.trim();
+    if (!salt) return;
+    const bytes32 = toBytes32Salt(salt);
     revealTx.writeContract({
       address: VOTING_ENGINE_ADDRESS,
       abi: votingEngineAbi,
@@ -134,25 +135,18 @@ export function VoteButton({ novelId, chapterId, votingRoundId, phase }: VoteBut
             className="w-24 rounded-md bg-neutral-800 border border-neutral-700 px-2 py-1 text-sm" />
           <span className="text-sm text-neutral-400">{TOKEN_SYMBOL}</span>
         </div>
-        <div className="text-xs space-y-1">
-          <div className="flex items-center gap-3">
-            <label className="flex items-center gap-1.5 cursor-pointer">
-              <input type="radio" checked={saltMode === "auto"} onChange={() => setSaltMode("auto")} className="accent-white" />
-              <span className="text-neutral-400">Auto-generate secret key</span>
-            </label>
-            <label className="flex items-center gap-1.5 cursor-pointer">
-              <input type="radio" checked={saltMode === "custom"} onChange={() => setSaltMode("custom")} className="accent-white" />
-              <span className="text-neutral-400">Custom secret key</span>
-            </label>
-          </div>
-          {saltMode === "custom" && (
-            <input type="text" value={customSalt} onChange={(e) => setCustomSalt(e.target.value)}
-              placeholder="Enter a memorable secret phrase..."
-              className="w-full rounded-md bg-neutral-800 border border-neutral-700 px-2 py-1 text-sm" />
+        <div className="space-y-1.5">
+          <label className="text-sm text-neutral-400">Secret Key</label>
+          <input type="text" value={secretKey} onChange={(e) => setSecretKey(e.target.value)}
+            placeholder="Enter a secret key you can remember..."
+            className="w-72 rounded-md bg-neutral-800 border border-neutral-700 px-2 py-1 text-sm" />
+          {secretKey.trim().length > 0 && secretKey.trim().length < 4 && (
+            <p className="text-amber-400 text-xs">Short keys are easier to brute-force — others may guess your vote before reveal.</p>
           )}
+          <p className="text-neutral-500 text-xs">You will need this exact key to reveal your vote. It is only stored in your browser as a backup — not on any server, so that no one can see your vote before reveal.</p>
         </div>
-        <Button size="sm" onClick={handleCommit} disabled={saltMode === "custom" && !customSalt.trim()}>
-          Vote for this
+        <Button size="sm" onClick={handleCommit} disabled={!secretKey.trim()}>
+          {secretKey.trim() ? "Vote for this" : "Enter a Secret Key"}
         </Button>
       </div>
     );
@@ -172,9 +166,16 @@ export function VoteButton({ novelId, chapterId, votingRoundId, phase }: VoteBut
   }
 
   return (
-    <div className="space-y-1">
-      <Button size="sm" onClick={handleReveal} disabled={revealTx.isBusy}>
-        {revealTx.isBusy ? (revealTx.isPending ? "Signing..." : "Confirming...") : "Reveal vote"}
+    <div className="space-y-2">
+      <div className="space-y-1.5">
+        <label className="text-sm text-neutral-400">Secret Key </label>
+        <input type="text" value={revealSecretKey} onChange={(e) => setRevealSecretKey(e.target.value)}
+          placeholder="Enter the secret key you used when voting..."
+          className="w-78 rounded-md bg-neutral-800 border border-neutral-700 px-2 py-1 text-sm" />
+        <p className="text-neutral-500 text-xs">Enter the exact secret key you used during commit. If it does not match, the reveal will fail.</p>
+      </div>
+      <Button size="sm" onClick={handleReveal} disabled={revealTx.isBusy || !revealSecretKey.trim()}>
+        {revealTx.isBusy ? (revealTx.isPending ? "Signing..." : "Confirming...") : !revealSecretKey.trim() ? "Enter Secret Key" : "Reveal vote"}
       </Button>
       <p className="text-xs text-neutral-500">Reveal to make your vote count and recover your stake.</p>
       {revealTx.isError && <p className="text-xs text-red-400">{revealTx.error}</p>}

@@ -1,13 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { parseEther, keccak256, encodePacked, toHex } from "viem";
+import { parseEther, keccak256, encodePacked } from "viem";
 import { useAccount, useReadContract } from "wagmi";
 import { Button } from "@/components/ui/button";
 import { VOTING_ENGINE_ADDRESS, votingEngineAbi } from "@/lib/contracts";
 import { TOKEN_SYMBOL, DEFAULT_STAKE } from "@/lib/config";
 import { shortenAddress } from "@/lib/format";
-import { saveVote, loadAllVotes, toBytes32Salt } from "@/lib/vote-storage";
+import { saveVote, loadAllVotes, loadVote, toBytes32Salt } from "@/lib/vote-storage";
 import { useTxAction } from "@/hooks/use-tx-action";
 
 interface VoteCandidate {
@@ -28,18 +28,48 @@ interface VotePanelProps {
   title?: string;
 }
 
-function generateRandomSalt(): string {
-  const bytes = new Uint8Array(32);
-  crypto.getRandomValues(bytes);
-  return toHex(bytes);
+function RevealForm({ novelId, votingRoundId, votedCandidateIds, localVotes, revealSecretKey, setRevealSecretKey, handleReveal, revealTx }: {
+  novelId: string; votingRoundId: string;
+  votedCandidateIds: string[]; localVotes: Record<string, string>;
+  revealSecretKey: string; setRevealSecretKey: (v: string) => void;
+  handleReveal: () => void; revealTx: ReturnType<typeof useTxAction>;
+}) {
+  const candidateId = votedCandidateIds[0];
+  const savedSalt = candidateId ? localVotes[candidateId] : null;
+
+  // Pre-fill from localStorage on mount
+  useEffect(() => {
+    if (savedSalt && !revealSecretKey) setRevealSecretKey(savedSalt);
+  }, [savedSalt]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <div className="space-y-3">
+      {candidateId && (
+        <p className="text-sm text-neutral-300">
+          You voted for <span className="text-amber-400">Candidate(ID.{candidateId})</span>. Reveal to make it count and recover your stake.
+        </p>
+      )}
+      <div className="space-y-1.5">
+        <label className="text-sm text-neutral-400">Secret Key </label>
+        <input type="text" value={revealSecretKey} onChange={(e) => setRevealSecretKey(e.target.value)}
+          placeholder="Enter the secret key you used when voting..."
+          className="w-78 rounded-md bg-neutral-800 border border-neutral-700 px-2 py-1 text-sm" />
+        <p className="text-neutral-500 text-xs">Enter the exact secret key you used during commit. If it does not match, the reveal will fail.</p>
+      </div>
+      <Button size="sm" onClick={handleReveal} disabled={revealTx.isBusy || !revealSecretKey.trim()}>
+        {revealTx.isBusy ? (revealTx.isPending ? "Signing..." : "Confirming...") : !revealSecretKey.trim() ? "Enter Secret Key" : "Reveal Vote"}
+      </Button>
+      {revealTx.isError && <p className="text-red-400 text-xs">{revealTx.error}</p>}
+    </div>
+  );
 }
 
 export function VotePanel({ novelId, votingRoundId, phase, candidates, title }: VotePanelProps) {
   const { isConnected, address } = useAccount();
   const [localVotes, setLocalVotes] = useState<Record<string, string>>({});
   const [stakeAmount, setStakeAmount] = useState(DEFAULT_STAKE);
-  const [saltMode, setSaltMode] = useState<"auto" | "custom">("auto");
-  const [customSalt, setCustomSalt] = useState("");
+  const [secretKey, setSecretKey] = useState("");
+  const [revealSecretKey, setRevealSecretKey] = useState("");
   const [justCommittedId, setJustCommittedId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -84,7 +114,8 @@ export function VotePanel({ novelId, votingRoundId, phase, candidates, title }: 
   const [pendingCommit, setPendingCommit] = useState<{ candidateId: string; userSalt: string } | null>(null);
 
   function handleCommit(candidateId: string) {
-    const userSalt = (saltMode === "custom" && customSalt.trim()) ? customSalt.trim() : generateRandomSalt();
+    const userSalt = secretKey.trim();
+    if (!userSalt) return;
     const bytes32 = toBytes32Salt(userSalt);
     const commitHash = keccak256(encodePacked(["uint256", "bytes32"], [BigInt(candidateId), bytes32]));
     setPendingCommit({ candidateId, userSalt });
@@ -95,16 +126,14 @@ export function VotePanel({ novelId, votingRoundId, phase, candidates, title }: 
       args: [BigInt(novelId), BigInt(votingRoundId), commitHash],
       value: parseEther(stakeAmount),
     });
-    setSaltMode("auto");
-    setCustomSalt("");
+    setSecretKey("");
   }
 
   function handleReveal() {
-    // Use the first local vote's salt for reveal
     const candidateId = votedCandidateIds[0];
-    const userSalt = localVotes[candidateId];
-    if (!candidateId || !userSalt) return;
-    const bytes32 = toBytes32Salt(userSalt);
+    const salt = revealSecretKey.trim();
+    if (!candidateId || !salt) return;
+    const bytes32 = toBytes32Salt(salt);
     revealTx.writeContract({
       address: VOTING_ENGINE_ADDRESS,
       abi: votingEngineAbi,
@@ -254,11 +283,11 @@ export function VotePanel({ novelId, votingRoundId, phase, candidates, title }: 
                   </div>
                   <div>
                     <span className="text-neutral-300 font-medium">2. Secret Key</span>
-                    <p>A secret key is generated (or you provide your own) and combined with your vote to create a hidden commitment. <span className="text-amber-400">Keep this key safe</span> — you need it to reveal your vote later. It is saved in your browser automatically, but back it up if you may switch devices or clear data.</p>
+                    <p>You set a secret key that is combined with your vote to create a hidden commitment. <span className="text-amber-400">Remember this key</span> — you need the exact same key to reveal your vote later.</p>
                   </div>
                   <div>
                     <span className="text-neutral-300 font-medium">3. Reveal</span>
-                    <p>After the commit phase ends, a reveal phase begins. You must reveal your vote during this window by submitting your secret key on-chain. This proves your vote without allowing others to copy it beforehand.</p>
+                    <p>After the commit phase ends, a reveal phase begins. You must enter your secret key again to reveal your vote on-chain. This proves your vote without allowing others to copy it beforehand.</p>
                   </div>
                   <div>
                     <span className="text-neutral-300 font-medium">4. Rewards</span>
@@ -266,33 +295,28 @@ export function VotePanel({ novelId, votingRoundId, phase, candidates, title }: 
                   </div>
                 </div>
               </details>
-              <div className="text-xs space-y-1">
-                <div className="flex items-center gap-3">
-                  <label className="flex items-center gap-1.5 cursor-pointer">
-                    <input type="radio" checked={saltMode === "auto"} onChange={() => setSaltMode("auto")} className="accent-white" />
-                    <span className="text-neutral-400">Auto-generate secret key</span>
-                  </label>
-                  <label className="flex items-center gap-1.5 cursor-pointer">
-                    <input type="radio" checked={saltMode === "custom"} onChange={() => setSaltMode("custom")} className="accent-white" />
-                    <span className="text-neutral-400">Custom secret key</span>
-                  </label>
-                </div>
-                {saltMode === "custom" && (
-                  <input type="text" value={customSalt} onChange={(e) => setCustomSalt(e.target.value)}
-                    placeholder="Enter a memorable secret phrase..."
-                    className="w-full rounded-md bg-neutral-800 border border-neutral-700 px-2 py-1 text-sm" />
+              <div className="space-y-1.5">
+                <label className="text-sm text-neutral-400">Secret Key</label>
+                <input type="text" value={secretKey} onChange={(e) => setSecretKey(e.target.value)}
+                  placeholder="Enter a secret key you can remember..."
+                  className="w-full rounded-md bg-neutral-800 border border-neutral-700 px-2 py-1 text-sm" />
+                {secretKey.trim().length > 0 && secretKey.trim().length < 4 && (
+                  <p className="text-amber-400 text-xs">Short keys are easier to brute-force — others may guess your vote before reveal.</p>
                 )}
+                <p className="text-neutral-500 text-xs">You will need this exact key to reveal your vote. It is only stored in your browser as a backup — not on any server, so that no one can see your vote before reveal.</p>
               </div>
               <Button
                 onClick={handleSubmitVote}
-                disabled={!selectedId || commitTx.isBusy}
+                disabled={!selectedId || !secretKey.trim() || commitTx.isBusy}
                 className="bg-amber-600 text-black font-semibold hover:bg-amber-500 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {commitTx.isBusy
                   ? (commitTx.isPending ? "Signing..." : "Confirming...")
-                  : selectedId
-                    ? `Submit Vote ID.${selectedId}`
-                    : "Select a Candidate Above"}
+                  : !selectedId
+                    ? "Select a Candidate Above"
+                    : !secretKey.trim()
+                      ? "Enter a Secret Key"
+                      : `Submit Vote ID.${selectedId}`}
               </Button>
             </div>
           )}
@@ -310,22 +334,17 @@ export function VotePanel({ novelId, votingRoundId, phase, candidates, title }: 
             <p className="text-green-400 text-sm">&#10003; Vote revealed!</p>
           )}
 
-          {isConnected && !onChainRevealed && alreadyCommittedOnChain && votedCandidateIds.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-sm text-neutral-300">
-                You voted for <span className="text-amber-400">Candidate(ID.{votedCandidateIds[0]})</span>. Reveal to make it count and recover your stake.
-              </p>
-              <Button size="sm" onClick={handleReveal} disabled={revealTx.isBusy}>
-                {revealTx.isBusy ? (revealTx.isPending ? "Signing..." : "Confirming...") : "Reveal Vote"}
-              </Button>
-              {revealTx.isError && <p className="text-red-400 text-xs">{revealTx.error}</p>}
-            </div>
-          )}
-
-          {isConnected && !onChainRevealed && alreadyCommittedOnChain && votedCandidateIds.length === 0 && (
-            <p className="text-neutral-500 text-sm">
-              You committed a vote but the secret key is not saved in this browser. If you have it backed up, enter it on the chapter page.
-            </p>
+          {isConnected && !onChainRevealed && alreadyCommittedOnChain && (
+            <RevealForm
+              novelId={novelId}
+              votingRoundId={votingRoundId}
+              votedCandidateIds={votedCandidateIds}
+              localVotes={localVotes}
+              revealSecretKey={revealSecretKey}
+              setRevealSecretKey={setRevealSecretKey}
+              handleReveal={handleReveal}
+              revealTx={revealTx}
+            />
           )}
 
           {isConnected && !alreadyCommittedOnChain && (

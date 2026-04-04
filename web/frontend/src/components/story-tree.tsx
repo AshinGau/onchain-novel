@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import type { TreeChapter } from "@/lib/api";
-import { shortenAddress } from "@/lib/format";
+import { shortenAddress, timeAgo } from "@/lib/format";
 import { VotedBadge } from "@/components/voted-badge";
 
 interface StoryTreeProps {
@@ -9,9 +9,11 @@ interface StoryTreeProps {
   novelId: string;
   /** Pass votingRoundId to show "My Vote" badges on chapters the user voted for */
   votingRoundId?: string;
+  /** Connected wallet address — highlights the user's own chapters */
+  connectedAddress?: string;
 }
 
-export function StoryTree({ chapters, novelId, votingRoundId }: StoryTreeProps) {
+export function StoryTree({ chapters, novelId, votingRoundId, connectedAddress }: StoryTreeProps) {
   // Build parent→children map
   const childrenOf = new Map<string, TreeChapter[]>();
   const roots: TreeChapter[] = [];
@@ -34,20 +36,22 @@ export function StoryTree({ chapters, novelId, votingRoundId }: StoryTreeProps) 
   return (
     <div className="space-y-1">
       {roots.map((root) => (
-        <TreeNode key={root.id} chapter={root} childrenOf={childrenOf} depth={0} novelId={novelId} votingRoundId={votingRoundId} />
+        <TreeNode key={root.id} chapter={root} childrenOf={childrenOf} depth={0} novelId={novelId} votingRoundId={votingRoundId} connectedAddress={connectedAddress} />
       ))}
     </div>
   );
 }
 
-function TreeNode({ chapter: ch, childrenOf, depth, novelId, votingRoundId }: {
+function TreeNode({ chapter: ch, childrenOf, depth, novelId, votingRoundId, connectedAddress }: {
   chapter: TreeChapter;
   childrenOf: Map<string, TreeChapter[]>;
   depth: number;
   novelId: string;
   votingRoundId?: string;
+  connectedAddress?: string;
 }) {
   const children = childrenOf.get(ch.id) || [];
+  const isOwn = !!connectedAddress && ch.author.toLowerCase() === connectedAddress.toLowerCase();
 
   return (
     <div className={depth > 0 ? "ml-5 border-l border-neutral-800 pl-3" : ""}>
@@ -65,8 +69,14 @@ function TreeNode({ chapter: ch, childrenOf, depth, novelId, votingRoundId }: {
           <span className="text-neutral-500 text-xs">
             {ch.round === 0 ? "Genesis" : `R${ch.round}`}
           </span>
-          <span className="font-mono text-xs">#{ch.chapter_index}</span>
-          <span className="text-neutral-400 text-xs">{shortenAddress(ch.author)}</span>
+          <span className="font-mono text-xs">#{ch.chapter_index}(ID.{ch.id})</span>
+          <span className={`text-xs ${isOwn ? "text-green-400" : "text-neutral-400"}`}>
+            {isOwn ? "You" : shortenAddress(ch.author)}
+          </span>
+          {ch.created_at && (
+            <span className="text-neutral-600 text-xs">{timeAgo(ch.created_at)}</span>
+          )}
+          {isOwn && <Badge variant="secondary" className="text-[10px] px-1 py-0 bg-green-900/50 text-green-400 border-green-700">Mine</Badge>}
           {ch.is_canon && <Badge className="text-[10px] px-1 py-0">Canon</Badge>}
           {ch.is_world_line && !ch.is_canon && (
             <Badge variant="secondary" className="text-[10px] px-1 py-0">WL</Badge>
@@ -80,7 +90,7 @@ function TreeNode({ chapter: ch, childrenOf, depth, novelId, votingRoundId }: {
         </div>
       </Link>
       {children.map((child) => (
-        <TreeNode key={child.id} chapter={child} childrenOf={childrenOf} depth={depth + 1} novelId={novelId} votingRoundId={votingRoundId} />
+        <TreeNode key={child.id} chapter={child} childrenOf={childrenOf} depth={depth + 1} novelId={novelId} votingRoundId={votingRoundId} connectedAddress={connectedAddress} />
       ))}
     </div>
   );
