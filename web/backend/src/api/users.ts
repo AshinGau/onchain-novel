@@ -79,11 +79,13 @@ router.get("/:address/rewards", async (req, res) => {
 
     // Novels the user participated in (as author or voter)
     const novelsRes = await query(
-      `SELECT DISTINCT novel_id FROM (
+      `SELECT DISTINCT t.novel_id, n.title AS novel_title FROM (
          SELECT novel_id FROM chapters WHERE LOWER(author) = $1
          UNION
          SELECT novel_id FROM votes WHERE LOWER(voter) = $1
-       ) t`,
+       ) t
+       LEFT JOIN novels n ON n.id = t.novel_id
+       ORDER BY t.novel_id DESC`,
       [addr]
     );
 
@@ -91,7 +93,7 @@ router.get("/:address/rewards", async (req, res) => {
       unclaimedVotes: unclaimedVotesRes.rows,
       stakeEvents: stakeRes.rows,
       rewardClaims: claimsRes.rows,
-      participatedNovelIds: novelsRes.rows.map(r => r.novel_id),
+      participatedNovels: novelsRes.rows.map(r => ({ novel_id: r.novel_id, novel_title: r.novel_title || "" })),
     });
   } catch (err) {
     console.error("GET /api/users/:address/rewards error:", err);

@@ -20,7 +20,7 @@ export default async function NovelDetailPage({ params }: { params: Promise<{ id
   let tree: TreeChapter[] = [];
   let forks: Novel[] = [];
   let worldlines: { id: string }[] = [];
-  let roundCandidates: { id: string; author: string; chapter_index: number; vote_count: string; is_world_line: boolean; content_text?: string | null }[] = [];
+  let roundCandidates: { id: string; author: string; chapter_index: number; vote_count: string; is_world_line: boolean; content_text?: string | null; comment_count?: string | number }[] = [];
   const warnings: string[] = [];
 
   try {
@@ -74,6 +74,7 @@ export default async function NovelDetailPage({ params }: { params: Promise<{ id
         chapter_index: treeChapter?.chapter_index ?? 0,
         vote_count: treeChapter?.vote_count || "0",
         is_world_line: true,
+        comment_count: 0,
       };
     });
   }
