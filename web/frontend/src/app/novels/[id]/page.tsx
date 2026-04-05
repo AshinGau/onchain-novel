@@ -56,7 +56,7 @@ export default async function NovelDetailPage({ params }: { params: Promise<{ id
   // Fetch round candidates for round voting (epoch_phase=0 + round Committing/Revealing)
   if (novel.active && novel.epoch_phase === 0 && (novel.round_phase === 1 || novel.round_phase === 2)) {
     try {
-      const roundData = await fetchApi<{ chapters: typeof roundCandidates }>(`/api/novels/${id}/rounds/${novel.current_round}`);
+      const roundData = await fetchApi<{ chapters: typeof roundCandidates }>(`/api/novels/${id}/rounds/${novel.current_round}?epoch=${novel.current_epoch}`);
       roundCandidates = roundData.chapters;
     } catch {
       warnings.push("Failed to load round candidates.");
@@ -247,7 +247,7 @@ export default async function NovelDetailPage({ params }: { params: Promise<{ id
       {tree.length > 0 && (
         <div className="mb-6">
           <h2 className="font-semibold mb-3">Story Tree</h2>
-          <ConnectedStoryTree chapters={tree} novelId={id} votingRoundId={novel.active && (novel.round_phase === 1 || novel.round_phase === 2) ? roundVotingId : undefined} />
+          <ConnectedStoryTree chapters={tree} novelId={id} votingRoundId={novel.active && (novel.round_phase === 1 || novel.round_phase === 2) ? roundVotingId : undefined} continuable={novel.active && novel.epoch_phase === 0 && novel.round_phase === 0} />
         </div>
       )}
 

@@ -188,13 +188,14 @@ router.get("/:id/worldlines", async (req, res) => {
 router.get("/:id/rounds/:round", async (req, res) => {
   try {
     const { id, round } = req.params;
+    const { epoch } = req.query;
     const chaptersRes = await query(
       `SELECT c.id, c.parent_id, c.author, c.content_hash, c.declared_length, c.chapter_index,
               c.vote_count, c.is_world_line, c.content_text, c.content_fetched,
               (SELECT COUNT(*) FROM comments WHERE chapter_id = c.id AND deleted = FALSE) AS comment_count
-       FROM chapters c WHERE c.novel_id = $1 AND c.round = $2
+       FROM chapters c WHERE c.novel_id = $1 AND c.round = $2 AND c.epoch = $3
        ORDER BY c.vote_count DESC`,
-      [id, round]
+      [id, round, epoch]
     );
     res.json({ chapters: chaptersRes.rows });
   } catch (err) {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useAccount } from "wagmi";
 import { NOVEL_CORE_ADDRESS, novelCoreAbi } from "@/lib/contracts";
 import { useTxAction, txStatusLabel } from "@/hooks/use-tx-action";
 
@@ -44,6 +45,7 @@ function getTransition(props: PhaseTransitionProps): TransitionInfo | null {
 }
 
 export function PhaseTransition(props: PhaseTransitionProps) {
+  const { isConnected } = useAccount();
   const router = useRouter();
   const transition = getTransition(props);
 
@@ -51,6 +53,7 @@ export function PhaseTransition(props: PhaseTransitionProps) {
     onSuccess: () => { setTimeout(() => router.refresh(), 3000); },
   });
 
+  if (!isConnected) return null;
   if (!transition) return null;
   if (Date.now() < transition.deadline) return null;
 

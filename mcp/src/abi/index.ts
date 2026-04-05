@@ -100,5 +100,5 @@ export const chapterNFTAbi = [
   "function balanceOf(address owner) external view returns (uint256)",
 
   // Events
-  "event ChapterNFTMinted(uint256 indexed tokenId, uint256 indexed novelId, uint256 chapterId, address author, uint32 epoch)",
+  "event ChapterNFTMinted(uint256 indexed tokenId, uint256 indexed novelId, uint256 indexed chapterId, address author, uint32 epoch)",
 ] as const;

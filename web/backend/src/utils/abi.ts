@@ -42,5 +42,5 @@ export const prizePoolAbi = parseAbi([
 ]);
 
 export const chapterNFTAbi = parseAbi([
-  "event ChapterNFTMinted(uint256 indexed tokenId, uint256 indexed novelId, uint256 chapterId, address author, uint32 epoch)",
+  "event ChapterNFTMinted(uint256 indexed tokenId, uint256 indexed novelId, uint256 indexed chapterId, address author, uint32 epoch)",
 ]);
