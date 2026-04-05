@@ -49,8 +49,8 @@ contract NovelCore is
     /// @notice Novel ID => current active world line chapter IDs
     mapping(uint256 => uint256[]) private _activeWorldLines;
 
-    /// @notice Novel ID => round number => submitted chapter IDs
-    mapping(uint256 => mapping(uint32 => uint256[])) private _roundSubmissions;
+    /// @notice Novel ID => epoch => round number => submitted chapter IDs
+    mapping(uint256 => mapping(uint32 => mapping(uint32 => uint256[]))) private _roundSubmissions;
 
     /// @notice Novel ID => author => stake balance (refundable)
     mapping(uint256 => mapping(address => uint256)) private _stakeBalances;
@@ -171,7 +171,7 @@ contract NovelCore is
         novel.active = false;
 
         // Unlock stakes for current round submissions (round will never settle)
-        uint256[] storage submissions = _roundSubmissions[novelId][novel.currentRound];
+        uint256[] storage submissions = _roundSubmissions[novelId][novel.currentEpoch][novel.currentRound];
         uint256 stakeAmt = novel.config.stakeAmount;
         for (uint256 i = 0; i < submissions.length; i++) {
             address author = _chapters[submissions[i]].author;
@@ -377,7 +377,7 @@ contract NovelCore is
             isCanon: false
         });
 
-        _roundSubmissions[novelId][novel.currentRound].push(chapterId);
+        _roundSubmissions[novelId][novel.currentEpoch][novel.currentRound].push(chapterId);
         _stakeBalances[novelId][msg.sender] += msg.value;
         _lockedStakes[novelId][msg.sender] += msg.value;
 
@@ -403,7 +403,7 @@ contract NovelCore is
             revert RoundConditionsNotMet();
         }
 
-        uint256[] storage submissions = _roundSubmissions[novelId][novel.currentRound];
+        uint256[] storage submissions = _roundSubmissions[novelId][novel.currentEpoch][novel.currentRound];
         if (submissions.length < config.roundMinSubmissions) {
             revert RoundConditionsNotMet();
         }
@@ -475,7 +475,7 @@ contract NovelCore is
         }
 
         _updatePollutionRecords(novelId, novel.currentRound, rankedIds);
-        _returnRoundStakes(novelId, novel.currentRound);
+        _returnRoundStakes(novelId, novel.currentEpoch, novel.currentRound);
 
         emit WorldLinesSelected(novelId, novel.currentRound, selectedIds);
 
@@ -670,8 +670,8 @@ contract NovelCore is
     }
 
     /// @inheritdoc INovelCore
-    function getRoundSubmissions(uint256 novelId, uint32 round) external view returns (uint256[] memory) {
-        return _roundSubmissions[novelId][round];
+    function getRoundSubmissions(uint256 novelId, uint32 epoch, uint32 round) external view returns (uint256[] memory) {
+        return _roundSubmissions[novelId][epoch][round];
     }
 
     /// @inheritdoc INovelCore
@@ -779,8 +779,8 @@ contract NovelCore is
         return uint256(keccak256(abi.encodePacked(novelId, epoch, round, isEpoch)));
     }
 
-    function _returnRoundStakes(uint256 novelId, uint32 round) internal {
-        uint256[] storage submissions = _roundSubmissions[novelId][round];
+    function _returnRoundStakes(uint256 novelId, uint32 epoch, uint32 round) internal {
+        uint256[] storage submissions = _roundSubmissions[novelId][epoch][round];
         DataTypes.NovelConfig storage config = _novels[novelId].config;
 
         for (uint256 i = 0; i < submissions.length; i++) {

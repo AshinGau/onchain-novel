@@ -141,6 +141,7 @@ export function registerChapterTools(server: McpServer): void {
     "Get all chapter IDs submitted in a specific round of a novel.",
     {
       novelId: z.number().describe("Novel ID"),
+      epoch: z.number().describe("Epoch number"),
       round: z.number().describe("Round number to query"),
     },
     async (params) => {
@@ -151,7 +152,7 @@ export function registerChapterTools(server: McpServer): void {
           address: config.novelCoreAddress,
           abi: novelCoreAbi,
           functionName: "getRoundSubmissions",
-          args: [BigInt(params.novelId), params.round],
+          args: [BigInt(params.novelId), params.epoch, params.round],
         })) as bigint[];
 
         if (submissions.length === 0) {

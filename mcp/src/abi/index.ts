@@ -30,7 +30,7 @@ export const novelCoreAbi = [
   "function getNovel(uint256 novelId) external view returns ((uint256 id, address creator, (uint64 minChapterLength, uint64 maxChapterLength, uint64 roundMinDuration, uint32 roundMinSubmissions, uint32 worldLineCount, uint32 roundsPerEpoch, uint16 prizeReleaseRate, uint16 voterRewardRate, uint64 commitDuration, uint64 revealDuration, uint256 stakeAmount, uint8 pollutionRounds, uint8 pollutionThreshold, uint8 contentLocation, string contentBaseUrl) config, uint32 currentRound, uint32 currentEpoch, uint8 roundPhase, uint8 epochPhase, uint256 phaseStartTime, uint32 genesisChapterCount, uint32 cumulativeCanonChapters, bool active, uint256 forkSourceNovelId, uint256 forkSourceChapterId))",
   "function getChapter(uint256 chapterId) external view returns ((uint256 id, uint256 novelId, uint256 parentId, address author, bytes32 contentHash, uint64 declaredLength, uint32 round, uint32 epoch, uint32 chapterIndex, uint256 voteCount, bool isWorldLine, bool isCanon))",
   "function getActiveWorldLines(uint256 novelId) external view returns (uint256[])",
-  "function getRoundSubmissions(uint256 novelId, uint32 round) external view returns (uint256[])",
+  "function getRoundSubmissions(uint256 novelId, uint32 epoch, uint32 round) external view returns (uint256[])",
   "function getNovelCount() external view returns (uint256)",
   "function getChapterCount() external view returns (uint256)",
   "function getClaimableStake(uint256 novelId, address author) external view returns (uint256)",

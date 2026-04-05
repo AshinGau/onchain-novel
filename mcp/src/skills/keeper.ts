@@ -126,7 +126,7 @@ export function registerKeeperSkills(server: McpServer): void {
                 address: config.novelCoreAddress,
                 abi: novelCoreAbi,
                 functionName: "getRoundSubmissions",
-                args: [BigInt(params.novelId), novel.currentRound],
+                args: [BigInt(params.novelId), novel.currentEpoch, novel.currentRound],
               })) as bigint[];
 
               if (submissions.length >= novel.config.roundMinSubmissions) {
