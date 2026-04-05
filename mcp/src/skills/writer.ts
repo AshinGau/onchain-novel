@@ -7,6 +7,7 @@ import { getPublicClient, getWalletClient } from "../utils/wallet.js";
 import { traceCanonChain, assembleStoryText } from "../utils/content-bridge.js";
 import { hasApi, apiFetch } from "../utils/api-client.js";
 import { fetchRules, formatRulesForWriter } from "../utils/rules-fetcher.js";
+import { getWriterCreativityGuidance } from "../utils/creativity.js";
 
 export function registerWriterSkills(server: McpServer): void {
   server.tool(
@@ -47,9 +48,10 @@ export function registerWriterSkills(server: McpServer): void {
             );
           }
 
-          // Fetch rules
+          // Fetch rules and creativity guidance
           const rules = await fetchRules(params.novelId);
           const rulesSection = formatRulesForWriter(rules);
+          const creativitySection = getWriterCreativityGuidance();
 
           const context = [
             `# Writing Context for Novel #${params.novelId}: ${novel.title}`,
@@ -62,6 +64,8 @@ export function registerWriterSkills(server: McpServer): void {
             `- Chapter Length: ${novel.config.minChapterLength}-${novel.config.maxChapterLength} bytes`,
             ``,
             rulesSection,
+            ``,
+            creativitySection,
             ``,
             `## Active World Lines (${wlData.worldlines.length})`,
             `These are the story branches you can extend. Pick one as your parent chapter.`,
@@ -124,9 +128,10 @@ export function registerWriterSkills(server: McpServer): void {
           );
         }
 
-        // Fetch rules
+        // Fetch rules and creativity guidance
         const rules = await fetchRules(params.novelId, publicClient);
         const rulesSection = formatRulesForWriter(rules);
+        const creativitySection = getWriterCreativityGuidance();
 
         const context = [
           `# Writing Context for Novel #${params.novelId}`,
@@ -139,6 +144,8 @@ export function registerWriterSkills(server: McpServer): void {
           `- Chapter Length: ${novel.config.minChapterLength}-${novel.config.maxChapterLength} bytes`,
           ``,
           rulesSection,
+          ``,
+          creativitySection,
           ``,
           `## Active World Lines (${worldLines.length})`,
           `These are the story branches you can extend. Pick one as your parent chapter.`,

@@ -14,6 +14,7 @@ import { computeVotingRoundId } from "../utils/voting-round-id.js";
 import { traceCanonChain, assembleStoryText } from "../utils/content-bridge.js";
 import { hasApi, apiFetch } from "../utils/api-client.js";
 import { fetchRules, formatRulesForVoter } from "../utils/rules-fetcher.js";
+import { getVoterCreativityGuidance } from "../utils/creativity.js";
 
 /**
  * In-memory salt storage for commit-reveal flow.
@@ -94,9 +95,10 @@ export function registerVoterSkills(server: McpServer): void {
             );
           }
 
-          // Fetch rules
+          // Fetch rules and creativity guidance
           const rules = await fetchRules(params.novelId);
           const rulesSection = formatRulesForVoter(rules);
+          const votingPref = getVoterCreativityGuidance();
 
           const context = [
             `# Voting Context for Novel #${params.novelId}`,
@@ -105,6 +107,8 @@ export function registerVoterSkills(server: McpServer): void {
             `Epoch: ${params.epoch}, Round: ${params.round}`,
             ``,
             rulesSection,
+            ``,
+            votingPref,
             ``,
             `## Candidates (${candidates.length})`,
             ``,
@@ -171,9 +175,10 @@ export function registerVoterSkills(server: McpServer): void {
           );
         }
 
-        // Fetch rules
+        // Fetch rules and creativity guidance
         const rules = await fetchRules(params.novelId, publicClient);
         const rulesSection = formatRulesForVoter(rules);
+        const votingPref = getVoterCreativityGuidance();
 
         const context = [
           `# Voting Context for Novel #${params.novelId}`,
@@ -182,6 +187,8 @@ export function registerVoterSkills(server: McpServer): void {
           `Epoch: ${params.epoch}, Round: ${params.round}`,
           ``,
           rulesSection,
+          ``,
+          votingPref,
           ``,
           `## Candidates (${candidates.length})`,
           ``,
