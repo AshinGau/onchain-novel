@@ -1,13 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { parseEther, keccak256, encodePacked } from "viem";
-import { useAccount, useReadContract } from "wagmi";
 import { Button } from "@/components/ui/button";
-import { VOTING_ENGINE_ADDRESS, votingEngineAbi } from "@/lib/contracts";
 import { TOKEN_SYMBOL, DEFAULT_STAKE } from "@/lib/config";
 import { shortenAddress } from "@/lib/format";
-import { saveVote, loadAllVotes, loadVote, toBytes32Salt } from "@/lib/vote-storage";
+import { saveVote, loadAllVotes } from "@/lib/vote-storage";
+import { useVote } from "@/hooks/use-vote";
 import { useTxAction } from "@/hooks/use-tx-action";
 
 interface VoteCandidate {
@@ -94,67 +92,39 @@ function RevealForm({ novelId, votingRoundId, votedCandidateIds, localVotes, sel
 }
 
 export function VotePanel({ novelId, votingRoundId, phase, candidates, title }: VotePanelProps) {
-  const { isConnected, address } = useAccount();
   const [localVotes, setLocalVotes] = useState<Record<string, string>>({});
   const [stakeAmount, setStakeAmount] = useState(DEFAULT_STAKE);
   const [secretKey, setSecretKey] = useState("");
   const [revealSecretKey, setRevealSecretKey] = useState("");
   const [justCommittedId, setJustCommittedId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [pendingCommit, setPendingCommit] = useState<{ candidateId: string; userSalt: string } | null>(null);
 
-  // Always check on-chain commit status for this address + round
-  const { data: onChainCommit, refetch: refetchCommit } = useReadContract({
-    address: VOTING_ENGINE_ADDRESS,
-    abi: votingEngineAbi,
-    functionName: "getVoteCommit",
-    args: address ? [BigInt(novelId), BigInt(votingRoundId), address] : undefined,
-    query: { enabled: !!address },
-  });
-
-  const onChainCommitHash = (onChainCommit as any)?.commitHash as string | undefined;
-  const onChainRevealed = !!(onChainCommit as any)?.revealed;
-  // Has this address already committed on-chain? (commitHash != bytes32(0))
-  const alreadyCommittedOnChain = !!onChainCommitHash && onChainCommitHash !== "0x0000000000000000000000000000000000000000000000000000000000000000";
-
-  useEffect(() => {
-    setLocalVotes(loadAllVotes(novelId, votingRoundId));
-  }, [novelId, votingRoundId]);
-
-  // Figure out which candidate the user voted for (from localStorage)
-  const votedCandidateIds = Object.keys(localVotes);
-
-  const commitTx = useTxAction({
-    onSuccess: () => {
+  const { isConnected, alreadyCommitted: alreadyCommittedOnChain, onChainRevealed, commitTx, revealTx, commit, reveal } = useVote({
+    novelId,
+    votingRoundId,
+    onCommitSuccess: () => {
       if (pendingCommit) {
         saveVote(novelId, votingRoundId, pendingCommit.candidateId, pendingCommit.userSalt);
         setLocalVotes((prev) => ({ ...prev, [pendingCommit!.candidateId]: pendingCommit!.userSalt }));
         setJustCommittedId(pendingCommit.candidateId);
         setSelectedId(null);
         setPendingCommit(null);
-        refetchCommit();
       }
     },
   });
 
-  const revealTx = useTxAction({
-    onSuccess: () => refetchCommit(),
-  });
+  useEffect(() => {
+    setLocalVotes(loadAllVotes(novelId, votingRoundId));
+  }, [novelId, votingRoundId]);
 
-  const [pendingCommit, setPendingCommit] = useState<{ candidateId: string; userSalt: string } | null>(null);
+  const votedCandidateIds = Object.keys(localVotes);
 
   function handleCommit(candidateId: string) {
     const userSalt = secretKey.trim();
     if (!userSalt) return;
-    const bytes32 = toBytes32Salt(userSalt);
-    const commitHash = keccak256(encodePacked(["uint256", "bytes32"], [BigInt(candidateId), bytes32]));
     setPendingCommit({ candidateId, userSalt });
-    commitTx.writeContract({
-      address: VOTING_ENGINE_ADDRESS,
-      abi: votingEngineAbi,
-      functionName: "commitVote",
-      args: [BigInt(novelId), BigInt(votingRoundId), commitHash],
-      value: parseEther(stakeAmount),
-    });
+    commit(candidateId, userSalt, stakeAmount);
     setSecretKey("");
   }
 
@@ -162,13 +132,7 @@ export function VotePanel({ novelId, votingRoundId, phase, candidates, title }: 
     const candidateId = candidateIdOverride || votedCandidateIds[0];
     const salt = revealSecretKey.trim();
     if (!candidateId || !salt) return;
-    const bytes32 = toBytes32Salt(salt);
-    revealTx.writeContract({
-      address: VOTING_ENGINE_ADDRESS,
-      abi: votingEngineAbi,
-      functionName: "revealVote",
-      args: [BigInt(novelId), BigInt(votingRoundId), BigInt(candidateId), bytes32],
-    });
+    reveal(candidateId, salt);
   }
 
   function handleSubmitVote() {
@@ -176,9 +140,7 @@ export function VotePanel({ novelId, votingRoundId, phase, candidates, title }: 
     handleCommit(selectedId);
   }
 
-  // Determine if user can still vote (not committed on-chain, not pending)
   const canVote = isConnected && phase === "committing" && !alreadyCommittedOnChain && !commitTx.isBusy && !justCommittedId;
-  // Allow selecting a candidate during reveal when localStorage lost the vote record
   const needsManualRevealSelect = isConnected && phase === "revealing" && !onChainRevealed && alreadyCommittedOnChain && votedCandidateIds.length === 0;
 
   const selectedCandidate = candidates.find((c) => c.id === selectedId);

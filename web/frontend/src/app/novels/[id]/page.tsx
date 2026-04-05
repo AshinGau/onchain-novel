@@ -5,9 +5,9 @@ import { Button } from "@/components/ui/button";
 import { TipButton } from "@/components/tip-modal";
 import { VotePanel } from "@/components/vote-panel";
 import { RewardsPanel } from "@/components/rewards-panel";
-import { fetchApi, type Novel, type TreeChapter, ROUND_PHASES, EPOCH_PHASES } from "@/lib/api";
+import { fetchApi, type Novel, type TreeChapter } from "@/lib/api";
 import { TOKEN_SYMBOL } from "@/lib/config";
-import { shortenAddress, formatEth } from "@/lib/format";
+import { shortenAddress, formatEth, getPhaseLabel } from "@/lib/format";
 import { computeVotingRoundId } from "@/lib/contracts";
 import { ConnectedStoryTree } from "@/components/connected-story-tree";
 import { PhaseCountdown } from "@/components/phase-countdown";
@@ -83,9 +83,7 @@ export default async function NovelDetailPage({ params }: { params: Promise<{ id
   const roundVotingId = computeVotingRoundId(BigInt(id), novel.current_epoch, novel.current_round, false);
   const epochVotingId = computeVotingRoundId(BigInt(id), novel.current_epoch, novel.current_round, true);
 
-  const phase = novel.epoch_phase === 0
-    ? ROUND_PHASES[novel.round_phase]
-    : `Epoch ${EPOCH_PHASES[novel.epoch_phase]}`;
+  const phase = getPhaseLabel(novel.round_phase, novel.epoch_phase);
 
   const stakeEth = formatEth(novel.config.stakeAmount);
   const poolEth = formatEth(novel.pool_balance);
