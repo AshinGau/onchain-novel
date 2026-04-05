@@ -8,6 +8,7 @@ import { computeVotingRoundId } from "@/lib/contracts";
 import { CommentSection } from "@/components/comment-section";
 import { ReportModal } from "@/components/report-modal";
 import { VoteButton } from "@/components/vote-button";
+import { ChapterListItem } from "@/components/chapter-list-item";
 
 interface SiblingChapter {
   id: string;
@@ -135,16 +136,7 @@ export default async function ChapterPage({ params }: { params: Promise<{ id: st
         <div className="mb-6">
           <h2 className="font-semibold mb-2 text-sm text-neutral-400">Continuations ({children.length})</h2>
           <div className="space-y-1">
-            {children.map(c => (
-              <Link key={c.id} href={`/chapters/${c.id}`} className="flex items-center justify-between rounded-md bg-neutral-900 border border-neutral-800 p-2 hover:border-neutral-600 text-sm">
-                <span>Candidate(ID.{c.id}) by {shortenAddress(c.author)}</span>
-                <div className="flex items-center gap-2">
-                  <span className="text-neutral-500">{c.vote_count} votes</span>
-                  {c.is_canon && <Badge className="bg-amber-600 text-xs">Canon</Badge>}
-                  {c.is_world_line && !c.is_canon && <Badge className="bg-green-700 text-xs">WL</Badge>}
-                </div>
-              </Link>
-            ))}
+            {children.map(c => <ChapterListItem key={c.id} {...c} />)}
           </div>
         </div>
       )}
@@ -154,16 +146,7 @@ export default async function ChapterPage({ params }: { params: Promise<{ id: st
         <div className="mb-6">
           <h2 className="font-semibold mb-2 text-sm text-neutral-400">Parallel Universes ({siblings.length})</h2>
           <div className="space-y-1">
-            {siblings.map(s => (
-              <Link key={s.id} href={`/chapters/${s.id}`} className="flex items-center justify-between rounded-md bg-neutral-900 border border-neutral-800 p-2 hover:border-neutral-600 text-sm">
-                <span>Candidate(ID.{s.id}) by {shortenAddress(s.author)}</span>
-                <div className="flex items-center gap-2">
-                  <span className="text-neutral-500">{s.vote_count} votes</span>
-                  {s.is_canon && <Badge className="bg-amber-600 text-xs">Canon</Badge>}
-                  {s.is_world_line && !s.is_canon && <Badge className="bg-green-700 text-xs">WL</Badge>}
-                </div>
-              </Link>
-            ))}
+            {siblings.map(s => <ChapterListItem key={s.id} {...s} />)}
           </div>
         </div>
       )}

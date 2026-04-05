@@ -9,6 +9,7 @@ import { NOVEL_CORE_ADDRESS, novelCoreAbi } from "@/lib/contracts";
 import { TOKEN_SYMBOL } from "@/lib/config";
 import { type NovelConfigForm, DEFAULT_CONFIG, validateAllFields } from "@/lib/novel-config";
 import { ConfigForm, inputBase, labelClass, hintClass } from "@/components/config-form";
+import { NovelMetadataFields } from "@/components/novel-metadata-fields";
 import { FieldTooltip } from "@/components/field-tooltip";
 import { useTxAction, txStatusLabel } from "@/hooks/use-tx-action";
 
@@ -88,8 +89,6 @@ export default function CreateNovelPage() {
     });
   }
 
-  const textInputClass = `${inputBase} border-neutral-700`;
-
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 pb-24 md:pb-8">
       <Link href="/" className="text-sm text-neutral-400 hover:text-white">← Back to Discover</Link>
@@ -97,27 +96,11 @@ export default function CreateNovelPage() {
       <p className="text-neutral-400 text-sm mb-8">Launch a new collaborative story on-chain.</p>
 
       <form onSubmit={handleSubmit} className="space-y-8">
-        {/* Metadata */}
-        <section className="rounded-lg bg-neutral-900 border border-neutral-800 p-5">
-          <h2 className="font-semibold mb-4">Novel Metadata</h2>
-          <div className="space-y-4">
-            <div>
-              <label className={labelClass}>Title *</label>
-              <input type="text" value={title} onChange={(e) => setTitle(e.target.value)}
-                placeholder="Enter novel title" className={textInputClass} required />
-            </div>
-            <div>
-              <label className={labelClass}>Description</label>
-              <textarea value={description} onChange={(e) => setDescription(e.target.value)}
-                placeholder="Describe your novel..." rows={3} className={textInputClass} />
-            </div>
-            <div>
-              <label className={labelClass}>Cover Image URL (optional)</label>
-              <input type="text" value={coverUri} onChange={(e) => setCoverUri(e.target.value)}
-                placeholder="https://..." className={textInputClass} />
-            </div>
-          </div>
-        </section>
+        <NovelMetadataFields
+          title={title} setTitle={setTitle}
+          description={description} setDescription={setDescription}
+          coverUri={coverUri} setCoverUri={setCoverUri}
+        />
 
         {/* Config */}
         <section className="rounded-lg bg-neutral-900 border border-neutral-800 p-5">
@@ -151,7 +134,7 @@ export default function CreateNovelPage() {
                   </div>
                 </div>
                 <textarea value={ch.content} onChange={(e) => setChapters((prev) => prev.map((c, j) => j === i ? { content: e.target.value } : c))}
-                  placeholder="Write your genesis chapter..." rows={8} className={textInputClass} />
+                  placeholder="Write your genesis chapter..." rows={8} className={`${inputBase} border-neutral-700`} />
               </div>
             ))}
           </div>
@@ -163,7 +146,7 @@ export default function CreateNovelPage() {
           <div>
             <label className={labelClass}>{TOKEN_SYMBOL} Amount (optional) <FieldTooltip content="Seed the prize pool to attract early authors and voters. Decays exponentially each epoch." /></label>
             <input type="text" value={initialPrize} onChange={(e) => setInitialPrize(e.target.value)}
-              placeholder="0.0" className={textInputClass} />
+              placeholder="0.0" className={`${inputBase} border-neutral-700`} />
             <p className={hintClass}>Seed the prize pool with {TOKEN_SYMBOL} to attract early participants.</p>
           </div>
         </section>

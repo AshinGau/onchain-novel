@@ -11,6 +11,7 @@ import { formatEth } from "@/lib/format";
 import { TOKEN_SYMBOL } from "@/lib/config";
 import { type NovelConfigForm, DEFAULT_CONFIG, validateAllFields } from "@/lib/novel-config";
 import { ConfigForm, inputBase, labelClass, hintClass } from "@/components/config-form";
+import { NovelMetadataFields } from "@/components/novel-metadata-fields";
 import { useTxAction, txStatusLabel } from "@/hooks/use-tx-action";
 
 export default function ForkNovelPage({
@@ -119,7 +120,6 @@ export default function ForkNovelPage({
     return <div className="mx-auto max-w-3xl px-4 py-8"><p className="text-red-400">{fetchError}</p></div>;
   }
 
-  const textInputClass = `${inputBase} border-neutral-700`;
   const minFeeDisplay = sourceNovel ? formatEth(sourceNovel.config.stakeAmount) : "0";
 
   return (
@@ -139,26 +139,12 @@ export default function ForkNovelPage({
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-8">
-        <section className="rounded-lg bg-neutral-900 border border-neutral-800 p-5">
-          <h2 className="font-semibold mb-4">Novel Metadata</h2>
-          <div className="space-y-4">
-            <div>
-              <label className={labelClass}>Title *</label>
-              <input type="text" value={title} onChange={(e) => setTitle(e.target.value)}
-                placeholder="Enter novel title" className={textInputClass} required />
-            </div>
-            <div>
-              <label className={labelClass}>Description</label>
-              <textarea value={description} onChange={(e) => setDescription(e.target.value)}
-                placeholder="Describe your forked novel..." rows={3} className={textInputClass} />
-            </div>
-            <div>
-              <label className={labelClass}>Cover Image URL (optional)</label>
-              <input type="text" value={coverUri} onChange={(e) => setCoverUri(e.target.value)}
-                placeholder="https://..." className={textInputClass} />
-            </div>
-          </div>
-        </section>
+        <NovelMetadataFields
+          title={title} setTitle={setTitle}
+          description={description} setDescription={setDescription}
+          coverUri={coverUri} setCoverUri={setCoverUri}
+          descriptionPlaceholder="Describe your forked novel..."
+        />
 
         <section className="rounded-lg bg-neutral-900 border border-neutral-800 p-5">
           <h2 className="font-semibold mb-1">Novel Configuration</h2>
@@ -171,7 +157,7 @@ export default function ForkNovelPage({
           <div>
             <label className={labelClass}>{TOKEN_SYMBOL} Amount</label>
             <input type="text" value={forkFee} onChange={(e) => setForkFee(e.target.value)}
-              placeholder="0.0" className={textInputClass} />
+              placeholder="0.0" className={`${inputBase} border-neutral-700`} />
             <p className={hintClass}>
               Must be &gt;= {minFeeDisplay} {TOKEN_SYMBOL} (source novel stake amount). Fee goes to the original prize pool.
             </p>

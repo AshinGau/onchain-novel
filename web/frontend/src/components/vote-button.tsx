@@ -1,13 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { parseEther, keccak256, encodePacked } from "viem";
-import { useAccount, useReadContract } from "wagmi";
 import { Button } from "@/components/ui/button";
-import { VOTING_ENGINE_ADDRESS, votingEngineAbi } from "@/lib/contracts";
 import { TOKEN_SYMBOL, DEFAULT_STAKE } from "@/lib/config";
-import { saveVote, hasVotedFor, loadVote, toBytes32Salt } from "@/lib/vote-storage";
-import { useTxAction } from "@/hooks/use-tx-action";
+import { saveVote, hasVotedFor, loadVote } from "@/lib/vote-storage";
+import { useVote } from "@/hooks/use-vote";
 
 interface VoteButtonProps {
   novelId: string;
@@ -17,72 +14,42 @@ interface VoteButtonProps {
 }
 
 export function VoteButton({ novelId, chapterId, votingRoundId, phase }: VoteButtonProps) {
-  const { isConnected, address } = useAccount();
   const [stakeAmount, setStakeAmount] = useState(DEFAULT_STAKE);
   const [secretKey, setSecretKey] = useState("");
   const [revealSecretKey, setRevealSecretKey] = useState("");
   const [committed, setCommitted] = useState(false);
   const [pendingSalt, setPendingSalt] = useState<string | null>(null);
 
-  // Check on-chain commit status — always, not just during reveal
-  const { data: onChainCommit, refetch } = useReadContract({
-    address: VOTING_ENGINE_ADDRESS,
-    abi: votingEngineAbi,
-    functionName: "getVoteCommit",
-    args: address ? [BigInt(novelId), BigInt(votingRoundId), address] : undefined,
-    query: { enabled: !!address },
-  });
-
-  const onChainCommitHash = (onChainCommit as any)?.commitHash as string | undefined;
-  const onChainRevealed = !!(onChainCommit as any)?.revealed;
-  const alreadyCommittedOnChain = !!onChainCommitHash && onChainCommitHash !== "0x0000000000000000000000000000000000000000000000000000000000000000";
-
-  const localVotedThis = typeof window !== "undefined" && hasVotedFor(novelId, votingRoundId, chapterId);
-  const localSalt = typeof window !== "undefined" ? loadVote(novelId, votingRoundId, chapterId) : null;
-
-  const commitTx = useTxAction({
-    onSuccess: () => {
+  const { isConnected, alreadyCommitted, onChainRevealed, commitTx, revealTx, commit, reveal } = useVote({
+    novelId,
+    votingRoundId,
+    onCommitSuccess: () => {
       if (pendingSalt) {
         saveVote(novelId, votingRoundId, chapterId, pendingSalt);
         setCommitted(true);
         setPendingSalt(null);
-        refetch();
       }
     },
   });
 
-  const revealTx = useTxAction({ onSuccess: () => refetch() });
+  const localVotedThis = typeof window !== "undefined" && hasVotedFor(novelId, votingRoundId, chapterId);
+  const localSalt = typeof window !== "undefined" ? loadVote(novelId, votingRoundId, chapterId) : null;
 
-  function handleCommit() {
-    const userSalt = secretKey.trim();
-    if (!userSalt) return;
-    const bytes32 = toBytes32Salt(userSalt);
-    const commitHash = keccak256(encodePacked(["uint256", "bytes32"], [BigInt(chapterId), bytes32]));
-    setPendingSalt(userSalt);
-    commitTx.writeContract({
-      address: VOTING_ENGINE_ADDRESS,
-      abi: votingEngineAbi,
-      functionName: "commitVote",
-      args: [BigInt(novelId), BigInt(votingRoundId), commitHash],
-      value: parseEther(stakeAmount),
-    });
-  }
-
-  // Pre-fill reveal secret key from localStorage
   useEffect(() => {
     if (localSalt && !revealSecretKey) setRevealSecretKey(localSalt);
   }, [localSalt]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  function handleCommit() {
+    const userSalt = secretKey.trim();
+    if (!userSalt) return;
+    setPendingSalt(userSalt);
+    commit(chapterId, userSalt, stakeAmount);
+  }
+
   function handleReveal() {
     const salt = revealSecretKey.trim();
     if (!salt) return;
-    const bytes32 = toBytes32Salt(salt);
-    revealTx.writeContract({
-      address: VOTING_ENGINE_ADDRESS,
-      abi: votingEngineAbi,
-      functionName: "revealVote",
-      args: [BigInt(novelId), BigInt(votingRoundId), BigInt(chapterId), bytes32],
-    });
+    reveal(chapterId, salt);
   }
 
   if (!isConnected) {
@@ -90,11 +57,8 @@ export function VoteButton({ novelId, chapterId, votingRoundId, phase }: VoteBut
   }
 
   if (phase === "committing") {
-    // Already committed on-chain (via any method)
-    if (alreadyCommittedOnChain) {
-      if (localVotedThis) {
-        return <p className="text-sm text-green-400">&#10003; You voted for this chapter</p>;
-      }
+    if (alreadyCommitted) {
+      if (localVotedThis) return <p className="text-sm text-green-400">&#10003; You voted for this chapter</p>;
       return <p className="text-sm text-neutral-400">&#10003; You already voted this round (one vote per address).</p>;
     }
 
@@ -125,7 +89,6 @@ export function VoteButton({ novelId, chapterId, votingRoundId, phase }: VoteBut
       );
     }
 
-    // Show vote form
     return (
       <div className="space-y-3">
         <div className="flex items-center gap-2">
@@ -143,7 +106,7 @@ export function VoteButton({ novelId, chapterId, votingRoundId, phase }: VoteBut
           {secretKey.trim().length > 0 && secretKey.trim().length < 4 && (
             <p className="text-amber-400 text-xs">Short keys are easier to brute-force — others may guess your vote before reveal.</p>
           )}
-          <p className="text-neutral-500 text-xs">You will need this exact key to reveal your vote. It is only stored in your browser as a backup — not on any server, so that no one can see your vote before reveal.</p>
+          <p className="text-neutral-500 text-xs">You will need this exact key to reveal your vote. It is only stored in your browser as a backup.</p>
         </div>
         <Button size="sm" onClick={handleCommit} disabled={!secretKey.trim()}>
           {secretKey.trim() ? "Vote for this" : "Enter a Secret Key"}
@@ -157,13 +120,8 @@ export function VoteButton({ novelId, chapterId, votingRoundId, phase }: VoteBut
     return <p className="text-sm text-green-400">&#10003; Vote revealed!</p>;
   }
 
-  if (!alreadyCommittedOnChain) {
-    return <p className="text-sm text-neutral-500">You did not vote in this round.</p>;
-  }
-
-  if (!localVotedThis) {
-    return <p className="text-sm text-neutral-500">You voted this round but not for this chapter.</p>;
-  }
+  if (!alreadyCommitted) return <p className="text-sm text-neutral-500">You did not vote in this round.</p>;
+  if (!localVotedThis) return <p className="text-sm text-neutral-500">You voted this round but not for this chapter.</p>;
 
   return (
     <div className="space-y-2">
@@ -172,12 +130,10 @@ export function VoteButton({ novelId, chapterId, votingRoundId, phase }: VoteBut
         <input type="text" value={revealSecretKey} onChange={(e) => setRevealSecretKey(e.target.value)}
           placeholder="Enter the secret key you used when voting..."
           className="w-78 rounded-md bg-neutral-800 border border-neutral-700 px-2 py-1 text-sm" />
-        <p className="text-neutral-500 text-xs">Enter the exact secret key you used during commit. If it does not match, the reveal will fail.</p>
       </div>
       <Button size="sm" onClick={handleReveal} disabled={revealTx.isBusy || !revealSecretKey.trim()}>
         {revealTx.isBusy ? (revealTx.isPending ? "Signing..." : "Confirming...") : !revealSecretKey.trim() ? "Enter Secret Key" : "Reveal vote"}
       </Button>
-      <p className="text-xs text-neutral-500">Reveal to make your vote count and recover your stake.</p>
       {revealTx.isError && <p className="text-xs text-red-400">{revealTx.error}</p>}
     </div>
   );

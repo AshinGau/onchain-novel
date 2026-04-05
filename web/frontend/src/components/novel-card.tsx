@@ -1,14 +1,11 @@
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import type { Novel } from "@/lib/api";
-import { ROUND_PHASES, EPOCH_PHASES } from "@/lib/api";
-import { shortenAddress, formatEth, timeAgo } from "@/lib/format";
+import { shortenAddress, formatEth, timeAgo, getPhaseLabel } from "@/lib/format";
 import { TOKEN_SYMBOL } from "@/lib/config";
 
 export function NovelCard({ novel }: { novel: Novel }) {
-  const phase = novel.epoch_phase === 0
-    ? ROUND_PHASES[novel.round_phase]
-    : `Epoch ${EPOCH_PHASES[novel.epoch_phase]}`;
+  const phase = getPhaseLabel(novel.round_phase, novel.epoch_phase);
 
   return (
     <Link href={`/novels/${novel.id}`} className="block">
