@@ -152,6 +152,28 @@ export function ConfigForm({ config, onChange, contentLocationReadOnly }: Config
         </Grid>
       </Section>
 
+      {/* Rules (AI Agents) */}
+      <Section title="Rules (AI Agents)">
+        <p className="text-xs text-neutral-500 mb-3">Configure how world-building rules are proposed and approved. Rules help collaborating AI agents maintain narrative consistency.</p>
+        <Grid>
+          <div>
+            <label className={labelClass}>Rule Proposal Fee ({TOKEN_SYMBOL}) <FieldTooltip content="Fee to propose a rule (goes to prize pool). Set to 0 for free proposals." /></label>
+            <input
+              type="text"
+              value={config.ruleFee}
+              onChange={(e) => update("ruleFee", e.target.value)}
+              onBlur={() => blur("ruleFee")}
+              className={`${inputBase} ${errors.ruleFee ? "border-red-600" : "border-neutral-700"}`}
+            />
+            {errors.ruleFee && <p className="text-xs text-red-400 mt-1">{errors.ruleFee}</p>}
+          </div>
+          <NumberField label="Rule Vote Quorum" tip="Number of canon-author votes needed to approve a rule proposal."
+            value={config.ruleQuorum} onChange={(v) => update("ruleQuorum", v)} onBlur={() => blur("ruleQuorum")} error={errors.ruleQuorum} min={0} />
+          <DurationField label="Rule Vote Duration" tip="Time window for canon authors to vote on a rule proposal."
+            value={config.ruleVoteDuration} onChange={(v) => update("ruleVoteDuration", v)} error={errors.ruleVoteDuration} />
+        </Grid>
+      </Section>
+
       {/* Content Storage */}
       <Section title="Content Storage">
         <div className="space-y-4">

@@ -13,6 +13,7 @@ import { getPublicClient, getWalletClient, getWalletAddress } from "../utils/wal
 import { computeVotingRoundId } from "../utils/voting-round-id.js";
 import { traceCanonChain, assembleStoryText } from "../utils/content-bridge.js";
 import { hasApi, apiFetch } from "../utils/api-client.js";
+import { fetchRules, formatRulesForVoter } from "../utils/rules-fetcher.js";
 
 /**
  * In-memory salt storage for commit-reveal flow.
@@ -93,11 +94,17 @@ export function registerVoterSkills(server: McpServer): void {
             );
           }
 
+          // Fetch rules
+          const rules = await fetchRules(params.novelId);
+          const rulesSection = formatRulesForVoter(rules);
+
           const context = [
             `# Voting Context for Novel #${params.novelId}`,
             `Voting Round ID: ${votingRoundId}`,
             `Type: ${params.isEpoch ? "Epoch" : "Round"} Vote`,
             `Epoch: ${params.epoch}, Round: ${params.round}`,
+            ``,
+            rulesSection,
             ``,
             `## Candidates (${candidates.length})`,
             ``,
@@ -107,7 +114,7 @@ export function registerVoterSkills(server: McpServer): void {
             `1. Evaluate each candidate based on story quality, creativity, and coherence`,
             `2. Use voter_cast_vote to commit your vote (this generates a salt automatically)`,
             `3. After the commit phase ends, use voter_reveal to reveal your vote`,
-          ].join("\n");
+          ].filter(Boolean).join("\n");
 
           return { content: [{ type: "text" as const, text: context }] };
         }
@@ -164,11 +171,17 @@ export function registerVoterSkills(server: McpServer): void {
           );
         }
 
+        // Fetch rules
+        const rules = await fetchRules(params.novelId, publicClient);
+        const rulesSection = formatRulesForVoter(rules);
+
         const context = [
           `# Voting Context for Novel #${params.novelId}`,
           `Voting Round ID: ${votingRoundId}`,
           `Type: ${params.isEpoch ? "Epoch" : "Round"} Vote`,
           `Epoch: ${params.epoch}, Round: ${params.round}`,
+          ``,
+          rulesSection,
           ``,
           `## Candidates (${candidates.length})`,
           ``,
@@ -178,7 +191,7 @@ export function registerVoterSkills(server: McpServer): void {
           `1. Evaluate each candidate based on story quality, creativity, and coherence`,
           `2. Use voter_cast_vote to commit your vote (this generates a salt automatically)`,
           `3. After the commit phase ends, use voter_reveal to reveal your vote`,
-        ].join("\n");
+        ].filter(Boolean).join("\n");
 
         return { content: [{ type: "text" as const, text: context }] };
       } catch (error) {

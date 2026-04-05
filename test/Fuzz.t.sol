@@ -176,7 +176,10 @@ contract FuzzTest is Test {
             spamRounds: 3,
             spamThreshold: 20,
             contentLocation: DataTypes.ContentLocation.Onchain,
-            contentBaseUrl: ""
+            contentBaseUrl: "",
+            ruleFee: 0.001 ether,
+            ruleVoteDuration: 3 days,
+            ruleQuorum: 1
         });
 
         // Generate content matching fuzzed minLen
@@ -214,7 +217,10 @@ contract FuzzTest is Test {
             spamRounds: 3,
             spamThreshold: 20,
             contentLocation: DataTypes.ContentLocation.Onchain,
-            contentBaseUrl: ""
+            contentBaseUrl: "",
+            ruleFee: 0.001 ether,
+            ruleVoteDuration: 3 days,
+            ruleQuorum: 1
         });
 
         DataTypes.ContentSubmission[] memory genesisChapters = new DataTypes.ContentSubmission[](1);
@@ -261,7 +267,10 @@ contract FuzzTest is Test {
             spamRounds: 3,
             spamThreshold: 20,
             contentLocation: DataTypes.ContentLocation.Onchain,
-            contentBaseUrl: ""
+            contentBaseUrl: "",
+            ruleFee: 0.001 ether,
+            ruleVoteDuration: 3 days,
+            ruleQuorum: 1
         });
 
         // Create novel with specified genesis count
@@ -320,7 +329,10 @@ contract FuzzTest is Test {
             spamRounds: 3,
             spamThreshold: 20,
             contentLocation: DataTypes.ContentLocation.Onchain,
-            contentBaseUrl: ""
+            contentBaseUrl: "",
+            ruleFee: 0.001 ether,
+            ruleVoteDuration: 3 days,
+            ruleQuorum: 1
         });
 
         DataTypes.ContentSubmission[] memory genesisChapters = new DataTypes.ContentSubmission[](1);

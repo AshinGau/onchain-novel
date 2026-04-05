@@ -67,6 +67,29 @@ contract NovelCore is
     /// @notice Global keeper reward amount (owner-settable, per state transition call)
     uint256 public keeperRewardAmount;
 
+    // --- Rules storage ---
+
+    /// @notice Novel ID => rule name => rule content
+    mapping(uint256 => mapping(string => string)) private _rules;
+
+    /// @notice Novel ID => list of rule names (for enumeration)
+    mapping(uint256 => string[]) private _ruleNames;
+
+    /// @notice Novel ID => rule name => index+1 in _ruleNames (0 = not exists)
+    mapping(uint256 => mapping(string => uint256)) private _ruleNameIndex;
+
+    /// @notice Novel ID => author address => has canon chapter
+    mapping(uint256 => mapping(address => bool)) private _isCanonAuthor;
+
+    /// @notice Global rule proposal counter
+    uint256 private _ruleProposalCount;
+
+    /// @notice Proposal ID => proposal data
+    mapping(uint256 => DataTypes.RuleProposal) private _ruleProposals;
+
+    /// @notice Proposal ID => voter address => has voted
+    mapping(uint256 => mapping(address => bool)) private _ruleProposalVotes;
+
     // ============================================================
     //                         ERRORS
     // ============================================================
@@ -93,6 +116,16 @@ contract NovelCore is
     error ContentHashMismatch(bytes32 expected, bytes32 actual);
     error OnchainContentRequired();
     error OnchainContentForbidden();
+    error RuleNotFound(string name);
+    error RuleAlreadyExists(string name);
+    error NotCanonAuthor(uint256 novelId, address caller);
+    error ProposalNotFound(uint256 proposalId);
+    error ProposalExpired(uint256 proposalId);
+    error ProposalAlreadyExecuted(uint256 proposalId);
+    error AlreadyVotedOnProposal(uint256 proposalId, address voter);
+    error InsufficientRuleFee(uint256 sent, uint256 required);
+    error InvalidRuleName();
+    error CreatorRulesLocked(uint256 novelId);
 
     // ============================================================
     //                      INITIALIZER
@@ -240,6 +273,9 @@ contract NovelCore is
             _activeWorldLines[novelId].push(genesisChapterId);
         }
 
+        // Creator is always a canon author (authored genesis chapters)
+        _isCanonAuthor[novelId][msg.sender] = true;
+
         // Deposit initial prize pool if any ETH sent
         if (msg.value > 0) {
             prizePool.deposit{value: msg.value}(novelId, "genesis");
@@ -311,6 +347,9 @@ contract NovelCore is
         });
 
         _activeWorldLines[novelId].push(forkRootId);
+
+        // Fork initiator is a canon author (authored fork root chapter)
+        _isCanonAuthor[novelId][msg.sender] = true;
 
         // Fork fee goes to the original novel's prize pool
         prizePool.deposit{value: forkFee}(originalNovelId, "fork_fee");
@@ -552,6 +591,11 @@ contract NovelCore is
         // Collect canon chapter authors for this epoch
         address[] memory canonAuthors = _collectCanonAuthors(novelId, canonWorldLineId);
 
+        // Mark canon authors for rule voting eligibility
+        for (uint256 i = 0; i < canonAuthors.length; i++) {
+            _isCanonAuthor[novelId][canonAuthors[i]] = true;
+        }
+
         // Mint NFTs for canon chapters
         _mintCanonNFTs(novelId, novel.currentEpoch, canonWorldLineId);
 
@@ -734,6 +778,9 @@ contract NovelCore is
         if (config.contentLocation != DataTypes.ContentLocation.Onchain && bytes(config.contentBaseUrl).length == 0) {
             revert InvalidConfig("contentBaseUrl required for External/HTTP");
         }
+        if (config.ruleQuorum > 0 && config.ruleVoteDuration == 0) {
+            revert InvalidConfig("ruleVoteDuration must be > 0 when ruleQuorum > 0");
+        }
     }
 
     function _validateMetadata(DataTypes.NovelMetadata calldata metadata) internal pure {
@@ -906,6 +953,153 @@ contract NovelCore is
     }
 
     // ============================================================
+    //                         RULES
+    // ============================================================
+
+    /// @inheritdoc INovelCore
+    function setCreatorRules(uint256 novelId, string[] calldata names, string[] calldata contents) external whenNotPaused {
+        DataTypes.Novel storage novel = _novels[novelId];
+        if (novel.id == 0) revert NovelNotFound(novelId);
+        if (novel.creator != msg.sender) revert NotNovelCreator(novelId, msg.sender);
+        if (novel.currentEpoch != 1) revert CreatorRulesLocked(novelId);
+        if (names.length != contents.length) revert InvalidGenesisInput();
+
+        for (uint256 i = 0; i < names.length; i++) {
+            if (bytes(names[i]).length == 0 || bytes(names[i]).length > 64) revert InvalidRuleName();
+            if (bytes(contents[i]).length == 0) revert InvalidConfig("rule content must not be empty");
+            _setRule(novelId, names[i], contents[i]);
+        }
+    }
+
+    /// @inheritdoc INovelCore
+    function proposeRule(
+        uint256 novelId,
+        DataTypes.RuleProposalType proposalType,
+        string calldata ruleName,
+        string calldata ruleContent
+    ) external payable whenNotPaused returns (uint256 proposalId) {
+        DataTypes.Novel storage novel = _novels[novelId];
+        if (novel.id == 0) revert NovelNotFound(novelId);
+        if (!novel.active) revert NovelNotActive(novelId);
+
+        DataTypes.NovelConfig storage config = novel.config;
+        if (msg.value < config.ruleFee) revert InsufficientRuleFee(msg.value, config.ruleFee);
+        if (bytes(ruleName).length == 0 || bytes(ruleName).length > 64) revert InvalidRuleName();
+
+        if (proposalType == DataTypes.RuleProposalType.Add) {
+            if (_ruleNameIndex[novelId][ruleName] != 0) revert RuleAlreadyExists(ruleName);
+            if (bytes(ruleContent).length == 0) revert InvalidConfig("rule content must not be empty");
+        } else {
+            if (_ruleNameIndex[novelId][ruleName] == 0) revert RuleNotFound(ruleName);
+        }
+
+        // Deposit fee to prize pool
+        if (msg.value > 0) {
+            prizePool.deposit{value: msg.value}(novelId, "rule_proposal");
+        }
+
+        proposalId = ++_ruleProposalCount;
+        _ruleProposals[proposalId] = DataTypes.RuleProposal({
+            id: proposalId,
+            novelId: novelId,
+            proposer: msg.sender,
+            proposalType: proposalType,
+            ruleName: ruleName,
+            ruleContent: ruleContent,
+            createdAt: block.timestamp,
+            voteCount: 0,
+            executed: false
+        });
+
+        emit RuleProposed(proposalId, novelId, msg.sender, uint8(proposalType), ruleName);
+    }
+
+    /// @inheritdoc INovelCore
+    function voteOnRuleProposal(uint256 proposalId) external whenNotPaused {
+        DataTypes.RuleProposal storage proposal = _ruleProposals[proposalId];
+        if (proposal.id == 0) revert ProposalNotFound(proposalId);
+        if (proposal.executed) revert ProposalAlreadyExecuted(proposalId);
+
+        uint256 novelId = proposal.novelId;
+        DataTypes.Novel storage novel = _novels[novelId];
+        if (!novel.active) revert NovelNotActive(novelId);
+
+        if (block.timestamp > proposal.createdAt + novel.config.ruleVoteDuration) {
+            revert ProposalExpired(proposalId);
+        }
+        if (!_isCanonAuthor[novelId][msg.sender]) revert NotCanonAuthor(novelId, msg.sender);
+        if (_ruleProposalVotes[proposalId][msg.sender]) revert AlreadyVotedOnProposal(proposalId, msg.sender);
+
+        _ruleProposalVotes[proposalId][msg.sender] = true;
+        proposal.voteCount++;
+
+        emit RuleProposalVoted(proposalId, msg.sender, proposal.voteCount);
+
+        // Auto-execute if quorum reached
+        if (proposal.voteCount >= novel.config.ruleQuorum) {
+            proposal.executed = true;
+            if (proposal.proposalType == DataTypes.RuleProposalType.Add) {
+                _setRule(novelId, proposal.ruleName, proposal.ruleContent);
+            } else {
+                _deleteRule(novelId, proposal.ruleName);
+            }
+            emit RuleProposalExecuted(proposalId, novelId);
+        }
+    }
+
+    // --- Rules queries ---
+
+    /// @inheritdoc INovelCore
+    function getRule(uint256 novelId, string calldata name) external view returns (string memory) {
+        return _rules[novelId][name];
+    }
+
+    /// @inheritdoc INovelCore
+    function getRuleNames(uint256 novelId) external view returns (string[] memory) {
+        return _ruleNames[novelId];
+    }
+
+    /// @inheritdoc INovelCore
+    function getRuleProposal(uint256 proposalId) external view returns (DataTypes.RuleProposal memory) {
+        return _ruleProposals[proposalId];
+    }
+
+    /// @inheritdoc INovelCore
+    function isCanonAuthor(uint256 novelId, address author) external view returns (bool) {
+        return _isCanonAuthor[novelId][author];
+    }
+
+    // --- Rules internal helpers ---
+
+    function _setRule(uint256 novelId, string memory name, string memory content) internal {
+        _rules[novelId][name] = content;
+        if (_ruleNameIndex[novelId][name] == 0) {
+            _ruleNames[novelId].push(name);
+            _ruleNameIndex[novelId][name] = _ruleNames[novelId].length; // index+1
+        }
+        emit RuleSet(novelId, name);
+    }
+
+    function _deleteRule(uint256 novelId, string memory name) internal {
+        uint256 indexPlusOne = _ruleNameIndex[novelId][name];
+        if (indexPlusOne == 0) revert RuleNotFound(name);
+
+        // Swap-and-pop from _ruleNames
+        uint256 lastIdx = _ruleNames[novelId].length - 1;
+        uint256 removeIdx = indexPlusOne - 1;
+        if (removeIdx != lastIdx) {
+            string memory lastName = _ruleNames[novelId][lastIdx];
+            _ruleNames[novelId][removeIdx] = lastName;
+            _ruleNameIndex[novelId][lastName] = indexPlusOne;
+        }
+        _ruleNames[novelId].pop();
+        delete _ruleNameIndex[novelId][name];
+        delete _rules[novelId][name];
+
+        emit RuleDeleted(novelId, name);
+    }
+
+    // ============================================================
     //                     UUPS UPGRADE
     // ============================================================
 
@@ -916,5 +1110,5 @@ contract NovelCore is
     // ============================================================
 
     /// @dev Reserved storage gap for future upgrades
-    uint256[50] private __gap;
+    uint256[43] private __gap;
 }

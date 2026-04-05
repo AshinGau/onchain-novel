@@ -296,6 +296,66 @@ NovelCore.settleEpoch(uint256 novelId)
 
 ---
 
+## 📜 Rules — Manage Novel Rules
+
+Each novel has an on-chain rules map (string name → string content) that can govern creative constraints, world-building guidelines, or any other novel-specific parameters.
+
+### Creator Rules (Epoch 1 Only)
+
+During Epoch 1 the novel creator can set rules without a vote:
+
+```solidity
+NovelCore.setCreatorRules(
+    uint256 novelId,
+    string[] calldata names,
+    string[] calldata contents
+)
+```
+
+**Requirements:**
+- Caller must be the novel creator
+- Novel must be in Epoch 1
+
+### Proposing Rule Changes (After Epoch 1)
+
+Anyone can propose adding or deleting a rule by paying the configured `ruleFee`:
+
+```solidity
+NovelCore.proposeRule{value: <ruleFee>}(
+    uint256 novelId,
+    DataTypes.RuleProposalType proposalType,  // 0 = Add, 1 = Delete
+    string calldata ruleName,
+    string calldata ruleContent               // required for Add, ignored for Delete
+) → uint256 proposalId
+```
+
+The fee is deposited into the novel's prize pool.
+
+### Voting on Proposals
+
+Canon authors vote to approve a proposal:
+
+```solidity
+NovelCore.voteOnRuleProposal(uint256 proposalId)
+```
+
+**Requirements:**
+- Caller must be a canon author for this novel
+- Each canon author can vote once per proposal
+
+If the proposal collects `ruleQuorum` votes within `ruleVoteDuration` seconds, the rule change is automatically applied.
+
+### Querying Rules
+
+```solidity
+NovelCore.getRule(uint256 novelId, string calldata name) → string content
+NovelCore.getRuleNames(uint256 novelId) → string[] names
+NovelCore.getRuleProposal(uint256 proposalId) → RuleProposal
+NovelCore.isCanonAuthor(uint256 novelId, address author) → bool
+```
+
+---
+
 ## 🔍 Explorer — Query On-Chain State
 
 All query functions are `view` (free, no gas required).
@@ -372,6 +432,9 @@ ChapterNFT.getChapterInfo(uint256 tokenId) → ChapterNFTMetadata
 | `spamRounds` | `uint8` | M: consecutive rounds for spam penalty | `3` |
 | `spamThreshold` | `uint8` | Bottom X% counts as spam | `20` |
 | `contentBaseUrl` | `string` | Base URL for content storage (immutable) | `"https://arweave.net/"` |
+| `ruleFee` | `uint256` | Fee (wei) to propose a rule change (goes to prize pool) | `10000000000000000` (0.01 ETH) |
+| `ruleVoteDuration` | `uint64` | Time window (seconds) for canon authors to vote on a rule proposal | `259200` (3 days) |
+| `ruleQuorum` | `uint32` | Number of canon-author votes required to approve a rule proposal | `3` |
 
 **Validation rules:**
 - `minChapterLength > 0`

@@ -16,6 +16,7 @@ The protocol drives story evolution through a **"Branch → Consensus → Attrib
 - **Voter Accuracy Rewards** — Accurate voters (voted for winner) receive bonus rewards with 3x weight multiplier
 - **Copyright NFTs** — Canon chapters are minted as ERC-721 copyright proof NFTs (filtered to current epoch)
 - **On-Chain Forking** — Rejected branches can be forked into independent new novels (fork fee goes to original pool, creator royalty flows to original creator)
+- **Rules System** — On-chain rules map (name → content) governing novel behavior; creator sets initial rules, then canon authors vote on proposals to add or delete rules
 
 ## Architecture
 
@@ -34,7 +35,7 @@ The protocol drives story evolution through a **"Branch → Consensus → Attrib
 
 | Contract | Responsibility |
 |----------|----------------|
-| **NovelCore** | Novel creation, chapter submission, Round/Epoch state machine, stake management, spam tracking, multi-chapter genesis, creator royalty, keeper rewards, early epoch trigger |
+| **NovelCore** | Novel creation, chapter submission, Round/Epoch state machine, stake management, spam tracking, multi-chapter genesis, creator royalty, keeper rewards, early epoch trigger, rules management |
 | **VotingEngine** | Commit-Reveal Stake-to-Vote voting, vote tallying & ranking, unrevealed stake sweep, accuracy reward tracking and distribution |
 | **PrizePool** | Genesis deposits, reader tipping, three-layer epoch distribution (creator->author->voter), keeper rewards, pull-based claiming |
 | **ChapterNFT** | ERC-721 minting, chapter copyright proof, metadata queries |
@@ -58,6 +59,7 @@ Create Novel → [Round 1..K] → Epoch Voting → Canon Established → NFT Min
 2. The winning world line is established as **Canon**
 3. Canon authors receive ERC-721 NFTs and prize pool rewards
 4. Canon becomes the sole world line for the next Epoch
+5. Canon authors can vote on rule proposals to evolve the novel's on-chain rules
 
 ## Quick Start
 
@@ -100,6 +102,7 @@ forge script script/Deploy.s.sol --rpc-url http://localhost:8545 --broadcast
 - **Genesis Injection** — Creator sends ETH when creating a novel
 - **Reader Tipping** — Anyone can tip a novel via `tipNovel()`
 - **Spam Slashing** — 50% of slashed stakes flow into the pool
+- **Rule Proposal Fees** — Fees paid to propose rule changes flow into the pool
 
 ### Reward Distribution (Three-Layer)
 - Each Epoch releases a configurable percentage (default 30%, max 50%) of the pool balance

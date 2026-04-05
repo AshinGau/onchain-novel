@@ -7,6 +7,7 @@ import { registerChapterTools } from "./tools/chapter.js";
 import { registerVotingTools } from "./tools/voting.js";
 import { registerPrizeTools } from "./tools/prize.js";
 import { registerKeeperTools } from "./tools/keeper.js";
+import { registerRuleTools } from "./tools/rules.js";
 
 // Skills
 import { registerWriterSkills } from "./skills/writer.js";
@@ -25,6 +26,7 @@ async function main() {
   registerVotingTools(server);
   registerPrizeTools(server);
   registerKeeperTools(server);
+  registerRuleTools(server);
 
   // Register all skills
   registerWriterSkills(server);

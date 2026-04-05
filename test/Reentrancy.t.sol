@@ -313,7 +313,10 @@ contract ReentrancyTest is Test {
             spamRounds: 3,
             spamThreshold: 20,
             contentLocation: DataTypes.ContentLocation.Onchain,
-            contentBaseUrl: ""
+            contentBaseUrl: "",
+            ruleFee: 0.001 ether,
+            ruleVoteDuration: 3 days,
+            ruleQuorum: 1
         });
     }
 

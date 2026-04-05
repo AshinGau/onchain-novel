@@ -5,8 +5,8 @@
 
 export const novelCoreAbi = [
   // Novel lifecycle
-  "function createNovel((uint64 minChapterLength, uint64 maxChapterLength, uint64 roundMinDuration, uint32 roundMinSubmissions, uint32 worldLineCount, uint32 roundsPerEpoch, uint16 prizeReleaseRate, uint16 voterRewardRate, uint64 commitDuration, uint64 revealDuration, uint256 stakeAmount, uint8 spamRounds, uint8 spamThreshold, uint8 contentLocation, string contentBaseUrl) config, (string title, string description, string coverUri) metadata, (bytes32 contentHash, uint64 declaredLength, bytes content)[] genesisChapters) external payable returns (uint256 novelId)",
-  "function forkNovel(uint256 originalNovelId, uint256 branchChapterId, (uint64 minChapterLength, uint64 maxChapterLength, uint64 roundMinDuration, uint32 roundMinSubmissions, uint32 worldLineCount, uint32 roundsPerEpoch, uint16 prizeReleaseRate, uint16 voterRewardRate, uint64 commitDuration, uint64 revealDuration, uint256 stakeAmount, uint8 spamRounds, uint8 spamThreshold, uint8 contentLocation, string contentBaseUrl) config, (string title, string description, string coverUri) metadata) external payable returns (uint256 novelId)",
+  "function createNovel((uint64 minChapterLength, uint64 maxChapterLength, uint64 roundMinDuration, uint32 roundMinSubmissions, uint32 worldLineCount, uint32 roundsPerEpoch, uint16 prizeReleaseRate, uint16 voterRewardRate, uint64 commitDuration, uint64 revealDuration, uint256 stakeAmount, uint8 spamRounds, uint8 spamThreshold, uint8 contentLocation, string contentBaseUrl, uint256 ruleFee, uint64 ruleVoteDuration, uint32 ruleQuorum) config, (string title, string description, string coverUri) metadata, (bytes32 contentHash, uint64 declaredLength, bytes content)[] genesisChapters) external payable returns (uint256 novelId)",
+  "function forkNovel(uint256 originalNovelId, uint256 branchChapterId, (uint64 minChapterLength, uint64 maxChapterLength, uint64 roundMinDuration, uint32 roundMinSubmissions, uint32 worldLineCount, uint32 roundsPerEpoch, uint16 prizeReleaseRate, uint16 voterRewardRate, uint64 commitDuration, uint64 revealDuration, uint256 stakeAmount, uint8 spamRounds, uint8 spamThreshold, uint8 contentLocation, string contentBaseUrl, uint256 ruleFee, uint64 ruleVoteDuration, uint32 ruleQuorum) config, (string title, string description, string coverUri) metadata) external payable returns (uint256 novelId)",
   "function completeNovel(uint256 novelId) external",
   "function updateNovelMetadata(uint256 novelId, (string title, string description, string coverUri) metadata) external",
 
@@ -27,7 +27,7 @@ export const novelCoreAbi = [
   "function claimStakeRefund(uint256 novelId) external",
 
   // Queries
-  "function getNovel(uint256 novelId) external view returns ((uint256 id, address creator, (uint64 minChapterLength, uint64 maxChapterLength, uint64 roundMinDuration, uint32 roundMinSubmissions, uint32 worldLineCount, uint32 roundsPerEpoch, uint16 prizeReleaseRate, uint16 voterRewardRate, uint64 commitDuration, uint64 revealDuration, uint256 stakeAmount, uint8 spamRounds, uint8 spamThreshold, uint8 contentLocation, string contentBaseUrl) config, uint32 currentRound, uint32 currentEpoch, uint8 roundPhase, uint8 epochPhase, uint256 phaseStartTime, uint32 genesisChapterCount, uint32 cumulativeCanonChapters, bool active, uint256 forkSourceNovelId, uint256 forkSourceChapterId))",
+  "function getNovel(uint256 novelId) external view returns ((uint256 id, address creator, (uint64 minChapterLength, uint64 maxChapterLength, uint64 roundMinDuration, uint32 roundMinSubmissions, uint32 worldLineCount, uint32 roundsPerEpoch, uint16 prizeReleaseRate, uint16 voterRewardRate, uint64 commitDuration, uint64 revealDuration, uint256 stakeAmount, uint8 spamRounds, uint8 spamThreshold, uint8 contentLocation, string contentBaseUrl, uint256 ruleFee, uint64 ruleVoteDuration, uint32 ruleQuorum) config, uint32 currentRound, uint32 currentEpoch, uint8 roundPhase, uint8 epochPhase, uint256 phaseStartTime, uint32 genesisChapterCount, uint32 cumulativeCanonChapters, bool active, uint256 forkSourceNovelId, uint256 forkSourceChapterId))",
   "function getChapter(uint256 chapterId) external view returns ((uint256 id, uint256 novelId, uint256 parentId, address author, bytes32 contentHash, uint64 declaredLength, uint32 round, uint32 epoch, uint32 chapterIndex, uint256 voteCount, bool isWorldLine, bool isCanon))",
   "function getActiveWorldLines(uint256 novelId) external view returns (uint256[])",
   "function getRoundSubmissions(uint256 novelId, uint32 epoch, uint32 round) external view returns (uint256[])",
@@ -35,6 +35,15 @@ export const novelCoreAbi = [
   "function getChapterCount() external view returns (uint256)",
   "function getClaimableStake(uint256 novelId, address author) external view returns (uint256)",
   "function getNovelMetadata(uint256 novelId) external view returns ((string title, string description, string coverUri))",
+
+  // Rules
+  "function setCreatorRules(uint256 novelId, string[] names, string[] contents) external",
+  "function proposeRule(uint256 novelId, uint8 proposalType, string ruleName, string ruleContent) external payable returns (uint256 proposalId)",
+  "function voteOnRuleProposal(uint256 proposalId) external",
+  "function getRule(uint256 novelId, string name) external view returns (string)",
+  "function getRuleNames(uint256 novelId) external view returns (string[])",
+  "function getRuleProposal(uint256 proposalId) external view returns ((uint256 id, uint256 novelId, address proposer, uint8 proposalType, string ruleName, string ruleContent, uint256 createdAt, uint32 voteCount, bool executed))",
+  "function isCanonAuthor(uint256 novelId, address author) external view returns (bool)",
 
   // Events
   "event NovelCreated(uint256 indexed novelId, address indexed creator, uint32 genesisCount)",
@@ -50,6 +59,11 @@ export const novelCoreAbi = [
   "event StakeSlashed(uint256 indexed novelId, address indexed author, uint256 amount)",
   "event KeeperRewarded(uint256 indexed novelId, address indexed keeper, uint256 amount)",
   "event NovelMetadataUpdated(uint256 indexed novelId, string title, string description, string coverUri)",
+  "event RuleSet(uint256 indexed novelId, string name)",
+  "event RuleDeleted(uint256 indexed novelId, string name)",
+  "event RuleProposed(uint256 indexed proposalId, uint256 indexed novelId, address indexed proposer, uint8 proposalType, string ruleName)",
+  "event RuleProposalVoted(uint256 indexed proposalId, address indexed voter, uint32 newVoteCount)",
+  "event RuleProposalExecuted(uint256 indexed proposalId, uint256 indexed novelId)",
 ] as const;
 
 export const votingEngineAbi = [

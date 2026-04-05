@@ -56,6 +56,9 @@ library DataTypes {
         uint8 spamThreshold; // Bottom X percentile counts as spam (e.g., 20 = bottom 20%)
         ContentLocation contentLocation; // Content storage strategy
         string contentBaseUrl; // Base URL (External/HTTP only, ignored for Onchain)
+        uint256 ruleFee; // Fee to propose a rule (wei), goes to prize pool
+        uint64 ruleVoteDuration; // Seconds before a rule proposal expires
+        uint32 ruleQuorum; // Canon-author votes needed to pass a rule proposal
     }
 
     /// @notice Core state of a novel
@@ -120,6 +123,25 @@ library DataTypes {
         bytes32 contentHash; // keccak256(content) for verification
         uint64 declaredLength; // Content byte length
         bytes content; // Onchain: actual content; External/HTTP: empty
+    }
+
+    /// @notice Type of rule proposal
+    enum RuleProposalType {
+        Add,
+        Delete
+    }
+
+    /// @notice A proposal to add or delete a rule
+    struct RuleProposal {
+        uint256 id;
+        uint256 novelId;
+        address proposer;
+        RuleProposalType proposalType;
+        string ruleName;
+        string ruleContent; // empty for Delete proposals
+        uint256 createdAt; // block.timestamp when proposed
+        uint32 voteCount;
+        bool executed;
     }
 
     /// @notice Mutable metadata for display purposes (separate from immutable NovelConfig)

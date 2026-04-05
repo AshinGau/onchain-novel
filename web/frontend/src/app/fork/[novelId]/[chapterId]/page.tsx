@@ -58,6 +58,9 @@ export default function ForkNovelPage({
           spamThreshold: c.spamThreshold,
           contentLocation: c.contentLocation,
           contentBaseUrl: c.contentBaseUrl,
+          ruleFee: c.ruleFee ? (Number(c.ruleFee) / 1e18).toString() : "0.001",
+          ruleVoteDuration: Number(c.ruleVoteDuration || 259200),
+          ruleQuorum: c.ruleQuorum ?? 7,
         });
         setForkFee((Number(c.stakeAmount) / 1e18).toString());
       } catch {
@@ -106,6 +109,9 @@ export default function ForkNovelPage({
           spamThreshold: config.spamThreshold,
           contentLocation: config.contentLocation,
           contentBaseUrl: config.contentBaseUrl,
+          ruleFee: parseEther(config.ruleFee),
+          ruleVoteDuration: BigInt(config.ruleVoteDuration),
+          ruleQuorum: config.ruleQuorum,
         },
         { title: title.trim(), description: description.trim(), coverUri: coverUri.trim() },
       ],
