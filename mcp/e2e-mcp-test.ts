@@ -4,9 +4,14 @@
  * Tests MCP utility functions and ABI interactions against a live Anvil node
  * with deployed contracts. Called from e2e-test.sh.
  *
+ * Two modes:
+ *   - RPC mode (default): tests direct chain reads via ABI
+ *   - API mode (API_BASE_URL set): also tests Web API reads (content text, search, etc.)
+ *
  * Env vars expected: RPC_URL, NOVEL_CORE_ADDRESS, VOTING_ENGINE_ADDRESS,
  * PRIZE_POOL_ADDRESS, CHAPTER_NFT_ADDRESS, PRIVATE_KEY, MCP_NOVEL_ID,
  * PK_CREATOR, PK_WRITER_A, PK_WRITER_B, PK_VOTER_A, PK_VOTER_B, PK_KEEPER
+ * Optional: API_BASE_URL (e.g. http://localhost:3001)
  */
 
 import {
@@ -348,82 +353,211 @@ async function testGetChapter() {
   pass(`MCP ABI: getChapter #${chapter.id}`);
 }
 
+// ── API mode tests ──
+
+const API_BASE_URL = process.env.API_BASE_URL || "";
+const HAS_API = API_BASE_URL.length > 0;
+
+async function apiFetch<T>(path: string): Promise<T> {
+  const res = await fetch(`${API_BASE_URL}${path}`);
+  if (!res.ok) throw new Error(`API ${res.status}: ${path}`);
+  return res.json() as Promise<T>;
+}
+
+async function testApiGetNovel() {
+  const novel = await apiFetch<any>(`/api/novels/${NOVEL_ID}`);
+  if (!novel.id) return fail("API get_novel: no id");
+  if (!novel.title) return fail("API get_novel: no title");
+  if (novel.chapter_count === undefined) return fail("API get_novel: no chapter_count");
+  if (novel.author_count === undefined) return fail("API get_novel: no author_count");
+  if (!novel.config) return fail("API get_novel: no config");
+  pass(`API: get_novel #${novel.id} "${novel.title}" (${novel.chapter_count} chapters, ${novel.author_count} authors)`);
+}
+
+async function testApiGetWorldLines() {
+  const data = await apiFetch<any>(`/api/novels/${NOVEL_ID}/worldlines`);
+  if (!Array.isArray(data.worldlines)) return fail("API worldlines: not array");
+  pass(`API: worldlines (${data.worldlines.length} lines)`);
+}
+
+async function testApiGetChapter() {
+  // Chapter 1 is the genesis chapter of novel 1 (created by e2e-test.sh Part 1)
+  // For MCP novel (NOVEL_ID), the genesis chapter ID depends on how many chapters were created before.
+  // Use the tree endpoint to find a chapter
+  const tree = await apiFetch<any>(`/api/novels/${NOVEL_ID}/tree`);
+  if (!tree.chapters || tree.chapters.length === 0) return fail("API tree: no chapters");
+  const ch = tree.chapters[0];
+  const detail = await apiFetch<any>(`/api/chapters/${ch.id}`);
+  if (!detail.id) return fail("API get_chapter: no id");
+  if (!detail.novel_title) return fail("API get_chapter: no novel_title");
+  // content_text may be null for non-fetched content, but field should exist
+  if (!("content_text" in detail)) return fail("API get_chapter: no content_text field");
+  pass(`API: get_chapter #${detail.id} (content_text: ${detail.content_text ? detail.content_text.length + " chars" : "null"})`);
+  return ch.id;
+}
+
+async function testApiChapterContext(chapterId: string) {
+  const data = await apiFetch<any>(`/api/chapters/${chapterId}/context`);
+  if (!Array.isArray(data.ancestors)) return fail("API context: not array");
+  if (data.ancestors.length === 0) return fail("API context: empty");
+  // Check that ancestors have content_text field
+  const first = data.ancestors[0];
+  if (!("content_text" in first)) return fail("API context: no content_text field");
+  pass(`API: chapter_context #${chapterId} (${data.ancestors.length} ancestors)`);
+}
+
+async function testApiRoundSubmissions() {
+  const novel = await apiFetch<any>(`/api/novels/${NOVEL_ID}`);
+  // Get submissions for the current or last round
+  const data = await apiFetch<any>(`/api/novels/${NOVEL_ID}/rounds/1?epoch=1`);
+  if (!Array.isArray(data.chapters)) return fail("API round_submissions: not array");
+  pass(`API: round_submissions E1R1 (${data.chapters.length} chapters)`);
+}
+
+async function testApiCanon() {
+  const data = await apiFetch<any>(`/api/novels/${NOVEL_ID}/canon`);
+  if (!Array.isArray(data.chapters)) return fail("API canon: not array");
+  // After settleEpoch there should be canon chapters
+  pass(`API: canon (${data.chapters.length} chapters)`);
+}
+
+async function testApiDiscoverNovels() {
+  const data = await apiFetch<any>(`/api/novels?sort=latest&limit=5`);
+  if (!Array.isArray(data.novels)) return fail("API discover: not array");
+  if (data.novels.length === 0) return fail("API discover: empty");
+  if (!data.pagination) return fail("API discover: no pagination");
+  pass(`API: discover_novels (${data.novels.length} novels, total=${data.pagination.total})`);
+}
+
+async function testApiNovelStats() {
+  const stats = await apiFetch<any>(`/api/novels/${NOVEL_ID}/stats`);
+  if (stats.chapter_count === undefined) return fail("API stats: no chapter_count");
+  if (stats.author_count === undefined) return fail("API stats: no author_count");
+  if (stats.vote_count === undefined) return fail("API stats: no vote_count");
+  pass(`API: novel_stats (chapters=${stats.chapter_count}, authors=${stats.author_count}, votes=${stats.vote_count})`);
+}
+
+async function testApiUserChapters() {
+  const data = await apiFetch<any>(`/api/users/${writerA.address}/chapters`);
+  if (!Array.isArray(data.chapters)) return fail("API user_chapters: not array");
+  pass(`API: user_chapters ${writerA.address.slice(0, 10)}... (${data.chapters.length} chapters)`);
+}
+
+async function testApiTreeByEpoch() {
+  const data = await apiFetch<any>(`/api/novels/${NOVEL_ID}/tree?epoch=1`);
+  if (!Array.isArray(data.chapters)) return fail("API tree?epoch: no chapters");
+  if (!("anchors" in data)) return fail("API tree?epoch: no anchors field");
+  pass(`API: tree?epoch=1 (${data.chapters.length} chapters, ${data.anchors.length} anchors)`);
+}
+
 // ── Main ──
 async function main() {
-  console.log("\n  MCP Integration Tests (Novel #" + NOVEL_ID + ")\n");
+  const mode = HAS_API ? "API" : "RPC";
+  const apiOnly = HAS_API && process.env.API_ONLY === "1";
+  console.log(`\n  MCP Integration Tests (Novel #${NOVEL_ID}, mode: ${mode}${apiOnly ? ", API-only" : ""})\n`);
 
-  // Phase 1: Read operations on novel
-  await testReadNovel();
-  const worldLines = await testReadWorldLines();
-  const parentId = worldLines![0];
+  if (!apiOnly) {
+    // Phase 1: Read operations on novel
+    await testReadNovel();
+    const worldLines = await testReadWorldLines();
+    const parentId = worldLines![0];
 
-  // Phase 2: Writer submissions via MCP ABI
-  await testSubmitChapter(writerA, parentId, "MCP Writer A chapter content for testing the full flow end to end, must be at least 100 bytes long so padding here.", "writer A");
-  await testSubmitChapter(writerB, parentId, "MCP Writer B chapter content for testing the full flow end to end, must be at least 100 bytes long so padding here.", "writer B");
+    // Phase 2: Writer submissions via MCP ABI
+    await testSubmitChapter(writerA, parentId, "MCP Writer A chapter content for testing the full flow end to end, must be at least 100 bytes long so padding here.", "writer A");
+    await testSubmitChapter(writerB, parentId, "MCP Writer B chapter content for testing the full flow end to end, must be at least 100 bytes long so padding here.", "writer B");
 
-  // Phase 3: Keeper transitions + Voting via MCP ABI
-  await sleep(3000);
-  await testKeeperTransition("closeSubmissions", "→ Committing");
+    // Phase 3: Keeper transitions + Voting via MCP ABI
+    await sleep(3000);
+    await testKeeperTransition("closeSubmissions", "→ Committing");
 
-  const votingRoundId = await testVotingRoundId();
+    const votingRoundId = await testVotingRoundId();
 
-  await testGetCandidates(votingRoundId!);
+    await testGetCandidates(votingRoundId!);
 
-  // Both voters vote for the same candidate (first submitted chapter after genesis)
-  const submissions = (await publicClient.readContract({
-    address: NOVEL_CORE,
-    abi: novelCoreAbi,
-    functionName: "getRoundSubmissions",
-    args: [NOVEL_ID, 1, 1],
-  })) as bigint[];
-  info(`Round submissions: ${submissions.join(", ")}`);
+    // Both voters vote for the same candidate (first submitted chapter after genesis)
+    const submissions = (await publicClient.readContract({
+      address: NOVEL_CORE,
+      abi: novelCoreAbi,
+      functionName: "getRoundSubmissions",
+      args: [NOVEL_ID, 1, 1],
+    })) as bigint[];
+    info(`Round submissions: ${submissions.join(", ")}`);
 
-  const targetCandidate = submissions[0]; // writer A's chapter
-  const saltA = "0x0000000000000000000000000000000000000000000000000000000000aabbcc" as `0x${string}`;
-  const saltB = "0x0000000000000000000000000000000000000000000000000000000000ddeeff" as `0x${string}`;
+    const targetCandidate = submissions[0]; // writer A's chapter
+    const saltA = "0x0000000000000000000000000000000000000000000000000000000000aabbcc" as `0x${string}`;
+    const saltB = "0x0000000000000000000000000000000000000000000000000000000000ddeeff" as `0x${string}`;
 
-  await testCommitVote(voterA, votingRoundId!, targetCandidate, saltA, "0.05", "voter A");
-  await testCommitVote(voterB, votingRoundId!, targetCandidate, saltB, "0.1", "voter B");
+    await testCommitVote(voterA, votingRoundId!, targetCandidate, saltA, "0.05", "voter A");
+    await testCommitVote(voterB, votingRoundId!, targetCandidate, saltB, "0.1", "voter B");
 
-  await sleep(3000);
-  await testKeeperTransition("closeCommit", "→ Revealing");
+    await sleep(3000);
+    await testKeeperTransition("closeCommit", "→ Revealing");
 
-  await testRevealVote(voterA, votingRoundId!, targetCandidate, saltA, "voter A");
-  await testRevealVote(voterB, votingRoundId!, targetCandidate, saltB, "voter B");
+    await testRevealVote(voterA, votingRoundId!, targetCandidate, saltA, "voter A");
+    await testRevealVote(voterB, votingRoundId!, targetCandidate, saltB, "voter B");
 
-  await sleep(3000);
-  await testKeeperTransition("settleRound", "→ Epoch voting");
+    await sleep(3000);
+    await testKeeperTransition("settleRound", "→ Epoch voting");
 
-  // Phase 4: Epoch voting
-  const epochVotingId = computeVotingRoundId(NOVEL_ID, 1, 1, true);
-  const epochCandidates = await testGetCandidates(epochVotingId);
-  info(`Epoch candidates: ${epochCandidates!.join(", ")}`);
+    // Phase 4: Epoch voting
+    const epochVotingId = computeVotingRoundId(NOVEL_ID, 1, 1, true);
+    const epochCandidates = await testGetCandidates(epochVotingId);
+    info(`Epoch candidates: ${epochCandidates!.join(", ")}`);
 
-  const epochTarget = epochCandidates![0];
-  const eSaltA = "0x00000000000000000000000000000000000000000000000000000000000e0001" as `0x${string}`;
-  const eSaltB = "0x00000000000000000000000000000000000000000000000000000000000e0002" as `0x${string}`;
+    const epochTarget = epochCandidates![0];
+    const eSaltA = "0x00000000000000000000000000000000000000000000000000000000000e0001" as `0x${string}`;
+    const eSaltB = "0x00000000000000000000000000000000000000000000000000000000000e0002" as `0x${string}`;
 
-  await testCommitVote(voterA, epochVotingId, epochTarget, eSaltA, "0.05", "epoch voter A");
-  await testCommitVote(voterB, epochVotingId, epochTarget, eSaltB, "0.1", "epoch voter B");
+    await testCommitVote(voterA, epochVotingId, epochTarget, eSaltA, "0.05", "epoch voter A");
+    await testCommitVote(voterB, epochVotingId, epochTarget, eSaltB, "0.1", "epoch voter B");
 
-  await sleep(3000);
-  await testKeeperTransition("closeEpochCommit", "→ Epoch Revealing");
+    await sleep(3000);
+    await testKeeperTransition("closeEpochCommit", "→ Epoch Revealing");
 
-  await testRevealVote(voterA, epochVotingId, epochTarget, eSaltA, "epoch voter A");
-  await testRevealVote(voterB, epochVotingId, epochTarget, eSaltB, "epoch voter B");
+    await testRevealVote(voterA, epochVotingId, epochTarget, eSaltA, "epoch voter A");
+    await testRevealVote(voterB, epochVotingId, epochTarget, eSaltB, "epoch voter B");
 
-  await sleep(3000);
-  await testKeeperTransition("settleEpoch", "Canon + NFTs + Rewards");
+    await sleep(3000);
+    await testKeeperTransition("settleEpoch", "Canon + NFTs + Rewards");
 
-  // Phase 5: Post-settlement reads and claims
-  await testPoolBalance();
-  await testGetPendingReward();
-  await testTipNovel();
-  await testGetClaimableStake();
-  await testClaimStakeRefund();
-  await testClaimReward();
-  await testClaimVotingReward(votingRoundId!);
-  await testGetChapter();
+    // Phase 5: Post-settlement reads and claims
+    await testPoolBalance();
+    await testGetPendingReward();
+    await testTipNovel();
+    await testGetClaimableStake();
+    await testClaimStakeRefund();
+    await testClaimReward();
+    await testClaimVotingReward(votingRoundId!);
+    await testGetChapter();
+  }
+
+  // API mode tests (only when API_BASE_URL is set)
+  if (HAS_API) {
+    console.log(`\n  Web API Tests\n`);
+
+    if (!apiOnly) {
+      // Wait for indexer to sync the test novel's post-settlement state
+      info("Waiting for indexer to sync...");
+      for (let i = 0; i < 15; i++) {
+        try {
+          const novel = await apiFetch<any>(`/api/novels/${NOVEL_ID}`);
+          if (novel.current_epoch >= 2) break;
+        } catch {}
+        await sleep(1000);
+      }
+    }
+
+    await testApiGetNovel();
+    await testApiGetWorldLines();
+    const chapterId = await testApiGetChapter();
+    if (chapterId) await testApiChapterContext(chapterId);
+    await testApiRoundSubmissions();
+    await testApiCanon();
+    await testApiDiscoverNovels();
+    await testApiNovelStats();
+    await testApiUserChapters();
+    await testApiTreeByEpoch();
+  }
 
   // Summary
   console.log(`\n  Results: ${passed} passed, ${failed} failed\n`);
