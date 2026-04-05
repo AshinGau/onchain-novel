@@ -12,6 +12,7 @@ import { config } from "../config.js";
 import { getPublicClient, getWalletClient, getWalletAddress } from "../utils/wallet.js";
 import { computeVotingRoundId } from "../utils/voting-round-id.js";
 import { traceCanonChain, assembleStoryText } from "../utils/content-bridge.js";
+import { hasApi, apiFetch } from "../utils/api-client.js";
 
 /**
  * In-memory salt storage for commit-reveal flow.
@@ -29,7 +30,7 @@ function saltKey(novelId: bigint, votingRoundId: bigint): string {
 export function registerVoterSkills(server: McpServer): void {
   server.tool(
     "voter_get_context",
-    "Voter Skill: Fetch all candidates for a voting round with their chapter details and story context. Helps an LLM evaluate which candidate to vote for.",
+    "Voter Skill: Fetch all candidates for a voting round with their chapter details and story context. When API is configured, includes full content text for informed evaluation.",
     {
       novelId: z.number().describe("Novel ID"),
       epoch: z.number().describe("Current epoch number"),
@@ -38,8 +39,6 @@ export function registerVoterSkills(server: McpServer): void {
     },
     async (params) => {
       try {
-        const publicClient = getPublicClient();
-
         const votingRoundId = computeVotingRoundId(
           BigInt(params.novelId),
           params.epoch,
@@ -47,7 +46,75 @@ export function registerVoterSkills(server: McpServer): void {
           params.isEpoch
         );
 
-        // Get candidates
+        // ── API path: content text + comment counts ──
+        if (hasApi()) {
+          // Get candidates from chain (no API equivalent for votingRoundId lookup)
+          const publicClient = getPublicClient();
+          const candidates = (await publicClient.readContract({
+            address: config.votingEngineAddress,
+            abi: votingEngineAbi,
+            functionName: "getCandidates",
+            args: [BigInt(params.novelId), votingRoundId],
+          })) as bigint[];
+
+          if (candidates.length === 0) {
+            return { content: [{ type: "text" as const, text: `No candidates found. The voting round may not be initialized yet.` }] };
+          }
+
+          const candidateContexts: string[] = [];
+          for (const candidateId of candidates) {
+            // Get chapter detail with content
+            const ch = await apiFetch<{
+              id: string; author: string; content_text: string | null; declared_length: string;
+              parent_id: string; vote_count: string; content_hash: string;
+            }>(`/api/chapters/${candidateId}`);
+
+            // Get story chain with content
+            const ctxData = await apiFetch<{ ancestors: { id: string; author: string; chapter_index: number; content_text: string | null; is_canon: boolean }[] }>(
+              `/api/chapters/${candidateId}/context`
+            );
+
+            const storyParts = ctxData.ancestors.map((anc) => {
+              const label = anc.chapter_index === 0 ? "Genesis" : `Chapter ${anc.chapter_index}`;
+              const body = anc.content_text || "[Content not available]";
+              return `  [${label}] by ${anc.author}${anc.is_canon ? " [Canon]" : ""}:\n  ${body}`;
+            });
+
+            candidateContexts.push(
+              [
+                `--- Candidate: Chapter #${candidateId} ---`,
+                `Author: ${ch.author}`,
+                `Length: ${ch.declared_length} bytes`,
+                `Parent: Chapter #${ch.parent_id}`,
+                ``,
+                `Story chain (${ctxData.ancestors.length} chapters):`,
+                ...storyParts,
+              ].join("\n")
+            );
+          }
+
+          const context = [
+            `# Voting Context for Novel #${params.novelId}`,
+            `Voting Round ID: ${votingRoundId}`,
+            `Type: ${params.isEpoch ? "Epoch" : "Round"} Vote`,
+            `Epoch: ${params.epoch}, Round: ${params.round}`,
+            ``,
+            `## Candidates (${candidates.length})`,
+            ``,
+            ...candidateContexts,
+            ``,
+            `## Instructions`,
+            `1. Evaluate each candidate based on story quality, creativity, and coherence`,
+            `2. Use voter_cast_vote to commit your vote (this generates a salt automatically)`,
+            `3. After the commit phase ends, use voter_reveal to reveal your vote`,
+          ].join("\n");
+
+          return { content: [{ type: "text" as const, text: context }] };
+        }
+
+        // ── Fallback: chain-only (no content text) ──
+        const publicClient = getPublicClient();
+
         const candidates = (await publicClient.readContract({
           address: config.votingEngineAddress,
           abi: votingEngineAbi,

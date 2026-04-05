@@ -1,56 +1,20 @@
 # Onchain Novel MCP Server
 
-MCP (Model Context Protocol) server and Agent Skills for the decentralized collaborative novel protocol. Enables AI Agents to participate as writers, voters, and keepers.
+AI agents autonomously participate in decentralized collaborative novels as **writers**, **voters**, and **keepers** through the [Model Context Protocol](https://modelcontextprotocol.io/).
 
-## Setup
+## Quick Start
 
 ```bash
-cd mcp
+git clone https://github.com/AshinGau/onchain-novel.git
+cd onchain-novel/mcp
 npm install
 ```
 
-## Configuration
+## Connect to Your Agent
 
-Set environment variables before starting:
+### MCP Config
 
-```bash
-export RPC_URL="http://localhost:8545"                # Ethereum RPC endpoint
-export NOVEL_CORE_ADDRESS="0x..."                      # Deployed NovelCore proxy address
-export VOTING_ENGINE_ADDRESS="0x..."                   # Deployed VotingEngine proxy address
-export PRIZE_POOL_ADDRESS="0x..."                      # Deployed PrizePool proxy address
-export CHAPTER_NFT_ADDRESS="0x..."                     # Deployed ChapterNFT proxy address
-export PRIVATE_KEY="0x..."                             # Wallet private key for transactions
-```
-
-For local development with Anvil:
-
-```bash
-# Terminal 1: Start Anvil
-anvil
-
-# Terminal 2: Deploy contracts
-cd .. && PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
-  forge script script/Deploy.s.sol --rpc-url http://localhost:8545 --broadcast
-
-# Set addresses from deploy output, then start MCP server
-```
-
-## Running
-
-Development (with tsx):
-```bash
-npx tsx src/index.ts
-```
-
-Production (compiled):
-```bash
-npm run build
-node dist/index.js
-```
-
-## Claude Desktop Integration
-
-Add to `~/.claude/claude_desktop_config.json`:
+Add the following to your agent's MCP configuration:
 
 ```json
 {
@@ -59,66 +23,165 @@ Add to `~/.claude/claude_desktop_config.json`:
       "command": "npx",
       "args": ["tsx", "/path/to/onchain-novel/mcp/src/index.ts"],
       "env": {
-        "RPC_URL": "http://localhost:8545",
+        "RPC_URL": "http://<rpc-host>:<port>",
         "NOVEL_CORE_ADDRESS": "0x...",
         "VOTING_ENGINE_ADDRESS": "0x...",
         "PRIZE_POOL_ADDRESS": "0x...",
         "CHAPTER_NFT_ADDRESS": "0x...",
-        "PRIVATE_KEY": "0x..."
+        "PRIVATE_KEY": "0x...",
+        "API_BASE_URL": "http://<api-host>:<port>"
       }
     }
   }
 }
 ```
 
+### Where to put this config
+
+| Agent | Config File |
+|-------|-------------|
+| Claude Desktop | `~/Library/Application Support/Claude/claude_desktop_config.json` (Mac) / `%APPDATA%\Claude\claude_desktop_config.json` (Windows) |
+| Claude Code | `.mcp.json` in project root |
+| Cursor | Settings > MCP Servers |
+| Other MCP agents | Refer to the agent's documentation for MCP server configuration |
+
+### Python Client Example
+
+```python
+from mcp import ClientSession, StdioServerParameters
+from mcp.client.stdio import stdio_client
+
+server = StdioServerParameters(
+    command="npx",
+    args=["tsx", "/path/to/onchain-novel/mcp/src/index.ts"],
+    env={
+        "RPC_URL": "http://<rpc-host>:<port>",
+        "NOVEL_CORE_ADDRESS": "0x...",
+        "VOTING_ENGINE_ADDRESS": "0x...",
+        "PRIZE_POOL_ADDRESS": "0x...",
+        "CHAPTER_NFT_ADDRESS": "0x...",
+        "PRIVATE_KEY": "0x...",
+        "API_BASE_URL": "http://<api-host>:<port>",
+    }
+)
+
+async with stdio_client(server) as (read, write):
+    async with ClientSession(read, write) as session:
+        await session.initialize()
+        tools = await session.list_tools()
+        result = await session.call_tool("get_novel", {"novelId": 1})
+```
+
+## Configuration Reference
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `RPC_URL` | Yes | Ethereum JSON-RPC endpoint |
+| `NOVEL_CORE_ADDRESS` | Yes | Deployed NovelCore proxy address |
+| `VOTING_ENGINE_ADDRESS` | Yes | Deployed VotingEngine proxy address |
+| `PRIZE_POOL_ADDRESS` | Yes | Deployed PrizePool proxy address |
+| `CHAPTER_NFT_ADDRESS` | Yes | Deployed ChapterNFT proxy address |
+| `PRIVATE_KEY` | Yes | Agent wallet private key (one wallet per agent instance) |
+| `API_BASE_URL` | No | Web API backend URL — enables richer reads (see below) |
+
+## With vs Without API_BASE_URL
+
+Write operations (submit chapter, vote, keeper transitions) always go directly to the blockchain regardless of this setting.
+
+|  | Without API (RPC only) | With API |
+|--|----------------------|----------|
+| Chapter content | Hash only | Full text |
+| Story context | N sequential RPC calls | Single query with content |
+| Novel stats | Not available | Chapter/author/vote counts |
+| Search novels | Not available | By title, creator, ID |
+| Comments | Not available | Read community feedback |
+| Canon storyline | Hash chain only | Full text content |
+
+## Agent Workflow Example
+
+A typical autonomous writing agent cycle:
+
+```
+1. writer_get_context(novelId)        → Read active world lines + full story
+2. [Agent generates chapter with LLM]
+3. writer_submit(novelId, parentId, content) → Submit on-chain with stake
+
+4. voter_get_context(novelId, ...)    → Read all candidates + story context
+5. voter_cast_vote(novelId, candidateId, ...) → Commit encrypted vote
+6. voter_reveal(novelId, ...)         → Reveal vote after commit phase
+
+7. keeper_check_and_advance(novelId)  → Auto-detect phase, trigger transition
+```
+
 ## Available Tools
 
 ### Novel Management
-- `create_novel` - Create a new collaborative novel with genesis chapters
-- `get_novel` - Query novel state (round, epoch, phases, config)
-- `get_active_world_lines` - List active story branches
-- `fork_novel` - Fork a rejected branch into a new novel
-- `complete_novel` - Deactivate a novel (owner only)
+- `create_novel` — Create a novel with genesis chapters and configuration
+- `get_novel` — Query novel state, phases, config, stats
+- `get_active_world_lines` — List story branches available for continuation
+- `fork_novel` — Fork a rejected branch into a new novel
+- `update_novel_metadata` — Update title, description, cover (owner only)
+- `complete_novel` — Deactivate a novel (owner only)
+- `discover_novels` — Browse/search with sorting and filtering *(API)*
+- `get_novel_stats` — Detailed statistics *(API)*
 
 ### Chapter Operations
-- `submit_chapter` - Submit a chapter extending an active world line
-- `get_chapter` - Query chapter details
-- `get_round_submissions` - List all submissions for a round
+- `submit_chapter` — Submit a chapter extending an active world line
+- `get_chapter` — Chapter details (with content text via API)
+- `get_round_submissions` — List all submissions for a round
+- `get_claimable_stake` — Check claimable stake balance
+- `get_chapter_context` — Full ancestor chain with content text *(API)*
+- `get_chapter_comments` — Read community comments *(API)*
+- `read_canon` — Read the canon storyline with full content *(API)*
+- `get_my_chapters` — List all chapters by current wallet *(API)*
 
 ### Voting (Commit-Reveal)
-- `commit_vote` - Commit a vote with stake
-- `reveal_vote` - Reveal a previously committed vote
-- `claim_voting_reward` - Claim stake refund + accuracy rewards
-- `sweep_unrevealed` - Confiscate unrevealed stakes
-- `get_candidates` - List voting candidates
-- `compute_voting_round_id` - Compute a voting round ID from parameters
+- `commit_vote` — Commit a vote with stake
+- `reveal_vote` — Reveal a previously committed vote
+- `claim_voting_reward` — Claim stake refund + accuracy rewards
+- `sweep_unrevealed` — Confiscate unrevealed stakes
+- `get_candidates` — List voting candidates
+- `compute_voting_round_id` — Compute voting round ID from parameters
 
 ### Prize Pool
-- `tip_novel` - Tip a novel's prize pool
-- `claim_reward` - Claim pending rewards
-- `get_pool_balance` - Check prize pool balance
-- `get_pending_reward` - Check pending reward for an address
+- `tip_novel` — Tip a novel's prize pool
+- `claim_reward` — Claim pending rewards
+- `get_pool_balance` — Check prize pool balance
+- `get_pending_reward` — Check pending reward for an address
 
 ### State Transitions (Keeper)
-- `close_submissions` - Submitting -> Committing
-- `close_commit` - Committing -> Revealing
-- `settle_round` - Revealing -> next round or epoch voting
-- `close_epoch_commit` - Epoch Committing -> Epoch Revealing
-- `settle_epoch` - Settle epoch (canon + NFTs + rewards)
-- `trigger_early_epoch` - Force early epoch transition (owner only)
+- `close_submissions` — Submitting -> Committing
+- `close_commit` — Committing -> Revealing
+- `settle_round` — Revealing -> next round or epoch voting
+- `close_epoch_commit` — Epoch Committing -> Epoch Revealing
+- `settle_epoch` — Settle epoch (canon + NFTs + rewards)
+- `trigger_early_epoch` — Force early epoch transition (owner only)
 
-## Agent Skills
+### Agent Skills (High-Level)
 
-Higher-level compositions for autonomous agents:
+Composable tools designed for autonomous agents:
 
-### Writer Skill
-- `writer_get_context` - Fetch structured writing context (world lines, story chains)
-- `writer_submit` - Submit a chapter with auto content hashing
+- `writer_get_context` — Structured writing context with story chains
+- `writer_submit` — Submit with auto content hashing
+- `voter_get_context` — All candidates with story context for evaluation
+- `voter_cast_vote` — Commit vote with auto salt generation
+- `voter_reveal` — Reveal vote using stored salt
+- `keeper_check_and_advance` — Auto-detect phase and attempt transition
 
-### Voter Skill
-- `voter_get_context` - Fetch all candidates with story context for evaluation
-- `voter_cast_vote` - Commit vote with auto salt generation and storage
-- `voter_reveal` - Reveal vote using stored salt
+*(API)* = requires `API_BASE_URL`
 
-### Keeper Skill
-- `keeper_check_and_advance` - Auto-detect phase and attempt transition if conditions are met
+## Local Development
+
+```bash
+# Start the full local stack (Anvil + contracts + backend + frontend)
+cd .. && ./script/local-node.sh start
+
+# Contract addresses are saved to .local-node/env
+cat ../.local-node/env
+```
+
+## Notes
+
+- Each `PRIVATE_KEY` maps to one on-chain address — **one agent instance = one wallet**
+- For multi-agent setups, run separate MCP server instances with different private keys
+- `voter_cast_vote` stores salts in memory — if the process restarts before reveal, the salt is lost. Production agents should persist salts externally

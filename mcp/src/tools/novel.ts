@@ -4,6 +4,7 @@ import { parseEther, formatEther, keccak256, toHex, toBytes } from "viem";
 import { novelCoreAbi } from "../abi/index.js";
 import { config } from "../config.js";
 import { getPublicClient, getWalletClient } from "../utils/wallet.js";
+import { hasApi, apiFetch } from "../utils/api-client.js";
 
 const ROUND_PHASE_NAMES = ["Submitting", "Committing", "Revealing", "Settling"];
 const EPOCH_PHASE_NAMES = ["Rounds", "Committing", "Revealing", "Settling"];
@@ -111,12 +112,45 @@ export function registerNovelTools(server: McpServer): void {
 
   server.tool(
     "get_novel",
-    "Get the full state of a novel by ID, including current round/epoch phases and configuration.",
+    "Get the full state of a novel by ID, including current round/epoch phases, configuration, and statistics.",
     {
       novelId: z.number().describe("Novel ID to query"),
     },
     async (params) => {
       try {
+        // Prefer API (richer data: chapter_count, author_count, pool_balance, etc.)
+        if (hasApi()) {
+          const novel = await apiFetch<Record<string, unknown>>(`/api/novels/${params.novelId}`);
+          if (!novel) {
+            return { content: [{ type: "text" as const, text: `Novel ${params.novelId} not found.` }] };
+          }
+          const cfg = novel.config as Record<string, unknown>;
+          const info = [
+            `Novel #${novel.id}: ${novel.title}`,
+            novel.description ? `Description: ${novel.description}` : "",
+            `Creator: ${novel.creator}`,
+            `Active: ${novel.active}`,
+            `Current Round: ${novel.current_round} (${ROUND_PHASE_NAMES[novel.round_phase as number]})`,
+            `Current Epoch: ${novel.current_epoch} (${EPOCH_PHASE_NAMES[novel.epoch_phase as number]})`,
+            `Phase Start: ${novel.phase_start_time}`,
+            `Genesis Chapters: ${novel.genesis_chapter_count}`,
+            `Cumulative Canon: ${novel.cumulative_canon_chapters}`,
+            `Stake: ${formatEther(BigInt(cfg.stakeAmount as string))} ETH`,
+            `World Lines: ${cfg.worldLineCount}`,
+            `Rounds/Epoch: ${cfg.roundsPerEpoch}`,
+            `Min Submissions: ${cfg.roundMinSubmissions}`,
+            `Pool Balance: ${formatEther(BigInt(novel.pool_balance as string))} ETH`,
+            `Chapters: ${novel.chapter_count ?? "?"}`,
+            `Authors: ${novel.author_count ?? "?"}`,
+            novel.fork_source_novel_id
+              ? `Forked from Novel #${novel.fork_source_novel_id} Chapter #${novel.fork_source_chapter_id}`
+              : "",
+          ].filter(Boolean).join("\n");
+
+          return { content: [{ type: "text" as const, text: info }] };
+        }
+
+        // Fallback: read from chain
         const publicClient = getPublicClient();
 
         const [novel, metadata] = await Promise.all([
@@ -217,6 +251,19 @@ export function registerNovelTools(server: McpServer): void {
     },
     async (params) => {
       try {
+        if (hasApi()) {
+          const data = await apiFetch<{ worldlines: { id: string; author: string; chapter_index: number; vote_count: string }[] }>(
+            `/api/novels/${params.novelId}/worldlines`
+          );
+          if (data.worldlines.length === 0) {
+            return { content: [{ type: "text" as const, text: `No active world lines for novel ${params.novelId}.` }] };
+          }
+          const lines = data.worldlines.map(
+            (wl) => `  - Chapter #${wl.id} (index ${wl.chapter_index}, by ${wl.author}, ${wl.vote_count} votes)`
+          );
+          return { content: [{ type: "text" as const, text: `Active world lines for Novel #${params.novelId}:\n${lines.join("\n")}` }] };
+        }
+
         const publicClient = getPublicClient();
 
         const worldLines = (await publicClient.readContract({
@@ -439,6 +486,83 @@ export function registerNovelTools(server: McpServer): void {
           ],
           isError: true,
         };
+      }
+    }
+  );
+
+  // ── API-only tools ──────────────────────────────────────────────
+
+  server.tool(
+    "discover_novels",
+    "Browse and search novels. Supports sorting (hot/pool/tipped/active/latest), filtering (active/completed), and text search by title, creator address, or novel ID. Requires API_BASE_URL.",
+    {
+      sort: z.enum(["hot", "pool", "tipped", "active", "latest"]).default("latest").describe("Sort order"),
+      filter: z.enum(["active", "completed", "all"]).default("all").describe("Filter by status"),
+      search: z.string().optional().describe("Search by title, creator address (0x...), or novel ID"),
+      page: z.number().default(1).describe("Page number"),
+      limit: z.number().default(10).describe("Results per page (max 50)"),
+    },
+    async (params) => {
+      try {
+        if (!hasApi()) {
+          return { content: [{ type: "text" as const, text: "discover_novels requires API_BASE_URL to be configured." }], isError: true };
+        }
+        const qs = new URLSearchParams();
+        qs.set("sort", params.sort);
+        if (params.filter !== "all") qs.set("filter", params.filter);
+        if (params.search) qs.set("search", params.search);
+        qs.set("page", String(params.page));
+        qs.set("limit", String(params.limit));
+
+        const data = await apiFetch<{
+          novels: { id: string; title: string; creator: string; active: boolean; pool_balance: string; chapter_count: string; author_count: string; current_epoch: number; current_round: number }[];
+          pagination: { page: number; limit: number; total: number; totalPages: number };
+        }>(`/api/novels?${qs}`);
+
+        if (data.novels.length === 0) {
+          return { content: [{ type: "text" as const, text: "No novels found." }] };
+        }
+
+        const lines = data.novels.map((n) =>
+          `  #${n.id} "${n.title}" by ${n.creator.slice(0, 10)}... | ${n.active ? "Active" : "Completed"} | E${n.current_epoch}R${n.current_round} | ${n.chapter_count} chapters, ${n.author_count} authors | Pool: ${formatEther(BigInt(n.pool_balance))} ETH`
+        );
+
+        const text = [
+          `Novels (page ${data.pagination.page}/${data.pagination.totalPages}, ${data.pagination.total} total):`,
+          ...lines,
+        ].join("\n");
+
+        return { content: [{ type: "text" as const, text }] };
+      } catch (error) {
+        return { content: [{ type: "text" as const, text: `Failed: ${error instanceof Error ? error.message : String(error)}` }], isError: true };
+      }
+    }
+  );
+
+  server.tool(
+    "get_novel_stats",
+    "Get detailed statistics for a novel (chapter count, author count, vote count, total tipped, canon count, NFT count). Requires API_BASE_URL.",
+    {
+      novelId: z.number().describe("Novel ID"),
+    },
+    async (params) => {
+      try {
+        if (!hasApi()) {
+          return { content: [{ type: "text" as const, text: "get_novel_stats requires API_BASE_URL to be configured." }], isError: true };
+        }
+        const stats = await apiFetch<Record<string, string>>(`/api/novels/${params.novelId}/stats`);
+        const lines = [
+          `Novel #${params.novelId} Statistics:`,
+          `  Chapters: ${stats.chapter_count}`,
+          `  Authors: ${stats.author_count}`,
+          `  Votes: ${stats.vote_count}`,
+          `  Canon chapters: ${stats.canon_count}`,
+          `  NFTs minted: ${stats.nft_count}`,
+          `  Total tipped: ${formatEther(BigInt(stats.total_tipped))} ETH`,
+        ];
+        return { content: [{ type: "text" as const, text: lines.join("\n") }] };
+      } catch (error) {
+        return { content: [{ type: "text" as const, text: `Failed: ${error instanceof Error ? error.message : String(error)}` }], isError: true };
       }
     }
   );
