@@ -15,7 +15,7 @@ import {DataTypes} from "../libraries/DataTypes.sol";
 
 /// @title NovelCore
 /// @notice Core contract managing novel lifecycle, chapter tree, Round/Epoch state machine,
-///         staking, and pollution tracking. Coordinates VotingEngine, PrizePool, and ChapterNFT.
+///         staking, and spam tracking. Coordinates VotingEngine, PrizePool, and ChapterNFT.
 /// @dev Designed for multi-Agent collaborative novel creation on-chain.
 contract NovelCore is
     Initializable,
@@ -55,8 +55,8 @@ contract NovelCore is
     /// @notice Novel ID => author => stake balance (refundable)
     mapping(uint256 => mapping(address => uint256)) private _stakeBalances;
 
-    /// @notice Novel ID => author => pollution tracking
-    mapping(uint256 => mapping(address => DataTypes.PollutionRecord)) private _pollutionRecords;
+    /// @notice Novel ID => author => spam tracking
+    mapping(uint256 => mapping(address => DataTypes.SpamRecord)) private _spamRecords;
 
     /// @notice Novel ID => author => locked stake amount (in-flight, not yet settled)
     mapping(uint256 => mapping(address => uint256)) private _lockedStakes;
@@ -474,7 +474,7 @@ contract NovelCore is
             selectedIds[i] = selectedId;
         }
 
-        _updatePollutionRecords(novelId, novel.currentRound, rankedIds);
+        _updateSpamRecords(novelId, novel.currentRound, rankedIds);
         _returnRoundStakes(novelId, novel.currentEpoch, novel.currentRound);
 
         emit WorldLinesSelected(novelId, novel.currentRound, selectedIds);
@@ -792,14 +792,14 @@ contract NovelCore is
                 _lockedStakes[novelId][author] -= config.stakeAmount;
             }
 
-            // Check for pollution-based slashing
-            DataTypes.PollutionRecord storage record = _pollutionRecords[novelId][author];
-            if (record.consecutiveStrikes >= config.pollutionRounds && config.pollutionRounds > 0) {
+            // Check for spam-based slashing
+            DataTypes.SpamRecord storage record = _spamRecords[novelId][author];
+            if (record.consecutiveStrikes >= config.spamRounds && config.spamRounds > 0) {
                 uint256 slashAmount = config.stakeAmount / 2;
 
                 if (slashAmount > 0 && _stakeBalances[novelId][author] >= slashAmount) {
                     _stakeBalances[novelId][author] -= slashAmount;
-                    prizePool.deposit{value: slashAmount}(novelId, "pollution_slash");
+                    prizePool.deposit{value: slashAmount}(novelId, "spam_slash");
                     emit StakeSlashed(novelId, author, slashAmount);
                 }
 
@@ -808,23 +808,23 @@ contract NovelCore is
         }
     }
 
-    /// @dev Skips pollution tracking when fewer than 10 submissions.
+    /// @dev Skips spam tracking when fewer than 10 submissions.
     ///      Processes each author only once using their best-ranked chapter
     ///      to prevent gaming via submitting both high and low ranked chapters.
-    function _updatePollutionRecords(uint256 novelId, uint32 round, uint256[] memory rankedIds) internal {
+    function _updateSpamRecords(uint256 novelId, uint32 round, uint256[] memory rankedIds) internal {
         DataTypes.NovelConfig storage config = _novels[novelId].config;
-        if (config.pollutionThreshold == 0 || rankedIds.length < 10) return;
+        if (config.spamThreshold == 0 || rankedIds.length < 10) return;
 
-        uint256 bottomCount = (rankedIds.length * config.pollutionThreshold) / 100;
+        uint256 bottomCount = (rankedIds.length * config.spamThreshold) / 100;
         if (bottomCount == 0) bottomCount = 1;
 
         uint256 bottomStartIdx = rankedIds.length - bottomCount;
 
         // Single pass from best to worst rank. First occurrence of each author
-        // is their best chapter — skip duplicates to prevent pollution gaming.
+        // is their best chapter — skip duplicates to prevent spam gaming.
         for (uint256 i = 0; i < rankedIds.length; i++) {
             address author = _chapters[rankedIds[i]].author;
-            DataTypes.PollutionRecord storage record = _pollutionRecords[novelId][author];
+            DataTypes.SpamRecord storage record = _spamRecords[novelId][author];
 
             // Skip if already processed this round (first seen = best rank)
             if (record.lastRecordedRound == round) continue;

@@ -52,7 +52,7 @@ Multi-chapter genesis is supported: each genesis chapter seeds a separate initia
   - **Onchain** -- full text stored in calldata/contract storage.
   - **External** -- content hash stored on-chain, body stored on a decentralized network (e.g., IPFS/Arweave).
   - **HTTP** -- content hash stored on-chain, body retrievable via URL.
-- **Pollution slashing**: authors whose submissions are consistently ranked last across multiple rounds have a portion of future stakes slashed to discourage low-effort spam.
+- **Spam slashing**: authors whose submissions are consistently ranked last across multiple rounds have a portion of future stakes slashed to discourage low-effort spam.
 
 ### 3.3 Round Voting (Commit-Reveal Stake-to-Vote)
 

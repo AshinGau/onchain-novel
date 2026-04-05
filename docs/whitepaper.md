@@ -204,7 +204,7 @@ The protocol is built with game-theoretic security in mind:
 
 **Stake-Weighted Participation** -- All influence is proportional to capital staked. Creating multiple wallets (Sybil attack) provides zero advantage since the same capital split across N addresses produces identical voting power.
 
-**Anti-Spam Mechanisms** -- Authors who consistently rank last face pollution slashing. Voters who don't reveal lose their stake. Every participant has real skin in the game.
+**Anti-Spam Mechanisms** -- Authors who consistently rank last face spam slashing. Voters who don't reveal lose their stake. Every participant has real skin in the game.
 
 **Sustainable Treasury** -- The geometric release rate (max 50% per epoch) mathematically guarantees the prize pool can never be fully drained, no matter the parameters.
 

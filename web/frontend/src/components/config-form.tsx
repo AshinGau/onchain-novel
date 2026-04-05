@@ -144,10 +144,10 @@ export function ConfigForm({ config, onChange, contentLocationReadOnly }: Config
       <Section title="Anti-Spam">
         <Grid>
           <NumberField label="Strikes Before Slash" tip="Consecutive rounds in the bottom tier before 50% stake slash. Resets if the author skips a round or ranks higher."
-            value={config.pollutionRounds} onChange={(v) => update("pollutionRounds", v)} onBlur={() => blur("pollutionRounds")} error={errors.pollutionRounds} min={1} />
+            value={config.spamRounds} onChange={(v) => update("spamRounds", v)} onBlur={() => blur("spamRounds")} error={errors.spamRounds} min={1} />
           <div>
             <label className={labelClass}>Bottom Tier <FieldTooltip content="Authors ranking in the lowest X% each round receive a strike. Only tracked when 10+ submissions." /></label>
-            <RawPercentSlider value={config.pollutionThreshold} onChange={(v) => update("pollutionThreshold", v)} min={5} max={50} step={5} />
+            <RawPercentSlider value={config.spamThreshold} onChange={(v) => update("spamThreshold", v)} min={5} max={50} step={5} />
           </div>
         </Grid>
       </Section>

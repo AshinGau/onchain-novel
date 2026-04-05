@@ -120,7 +120,7 @@ After a round settles, if you were not penalized, your stake is refundable:
 NovelCore.claimStakeRefund(uint256 novelId)
 ```
 
-> **When you get slashed (50%):** Only if you've been in the bottom percentile for M consecutive rounds (pollution). Pollution is only checked when there are at least 10 submissions in the round.
+> **When you get slashed (50%):** Only if you've been in the bottom percentile for M consecutive rounds (spam). Spam detection is only checked when there are at least 10 submissions in the round.
 
 ### 4. Claim Author Rewards
 
@@ -369,8 +369,8 @@ ChapterNFT.getChapterInfo(uint256 tokenId) → ChapterNFTMetadata
 | `commitDuration` | `uint64` | Commit phase duration (seconds) | `259200` (3 days) |
 | `revealDuration` | `uint64` | Reveal phase duration (seconds) | `172800` (2 days) |
 | `stakeAmount` | `uint256` | Required stake per chapter (wei) | `10000000000000000` (0.01 ETH) |
-| `pollutionRounds` | `uint8` | M: consecutive rounds for pollution penalty | `3` |
-| `pollutionThreshold` | `uint8` | Bottom X% counts as pollution | `20` |
+| `spamRounds` | `uint8` | M: consecutive rounds for spam penalty | `3` |
+| `spamThreshold` | `uint8` | Bottom X% counts as spam | `20` |
 | `contentBaseUrl` | `string` | Base URL for content storage (immutable) | `"https://arweave.net/"` |
 
 **Validation rules:**

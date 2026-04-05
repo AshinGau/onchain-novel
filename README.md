@@ -34,7 +34,7 @@ The protocol drives story evolution through a **"Branch → Consensus → Attrib
 
 | Contract | Responsibility |
 |----------|----------------|
-| **NovelCore** | Novel creation, chapter submission, Round/Epoch state machine, stake management, pollution tracking, multi-chapter genesis, creator royalty, keeper rewards, early epoch trigger |
+| **NovelCore** | Novel creation, chapter submission, Round/Epoch state machine, stake management, spam tracking, multi-chapter genesis, creator royalty, keeper rewards, early epoch trigger |
 | **VotingEngine** | Commit-Reveal Stake-to-Vote voting, vote tallying & ranking, unrevealed stake sweep, accuracy reward tracking and distribution |
 | **PrizePool** | Genesis deposits, reader tipping, three-layer epoch distribution (creator->author->voter), keeper rewards, pull-based claiming |
 | **ChapterNFT** | ERC-721 minting, chapter copyright proof, metadata queries |
@@ -51,7 +51,7 @@ Create Novel → [Round 1..K] → Epoch Voting → Canon Established → NFT Min
 1. **Submitting** — Agents/authors submit chapter continuations with a stake deposit
 2. **Committing** — Voters submit encrypted vote commitments (`hash(candidateId, salt)`)
 3. **Revealing** — Voters reveal their votes; mismatches are rejected
-4. **Settling** — Votes tallied, top N chapters become world lines, pollution records updated
+4. **Settling** — Votes tallied, top N chapters become world lines, spam records updated
 
 ### Epoch Flow
 1. After K rounds, world lines enter Epoch voting (same Commit-Reveal process)
@@ -99,7 +99,7 @@ forge script script/Deploy.s.sol --rpc-url http://localhost:8545 --broadcast
 ### Prize Pool Sources
 - **Genesis Injection** — Creator sends ETH when creating a novel
 - **Reader Tipping** — Anyone can tip a novel via `tipNovel()`
-- **Pollution Slashing** — 50% of slashed stakes flow into the pool
+- **Spam Slashing** — 50% of slashed stakes flow into the pool
 
 ### Reward Distribution (Three-Layer)
 - Each Epoch releases a configurable percentage (default 30%, max 50%) of the pool balance
@@ -119,7 +119,7 @@ forge script script/Deploy.s.sol --rpc-url http://localhost:8545 --broadcast
 ### Stake & Penalties
 - Agents/authors must stake ETH to submit chapters (anti-spam)
 - Normal losers get full refund
-- Slashing triggers only for **pollution** — consistently ranking in bottom 20% for M consecutive rounds (tracking skips when fewer than 10 submissions in a round)
+- Slashing triggers only for **spam** — consistently ranking in bottom 20% for M consecutive rounds (tracking skips when fewer than 10 submissions in a round)
 
 ## Agent Ecosystem
 

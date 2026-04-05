@@ -295,22 +295,22 @@ contract E2ETest is Test {
     }
 
     // ============================================================
-    //  SCENARIO 2.4: Pollution Detection & Slashing
+    //  SCENARIO 2.4: Spam Detection & Slashing
     // ============================================================
 
-    function test_E2E_PollutionSlashing() public {
+    function test_E2E_SpamSlashing() public {
         DataTypes.NovelConfig memory config = _defaultConfig();
-        config.pollutionRounds = 2;
-        config.pollutionThreshold = 20;
+        config.spamRounds = 2;
+        config.spamThreshold = 20;
         config.roundMinSubmissions = 10;
         config.worldLineCount = 2;
-        config.roundsPerEpoch = 3; // Need multiple rounds for pollution
+        config.roundsPerEpoch = 3; // Need multiple rounds for spam
 
         vm.prank(creatorAddr);
         uint256 novelId =
             novelCore.createNovel{value: 5 ether}(config, defaultMetadata, _genesisSubmissions(GENESIS_CONTENT));
 
-        // Need 10+ unique authors for pollution detection
+        // Need 10+ unique authors for spam detection
         address[10] memory manyAuthors;
         for (uint256 i = 0; i < 10; i++) {
             manyAuthors[i] = makeAddr(string.concat("pollAuthor", vm.toString(i)));
@@ -318,18 +318,18 @@ contract E2ETest is Test {
         }
 
         // Round 1: author[9] gets fewest votes (bottom 20%)
-        this.runPollutionRoundExternal(novelId, config, manyAuthors, 1);
+        this.runSpamRoundExternal(novelId, config, manyAuthors, 1);
 
         // Round 2: author[9] again bottom → now has 2 consecutive strikes
-        this.runPollutionRoundExternal(novelId, config, manyAuthors, 2);
+        this.runSpamRoundExternal(novelId, config, manyAuthors, 2);
 
         // After round 2 settlement, author[9] should have been slashed
         // Check: author[9]'s stake balance should be reduced
-        // The _returnRoundStakes checks pollution and slashes if consecutiveStrikes >= pollutionRounds
+        // The _returnRoundStakes checks spam and slashes if consecutiveStrikes >= spamRounds
         // After slashing, 50% of stake goes to prize pool
 
         // Round 3: not bottom → should have reset
-        this.runPollutionRoundExternal(novelId, config, manyAuthors, 3);
+        this.runSpamRoundExternal(novelId, config, manyAuthors, 3);
     }
 
     // ============================================================
@@ -711,8 +711,8 @@ contract E2ETest is Test {
             commitDuration: 3 days,
             revealDuration: 2 days,
             stakeAmount: 0.01 ether,
-            pollutionRounds: 3,
-            pollutionThreshold: 20,
+            spamRounds: 3,
+            spamThreshold: 20,
             contentLocation: DataTypes.ContentLocation.Onchain,
             contentBaseUrl: ""
         });
@@ -803,16 +803,16 @@ contract E2ETest is Test {
         novelCore.settleRound(novelId);
     }
 
-    function runPollutionRoundExternal(
+    function runSpamRoundExternal(
         uint256 novelId,
         DataTypes.NovelConfig memory config,
         address[10] memory manyAuthors,
         uint32 roundNum
     ) external {
-        _runPollutionRound(novelId, config, manyAuthors, roundNum);
+        _runSpamRound(novelId, config, manyAuthors, roundNum);
     }
 
-    function _runPollutionRound(
+    function _runSpamRound(
         uint256 novelId,
         DataTypes.NovelConfig memory config,
         address[10] memory manyAuthors,
@@ -827,7 +827,7 @@ contract E2ETest is Test {
             vm.prank(manyAuthors[i]);
             bytes memory pollContent = bytes(
                 string.concat(
-                    "Pollution round ",
+                    "Spam round ",
                     vm.toString(roundNum),
                     " chapter by author ",
                     vm.toString(i),

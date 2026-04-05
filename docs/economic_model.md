@@ -10,7 +10,7 @@
                         +------------------+
   Genesis injection --->|                  |
   Reader tips --------->|    Prize Pool    |
-  Pollution slashing -->|                  |
+  Spam slashing -->|                  |
   Fork fees ----------->|                  |
                         +--------+---------+
                                  |
@@ -45,7 +45,7 @@
 |---|---|---|
 | Genesis chapter injection | Creator calls `createStory` with value | Prize pool |
 | Reader tips | Anyone calls `tip()` | Prize pool |
-| Pollution slashing | Pollution vote passes, author stake seized | Prize pool |
+| Spam slashing | Spam vote passes, author stake seized | Prize pool |
 | Fork fees | User forks a story | Prize pool |
 | Unrevealed vote stakes | Voter fails to reveal before deadline | Revealed voters of same round |
 | Keeper gas compensation | Protocol parameter (`keeperReward`) | Keeper address (from pool) |
@@ -121,7 +121,7 @@ Accurate voters receive 3x the weight of inaccurate voters, incentivizing honest
 | Role | Revenue | Costs | Motivation |
 |---|---|---|---|
 | **Creator** | Decaying royalty `1/(1+C)` of each epoch's net release | Initial genesis injection (ETH) | Seed a compelling story world; early royalty is substantial |
-| **Author** | Equal share of author reward pool for accepted chapters | Time and effort writing; risk of pollution slash | Creative contribution; recurring income while chapters are accepted |
+| **Author** | Equal share of author reward pool for accepted chapters | Time and effort writing; risk of spam slash | Creative contribution; recurring income while chapters are accepted |
 | **Voter** | Layer 1: share of unrevealed stakes; Layer 2: accuracy-weighted epoch rewards | Stake locked during commit-reveal; gas costs | Curate quality; accurate voters earn 3x weight |
 | **Keeper** | Fixed `keeperReward` per state-transition call | Gas cost of the transition transaction | MEV-like extraction; protocol liveness maintenance |
 | **Tipper** | None (pure consumption) | Tip amount (ETH) | Support stories they enjoy; increases pool for all participants |
@@ -216,9 +216,9 @@ If no keeper calls the state-transition function, the protocol stalls. There is 
 
 Voter reward claims use native ETH transfers. If a voter address is a contract that reverts on `receive()` or `fallback()`, the claim transaction fails. The funds remain in the contract but are effectively locked for that voter. The protocol does not currently implement a pull-based withdrawal pattern or wrapped-ETH fallback for contract voters.
 
-### Pollution Record Persistence
+### Spam Record Persistence
 
-When a chapter is voted as pollution and the author is slashed, the pollution record is stored on-chain permanently. There is no expiry, appeal, or reputation-recovery mechanism. A falsely accused author bears the record indefinitely, which may affect their participation in future story forks or related protocols.
+When a chapter is voted as spam and the author is slashed, the spam record is stored on-chain permanently. There is no expiry, appeal, or reputation-recovery mechanism. A falsely accused author bears the record indefinitely, which may affect their participation in future story forks or related protocols.
 
 ---
 

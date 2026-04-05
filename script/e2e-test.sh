@@ -100,7 +100,7 @@ pass "Keeper reward set"
 info "Creating novel..."
 # Config: min=100, max=10000, roundMinDuration=2s, roundMinSubmissions=2, worldLineCount=2,
 #         roundsPerEpoch=1, prizeRelease=3000, voterReward=2000, commit=2s, reveal=2s,
-#         stake=0.01 ETH, pollutionRounds=0, pollutionThreshold=0, contentBaseUrl=""
+#         stake=0.01 ETH, spamRounds=0, spamThreshold=0, contentBaseUrl=""
 # Genesis: 1 chapter (onchain content)
 GENESIS_CONTENT="Once upon a time in a decentralized world, where stories are written by many and owned by all..."
 GENESIS_HEX="0x$(echo -n "$GENESIS_CONTENT" | xxd -p | tr -d '\n')"
