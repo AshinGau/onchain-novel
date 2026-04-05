@@ -52,8 +52,8 @@ library DataTypes {
         uint64 commitDuration; // Commit phase duration in seconds
         uint64 revealDuration; // Reveal phase duration in seconds
         uint256 stakeAmount; // Required stake per chapter submission (wei)
-        uint8 pollutionRounds; // M: pollution tracking window (consecutive rounds)
-        uint8 pollutionThreshold; // Bottom X percentile counts as pollution (e.g., 20 = bottom 20%)
+        uint8 spamRounds; // M: spam tracking window (consecutive rounds)
+        uint8 spamThreshold; // Bottom X percentile counts as spam (e.g., 20 = bottom 20%)
         ContentLocation contentLocation; // Content storage strategy
         string contentBaseUrl; // Base URL (External/HTTP only, ignored for Onchain)
     }
@@ -109,10 +109,10 @@ library DataTypes {
         bytes32 contentHash;
     }
 
-    /// @notice Pollution tracking for an author in a specific novel
-    struct PollutionRecord {
+    /// @notice Spam tracking for an author in a specific novel
+    struct SpamRecord {
         uint8 consecutiveStrikes; // Consecutive rounds in bottom percentile
-        uint32 lastRecordedRound; // Last round where pollution was checked
+        uint32 lastRecordedRound; // Last round where spam was checked
     }
 
     /// @notice Unified content submission (replaces separate contentHash + declaredLength params)

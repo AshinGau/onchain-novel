@@ -91,7 +91,7 @@ export function registerKeeperTools(server: McpServer): void {
 
   server.tool(
     "settle_round",
-    "Settle a round: tally votes, select top N world lines, process pollution, return stakes. Requires reveal duration to have elapsed.",
+    "Settle a round: tally votes, select top N world lines, process spam, return stakes. Requires reveal duration to have elapsed.",
     {
       novelId: z.number().describe("Novel ID"),
     },

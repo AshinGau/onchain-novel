@@ -77,8 +77,8 @@ contract GasProfileTest is Test {
             commitDuration: 3 days,
             revealDuration: 2 days,
             stakeAmount: 0.01 ether,
-            pollutionRounds: 3,
-            pollutionThreshold: 20,
+            spamRounds: 3,
+            spamThreshold: 20,
             contentLocation: DataTypes.ContentLocation.Onchain,
             contentBaseUrl: ""
         });

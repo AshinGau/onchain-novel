@@ -25,8 +25,8 @@ export function registerNovelTools(server: McpServer): void {
       commitDuration: z.number().describe("Commit phase duration in seconds"),
       revealDuration: z.number().describe("Reveal phase duration in seconds"),
       stakeAmount: z.string().describe("Required stake per chapter submission in ETH (e.g. '0.01')"),
-      pollutionRounds: z.number().describe("Consecutive rounds for pollution tracking"),
-      pollutionThreshold: z.number().describe("Bottom X percentile counts as pollution (e.g. 20)"),
+      spamRounds: z.number().describe("Consecutive rounds for spam tracking"),
+      spamThreshold: z.number().describe("Bottom X percentile counts as spam (e.g. 20)"),
       contentLocation: z.number().default(0).describe("Content storage mode: 0=Onchain, 1=External (IPFS/Arweave), 2=HTTP"),
       contentBaseUrl: z.string().default("").describe("Base URL for content storage (External/HTTP only, ignored for Onchain)"),
       title: z.string().describe("Novel title"),
@@ -52,8 +52,8 @@ export function registerNovelTools(server: McpServer): void {
           commitDuration: BigInt(params.commitDuration),
           revealDuration: BigInt(params.revealDuration),
           stakeAmount: parseEther(params.stakeAmount),
-          pollutionRounds: params.pollutionRounds,
-          pollutionThreshold: params.pollutionThreshold,
+          spamRounds: params.spamRounds,
+          spamThreshold: params.spamThreshold,
           contentLocation: params.contentLocation,
           contentBaseUrl: params.contentBaseUrl,
         };
@@ -191,8 +191,8 @@ export function registerNovelTools(server: McpServer): void {
             commitDuration: bigint;
             revealDuration: bigint;
             stakeAmount: bigint;
-            pollutionRounds: number;
-            pollutionThreshold: number;
+            spamRounds: number;
+            spamThreshold: number;
           };
           currentRound: number;
           currentEpoch: number;
@@ -323,8 +323,8 @@ export function registerNovelTools(server: McpServer): void {
       commitDuration: z.number().describe("Commit phase duration in seconds"),
       revealDuration: z.number().describe("Reveal phase duration in seconds"),
       stakeAmount: z.string().describe("Required stake per submission in ETH"),
-      pollutionRounds: z.number().describe("Pollution tracking window"),
-      pollutionThreshold: z.number().describe("Bottom percentile for pollution"),
+      spamRounds: z.number().describe("Spam tracking window"),
+      spamThreshold: z.number().describe("Bottom percentile for spam"),
       title: z.string().describe("Novel title for the forked novel"),
       description: z.string().default("").describe("Novel description"),
       coverUri: z.string().default("").describe("Cover image URI"),
@@ -347,8 +347,8 @@ export function registerNovelTools(server: McpServer): void {
           commitDuration: BigInt(params.commitDuration),
           revealDuration: BigInt(params.revealDuration),
           stakeAmount: parseEther(params.stakeAmount),
-          pollutionRounds: params.pollutionRounds,
-          pollutionThreshold: params.pollutionThreshold,
+          spamRounds: params.spamRounds,
+          spamThreshold: params.spamThreshold,
           contentLocation: 0, // Default to Onchain
           contentBaseUrl: "", // Inherited from source novel (overridden by contract)
         };

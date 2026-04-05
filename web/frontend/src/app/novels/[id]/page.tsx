@@ -190,8 +190,8 @@ export default async function NovelDetailPage({ params }: { params: Promise<{ id
           <div><span className="text-neutral-500">Stake <FieldTooltip content="Anti-spam deposit. Normal losers get full refund; only spam-flagged authors lose 50%." /></span> {stakeEth} {TOKEN_SYMBOL}</div>
           <div><span className="text-neutral-500">Prize Release <FieldTooltip content="Percentage of the prize pool released each Epoch. Split into: creator royalty → author rewards → voter rewards." /></span> {novel.config.prizeReleaseRate / 100}%</div>
           <div><span className="text-neutral-500">Voter Reward <FieldTooltip content="Share of epoch rewards for voters. Higher = more voter incentive, less for authors. Accurate voters get 3x weight." /></span> {novel.config.voterRewardRate / 100}%</div>
-          <div><span className="text-neutral-500">Strikes Before Slash <FieldTooltip content="Consecutive rounds in the bottom tier before 50% stake slash. Resets if the author skips a round or ranks higher." /></span> {novel.config.pollutionRounds}</div>
-          <div><span className="text-neutral-500">Bottom Tier <FieldTooltip content="Authors ranking in the lowest X% each round receive a strike. Only tracked when 10+ submissions." /></span> {novel.config.pollutionThreshold}%</div>
+          <div><span className="text-neutral-500">Strikes Before Slash <FieldTooltip content="Consecutive rounds in the bottom tier before 50% stake slash. Resets if the author skips a round or ranks higher." /></span> {novel.config.spamRounds}</div>
+          <div><span className="text-neutral-500">Bottom Tier <FieldTooltip content="Authors ranking in the lowest X% each round receive a strike. Only tracked when 10+ submissions." /></span> {novel.config.spamThreshold}%</div>
         </div>
       </details>
 

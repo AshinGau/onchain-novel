@@ -47,8 +47,8 @@ export async function handleNovelCoreEvent(log: Log, db: Client, rpc: PublicClie
         commitDuration: novel.config.commitDuration.toString(),
         revealDuration: novel.config.revealDuration.toString(),
         stakeAmount: novel.config.stakeAmount.toString(),
-        pollutionRounds: novel.config.pollutionRounds,
-        pollutionThreshold: novel.config.pollutionThreshold,
+        spamRounds: novel.config.spamRounds,
+        spamThreshold: novel.config.spamThreshold,
         contentLocation: novel.config.contentLocation,
         contentBaseUrl: novel.config.contentBaseUrl,
       };
@@ -96,8 +96,8 @@ export async function handleNovelCoreEvent(log: Log, db: Client, rpc: PublicClie
         commitDuration: novel.config.commitDuration.toString(),
         revealDuration: novel.config.revealDuration.toString(),
         stakeAmount: novel.config.stakeAmount.toString(),
-        pollutionRounds: novel.config.pollutionRounds,
-        pollutionThreshold: novel.config.pollutionThreshold,
+        spamRounds: novel.config.spamRounds,
+        spamThreshold: novel.config.spamThreshold,
         contentLocation: novel.config.contentLocation,
         contentBaseUrl: novel.config.contentBaseUrl,
       };
