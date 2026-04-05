@@ -374,7 +374,7 @@ async function main() {
     address: NOVEL_CORE,
     abi: novelCoreAbi,
     functionName: "getRoundSubmissions",
-    args: [NOVEL_ID, 1],
+    args: [NOVEL_ID, 1, 1],
   })) as bigint[];
   info(`Round submissions: ${submissions.join(", ")}`);
 

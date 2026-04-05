@@ -192,7 +192,7 @@ contract ReentrancyTest is Test {
         uint256 votingRoundId = uint256(keccak256(abi.encodePacked(novelId, uint32(1), uint32(1), false)));
         uint256[] memory wl = novelCore.getActiveWorldLines(novelId);
         // Get a submitted chapter
-        uint256[] memory subs = novelCore.getRoundSubmissions(novelId, 1);
+        uint256[] memory subs = novelCore.getRoundSubmissions(novelId, 1, 1);
 
         // Attacker commits and reveals
         bytes32 salt = bytes32("attack_salt");

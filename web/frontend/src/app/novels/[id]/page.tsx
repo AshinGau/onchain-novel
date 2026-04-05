@@ -7,7 +7,8 @@ import { VotePanel } from "@/components/vote-panel";
 import { RewardsPanel } from "@/components/rewards-panel";
 import { fetchApi, type Novel, type TreeChapter } from "@/lib/api";
 import { TOKEN_SYMBOL } from "@/lib/config";
-import { shortenAddress, formatEth, getPhaseLabel } from "@/lib/format";
+import { shortenAddress, formatEth, formatDuration, getPhaseLabel } from "@/lib/format";
+import { FieldTooltip } from "@/components/field-tooltip";
 import { computeVotingRoundId } from "@/lib/contracts";
 import { ConnectedStoryTree } from "@/components/connected-story-tree";
 import { PhaseCountdown } from "@/components/phase-countdown";
@@ -176,13 +177,18 @@ export default async function NovelDetailPage({ params }: { params: Promise<{ id
       <details className="rounded-lg bg-neutral-900 border border-neutral-800 p-4 mb-6">
         <summary className="font-semibold cursor-pointer">Configuration</summary>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-3 text-sm">
-          <div><span className="text-neutral-500">Stake:</span> {stakeEth} {TOKEN_SYMBOL}</div>
-          <div><span className="text-neutral-500">World Lines:</span> {novel.config.worldLineCount}</div>
-          <div><span className="text-neutral-500">Rounds/Epoch:</span> {novel.config.roundsPerEpoch}</div>
-          <div><span className="text-neutral-500">Min Submissions:</span> {novel.config.roundMinSubmissions}</div>
-          <div><span className="text-neutral-500">Prize Release:</span> {novel.config.prizeReleaseRate / 100}%</div>
-          <div><span className="text-neutral-500">Voter Reward:</span> {novel.config.voterRewardRate / 100}%</div>
-          <div><span className="text-neutral-500">Chapter Length:</span> {novel.config.minChapterLength}–{novel.config.maxChapterLength} bytes</div>
+          <div><span className="text-neutral-500">Chapter Length <FieldTooltip content="Min–Max content size in bytes. CJK characters are ~3 bytes each." /></span> {novel.config.minChapterLength}–{novel.config.maxChapterLength} bytes</div>
+          <div><span className="text-neutral-500">Round Duration <FieldTooltip content="Minimum time the submission phase must last before it can close." /></span> {formatDuration(novel.config.roundMinDuration)}</div>
+          <div><span className="text-neutral-500">Min Submissions <FieldTooltip content="Minimum chapter submissions required before voting. Must be >= World Line Count." /></span> {novel.config.roundMinSubmissions}</div>
+          <div><span className="text-neutral-500">World Lines <FieldTooltip content="Parallel story branches kept each round. Top N voted chapters become world lines." /></span> {novel.config.worldLineCount}</div>
+          <div><span className="text-neutral-500">Rounds/Epoch <FieldTooltip content="Rounds before Epoch voting. At epoch end, one world line is elected as Canon." /></span> {novel.config.roundsPerEpoch}</div>
+          <div><span className="text-neutral-500">Commit Duration <FieldTooltip content="Time for voters to submit encrypted vote commitments." /></span> {formatDuration(novel.config.commitDuration)}</div>
+          <div><span className="text-neutral-500">Reveal Duration <FieldTooltip content="Time for voters to reveal votes. Unrevealed votes are confiscated." /></span> {formatDuration(novel.config.revealDuration)}</div>
+          <div><span className="text-neutral-500">Stake <FieldTooltip content="Anti-spam deposit. Normal losers get full refund; only spam-flagged authors lose 50%." /></span> {stakeEth} {TOKEN_SYMBOL}</div>
+          <div><span className="text-neutral-500">Prize Release <FieldTooltip content="Percentage of the prize pool released each Epoch. Split into: creator royalty → author rewards → voter rewards." /></span> {novel.config.prizeReleaseRate / 100}%</div>
+          <div><span className="text-neutral-500">Voter Reward <FieldTooltip content="Share of epoch rewards for voters. Higher = more voter incentive, less for authors. Accurate voters get 3x weight." /></span> {novel.config.voterRewardRate / 100}%</div>
+          <div><span className="text-neutral-500">Strikes Before Slash <FieldTooltip content="Consecutive rounds in the bottom tier before 50% stake slash. Resets if the author skips a round or ranks higher." /></span> {novel.config.pollutionRounds}</div>
+          <div><span className="text-neutral-500">Bottom Tier <FieldTooltip content="Authors ranking in the lowest X% each round receive a strike. Only tracked when 10+ submissions." /></span> {novel.config.pollutionThreshold}%</div>
         </div>
       </details>
 

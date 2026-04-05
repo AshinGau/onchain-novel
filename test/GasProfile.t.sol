@@ -135,7 +135,7 @@ contract GasProfileTest is Test {
     function test_Gas_CommitVote() public {
         _createNovelAndStartVoting();
         uint256 votingRoundId = _roundVotingId();
-        uint256[] memory subs = novelCore.getRoundSubmissions(novelId, 1);
+        uint256[] memory subs = novelCore.getRoundSubmissions(novelId, 1, 1);
 
         vm.prank(voter1);
         votingEngine.commitVote{value: 0.1 ether}(
@@ -146,7 +146,7 @@ contract GasProfileTest is Test {
     function test_Gas_RevealVote() public {
         _createNovelAndCommitVotes();
         uint256 votingRoundId = _roundVotingId();
-        uint256[] memory subs = novelCore.getRoundSubmissions(novelId, 1);
+        uint256[] memory subs = novelCore.getRoundSubmissions(novelId, 1, 1);
 
         vm.warp(block.timestamp + 3 days + 1);
         novelCore.closeCommit(novelId);
@@ -251,7 +251,7 @@ contract GasProfileTest is Test {
     function _createNovelAndCommitVotes() internal {
         _createNovelAndStartVoting();
         uint256 votingRoundId = _roundVotingId();
-        uint256[] memory subs = novelCore.getRoundSubmissions(novelId, 1);
+        uint256[] memory subs = novelCore.getRoundSubmissions(novelId, 1, 1);
 
         vm.prank(voter1);
         votingEngine.commitVote{value: 0.1 ether}(
@@ -266,7 +266,7 @@ contract GasProfileTest is Test {
     function _createNovelAndRevealVotes() internal {
         _createNovelAndCommitVotes();
         uint256 votingRoundId = _roundVotingId();
-        uint256[] memory subs = novelCore.getRoundSubmissions(novelId, 1);
+        uint256[] memory subs = novelCore.getRoundSubmissions(novelId, 1, 1);
 
         vm.warp(block.timestamp + 3 days + 1);
         novelCore.closeCommit(novelId);

@@ -110,7 +110,7 @@ interface INovelCore {
     function getNovel(uint256 novelId) external view returns (DataTypes.Novel memory);
     function getChapter(uint256 chapterId) external view returns (DataTypes.Chapter memory);
     function getActiveWorldLines(uint256 novelId) external view returns (uint256[] memory);
-    function getRoundSubmissions(uint256 novelId, uint32 round) external view returns (uint256[] memory);
+    function getRoundSubmissions(uint256 novelId, uint32 epoch, uint32 round) external view returns (uint256[] memory);
     function getNovelCount() external view returns (uint256);
     function getChapterCount() external view returns (uint256);
     function getClaimableStake(uint256 novelId, address author) external view returns (uint256);
