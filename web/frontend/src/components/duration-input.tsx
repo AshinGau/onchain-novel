@@ -15,12 +15,11 @@ function bestUnit(seconds: number): Unit {
 }
 
 interface DurationInputProps {
-  value: number; // seconds
+  value: number;
   onChange: (seconds: number) => void;
-  className?: string;
 }
 
-export function DurationInput({ value, onChange, className }: DurationInputProps) {
+export function DurationInput({ value, onChange }: DurationInputProps) {
   const [unit, setUnit] = useState<Unit>(() => bestUnit(value));
   const [display, setDisplay] = useState(() => String(value / UNIT_SECONDS[bestUnit(value)]));
 
@@ -46,22 +45,21 @@ export function DurationInput({ value, onChange, className }: DurationInputProps
     }
   }
 
-  const inputClass = className || "w-full rounded-lg bg-neutral-900 border border-neutral-700 px-3 py-2 text-sm text-neutral-100 focus:outline-none focus:border-neutral-500";
-
   return (
-    <div className="flex gap-1.5">
+    <div className="input-group">
       <input
         type="number"
         min="0"
         step="any"
         value={display}
         onChange={(e) => handleValueChange(e.target.value)}
-        className={inputClass + " flex-1"}
+        className="form-control"
       />
       <select
         value={unit}
         onChange={(e) => handleUnitChange(e.target.value as Unit)}
-        className="rounded-lg bg-neutral-900 border border-neutral-700 px-2 py-2 text-sm text-neutral-100 focus:outline-none focus:border-neutral-500"
+        className="form-select"
+        style={{ maxWidth: 90 }}
       >
         {(Object.keys(UNIT_SECONDS) as Unit[]).map((u) => (
           <option key={u} value={u}>{UNIT_LABELS[u]}</option>
