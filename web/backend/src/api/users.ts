@@ -18,7 +18,7 @@ router.get("/:address/votes", async (req, res) => {
     const offset = (page - 1) * limit;
 
     const votesRes = await query(
-      `SELECT v.*, n.title AS novel_title
+      `SELECT v.*, n.title AS novel_title, n.round_phase, n.epoch_phase
        FROM votes v
        LEFT JOIN novels n ON n.id = v.novel_id
        WHERE LOWER(v.voter) = $1

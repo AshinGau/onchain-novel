@@ -33,6 +33,8 @@ interface UserVote {
   claimed: boolean;
   commit_block: string;
   novel_title: string;
+  round_phase: number;
+  epoch_phase: number;
 }
 
 interface UserNFT {
@@ -90,7 +92,9 @@ export default function DashboardPage() {
     );
   }
 
-  const pendingReveals = votes.filter(v => !v.revealed && !v.claimed);
+  // Only show pending reveals when the novel is currently in a Reveal phase
+  // round_phase=2 → round revealing, epoch_phase=2 → epoch revealing
+  const pendingReveals = votes.filter(v => !v.revealed && !v.claimed && (v.round_phase === 2 || v.epoch_phase === 2));
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 pb-24 md:pb-8">

@@ -28,11 +28,32 @@ interface VotePanelProps {
   title?: string;
 }
 
-function RevealForm({ novelId, votingRoundId, votedCandidateIds, localVotes, revealSecretKey, setRevealSecretKey, handleReveal, revealTx }: {
+function CandidatePreview({ candidate }: { candidate: VoteCandidate }) {
+  return (
+    <div className="rounded-md border border-neutral-700 bg-neutral-800/60 p-3">
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-xs text-neutral-400 font-medium">Selected: Candidate(ID.{candidate.id})</span>
+      </div>
+      {candidate.content_text ? (
+        <p className="text-sm text-neutral-300 leading-relaxed">
+          {candidate.content_text.length > 100
+            ? candidate.content_text.slice(0, 100) + "…"
+            : candidate.content_text}
+        </p>
+      ) : (
+        <p className="text-sm text-neutral-500 italic">Content not yet fetched.</p>
+      )}
+    </div>
+  );
+}
+
+function RevealForm({ novelId, votingRoundId, votedCandidateIds, localVotes, selectedRevealId, candidates, revealSecretKey, setRevealSecretKey, handleReveal, revealTx }: {
   novelId: string; votingRoundId: string;
   votedCandidateIds: string[]; localVotes: Record<string, string>;
+  selectedRevealId: string | null;
+  candidates: VoteCandidate[];
   revealSecretKey: string; setRevealSecretKey: (v: string) => void;
-  handleReveal: () => void; revealTx: ReturnType<typeof useTxAction>;
+  handleReveal: (candidateIdOverride?: string) => void; revealTx: ReturnType<typeof useTxAction>;
 }) {
   const candidateId = votedCandidateIds[0];
   const savedSalt = candidateId ? localVotes[candidateId] : null;
@@ -42,13 +63,21 @@ function RevealForm({ novelId, votingRoundId, votedCandidateIds, localVotes, rev
     if (savedSalt && !revealSecretKey) setRevealSecretKey(savedSalt);
   }, [savedSalt]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const effectiveCandidateId = candidateId || selectedRevealId;
+  const selectedCandidate = effectiveCandidateId ? candidates.find(c => c.id === effectiveCandidateId) : null;
+
   return (
     <div className="space-y-3">
-      {candidateId && (
+      {candidateId ? (
         <p className="text-sm text-neutral-300">
           You voted for <span className="text-amber-400">Candidate(ID.{candidateId})</span>. Reveal to make it count and recover your stake.
         </p>
+      ) : (
+        <p className="text-sm text-amber-400">
+          Vote record not found in browser storage. Select the candidate you voted for above.
+        </p>
       )}
+      {selectedCandidate && <CandidatePreview candidate={selectedCandidate} />}
       <div className="space-y-1.5">
         <label className="text-sm text-neutral-400">Secret Key </label>
         <input type="text" value={revealSecretKey} onChange={(e) => setRevealSecretKey(e.target.value)}
@@ -56,8 +85,8 @@ function RevealForm({ novelId, votingRoundId, votedCandidateIds, localVotes, rev
           className="w-78 rounded-md bg-neutral-800 border border-neutral-700 px-2 py-1 text-sm" />
         <p className="text-neutral-500 text-xs">Enter the exact secret key you used during commit. If it does not match, the reveal will fail.</p>
       </div>
-      <Button size="sm" onClick={handleReveal} disabled={revealTx.isBusy || !revealSecretKey.trim()}>
-        {revealTx.isBusy ? (revealTx.isPending ? "Signing..." : "Confirming...") : !revealSecretKey.trim() ? "Enter Secret Key" : "Reveal Vote"}
+      <Button size="sm" onClick={() => handleReveal(effectiveCandidateId || undefined)} disabled={revealTx.isBusy || !revealSecretKey.trim() || !effectiveCandidateId}>
+        {revealTx.isBusy ? (revealTx.isPending ? "Signing..." : "Confirming...") : !effectiveCandidateId ? "Select a Candidate Above" : !revealSecretKey.trim() ? "Enter Secret Key" : "Reveal Vote"}
       </Button>
       {revealTx.isError && <p className="text-red-400 text-xs">{revealTx.error}</p>}
     </div>
@@ -129,8 +158,8 @@ export function VotePanel({ novelId, votingRoundId, phase, candidates, title }: 
     setSecretKey("");
   }
 
-  function handleReveal() {
-    const candidateId = votedCandidateIds[0];
+  function handleReveal(candidateIdOverride?: string) {
+    const candidateId = candidateIdOverride || votedCandidateIds[0];
     const salt = revealSecretKey.trim();
     if (!candidateId || !salt) return;
     const bytes32 = toBytes32Salt(salt);
@@ -149,6 +178,8 @@ export function VotePanel({ novelId, votingRoundId, phase, candidates, title }: 
 
   // Determine if user can still vote (not committed on-chain, not pending)
   const canVote = isConnected && phase === "committing" && !alreadyCommittedOnChain && !commitTx.isBusy && !justCommittedId;
+  // Allow selecting a candidate during reveal when localStorage lost the vote record
+  const needsManualRevealSelect = isConnected && phase === "revealing" && !onChainRevealed && alreadyCommittedOnChain && votedCandidateIds.length === 0;
 
   const selectedCandidate = candidates.find((c) => c.id === selectedId);
 
@@ -164,12 +195,13 @@ export function VotePanel({ novelId, votingRoundId, phase, candidates, title }: 
           const isVotedLocally = votedCandidateIds.includes(c.id);
           const isSelected = selectedId === c.id;
           const commentCount = Number(c.comment_count || 0);
+          const isClickable = (canVote && !isVotedLocally) || needsManualRevealSelect;
 
           return (
             <div
               key={c.id}
               onClick={() => {
-                if (canVote && !isVotedLocally) {
+                if (isClickable) {
                   setSelectedId(isSelected ? null : c.id);
                 }
               }}
@@ -177,7 +209,7 @@ export function VotePanel({ novelId, votingRoundId, phase, candidates, title }: 
                   ? "border-green-700 bg-green-950/20"
                   : isSelected
                     ? "border-amber-500 bg-amber-950/25 shadow-[0_0_8px_rgba(245,158,11,0.1)]"
-                    : canVote
+                    : isClickable
                       ? "border-neutral-700 bg-neutral-800 hover:border-neutral-500 cursor-pointer"
                       : "border-neutral-700 bg-neutral-800"
                 }`}
@@ -248,22 +280,7 @@ export function VotePanel({ novelId, votingRoundId, phase, candidates, title }: 
               <p className="text-xs text-neutral-400">Select a candidate above to read, then vote here. One vote per address per round.</p>
 
               {/* Content preview of selected candidate */}
-              {selectedCandidate && (
-                <div className="rounded-md border border-neutral-700 bg-neutral-800/60 p-3">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-xs text-neutral-400 font-medium">Selected: Candidate(ID.{selectedCandidate.id})</span>
-                  </div>
-                  {selectedCandidate.content_text ? (
-                    <p className="text-sm text-neutral-300 leading-relaxed">
-                      {selectedCandidate.content_text.length > 100
-                        ? selectedCandidate.content_text.slice(0, 100) + "…"
-                        : selectedCandidate.content_text}
-                    </p>
-                  ) : (
-                    <p className="text-sm text-neutral-500 italic">Content not yet fetched.</p>
-                  )}
-                </div>
-              )}
+              {selectedCandidate && <CandidatePreview candidate={selectedCandidate} />}
 
               <div className="flex items-center gap-2">
                 <label className="text-sm text-neutral-400">Stake:</label>
@@ -340,6 +357,8 @@ export function VotePanel({ novelId, votingRoundId, phase, candidates, title }: 
               votingRoundId={votingRoundId}
               votedCandidateIds={votedCandidateIds}
               localVotes={localVotes}
+              selectedRevealId={selectedId}
+              candidates={candidates}
               revealSecretKey={revealSecretKey}
               setRevealSecretKey={setRevealSecretKey}
               handleReveal={handleReveal}
