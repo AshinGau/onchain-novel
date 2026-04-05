@@ -19,6 +19,7 @@ export default async function NovelDetailPage({ params }: { params: Promise<{ id
 
   let novel: Novel;
   let tree: TreeChapter[] = [];
+  let treeAnchors: TreeChapter[] = [];
   let forks: Novel[] = [];
   let worldlines: { id: string }[] = [];
   let roundCandidates: { id: string; author: string; chapter_index: number; vote_count: string; is_world_line: boolean; content_text?: string | null; comment_count?: string | number }[] = [];
@@ -31,8 +32,10 @@ export default async function NovelDetailPage({ params }: { params: Promise<{ id
   }
 
   try {
-    const treeData = await fetchApi<{ chapters: TreeChapter[] }>(`/api/novels/${id}/tree`);
+    const epoch = novel.current_epoch <= 0 ? 1 : novel.current_epoch;
+    const treeData = await fetchApi<{ chapters: TreeChapter[]; anchors: TreeChapter[] }>(`/api/novels/${id}/tree?epoch=${epoch}`);
     tree = treeData.chapters;
+    treeAnchors = treeData.anchors || [];
   } catch {
     warnings.push("Failed to load story tree.");
   }
@@ -248,10 +251,10 @@ export default async function NovelDetailPage({ params }: { params: Promise<{ id
       </div>
 
       {/* Story Tree */}
-      {tree.length > 0 && (
+      {(tree.length > 0 || novel.current_epoch > 1) && (
         <div className="mb-6">
           <h2 className="font-semibold mb-3">Story Tree</h2>
-          <ConnectedStoryTree chapters={tree} novelId={id} votingRoundId={novel.active && (novel.round_phase === 1 || novel.round_phase === 2) ? roundVotingId : undefined} continuable={novel.active && novel.epoch_phase === 0 && novel.round_phase === 0} />
+          <ConnectedStoryTree initialChapters={tree} initialAnchors={treeAnchors} currentEpoch={novel.current_epoch} novelId={id} votingRoundId={novel.active && (novel.round_phase === 1 || novel.round_phase === 2) ? roundVotingId : undefined} continuable={novel.active && novel.epoch_phase === 0 && novel.round_phase === 0} />
         </div>
       )}
 

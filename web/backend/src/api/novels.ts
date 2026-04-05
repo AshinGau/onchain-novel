@@ -131,18 +131,60 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-// GET /api/novels/:id/tree — Story tree (all chapters with parent relationships)
+// GET /api/novels/:id/tree — Story tree chapters, optionally filtered by epoch
 router.get("/:id/tree", async (req, res) => {
   try {
     const { id } = req.params;
-    const chaptersRes = await query(
-      `SELECT id, parent_id, author, chapter_index, round, epoch, vote_count,
-              is_world_line, is_canon, declared_length, content_hash, created_at
-       FROM chapters WHERE novel_id = $1
-       ORDER BY id ASC`,
-      [id]
-    );
-    res.json({ chapters: chaptersRes.rows });
+    const epochParam = req.query.epoch;
+
+    if (epochParam !== undefined) {
+      const epoch = safeInt(epochParam, 0, 0, 1000000);
+
+      // Epoch 0 (genesis) merges into epoch 1 in the UI
+      const epochCondition = epoch <= 1 ? "(epoch = 0 OR epoch = 1)" : "epoch = $2";
+      const params = epoch <= 1 ? [id] : [id, epoch];
+
+      const chaptersRes = await query(
+        `SELECT id, parent_id, author, chapter_index, round, epoch, vote_count,
+                is_world_line, is_canon, declared_length, content_hash, created_at
+         FROM chapters WHERE novel_id = $1 AND ${epochCondition}
+         ORDER BY id ASC`,
+        params
+      );
+
+      // For epoch >= 2, fetch anchor chapters (parents from previous epochs)
+      let anchors: typeof chaptersRes.rows = [];
+      if (epoch >= 2) {
+        const chapterIds = new Set(chaptersRes.rows.map((c) => c.id as string));
+        const externalParentIds = chaptersRes.rows
+          .map((c) => c.parent_id as string)
+          .filter((pid) => pid && pid !== "0" && !chapterIds.has(pid));
+
+        if (externalParentIds.length > 0) {
+          const unique = [...new Set(externalParentIds)];
+          const placeholders = unique.map((_: string, i: number) => `$${i + 2}`).join(",");
+          const anchorRes = await query(
+            `SELECT id, parent_id, author, chapter_index, round, epoch, vote_count,
+                    is_world_line, is_canon, declared_length, content_hash, created_at
+             FROM chapters WHERE novel_id = $1 AND id IN (${placeholders})`,
+            [id, ...unique]
+          );
+          anchors = anchorRes.rows;
+        }
+      }
+
+      res.json({ chapters: chaptersRes.rows, anchors });
+    } else {
+      // No epoch filter — return all chapters
+      const chaptersRes = await query(
+        `SELECT id, parent_id, author, chapter_index, round, epoch, vote_count,
+                is_world_line, is_canon, declared_length, content_hash, created_at
+         FROM chapters WHERE novel_id = $1
+         ORDER BY id ASC`,
+        [id]
+      );
+      res.json({ chapters: chaptersRes.rows });
+    }
   } catch (err) {
     console.error("GET /api/novels/:id/tree error:", err);
     res.status(500).json({ error: "Internal server error" });
