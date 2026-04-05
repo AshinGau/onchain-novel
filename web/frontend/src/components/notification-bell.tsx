@@ -37,12 +37,9 @@ export function NotificationBell() {
       const listData = await listRes.json();
       setUnreadCount(countData.count || 0);
       setNotifications(listData.notifications || []);
-    } catch {
-      // API not available
-    }
+    } catch {}
   }, [address]);
 
-  // Poll every 30 seconds
   useEffect(() => {
     if (!isConnected) return;
     fetchNotifications();
@@ -55,11 +52,9 @@ export function NotificationBell() {
     try {
       const unreadIds = notifications.filter(n => !n.read).map(n => n.id);
       await signedFetch(
-        `${API_BASE}/api/notifications/${address}/mark-read`,
-        "POST",
+        `${API_BASE}/api/notifications/${address}/mark-read`, "POST",
         unreadIds.length > 0 ? { ids: unreadIds } : {},
-        address,
-        signMessageAsync,
+        address, signMessageAsync,
       );
       setUnreadCount(0);
       setNotifications(prev => prev.filter(n => n.read));
@@ -69,25 +64,22 @@ export function NotificationBell() {
   if (!isConnected) return null;
 
   const typeIcons: Record<string, string> = {
-    phase_change: "🔄",
-    reveal_reminder: "⚠️",
-    canon_established: "🏆",
-    chapter_submitted: "📝",
+    phase_change: "bi-arrow-repeat",
+    reveal_reminder: "bi-exclamation-triangle",
+    canon_established: "bi-trophy",
+    chapter_submitted: "bi-pencil",
   };
 
   return (
-    <div className="relative">
+    <div className="dropdown">
       <button
         onClick={() => { setOpen(!open); if (!open) fetchNotifications(); }}
-        className="relative p-1.5 rounded-md hover:bg-neutral-800 transition-colors"
+        className="btn btn-link text-body p-1 position-relative"
         aria-label="Notifications"
       >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-          <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-        </svg>
+        <i className="bi bi-bell fs-5" />
         {unreadCount > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+          <span className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style={{ fontSize: "0.6rem" }}>
             {unreadCount > 9 ? "9+" : unreadCount}
           </span>
         )}
@@ -95,41 +87,29 @@ export function NotificationBell() {
 
       {open && (
         <>
-          {/* Backdrop */}
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-
-          {/* Dropdown */}
-          <div className="absolute right-0 top-full mt-2 w-80 max-h-96 overflow-y-auto rounded-lg bg-neutral-900 border border-neutral-700 shadow-xl z-50">
-            <div className="flex items-center justify-between px-3 py-2 border-b border-neutral-800">
-              <span className="text-sm font-semibold">Notifications</span>
+          <div className="position-fixed top-0 start-0 w-100 h-100" style={{ zIndex: 1049 }} onClick={() => setOpen(false)} />
+          <div className="dropdown-menu show end-0 shadow" style={{ width: 320, maxHeight: 400, overflowY: "auto", zIndex: 1050 }}>
+            <div className="d-flex justify-content-between align-items-center px-3 py-2 border-bottom">
+              <span className="fw-semibold small">Notifications</span>
               {unreadCount > 0 && (
-                <button onClick={markAllRead} className="text-xs text-blue-400 hover:underline">
-                  Mark all read
-                </button>
+                <button onClick={markAllRead} className="btn btn-link btn-sm p-0 small">Mark all read</button>
               )}
             </div>
 
             {notifications.length === 0 ? (
-              <div className="px-3 py-6 text-center text-neutral-500 text-sm">
-                No notifications yet.
-              </div>
+              <div className="px-3 py-4 text-center text-body-tertiary small">No notifications yet.</div>
             ) : (
-              <div>
-                {notifications.map(n => (
-                  <div
-                    key={n.id}
-                    className={`px-3 py-2.5 border-b border-neutral-800 last:border-0 ${!n.read ? "bg-neutral-800/50" : ""}`}
-                  >
-                    {n.link ? (
-                      <Link href={n.link} onClick={() => setOpen(false)} className="block">
-                        <NotifContent n={n} typeIcons={typeIcons} />
-                      </Link>
-                    ) : (
+              notifications.map(n => (
+                <div key={n.id} className={`dropdown-item-text border-bottom px-3 py-2 ${!n.read ? "bg-body-secondary" : ""}`}>
+                  {n.link ? (
+                    <Link href={n.link} onClick={() => setOpen(false)} className="text-decoration-none text-body">
                       <NotifContent n={n} typeIcons={typeIcons} />
-                    )}
-                  </div>
-                ))}
-              </div>
+                    </Link>
+                  ) : (
+                    <NotifContent n={n} typeIcons={typeIcons} />
+                  )}
+                </div>
+              ))
             )}
           </div>
         </>
@@ -141,14 +121,12 @@ export function NotificationBell() {
 function NotifContent({ n, typeIcons }: { n: Notification; typeIcons: Record<string, string> }) {
   return (
     <>
-      <div className="flex items-center gap-1.5">
-        <span>{typeIcons[n.type] || "📌"}</span>
-        <span className={`text-sm font-medium ${!n.read ? "text-white" : "text-neutral-300"}`}>
-          {n.title}
-        </span>
+      <div className="d-flex align-items-center gap-1">
+        <i className={`bi ${typeIcons[n.type] || "bi-pin"}`} />
+        <span className={`small fw-medium ${!n.read ? "text-body" : "text-body-secondary"}`}>{n.title}</span>
       </div>
-      <p className="text-xs text-neutral-400 mt-0.5">{n.message}</p>
-      <p className="text-xs text-neutral-600 mt-0.5">{timeAgo(n.created_at)}</p>
+      <p className="small text-body-secondary mb-0">{n.message}</p>
+      <p className="small text-body-tertiary mb-0">{timeAgo(n.created_at)}</p>
     </>
   );
 }

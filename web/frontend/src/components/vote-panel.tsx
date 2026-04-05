@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import { parseEther, keccak256, encodePacked } from "viem";
 import { useAccount, useReadContract } from "wagmi";
-import { Button } from "@/components/ui/button";
 import { VOTING_ENGINE_ADDRESS, votingEngineAbi } from "@/lib/contracts";
 import { TOKEN_SYMBOL, DEFAULT_STAKE } from "@/lib/config";
 import { shortenAddress } from "@/lib/format";
@@ -11,55 +10,41 @@ import { saveVote, loadAllVotes, loadVote, toBytes32Salt } from "@/lib/vote-stor
 import { useTxAction } from "@/hooks/use-tx-action";
 
 interface VoteCandidate {
-  id: string;
-  author: string;
-  chapter_index: number;
-  vote_count: string;
-  is_world_line: boolean;
-  content_text?: string | null;
-  comment_count?: string | number;
+  id: string; author: string; chapter_index: number; vote_count: string;
+  is_world_line: boolean; content_text?: string | null; comment_count?: string | number;
 }
 
 interface VotePanelProps {
-  novelId: string;
-  votingRoundId: string;
-  phase: "committing" | "revealing";
-  candidates: VoteCandidate[];
-  title?: string;
+  novelId: string; votingRoundId: string; phase: "committing" | "revealing";
+  candidates: VoteCandidate[]; title?: string;
 }
 
-function RevealForm({ novelId, votingRoundId, votedCandidateIds, localVotes, revealSecretKey, setRevealSecretKey, handleReveal, revealTx }: {
-  novelId: string; votingRoundId: string;
-  votedCandidateIds: string[]; localVotes: Record<string, string>;
-  revealSecretKey: string; setRevealSecretKey: (v: string) => void;
-  handleReveal: () => void; revealTx: ReturnType<typeof useTxAction>;
-}) {
+function RevealForm({ novelId, votingRoundId, votedCandidateIds, localVotes, revealSecretKey, setRevealSecretKey, handleReveal, revealTx }: any) {
   const candidateId = votedCandidateIds[0];
   const savedSalt = candidateId ? localVotes[candidateId] : null;
 
-  // Pre-fill from localStorage on mount
   useEffect(() => {
     if (savedSalt && !revealSecretKey) setRevealSecretKey(savedSalt);
   }, [savedSalt]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div className="space-y-3">
+    <div className="d-flex flex-column gap-2">
       {candidateId && (
-        <p className="text-sm text-neutral-300">
-          You voted for <span className="text-amber-400">Candidate(ID.{candidateId})</span>. Reveal to make it count and recover your stake.
-        </p>
+        <p className="small">You voted for <span className="text-warning fw-semibold">Candidate(ID.{candidateId})</span>. Reveal to make it count and recover your stake.</p>
       )}
-      <div className="space-y-1.5">
-        <label className="text-sm text-neutral-400">Secret Key </label>
-        <input type="text" value={revealSecretKey} onChange={(e) => setRevealSecretKey(e.target.value)}
+      <div>
+        <label className="form-label small text-body-secondary">Secret Key</label>
+        <input type="text" value={revealSecretKey} onChange={(e: any) => setRevealSecretKey(e.target.value)}
           placeholder="Enter the secret key you used when voting..."
-          className="w-78 rounded-md bg-neutral-800 border border-neutral-700 px-2 py-1 text-sm" />
-        <p className="text-neutral-500 text-xs">Enter the exact secret key you used during commit. If it does not match, the reveal will fail.</p>
+          className="form-control form-control-sm" style={{ maxWidth: 320 }} />
+        <div className="form-text">Enter the exact secret key you used during commit.</div>
       </div>
-      <Button size="sm" onClick={handleReveal} disabled={revealTx.isBusy || !revealSecretKey.trim()}>
-        {revealTx.isBusy ? (revealTx.isPending ? "Signing..." : "Confirming...") : !revealSecretKey.trim() ? "Enter Secret Key" : "Reveal Vote"}
-      </Button>
-      {revealTx.isError && <p className="text-red-400 text-xs">{revealTx.error}</p>}
+      <div>
+        <button className="btn btn-primary btn-sm" onClick={handleReveal} disabled={revealTx.isBusy || !revealSecretKey.trim()}>
+          {revealTx.isBusy ? (revealTx.isPending ? "Signing..." : "Confirming...") : !revealSecretKey.trim() ? "Enter Secret Key" : "Reveal Vote"}
+        </button>
+      </div>
+      {revealTx.isError && <div className="text-danger small">{revealTx.error}</div>}
     </div>
   );
 }
@@ -73,26 +58,20 @@ export function VotePanel({ novelId, votingRoundId, phase, candidates, title }: 
   const [justCommittedId, setJustCommittedId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  // Always check on-chain commit status for this address + round
   const { data: onChainCommit, refetch: refetchCommit } = useReadContract({
-    address: VOTING_ENGINE_ADDRESS,
-    abi: votingEngineAbi,
-    functionName: "getVoteCommit",
+    address: VOTING_ENGINE_ADDRESS, abi: votingEngineAbi, functionName: "getVoteCommit",
     args: address ? [BigInt(novelId), BigInt(votingRoundId), address] : undefined,
     query: { enabled: !!address },
   });
 
   const onChainCommitHash = (onChainCommit as any)?.commitHash as string | undefined;
   const onChainRevealed = !!(onChainCommit as any)?.revealed;
-  // Has this address already committed on-chain? (commitHash != bytes32(0))
   const alreadyCommittedOnChain = !!onChainCommitHash && onChainCommitHash !== "0x0000000000000000000000000000000000000000000000000000000000000000";
 
-  useEffect(() => {
-    setLocalVotes(loadAllVotes(novelId, votingRoundId));
-  }, [novelId, votingRoundId]);
-
-  // Figure out which candidate the user voted for (from localStorage)
+  useEffect(() => { setLocalVotes(loadAllVotes(novelId, votingRoundId)); }, [novelId, votingRoundId]);
   const votedCandidateIds = Object.keys(localVotes);
+
+  const [pendingCommit, setPendingCommit] = useState<{ candidateId: string; userSalt: string } | null>(null);
 
   const commitTx = useTxAction({
     onSuccess: () => {
@@ -100,18 +79,11 @@ export function VotePanel({ novelId, votingRoundId, phase, candidates, title }: 
         saveVote(novelId, votingRoundId, pendingCommit.candidateId, pendingCommit.userSalt);
         setLocalVotes((prev) => ({ ...prev, [pendingCommit!.candidateId]: pendingCommit!.userSalt }));
         setJustCommittedId(pendingCommit.candidateId);
-        setSelectedId(null);
-        setPendingCommit(null);
-        refetchCommit();
+        setSelectedId(null); setPendingCommit(null); refetchCommit();
       }
     },
   });
-
-  const revealTx = useTxAction({
-    onSuccess: () => refetchCommit(),
-  });
-
-  const [pendingCommit, setPendingCommit] = useState<{ candidateId: string; userSalt: string } | null>(null);
+  const revealTx = useTxAction({ onSuccess: () => refetchCommit() });
 
   function handleCommit(candidateId: string) {
     const userSalt = secretKey.trim();
@@ -119,13 +91,8 @@ export function VotePanel({ novelId, votingRoundId, phase, candidates, title }: 
     const bytes32 = toBytes32Salt(userSalt);
     const commitHash = keccak256(encodePacked(["uint256", "bytes32"], [BigInt(candidateId), bytes32]));
     setPendingCommit({ candidateId, userSalt });
-    commitTx.writeContract({
-      address: VOTING_ENGINE_ADDRESS,
-      abi: votingEngineAbi,
-      functionName: "commitVote",
-      args: [BigInt(novelId), BigInt(votingRoundId), commitHash],
-      value: parseEther(stakeAmount),
-    });
+    commitTx.writeContract({ address: VOTING_ENGINE_ADDRESS, abi: votingEngineAbi, functionName: "commitVote",
+      args: [BigInt(novelId), BigInt(votingRoundId), commitHash], value: parseEther(stakeAmount) });
     setSecretKey("");
   }
 
@@ -134,224 +101,151 @@ export function VotePanel({ novelId, votingRoundId, phase, candidates, title }: 
     const salt = revealSecretKey.trim();
     if (!candidateId || !salt) return;
     const bytes32 = toBytes32Salt(salt);
-    revealTx.writeContract({
-      address: VOTING_ENGINE_ADDRESS,
-      abi: votingEngineAbi,
-      functionName: "revealVote",
-      args: [BigInt(novelId), BigInt(votingRoundId), BigInt(candidateId), bytes32],
-    });
+    revealTx.writeContract({ address: VOTING_ENGINE_ADDRESS, abi: votingEngineAbi, functionName: "revealVote",
+      args: [BigInt(novelId), BigInt(votingRoundId), BigInt(candidateId), bytes32] });
   }
 
-  function handleSubmitVote() {
-    if (!selectedId) return;
-    handleCommit(selectedId);
-  }
-
-  // Determine if user can still vote (not committed on-chain, not pending)
   const canVote = isConnected && phase === "committing" && !alreadyCommittedOnChain && !commitTx.isBusy && !justCommittedId;
-
   const selectedCandidate = candidates.find((c) => c.id === selectedId);
 
   return (
-    <div className="rounded-lg bg-neutral-900 border border-neutral-800 p-4">
-      <h3 className="font-semibold mb-3">
-        {title || (phase === "committing" ? "Cast Your Vote" : "Reveal Your Vote")}
-      </h3>
+    <div className="card">
+      <div className="card-body">
+        <h6 className="card-title">{title || (phase === "committing" ? "Cast Your Vote" : "Reveal Your Vote")}</h6>
 
-      {/* Candidate list — clickable to select */}
-      <div className="space-y-2 mb-4">
-        {candidates.map((c) => {
-          const isVotedLocally = votedCandidateIds.includes(c.id);
-          const isSelected = selectedId === c.id;
-          const commentCount = Number(c.comment_count || 0);
+        {/* Candidate list */}
+        <div className="list-group mb-3">
+          {candidates.map((c) => {
+            const isVotedLocally = votedCandidateIds.includes(c.id);
+            const isSelected = selectedId === c.id;
+            const commentCount = Number(c.comment_count || 0);
 
-          return (
-            <div
-              key={c.id}
-              onClick={() => {
-                if (canVote && !isVotedLocally) {
-                  setSelectedId(isSelected ? null : c.id);
-                }
-              }}
-              className={`rounded-md border p-3 text-sm transition-all duration-150 ${isVotedLocally
-                  ? "border-green-700 bg-green-950/20"
-                  : isSelected
-                    ? "border-amber-500 bg-amber-950/25 shadow-[0_0_8px_rgba(245,158,11,0.1)]"
-                    : canVote
-                      ? "border-neutral-700 bg-neutral-800 hover:border-neutral-500 cursor-pointer"
-                      : "border-neutral-700 bg-neutral-800"
-                }`}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span>Candidate(ID.{c.id}) by {shortenAddress(c.author)}</span>
-                  {isSelected && (
-                    <a
-                      href={`/chapters/${c.id}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      className="text-blue-400 hover:text-blue-300 text-xs underline underline-offset-2 flex-shrink-0"
-                    >
-                      View full
-                    </a>
-                  )}
-                </div>
-                <div className="flex items-center gap-3 flex-shrink-0 ml-2">
-                  {isVotedLocally && <span className="text-green-400 text-xs">&#10003; Voted</span>}
-                  <span className="text-neutral-500 text-xs flex items-center gap-1" title="Comments">
-                    <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="currentColor"><path d="M2.5 2A1.5 1.5 0 001 3.5v7A1.5 1.5 0 002.5 12h1v2.5l3.5-2.5h6A1.5 1.5 0 0015 10.5v-7A1.5 1.5 0 0013.5 2h-11z" /></svg>
-                    {commentCount}
-                  </span>
-                  {Number(c.vote_count) > 0 && <span className="text-neutral-500 text-xs">{c.vote_count} votes</span>}
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Commit UI */}
-      {phase === "committing" && (
-        <>
-          {!isConnected && (
-            <p className="text-amber-400 text-sm">Connect wallet to vote</p>
-          )}
-
-          {isConnected && alreadyCommittedOnChain && !justCommittedId && (
-            <p className="text-green-400 text-sm">&#10003; You have already voted this round. One vote per address per round.</p>
-          )}
-
-          {justCommittedId && localVotes[justCommittedId] && (
-            <div className="rounded-md border border-amber-800 bg-amber-950/30 p-3 text-xs space-y-1">
-              <p className="text-green-400 text-sm font-medium">&#10003; Vote committed!</p>
-              <p className="text-amber-300 font-medium mt-2">Secret key (needed to reveal &amp; recover stake):</p>
-              <code className="block bg-neutral-900 rounded px-2 py-1 text-neutral-300 break-all select-all">{localVotes[justCommittedId]}</code>
-              <p className="text-neutral-500">Saved in your browser. Back it up if you may clear data or switch devices.</p>
-              <button onClick={() => navigator.clipboard.writeText(localVotes[justCommittedId])} className="text-blue-400 hover:text-blue-300 underline">Copy</button>
-            </div>
-          )}
-
-          {commitTx.isBusy && (
-            <p className="text-neutral-400 text-sm">{commitTx.isPending ? "Waiting for signature..." : "Confirming on-chain..."}</p>
-          )}
-
-          {commitTx.isError && (
-            <div className="space-y-1">
-              <p className="text-red-400 text-xs">{commitTx.error}</p>
-              <button onClick={commitTx.reset} className="text-xs text-neutral-400 hover:text-white underline">Dismiss</button>
-            </div>
-          )}
-
-          {canVote && (
-            <div className="space-y-3 border-t border-neutral-700 pt-3">
-              <p className="text-xs text-neutral-400">Select a candidate above to read, then vote here. One vote per address per round.</p>
-
-              {/* Content preview of selected candidate */}
-              {selectedCandidate && (
-                <div className="rounded-md border border-neutral-700 bg-neutral-800/60 p-3">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-xs text-neutral-400 font-medium">Selected: Candidate(ID.{selectedCandidate.id})</span>
-                  </div>
-                  {selectedCandidate.content_text ? (
-                    <p className="text-sm text-neutral-300 leading-relaxed">
-                      {selectedCandidate.content_text.length > 100
-                        ? selectedCandidate.content_text.slice(0, 100) + "…"
-                        : selectedCandidate.content_text}
-                    </p>
-                  ) : (
-                    <p className="text-sm text-neutral-500 italic">Content not yet fetched.</p>
-                  )}
-                </div>
-              )}
-
-              <div className="flex items-center gap-2">
-                <label className="text-sm text-neutral-400">Stake:</label>
-                <input type="number" step="0.001" min="0.001" value={stakeAmount}
-                  onChange={(e) => setStakeAmount(e.target.value)}
-                  className="w-24 rounded-md bg-neutral-800 border border-neutral-700 px-2 py-1 text-sm" />
-                <span className="text-sm text-neutral-400">{TOKEN_SYMBOL}</span>
-              </div>
-              <details className="rounded-md border border-neutral-700 bg-neutral-800/40 text-xs">
-                <summary className="px-3 py-2 cursor-pointer text-neutral-400 hover:text-neutral-300 select-none">
-                  How voting works (commit-reveal)
-                </summary>
-                <div className="px-3 pb-3 space-y-2 text-neutral-400 leading-relaxed">
-                  <div>
-                    <span className="text-neutral-300 font-medium">1. Stake</span>
-                    <p>You deposit a small amount of {TOKEN_SYMBOL} as a stake to cast your vote. This prevents spam and ensures voters have skin in the game. Your stake is returned when you reveal.</p>
-                  </div>
-                  <div>
-                    <span className="text-neutral-300 font-medium">2. Secret Key</span>
-                    <p>You set a secret key that is combined with your vote to create a hidden commitment. <span className="text-amber-400">Remember this key</span> — you need the exact same key to reveal your vote later.</p>
-                  </div>
-                  <div>
-                    <span className="text-neutral-300 font-medium">3. Reveal</span>
-                    <p>After the commit phase ends, a reveal phase begins. You must enter your secret key again to reveal your vote on-chain. This proves your vote without allowing others to copy it beforehand.</p>
-                  </div>
-                  <div>
-                    <span className="text-neutral-300 font-medium">4. Rewards</span>
-                    <p>If you voted for the winning candidate and revealed on time, you recover your full stake plus a share of the voter reward pool. Unrevealed votes forfeit their stake. You can claim rewards from the Rewards panel below.</p>
-                  </div>
-                </div>
-              </details>
-              <div className="space-y-1.5">
-                <label className="text-sm text-neutral-400">Secret Key</label>
-                <input type="text" value={secretKey} onChange={(e) => setSecretKey(e.target.value)}
-                  placeholder="Enter a secret key you can remember..."
-                  className="w-full rounded-md bg-neutral-800 border border-neutral-700 px-2 py-1 text-sm" />
-                {secretKey.trim().length > 0 && secretKey.trim().length < 4 && (
-                  <p className="text-amber-400 text-xs">Short keys are easier to brute-force — others may guess your vote before reveal.</p>
-                )}
-                <p className="text-neutral-500 text-xs">You will need this exact key to reveal your vote. It is only stored in your browser as a backup — not on any server, so that no one can see your vote before reveal.</p>
-              </div>
-              <Button
-                onClick={handleSubmitVote}
-                disabled={!selectedId || !secretKey.trim() || commitTx.isBusy}
-                className="bg-amber-600 text-black font-semibold hover:bg-amber-500 disabled:opacity-40 disabled:cursor-not-allowed"
+            return (
+              <div key={c.id}
+                onClick={() => { if (canVote && !isVotedLocally) setSelectedId(isSelected ? null : c.id); }}
+                className={`list-group-item list-group-item-action small ${
+                  isVotedLocally ? "list-group-item-success" : isSelected ? "list-group-item-warning" : ""
+                } ${canVote && !isVotedLocally ? "" : "pe-none"}`}
+                role="button"
               >
-                {commitTx.isBusy
-                  ? (commitTx.isPending ? "Signing..." : "Confirming...")
-                  : !selectedId
-                    ? "Select a Candidate Above"
-                    : !secretKey.trim()
-                      ? "Enter a Secret Key"
-                      : `Submit Vote ID.${selectedId}`}
-              </Button>
-            </div>
-          )}
-        </>
-      )}
+                <div className="d-flex justify-content-between align-items-center">
+                  <div className="d-flex align-items-center gap-2">
+                    <span>Candidate(ID.{c.id}) by {shortenAddress(c.author)}</span>
+                    {isSelected && (
+                      <a href={`/chapters/${c.id}`} target="_blank" rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()} className="link-primary small">View full</a>
+                    )}
+                  </div>
+                  <div className="d-flex align-items-center gap-2">
+                    {isVotedLocally && <span className="text-success small"><i className="bi bi-check-lg" /> Voted</span>}
+                    <span className="text-body-tertiary"><i className="bi bi-chat" /> {commentCount}</span>
+                    {Number(c.vote_count) > 0 && <span className="text-body-tertiary">{c.vote_count} votes</span>}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
 
-      {/* Reveal UI */}
-      {phase === "revealing" && (
-        <>
-          {!isConnected && (
-            <p className="text-amber-400 text-sm">Connect wallet to reveal your vote</p>
-          )}
+        {/* Commit UI */}
+        {phase === "committing" && (
+          <>
+            {!isConnected && <div className="alert alert-warning small py-2">Connect wallet to vote</div>}
 
-          {isConnected && onChainRevealed && (
-            <p className="text-green-400 text-sm">&#10003; Vote revealed!</p>
-          )}
+            {isConnected && alreadyCommittedOnChain && !justCommittedId && (
+              <div className="alert alert-success small py-2"><i className="bi bi-check-lg" /> You have already voted this round. One vote per address per round.</div>
+            )}
 
-          {isConnected && !onChainRevealed && alreadyCommittedOnChain && (
-            <RevealForm
-              novelId={novelId}
-              votingRoundId={votingRoundId}
-              votedCandidateIds={votedCandidateIds}
-              localVotes={localVotes}
-              revealSecretKey={revealSecretKey}
-              setRevealSecretKey={setRevealSecretKey}
-              handleReveal={handleReveal}
-              revealTx={revealTx}
-            />
-          )}
+            {justCommittedId && localVotes[justCommittedId] && (
+              <div className="alert alert-warning small">
+                <p className="text-success fw-semibold mb-1"><i className="bi bi-check-lg" /> Vote committed!</p>
+                <p className="mb-1 fw-semibold">Secret key (needed to reveal &amp; recover stake):</p>
+                <code className="d-block bg-body-tertiary rounded p-2 mb-1 user-select-all" style={{ wordBreak: "break-all" }}>{localVotes[justCommittedId]}</code>
+                <p className="text-body-tertiary mb-1">Saved in your browser. Back it up if you may clear data.</p>
+                <button onClick={() => navigator.clipboard.writeText(localVotes[justCommittedId])} className="btn btn-link btn-sm p-0">Copy</button>
+              </div>
+            )}
 
-          {isConnected && !alreadyCommittedOnChain && (
-            <p className="text-neutral-500 text-sm">You did not vote in this round.</p>
-          )}
-        </>
-      )}
+            {commitTx.isBusy && <p className="text-body-secondary small">{commitTx.isPending ? "Waiting for signature..." : "Confirming on-chain..."}</p>}
+            {commitTx.isError && (
+              <div>
+                <p className="text-danger small">{commitTx.error}</p>
+                <button onClick={commitTx.reset} className="btn btn-link btn-sm p-0 text-body-secondary">Dismiss</button>
+              </div>
+            )}
+
+            {canVote && (
+              <div className="border-top pt-3 mt-2">
+                <p className="small text-body-secondary mb-2">Select a candidate above, then vote here. One vote per address per round.</p>
+
+                {selectedCandidate && (
+                  <div className="card card-body bg-body-tertiary p-2 mb-2 small">
+                    <span className="text-body-secondary fw-medium">Selected: Candidate(ID.{selectedCandidate.id})</span>
+                    {selectedCandidate.content_text ? (
+                      <p className="mb-0 mt-1">{selectedCandidate.content_text.length > 100 ? selectedCandidate.content_text.slice(0, 100) + "…" : selectedCandidate.content_text}</p>
+                    ) : (
+                      <p className="mb-0 mt-1 text-body-tertiary fst-italic">Content not yet fetched.</p>
+                    )}
+                  </div>
+                )}
+
+                <div className="d-flex align-items-center gap-2 mb-2">
+                  <label className="form-label small mb-0 text-body-secondary">Stake:</label>
+                  <div className="input-group input-group-sm" style={{ width: 160 }}>
+                    <input type="number" step="0.001" min="0.001" value={stakeAmount}
+                      onChange={(e) => setStakeAmount(e.target.value)} className="form-control" />
+                    <span className="input-group-text">{TOKEN_SYMBOL}</span>
+                  </div>
+                </div>
+
+                <details className="mb-2">
+                  <summary className="small text-body-secondary" role="button">How voting works (commit-reveal)</summary>
+                  <div className="small text-body-secondary mt-2 d-flex flex-column gap-2">
+                    <div><strong>1. Stake</strong> — Deposit {TOKEN_SYMBOL} as anti-spam. Returned when you reveal.</div>
+                    <div><strong>2. Secret Key</strong> — Combined with your vote to create a hidden commitment. <span className="text-warning">Remember this key.</span></div>
+                    <div><strong>3. Reveal</strong> — Enter your secret key again to reveal on-chain.</div>
+                    <div><strong>4. Rewards</strong> — Winners recover stake + voter reward. Unrevealed votes forfeit stake.</div>
+                  </div>
+                </details>
+
+                <div className="mb-2">
+                  <label className="form-label small text-body-secondary">Secret Key</label>
+                  <input type="text" value={secretKey} onChange={(e) => setSecretKey(e.target.value)}
+                    placeholder="Enter a secret key you can remember..."
+                    className="form-control form-control-sm" style={{ maxWidth: 320 }} />
+                  {secretKey.trim().length > 0 && secretKey.trim().length < 4 && (
+                    <div className="form-text text-warning">Short keys are easier to brute-force.</div>
+                  )}
+                  <div className="form-text">You will need this exact key to reveal your vote.</div>
+                </div>
+
+                <button onClick={() => selectedId && handleCommit(selectedId)}
+                  disabled={!selectedId || !secretKey.trim() || commitTx.isBusy}
+                  className="btn btn-warning">
+                  {commitTx.isBusy ? (commitTx.isPending ? "Signing..." : "Confirming...")
+                    : !selectedId ? "Select a Candidate Above"
+                    : !secretKey.trim() ? "Enter a Secret Key"
+                    : `Submit Vote ID.${selectedId}`}
+                </button>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Reveal UI */}
+        {phase === "revealing" && (
+          <>
+            {!isConnected && <div className="alert alert-warning small py-2">Connect wallet to reveal your vote</div>}
+            {isConnected && onChainRevealed && <div className="alert alert-success small py-2"><i className="bi bi-check-lg" /> Vote revealed!</div>}
+            {isConnected && !onChainRevealed && alreadyCommittedOnChain && (
+              <RevealForm novelId={novelId} votingRoundId={votingRoundId} votedCandidateIds={votedCandidateIds}
+                localVotes={localVotes} revealSecretKey={revealSecretKey} setRevealSecretKey={setRevealSecretKey}
+                handleReveal={handleReveal} revealTx={revealTx} />
+            )}
+            {isConnected && !alreadyCommittedOnChain && <p className="text-body-tertiary small">You did not vote in this round.</p>}
+          </>
+        )}
+      </div>
     </div>
   );
 }

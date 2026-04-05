@@ -4,44 +4,53 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { NotificationBell } from "@/components/notification-bell";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export function NavBar() {
   const pathname = usePathname();
 
+  function navLink(href: string, label: string) {
+    const active = pathname === href;
+    return (
+      <li className="nav-item">
+        <Link href={href} className={`nav-link ${active ? "active fw-semibold" : ""}`}>
+          {label}
+        </Link>
+      </li>
+    );
+  }
+
   return (
     <>
       {/* Desktop nav */}
-      <header className="hidden md:flex items-center justify-between border-b border-neutral-800 px-6 py-3">
-        <Link href="/" className="text-lg font-bold tracking-tight">
-          Onchain Novel
-        </Link>
-        <nav className="flex items-center gap-6 text-sm">
-          <Link href="/" className={pathname === "/" ? "text-white" : "text-neutral-400 hover:text-white"}>
-            Discover
-          </Link>
-          <Link href="/create" className={pathname === "/create" ? "text-white" : "text-neutral-400 hover:text-white"}>
-            Create Novel
-          </Link>
-          <Link href="/dashboard" className={pathname === "/dashboard" ? "text-white" : "text-neutral-400 hover:text-white"}>
-            My Dashboard
-          </Link>
-          <NotificationBell />
-          <ConnectButton showBalance={false} chainStatus="icon" accountStatus="avatar" />
-        </nav>
-      </header>
+      <nav className="navbar navbar-expand-md border-bottom d-none d-md-flex">
+        <div className="container-lg">
+          <Link href="/" className="navbar-brand fw-bold">Onchain Novel</Link>
+          <ul className="navbar-nav me-auto">
+            {navLink("/", "Discover")}
+            {navLink("/create", "Create Novel")}
+            {navLink("/dashboard", "My Dashboard")}
+          </ul>
+          <div className="d-flex align-items-center gap-2">
+            <NotificationBell />
+            <ThemeToggle />
+            <ConnectButton showBalance={false} chainStatus="icon" accountStatus="avatar" />
+          </div>
+        </div>
+      </nav>
 
       {/* Mobile bottom tab bar */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 flex items-center justify-around border-t border-neutral-800 bg-neutral-950 py-2">
-        <Link href="/" className={`flex flex-col items-center text-xs ${pathname === "/" ? "text-white" : "text-neutral-500"}`}>
-          <span className="text-lg">📖</span>
+      <nav className="d-md-none fixed-bottom border-top bg-body d-flex justify-content-around py-2" style={{ zIndex: 1030 }}>
+        <Link href="/" className={`d-flex flex-column align-items-center small text-decoration-none ${pathname === "/" ? "text-body" : "text-body-secondary"}`}>
+          <i className="bi bi-book fs-5" />
           <span>Discover</span>
         </Link>
-        <Link href="/create" className={`flex flex-col items-center text-xs ${pathname === "/create" ? "text-white" : "text-neutral-500"}`}>
-          <span className="text-lg">✍️</span>
+        <Link href="/create" className={`d-flex flex-column align-items-center small text-decoration-none ${pathname === "/create" ? "text-body" : "text-body-secondary"}`}>
+          <i className="bi bi-pencil-square fs-5" />
           <span>Create</span>
         </Link>
-        <Link href="/dashboard" className={`flex flex-col items-center text-xs ${pathname === "/dashboard" ? "text-white" : "text-neutral-500"}`}>
-          <span className="text-lg">👤</span>
+        <Link href="/dashboard" className={`d-flex flex-column align-items-center small text-decoration-none ${pathname === "/dashboard" ? "text-body" : "text-body-secondary"}`}>
+          <i className="bi bi-person fs-5" />
           <span>Me</span>
         </Link>
       </nav>

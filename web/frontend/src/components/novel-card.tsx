@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { Badge } from "@/components/ui/badge";
 import type { Novel } from "@/lib/api";
 import { ROUND_PHASES, EPOCH_PHASES } from "@/lib/api";
 import { shortenAddress, formatEth, timeAgo } from "@/lib/format";
@@ -11,36 +10,36 @@ export function NovelCard({ novel }: { novel: Novel }) {
     : `Epoch ${EPOCH_PHASES[novel.epoch_phase]}`;
 
   return (
-    <Link href={`/novels/${novel.id}`} className="block">
-      <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-4 hover:border-neutral-600 transition-colors">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <h3 className="font-semibold truncate">{novel.title || `Novel #${novel.id}`}</h3>
-            <p className="text-sm text-neutral-400 mt-0.5">{shortenAddress(novel.creator)}</p>
-          </div>
-          <div className="flex flex-col items-end gap-1 shrink-0">
-            <Badge variant={novel.active ? "default" : "secondary"} className="text-xs">
-              {novel.active ? phase : "Completed"}
-            </Badge>
-            {Number(novel.pool_balance) > 0 && (
-              <span className="text-xs font-medium text-amber-400">
-                Pool: {formatEth(novel.pool_balance)} {TOKEN_SYMBOL}
+    <Link href={`/novels/${novel.id}`} className="text-decoration-none">
+      <div className="card h-100">
+        <div className="card-body">
+          <div className="d-flex justify-content-between align-items-start gap-2">
+            <div className="min-w-0">
+              <h6 className="card-title text-truncate mb-1">{novel.title || `Novel #${novel.id}`}</h6>
+              <p className="small text-body-secondary mb-0">{shortenAddress(novel.creator)}</p>
+            </div>
+            <div className="d-flex flex-column align-items-end gap-1 flex-shrink-0">
+              <span className={`badge ${novel.active ? "bg-primary" : "bg-secondary"}`}>
+                {novel.active ? phase : "Completed"}
               </span>
-            )}
+              {Number(novel.pool_balance) > 0 && (
+                <span className="badge bg-warning text-dark">
+                  Pool: {formatEth(novel.pool_balance)} {TOKEN_SYMBOL}
+                </span>
+              )}
+            </div>
           </div>
-        </div>
 
-        {novel.description && (
-          <p className="text-sm text-neutral-400 mt-2 line-clamp-2">{novel.description}</p>
-        )}
-
-        <div className="flex items-center gap-4 mt-3 text-xs text-neutral-500">
-          <span>{novel.chapter_count ?? 0} chapters</span>
-          <span>{novel.author_count ?? 0} authors</span>
-          {novel.fork_source_novel_id && (
-            <span>Forked from #{novel.fork_source_novel_id}</span>
+          {novel.description && (
+            <p className="small text-body-secondary mt-2 mb-0 line-clamp-2">{novel.description}</p>
           )}
-          {novel.last_chapter_at && <span>{timeAgo(novel.last_chapter_at)}</span>}
+
+          <div className="d-flex gap-3 mt-2 small text-body-tertiary">
+            <span>{novel.chapter_count ?? 0} chapters</span>
+            <span>{novel.author_count ?? 0} authors</span>
+            {novel.fork_source_novel_id && <span>Forked from #{novel.fork_source_novel_id}</span>}
+            {novel.last_chapter_at && <span>{timeAgo(novel.last_chapter_at)}</span>}
+          </div>
         </div>
       </div>
     </Link>

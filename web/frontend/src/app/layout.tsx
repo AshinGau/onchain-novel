@@ -14,12 +14,12 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} dark h-full antialiased`}>
-      <body className="min-h-full flex flex-col bg-neutral-950 text-neutral-100">
+    <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`} suppressHydrationWarning>
+      <body className="d-flex flex-column min-vh-100">
         <Providers>
           <NavBar />
-          <main className="flex-1">{children}</main>
-          <footer className="border-t border-neutral-800 py-6 text-center text-sm text-neutral-500">
+          <main className="flex-grow-1">{children}</main>
+          <footer className="border-top py-4 text-center small text-body-tertiary">
             Onchain Novel Protocol
           </footer>
         </Providers>
