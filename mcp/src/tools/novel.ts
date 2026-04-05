@@ -29,11 +29,18 @@ export function registerNovelTools(server: McpServer): void {
       spamThreshold: z.number().describe("Bottom X percentile counts as spam (e.g. 20)"),
       contentLocation: z.number().default(0).describe("Content storage mode: 0=Onchain, 1=External (IPFS/Arweave), 2=HTTP"),
       contentBaseUrl: z.string().default("").describe("Base URL for content storage (External/HTTP only, ignored for Onchain)"),
+      ruleFee: z.string().default("0.001").describe("Fee to propose a rule in ETH (goes to prize pool)"),
+      ruleVoteDuration: z.number().default(259200).describe("Seconds before a rule proposal expires (default 3 days)"),
+      ruleQuorum: z.number().default(7).describe("Canon-author votes needed to pass a rule proposal"),
       title: z.string().describe("Novel title"),
       description: z.string().default("").describe("Novel description / synopsis"),
       coverUri: z.string().default("").describe("Cover image URI (IPFS/Arweave/HTTP)"),
       genesisContents: z.array(z.string()).describe("Array of genesis chapter contents (text strings, stored on-chain for Onchain mode)"),
       initialPrizeEth: z.string().optional().describe("Initial prize pool deposit in ETH (e.g. '1.0')"),
+      rules: z.array(z.object({
+        name: z.string().describe("Rule name (max 64 bytes)"),
+        content: z.string().describe("Rule content"),
+      })).optional().describe("Initial world-building rules (story background, characters, plot threads). These are creative reference for AI agents, not rigid constraints."),
     },
     async (params) => {
       try {
@@ -56,6 +63,9 @@ export function registerNovelTools(server: McpServer): void {
           spamThreshold: params.spamThreshold,
           contentLocation: params.contentLocation,
           contentBaseUrl: params.contentBaseUrl,
+          ruleFee: parseEther(params.ruleFee),
+          ruleVoteDuration: BigInt(params.ruleVoteDuration),
+          ruleQuorum: params.ruleQuorum,
         };
 
         const value = params.initialPrizeEth
@@ -88,11 +98,35 @@ export function registerNovelTools(server: McpServer): void {
 
         const receipt = await publicClient.waitForTransactionReceipt({ hash });
 
+        // Extract novelId from NovelCreated event log
+        const novelCreatedLog = receipt.logs.find(
+          (l) => l.address.toLowerCase() === config.novelCoreAddress.toLowerCase() && l.topics.length >= 2
+        );
+        const novelId = novelCreatedLog?.topics[1] ? BigInt(novelCreatedLog.topics[1]) : null;
+
+        // Set initial rules if provided
+        const validRules = (params.rules ?? []).filter((r) => r.name.trim() && r.content.trim());
+        let rulesInfo = "";
+        if (validRules.length > 0 && novelId) {
+          try {
+            const rulesHash = await walletClient.writeContract({
+              address: config.novelCoreAddress,
+              abi: novelCoreAbi,
+              functionName: "setCreatorRules",
+              args: [novelId, validRules.map((r) => r.name.trim()), validRules.map((r) => r.content.trim())],
+            });
+            await publicClient.waitForTransactionReceipt({ hash: rulesHash });
+            rulesInfo = `\nRules: ${validRules.length} rule(s) set (tx: ${rulesHash})`;
+          } catch (err) {
+            rulesInfo = `\nRules: Failed to set — ${err instanceof Error ? err.message : String(err)}`;
+          }
+        }
+
         return {
           content: [
             {
               type: "text" as const,
-              text: `Novel created successfully.\nTransaction: ${hash}\nBlock: ${receipt.blockNumber}\nStatus: ${receipt.status}`,
+              text: `Novel created successfully.${novelId ? `\nNovel ID: ${novelId}` : ""}\nTransaction: ${hash}\nBlock: ${receipt.blockNumber}\nStatus: ${receipt.status}${rulesInfo}`,
             },
           ],
         };
@@ -142,6 +176,9 @@ export function registerNovelTools(server: McpServer): void {
             `Pool Balance: ${formatEther(BigInt(novel.pool_balance as string))} ETH`,
             `Chapters: ${novel.chapter_count ?? "?"}`,
             `Authors: ${novel.author_count ?? "?"}`,
+            cfg.ruleFee ? `Rule Fee: ${formatEther(BigInt(cfg.ruleFee as string))} ETH` : "",
+            cfg.ruleQuorum ? `Rule Quorum: ${cfg.ruleQuorum} votes` : "",
+            cfg.ruleVoteDuration ? `Rule Vote Duration: ${cfg.ruleVoteDuration}s` : "",
             novel.fork_source_novel_id
               ? `Forked from Novel #${novel.fork_source_novel_id} Chapter #${novel.fork_source_chapter_id}`
               : "",
@@ -221,6 +258,9 @@ export function registerNovelTools(server: McpServer): void {
           `World Lines: ${n.config.worldLineCount}`,
           `Rounds/Epoch: ${n.config.roundsPerEpoch}`,
           `Min Submissions: ${n.config.roundMinSubmissions}`,
+          (n.config as any).ruleFee ? `Rule Fee: ${formatEther((n.config as any).ruleFee)} ETH` : "",
+          (n.config as any).ruleQuorum ? `Rule Quorum: ${(n.config as any).ruleQuorum} votes` : "",
+          (n.config as any).ruleVoteDuration ? `Rule Vote Duration: ${(n.config as any).ruleVoteDuration}s` : "",
           n.forkSourceNovelId > 0n
             ? `Forked from Novel #${n.forkSourceNovelId} Chapter #${n.forkSourceChapterId}`
             : "",
@@ -325,6 +365,9 @@ export function registerNovelTools(server: McpServer): void {
       stakeAmount: z.string().describe("Required stake per submission in ETH"),
       spamRounds: z.number().describe("Spam tracking window"),
       spamThreshold: z.number().describe("Bottom percentile for spam"),
+      ruleFee: z.string().default("0.001").describe("Fee to propose a rule in ETH"),
+      ruleVoteDuration: z.number().default(259200).describe("Rule proposal vote duration in seconds"),
+      ruleQuorum: z.number().default(7).describe("Canon-author votes needed for rule proposal"),
       title: z.string().describe("Novel title for the forked novel"),
       description: z.string().default("").describe("Novel description"),
       coverUri: z.string().default("").describe("Cover image URI"),
@@ -351,6 +394,9 @@ export function registerNovelTools(server: McpServer): void {
           spamThreshold: params.spamThreshold,
           contentLocation: 0, // Default to Onchain
           contentBaseUrl: "", // Inherited from source novel (overridden by contract)
+          ruleFee: parseEther(params.ruleFee),
+          ruleVoteDuration: BigInt(params.ruleVoteDuration),
+          ruleQuorum: params.ruleQuorum,
         };
 
         const value = params.initialPrizeEth

@@ -51,6 +51,9 @@ export async function handleNovelCoreEvent(log: Log, db: Client, rpc: PublicClie
         spamThreshold: novel.config.spamThreshold,
         contentLocation: novel.config.contentLocation,
         contentBaseUrl: novel.config.contentBaseUrl,
+        ruleFee: novel.config.ruleFee.toString(),
+        ruleVoteDuration: novel.config.ruleVoteDuration.toString(),
+        ruleQuorum: novel.config.ruleQuorum,
       };
 
       await db.query(
@@ -100,6 +103,9 @@ export async function handleNovelCoreEvent(log: Log, db: Client, rpc: PublicClie
         spamThreshold: novel.config.spamThreshold,
         contentLocation: novel.config.contentLocation,
         contentBaseUrl: novel.config.contentBaseUrl,
+        ruleFee: novel.config.ruleFee.toString(),
+        ruleVoteDuration: novel.config.ruleVoteDuration.toString(),
+        ruleQuorum: novel.config.ruleQuorum,
       };
 
       await db.query(
@@ -335,6 +341,69 @@ export async function handleNovelCoreEvent(log: Log, db: Client, rpc: PublicClie
         "INSERT INTO stake_events (novel_id, author, event_type, amount, block_number) VALUES ($1, $2, 'slashed', $3, $4)",
         [novelId.toString(), author, amount.toString(), blockNumber]
       );
+      break;
+    }
+
+    case "RuleSet": {
+      const { novelId, name } = decoded.args;
+      // Read rule content from chain
+      const ruleContent = await rpc.readContract({
+        address: env.NOVEL_CORE_ADDRESS, abi: novelCoreAbi,
+        functionName: "getRule", args: [novelId, name],
+      }) as string;
+      await db.query(
+        `INSERT INTO rules (novel_id, name, content, block_number)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (novel_id, name) DO UPDATE SET content = $3, block_number = $4`,
+        [novelId.toString(), name, ruleContent, blockNumber]
+      );
+      break;
+    }
+
+    case "RuleDeleted": {
+      const { novelId, name } = decoded.args;
+      await db.query("DELETE FROM rules WHERE novel_id = $1 AND name = $2", [novelId.toString(), name]);
+      break;
+    }
+
+    case "RuleProposed": {
+      const { proposalId, novelId, proposalType, proposer, ruleName } = decoded.args;
+      // Read full proposal from chain
+      const proposal = await rpc.readContract({
+        address: env.NOVEL_CORE_ADDRESS, abi: novelCoreAbi,
+        functionName: "getRuleProposal", args: [proposalId],
+      }) as any;
+      await db.query(
+        `INSERT INTO rule_proposals (id, novel_id, proposer, proposal_type, rule_name, rule_content, created_at_time, vote_count, executed, block_number)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         ON CONFLICT (id) DO NOTHING`,
+        [
+          proposalId.toString(), novelId.toString(), proposer, proposalType,
+          ruleName, proposal.ruleContent, proposal.createdAt.toString(),
+          0, false, blockNumber,
+        ]
+      );
+      break;
+    }
+
+    case "RuleProposalVoted": {
+      const { proposalId, voter, newVoteCount } = decoded.args;
+      await db.query(
+        `INSERT INTO rule_proposal_votes (proposal_id, voter, block_number)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (proposal_id, voter) DO NOTHING`,
+        [proposalId.toString(), voter, blockNumber]
+      );
+      await db.query(
+        "UPDATE rule_proposals SET vote_count = $1 WHERE id = $2",
+        [newVoteCount, proposalId.toString()]
+      );
+      break;
+    }
+
+    case "RuleProposalExecuted": {
+      const { proposalId } = decoded.args;
+      await db.query("UPDATE rule_proposals SET executed = TRUE WHERE id = $1", [proposalId.toString()]);
       break;
     }
 

@@ -81,7 +81,17 @@ Each round proceeds through three mandatory phases:
 - The fork inherits the story content up to the point of divergence.
 - A **fork fee** is charged and deposited into the original novel's prize pool, creating an economic link between parent and child novels.
 
-### 3.6 Rewards
+### 3.6 Rules
+
+Each novel maintains an on-chain rules map (string name → string content) for governing creative constraints, world-building, or other novel-specific parameters.
+
+- **Creator rules (Epoch 1):** During the first epoch the novel creator may set rules unilaterally via `setCreatorRules`, bootstrapping the novel's creative foundation without requiring a vote.
+- **Rule proposals (after Epoch 1):** Any participant may propose adding, updating, or deleting a rule by calling `proposeRule` and paying the configured `ruleFee`. The fee flows into the novel's prize pool.
+- **Canon author voting:** Canon authors vote on proposals via `voteOnRuleProposal`. Each canon author may vote once per proposal.
+- **Automatic application:** If a proposal collects `ruleQuorum` votes within `ruleVoteDuration` seconds, the rule change is applied on-chain automatically.
+- **Configuration:** Three parameters govern the rules system: `ruleFee` (proposal cost in wei), `ruleVoteDuration` (voting window in seconds), and `ruleQuorum` (required vote count).
+
+### 3.7 Rewards
 
 Rewards are distributed across three layers:
 

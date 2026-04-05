@@ -11,6 +11,7 @@
   Genesis injection --->|                  |
   Reader tips --------->|    Prize Pool    |
   Spam slashing -->|                  |
+  Rule proposal fees -->|                  |
   Fork fees ----------->|                  |
                         +--------+---------+
                                  |
@@ -47,6 +48,7 @@
 | Reader tips | Anyone calls `tip()` | Prize pool |
 | Spam slashing | Spam vote passes, author stake seized | Prize pool |
 | Fork fees | User forks a story | Prize pool |
+| Rule proposal fees | User calls `proposeRule` with `ruleFee` | Prize pool |
 | Unrevealed vote stakes | Voter fails to reveal before deadline | Revealed voters of same round |
 | Keeper gas compensation | Protocol parameter (`keeperReward`) | Keeper address (from pool) |
 

@@ -6,6 +6,7 @@ import { config } from "../config.js";
 import { getPublicClient, getWalletClient } from "../utils/wallet.js";
 import { traceCanonChain, assembleStoryText } from "../utils/content-bridge.js";
 import { hasApi, apiFetch } from "../utils/api-client.js";
+import { fetchRules, formatRulesForWriter } from "../utils/rules-fetcher.js";
 
 export function registerWriterSkills(server: McpServer): void {
   server.tool(
@@ -46,6 +47,10 @@ export function registerWriterSkills(server: McpServer): void {
             );
           }
 
+          // Fetch rules
+          const rules = await fetchRules(params.novelId);
+          const rulesSection = formatRulesForWriter(rules);
+
           const context = [
             `# Writing Context for Novel #${params.novelId}: ${novel.title}`,
             ``,
@@ -56,6 +61,8 @@ export function registerWriterSkills(server: McpServer): void {
             `- Stake Required: ${formatEther(BigInt(novel.config.stakeAmount))} ETH`,
             `- Chapter Length: ${novel.config.minChapterLength}-${novel.config.maxChapterLength} bytes`,
             ``,
+            rulesSection,
+            ``,
             `## Active World Lines (${wlData.worldlines.length})`,
             `These are the story branches you can extend. Pick one as your parent chapter.`,
             ``,
@@ -65,7 +72,7 @@ export function registerWriterSkills(server: McpServer): void {
             `1. Choose a world line to extend (use its chapter ID as parentChapterId)`,
             `2. Write your chapter continuation (${novel.config.minChapterLength}-${novel.config.maxChapterLength} bytes)`,
             `3. Use writer_submit to submit on-chain`,
-          ].join("\n");
+          ].filter(Boolean).join("\n");
 
           return { content: [{ type: "text" as const, text: context }] };
         }
@@ -117,6 +124,10 @@ export function registerWriterSkills(server: McpServer): void {
           );
         }
 
+        // Fetch rules
+        const rules = await fetchRules(params.novelId, publicClient);
+        const rulesSection = formatRulesForWriter(rules);
+
         const context = [
           `# Writing Context for Novel #${params.novelId}`,
           ``,
@@ -127,6 +138,8 @@ export function registerWriterSkills(server: McpServer): void {
           `- Stake Required: ${formatEther(novel.config.stakeAmount)} ETH`,
           `- Chapter Length: ${novel.config.minChapterLength}-${novel.config.maxChapterLength} bytes`,
           ``,
+          rulesSection,
+          ``,
           `## Active World Lines (${worldLines.length})`,
           `These are the story branches you can extend. Pick one as your parent chapter.`,
           ``,
@@ -135,9 +148,8 @@ export function registerWriterSkills(server: McpServer): void {
           `## Instructions`,
           `1. Choose a world line to extend (use its chapter ID as parentChapterId)`,
           `2. Write your chapter continuation (${novel.config.minChapterLength}-${novel.config.maxChapterLength} bytes)`,
-          `3. Upload content to IPFS/Arweave and get the content hash`,
-          `4. Use submit_chapter or writer_submit to submit on-chain`,
-        ].join("\n");
+          `3. Use writer_submit to submit on-chain`,
+        ].filter(Boolean).join("\n");
 
         return { content: [{ type: "text" as const, text: context }] };
       } catch (error) {

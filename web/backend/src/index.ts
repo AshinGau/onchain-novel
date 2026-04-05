@@ -10,6 +10,7 @@ import chaptersRouter from "./api/chapters.js";
 import usersRouter from "./api/users.js";
 import notificationsRouter from "./api/notifications.js";
 import contentRouter from "./api/content.js";
+import rulesRouter from "./api/rules.js";
 import { query } from "./db/index.js";
 
 const app = express();
@@ -62,6 +63,7 @@ app.use("/api/chapters", chaptersRouter);
 app.use("/api/users", usersRouter);
 app.use("/api/notifications", notificationsRouter);
 app.use("/api/content", contentRouter);
+app.use("/api", rulesRouter);
 
 // Start server
 app.listen(env.PORT, () => {

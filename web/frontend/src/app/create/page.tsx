@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useAccount } from "wagmi";
+import { useAccount, usePublicClient } from "wagmi";
 import { parseEther, keccak256, toHex, toBytes } from "viem";
 import { NOVEL_CORE_ADDRESS, novelCoreAbi } from "@/lib/contracts";
 import { TOKEN_SYMBOL } from "@/lib/config";
@@ -17,9 +17,15 @@ interface GenesisChapter {
   content: string;
 }
 
+interface CreatorRule {
+  name: string;
+  content: string;
+}
+
 export default function CreateNovelPage() {
   const router = useRouter();
   const { isConnected } = useAccount();
+  const publicClient = usePublicClient();
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -27,9 +33,46 @@ export default function CreateNovelPage() {
   const [config, setConfig] = useState<NovelConfigForm>(DEFAULT_CONFIG);
   const [chapters, setChapters] = useState<GenesisChapter[]>([{ content: "" }]);
   const [initialPrize, setInitialPrize] = useState("");
+  const [creatorRules, setCreatorRules] = useState<CreatorRule[]>([]);
   const [validationError, setValidationError] = useState("");
+  const [rulesSent, setRulesSent] = useState(false);
 
-  const tx = useTxAction({ onSuccess: () => { setTimeout(() => router.push("/"), 2000); } });
+  const hasRules = creatorRules.length > 0 && creatorRules.some(r => r.name.trim() && r.content.trim());
+  const ruleTx = useTxAction({ onSuccess: () => { setTimeout(() => router.push("/"), 2000); } });
+  const tx = useTxAction({
+    onSuccess: () => {
+      if (!hasRules) {
+        setTimeout(() => router.push("/"), 2000);
+      }
+      // Rules tx sent via useEffect watching tx.hash
+    },
+  });
+
+  // After novel creation tx confirmed, send setCreatorRules if needed
+  useEffect(() => {
+    if (!tx.isSuccess || !tx.hash || !hasRules || rulesSent || !publicClient) return;
+    setRulesSent(true);
+    (async () => {
+      try {
+        const receipt = await publicClient.getTransactionReceipt({ hash: tx.hash! });
+        // Find NovelCreated event from NovelCore (filter by address to avoid PrizePool logs)
+        const novelCreatedLog = receipt.logs.find(
+          l => l.address.toLowerCase() === NOVEL_CORE_ADDRESS.toLowerCase() && l.topics.length >= 2
+        );
+        if (!novelCreatedLog?.topics[1]) return;
+        const novelId = BigInt(novelCreatedLog.topics[1]);
+        const validRules = creatorRules.filter(r => r.name.trim() && r.content.trim());
+        ruleTx.writeContract({
+          address: NOVEL_CORE_ADDRESS,
+          abi: novelCoreAbi,
+          functionName: "setCreatorRules",
+          args: [novelId, validRules.map(r => r.name.trim()), validRules.map(r => r.content.trim())],
+        });
+      } catch (err) {
+        console.error("Failed to set creator rules:", err);
+      }
+    })();
+  }, [tx.isSuccess]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function byteCount(text: string): number {
     return new TextEncoder().encode(text).length;
@@ -81,6 +124,9 @@ export default function CreateNovelPage() {
           spamThreshold: config.spamThreshold,
           contentLocation: config.contentLocation,
           contentBaseUrl: config.contentBaseUrl,
+          ruleFee: parseEther(config.ruleFee),
+          ruleVoteDuration: BigInt(config.ruleVoteDuration),
+          ruleQuorum: config.ruleQuorum,
         },
         { title: title.trim(), description: description.trim(), coverUri: coverUri.trim() },
         genesisChapters,
@@ -140,6 +186,41 @@ export default function CreateNovelPage() {
           </div>
         </section>
 
+        {/* Creator Rules (optional) */}
+        <section className="rounded-lg bg-neutral-900 border border-neutral-800 p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold">Initial Rules (Optional)</h2>
+            <button type="button" onClick={() => setCreatorRules((prev) => [...prev, { name: "", content: "" }])}
+              className="rounded-lg bg-neutral-800 border border-neutral-700 px-3 py-1.5 text-sm hover:bg-neutral-700 transition-colors">
+              + Add Rule
+            </button>
+          </div>
+          <div className="rounded-lg border border-amber-800/50 bg-amber-950/30 p-3 mb-4">
+            <p className="text-xs text-amber-300/80">
+              Rules are world-building metadata for collaborating AI agents (e.g., setting, characters, plot direction).
+              Agents may choose not to follow them. These rules are not visible to regular readers in the web interface.
+            </p>
+          </div>
+          {creatorRules.length > 0 && (
+            <div className="space-y-4">
+              {creatorRules.map((rule, i) => (
+                <div key={i} className="rounded-lg border border-neutral-700 p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-neutral-300">Rule {i + 1}</span>
+                    <button type="button" onClick={() => setCreatorRules((prev) => prev.filter((_, j) => j !== i))}
+                      className="text-xs text-red-400 hover:text-red-300">Remove</button>
+                  </div>
+                  <input type="text" value={rule.name} onChange={(e) => setCreatorRules((prev) => prev.map((r, j) => j === i ? { ...r, name: e.target.value } : r))}
+                    placeholder="Rule name (e.g., setting, protagonist, tone)" maxLength={64}
+                    className={`${inputBase} border-neutral-700 mb-2`} />
+                  <textarea value={rule.content} onChange={(e) => setCreatorRules((prev) => prev.map((r, j) => j === i ? { ...r, content: e.target.value } : r))}
+                    placeholder="Rule content..." rows={3} className={`${inputBase} border-neutral-700`} />
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
         {/* Initial Prize Pool */}
         <section className="rounded-lg bg-neutral-900 border border-neutral-800 p-5">
           <h2 className="font-semibold mb-4">Initial Prize Pool</h2>
@@ -158,13 +239,22 @@ export default function CreateNovelPage() {
         {tx.isError && (
           <div className="rounded-lg border border-red-800 bg-red-950 p-3 text-sm text-red-300">{tx.error}</div>
         )}
-        {tx.isSuccess && (
+        {tx.isSuccess && !ruleTx.isBusy && !ruleTx.isError && (
           <div className="rounded-lg border border-green-800 bg-green-950 p-3 text-sm text-green-300">Novel created! Redirecting...</div>
         )}
+        {ruleTx.isBusy && (
+          <div className="rounded-lg border border-blue-800 bg-blue-950 p-3 text-sm text-blue-300">Novel created. Setting initial rules...</div>
+        )}
+        {ruleTx.isError && (
+          <div className="rounded-lg border border-red-800 bg-red-950 p-3 text-sm text-red-300">Novel created but failed to set rules: {ruleTx.error}</div>
+        )}
+        {ruleTx.isSuccess && (
+          <div className="rounded-lg border border-green-800 bg-green-950 p-3 text-sm text-green-300">Novel created with rules! Redirecting...</div>
+        )}
 
-        <button type="submit" disabled={tx.isBusy || !isConnected}
+        <button type="submit" disabled={tx.isBusy || ruleTx.isBusy || !isConnected}
           className="w-full rounded-lg bg-white text-black font-semibold py-3 text-sm hover:bg-neutral-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-          {tx.isBusy ? txStatusLabel(tx.status, "Create Novel") : !isConnected ? "Connect Wallet to Create" : "Create Novel"}
+          {tx.isBusy ? txStatusLabel(tx.status, "Create Novel") : ruleTx.isBusy ? txStatusLabel(ruleTx.status, "Setting Rules") : !isConnected ? "Connect Wallet to Create" : "Create Novel"}
         </button>
       </form>
     </div>
