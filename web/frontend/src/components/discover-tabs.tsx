@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { NovelCard } from "@/components/novel-card";
 import { API_BASE } from "@/lib/api";
 import type { Novel } from "@/lib/api";
@@ -19,11 +20,13 @@ export function DiscoverTabs({ initialNovels }: { initialNovels: Novel[] }) {
   const [error, setError] = useState<string | null>(null);
   const [currentTab, setCurrentTab] = useState("hot");
   const [filter, setFilter] = useState<"all" | "active" | "completed">("all");
+
   const fetchId = useRef(0);
 
   async function fetchNovels(sort: string, f: string) {
     const id = ++fetchId.current;
-    setLoading(true); setError(null);
+    setLoading(true);
+    setError(null);
     try {
       let url = `${API_BASE}/api/novels?limit=20&sort=${sort}`;
       if (f !== "all") url += `&filter=${f}`;
@@ -38,46 +41,56 @@ export function DiscoverTabs({ initialNovels }: { initialNovels: Novel[] }) {
     }
   }
 
+  function onTabChange(value: string) {
+    setCurrentTab(value);
+    fetchNovels(value, filter);
+  }
+
+  function onFilterChange(value: "all" | "active" | "completed") {
+    setFilter(value);
+    fetchNovels(currentTab, value);
+  }
+
   return (
-    <div>
-      <div className="d-flex flex-wrap align-items-center gap-3 mb-3">
-        <ul className="nav nav-tabs">
+    <Tabs value={currentTab} onValueChange={onTabChange}>
+      <div className="flex flex-wrap items-center gap-3">
+        <TabsList className="bg-neutral-900 border border-neutral-800">
           {TABS.map(t => (
-            <li className="nav-item" key={t.value}>
-              <button
-                className={`nav-link ${currentTab === t.value ? "active" : ""}`}
-                onClick={() => { setCurrentTab(t.value); fetchNovels(t.value, filter); }}
-              >
-                {t.label}
-              </button>
-            </li>
+            <TabsTrigger key={t.value} value={t.value} className="text-xs data-[state=active]:bg-neutral-700">
+              {t.label}
+            </TabsTrigger>
           ))}
-        </ul>
-        <div className="btn-group btn-group-sm">
+        </TabsList>
+        <div className="flex items-center rounded-md bg-neutral-900 border border-neutral-800 p-0.5">
           {(["all", "active", "completed"] as const).map(f => (
-            <button key={f} onClick={() => { setFilter(f); fetchNovels(currentTab, f); }}
-              className={`btn ${filter === f ? "btn-primary" : "btn-outline-secondary"} text-capitalize`}>
+            <button
+              key={f}
+              onClick={() => onFilterChange(f)}
+              className={`px-2.5 py-1 text-xs rounded-md capitalize transition-colors ${
+                filter === f
+                  ? "bg-neutral-700 text-white"
+                  : "text-neutral-400 hover:text-white"
+              }`}
+            >
               {f}
             </button>
           ))}
         </div>
       </div>
 
-      {loading ? (
-        <p className="text-body-tertiary text-center py-4">Loading...</p>
-      ) : error ? (
-        <p className="text-danger text-center py-4">{error}</p>
-      ) : novels.length === 0 ? (
-        <p className="text-body-tertiary text-center py-4">No novels found. Be the first to create one!</p>
-      ) : (
-        <div className="row row-cols-1 row-cols-sm-2 row-cols-lg-3 g-3">
-          {novels.map(n => (
-            <div className="col" key={n.id}>
-              <NovelCard novel={n} />
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+      <div className="mt-4">
+        {loading ? (
+          <p className="text-neutral-500 text-sm py-8 text-center">Loading...</p>
+        ) : error ? (
+          <p className="text-red-400 text-sm py-8 text-center">{error}</p>
+        ) : novels.length === 0 ? (
+          <p className="text-neutral-500 text-sm py-8 text-center">No novels found. Be the first to create one!</p>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {novels.map(n => <NovelCard key={n.id} novel={n} />)}
+          </div>
+        )}
+      </div>
+    </Tabs>
   );
 }

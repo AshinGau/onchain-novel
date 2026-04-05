@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { parseEther } from "viem";
 import { useWriteContract, useWaitForTransactionReceipt, useAccount } from "wagmi";
+import { Button } from "@/components/ui/button";
 import { PRIZE_POOL_ADDRESS, prizePoolAbi } from "@/lib/contracts";
 import { TOKEN_SYMBOL, DEFAULT_STAKE } from "@/lib/config";
 import { parseTxError } from "@/lib/parse-tx-error";
@@ -26,33 +27,43 @@ export function TipButton({ novelId }: { novelId: string }) {
   }
 
   if (!isConnected) {
-    return <button className="btn btn-outline-secondary btn-sm" disabled>Connect wallet to tip</button>;
+    return (
+      <Button variant="outline" size="sm" disabled className="opacity-50">
+        Connect wallet to tip
+      </Button>
+    );
   }
 
   if (!open) {
     return (
-      <button className="btn btn-outline-warning btn-sm" onClick={() => setOpen(true)}>
+      <Button variant="outline" size="sm" onClick={() => setOpen(true)} className="text-amber-400 border-amber-600 hover:bg-amber-950">
         Tip this Novel
-      </button>
+      </Button>
     );
   }
 
   return (
-    <div className="d-flex align-items-center gap-2">
-      <div className="input-group input-group-sm" style={{ width: 160 }}>
-        <input type="number" step="0.001" min="0.001" value={amount}
-          onChange={e => setAmount(e.target.value)}
-          className="form-control" disabled={isPending || isConfirming} />
-        <span className="input-group-text">{TOKEN_SYMBOL}</span>
-      </div>
-      <button className="btn btn-primary btn-sm"
+    <div className="flex items-center gap-2">
+      <input
+        type="number"
+        step="0.001"
+        min="0.001"
+        value={amount}
+        onChange={e => setAmount(e.target.value)}
+        className="w-24 rounded-md bg-neutral-800 border border-neutral-700 px-2 py-1 text-sm"
+        disabled={isPending || isConfirming}
+      />
+      <span className="text-sm text-neutral-400">{TOKEN_SYMBOL}</span>
+      <Button
+        size="sm"
         onClick={handleTip}
-        disabled={isPending || isConfirming || !amount || parseFloat(amount) < 0.001}>
+        disabled={isPending || isConfirming || !amount || parseFloat(amount) < 0.001}
+      >
         {isPending ? "Confirming..." : isConfirming ? "Processing..." : "Send Tip"}
-      </button>
-      <button className="btn btn-outline-secondary btn-sm" onClick={() => setOpen(false)}>Cancel</button>
-      {isSuccess && <span className="text-success small">Tip sent!</span>}
-      {error && <span className="text-danger small">{parseTxError(error).message}</span>}
+      </Button>
+      <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+      {isSuccess && <span className="text-green-400 text-sm">Tip sent!</span>}
+      {error && <span className="text-red-400 text-sm">{parseTxError(error).message}</span>}
     </div>
   );
 }

@@ -5,28 +5,41 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAccount } from "wagmi";
 import { keccak256, toHex, toBytes } from "viem";
+import { Button } from "@/components/ui/button";
 import { fetchApi, type Novel, type Chapter } from "@/lib/api";
 import { NOVEL_CORE_ADDRESS, novelCoreAbi } from "@/lib/contracts";
 import { TOKEN_SYMBOL } from "@/lib/config";
 import { shortenAddress, formatEth } from "@/lib/format";
 import { useTxAction, txStatusLabel } from "@/hooks/use-tx-action";
 
-export default function WritePage({ params }: { params: Promise<{ novelId: string; parentId: string }> }) {
+export default function WritePage({
+  params,
+}: {
+  params: Promise<{ novelId: string; parentId: string }>;
+}) {
   const { novelId, parentId } = use(params);
   const router = useRouter();
   const { isConnected } = useAccount();
+
   const [novel, setNovel] = useState<Novel | null>(null);
   const [parentChapter, setParentChapter] = useState<Chapter | null>(null);
   const [content, setContent] = useState("");
   const [preview, setPreview] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loadingContext, setLoadingContext] = useState(true);
+
   const draftKey = `draft:${novelId}:${parentId}`;
   const autoSaveTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastSavedContent = useRef("");
 
-  const tx = useTxAction({ onSuccess: () => { localStorage.removeItem(draftKey); router.push(`/novels/${novelId}`); } });
+  const tx = useTxAction({
+    onSuccess: () => {
+      localStorage.removeItem(draftKey);
+      router.push(`/novels/${novelId}`);
+    },
+  });
 
+  // Byte count via TextEncoder
   const byteCount = new TextEncoder().encode(content).length;
   const minLen = novel ? Number(novel.config.minChapterLength) : 0;
   const maxLen = novel ? Number(novel.config.maxChapterLength) : Infinity;
@@ -34,100 +47,262 @@ export default function WritePage({ params }: { params: Promise<{ novelId: strin
   const [editorBlurred, setEditorBlurred] = useState(false);
   const tooShort = byteCount > 0 && byteCount < minLen;
   const tooLong = byteCount > maxLen;
+  // Show "too short" only after blur; show "too long" immediately
   const showLengthError = tooLong || (tooShort && editorBlurred);
 
+  // Fetch novel and parent context on mount
   useEffect(() => {
     async function load() {
       setLoadingContext(true);
       try {
-        const [novelData, contextData] = await Promise.all([fetchApi<Novel>(`/api/novels/${novelId}`), fetchApi<{ ancestors: Chapter[] }>(`/api/chapters/${parentId}/context`)]);
+        const [novelData, contextData] = await Promise.all([
+          fetchApi<Novel>(`/api/novels/${novelId}`),
+          fetchApi<{ ancestors: Chapter[] }>(`/api/chapters/${parentId}/context`),
+        ]);
         setNovel(novelData);
+        // Context API returns ancestor chain ordered root→leaf; last element is the parent chapter itself
         const ancestors = contextData.ancestors || [];
         setParentChapter(ancestors.length > 0 ? ancestors[ancestors.length - 1] : null);
-      } catch (err: unknown) { setError(err instanceof Error ? err.message : "Failed to load context"); }
-      finally { setLoadingContext(false); }
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : "Failed to load context");
+      } finally {
+        setLoadingContext(false);
+      }
     }
     load();
   }, [novelId, parentId]);
 
-  useEffect(() => { const saved = localStorage.getItem(draftKey); if (saved) { setContent(saved); lastSavedContent.current = saved; } }, [draftKey]);
-
+  // Load draft from localStorage on mount
   useEffect(() => {
-    const saveDraft = () => { if (content && content !== lastSavedContent.current) { localStorage.setItem(draftKey, content); lastSavedContent.current = content; } };
+    const saved = localStorage.getItem(draftKey);
+    if (saved) {
+      setContent(saved);
+      lastSavedContent.current = saved;
+    }
+  }, [draftKey]);
+
+  // Auto-save draft every 3 seconds + save on page unload
+  useEffect(() => {
+    const saveDraft = () => {
+      if (content && content !== lastSavedContent.current) {
+        localStorage.setItem(draftKey, content);
+        lastSavedContent.current = content;
+      }
+    };
+
     autoSaveTimer.current = setInterval(saveDraft, 3000);
+
     const handleBeforeUnload = () => saveDraft();
     window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => { if (autoSaveTimer.current) clearInterval(autoSaveTimer.current); window.removeEventListener("beforeunload", handleBeforeUnload); saveDraft(); };
+
+    return () => {
+      if (autoSaveTimer.current) clearInterval(autoSaveTimer.current);
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      saveDraft(); // Save on unmount too
+    };
   }, [content, draftKey]);
 
   const handleSubmit = useCallback(() => {
-    if (!novel || !isConnected) return; setError(null);
+    if (!novel || !isConnected) return;
+    setError(null);
+
     try {
       const contentBytes = toHex(toBytes(content));
-      tx.writeContract({ address: NOVEL_CORE_ADDRESS, abi: novelCoreAbi, functionName: "submitChapter",
-        args: [BigInt(novelId), BigInt(parentId), { contentHash: keccak256(contentBytes), declaredLength: BigInt(new TextEncoder().encode(content).length), content: contentBytes }],
-        value: BigInt(novel.config.stakeAmount) > BigInt(0) ? BigInt(novel.config.stakeAmount) : undefined });
-    } catch (err: unknown) { setError(err instanceof Error ? err.message : "Submission failed"); }
+      const contentHash = keccak256(contentBytes);
+      const declaredLength = BigInt(new TextEncoder().encode(content).length);
+
+      tx.writeContract({
+        address: NOVEL_CORE_ADDRESS,
+        abi: novelCoreAbi,
+        functionName: "submitChapter",
+        args: [BigInt(novelId), BigInt(parentId), { contentHash, declaredLength, content: contentBytes }],
+        value: BigInt(novel.config.stakeAmount) > BigInt(0)
+          ? BigInt(novel.config.stakeAmount)
+          : undefined,
+      });
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Submission failed");
+    }
   }, [novel, isConnected, content, novelId, parentId, tx]);
 
-  if (loadingContext) return <div className="container py-5" style={{ maxWidth: 720 }}><p className="text-body-tertiary">Loading...</p></div>;
+  // --- Rendering ---
+
+  if (loadingContext) {
+    return (
+      <div className="mx-auto max-w-3xl px-4 py-12">
+        <p className="text-neutral-500">Loading...</p>
+      </div>
+    );
+  }
 
   const stakeDisplay = novel ? formatEth(novel.config.stakeAmount) : "0";
 
   return (
-    <div className="container py-4 pb-5" style={{ maxWidth: 720 }}>
-      <Link href={`/novels/${novelId}`} className="small text-body-secondary text-decoration-none">&larr; Back to novel</Link>
+    <div className="mx-auto max-w-3xl px-4 py-8 pb-24 md:pb-8">
+      {/* Back link */}
+      <Link
+        href={`/novels/${novelId}`}
+        className="inline-flex items-center gap-1 text-sm text-neutral-400 hover:text-neutral-200 mb-6"
+      >
+        &larr; Back to novel
+      </Link>
 
-      <h2 className="fw-bold mb-1 mt-3">Write Chapter</h2>
-      <p className="text-body-secondary small mb-4">
+      {/* Header */}
+      <h1 className="text-2xl font-bold mb-1">Write Chapter</h1>
+      <p className="text-neutral-400 text-sm mb-6">
         {novel?.title ? `Novel: ${novel.title}` : `Novel #${novelId}`}
         {" "}&middot; Continuing from Candidate(ID.{parentId})
         {novel && <> &middot; Stake: {stakeDisplay} {TOKEN_SYMBOL}</>}
       </p>
 
+      {/* Parent context */}
       {parentChapter?.content_text && (
-        <details className="card mb-3" open>
-          <summary className="card-header fw-semibold small" role="button">Parent Candidate(ID.{parentId}) by {shortenAddress(parentChapter.author)}</summary>
-          <div className="card-body small text-body-secondary" style={{ maxHeight: 200, overflowY: "auto", whiteSpace: "pre-wrap" }}>{parentChapter.content_text}</div>
+        <details className="rounded-lg bg-neutral-900 border border-neutral-800 p-4 mb-6" open>
+          <summary className="font-semibold cursor-pointer text-sm text-neutral-300">
+            Parent Candidate(ID.{parentId}) by {shortenAddress(parentChapter.author)}
+          </summary>
+          <div className="mt-3 text-sm text-neutral-400 whitespace-pre-wrap max-h-48 overflow-y-auto leading-relaxed">
+            {parentChapter.content_text}
+          </div>
         </details>
       )}
 
-      {/* Write / Preview toggle */}
-      <div className="btn-group btn-group-sm mb-2">
-        <button onClick={() => setPreview(false)} className={`btn ${!preview ? "btn-primary" : "btn-outline-secondary"}`}>Write</button>
-        <button onClick={() => setPreview(true)} className={`btn ${preview ? "btn-primary" : "btn-outline-secondary"}`}>Preview</button>
+      {/* Editor / Preview toggle */}
+      <div className="flex items-center gap-2 mb-3">
+        <button
+          onClick={() => setPreview(false)}
+          className={`text-sm px-3 py-1 rounded-md transition-colors ${
+            !preview ? "bg-neutral-800 text-neutral-100" : "text-neutral-500 hover:text-neutral-300"
+          }`}
+        >
+          Write
+        </button>
+        <button
+          onClick={() => setPreview(true)}
+          className={`text-sm px-3 py-1 rounded-md transition-colors ${
+            preview ? "bg-neutral-800 text-neutral-100" : "text-neutral-500 hover:text-neutral-300"
+          }`}
+        >
+          Preview
+        </button>
       </div>
 
+      {/* Editor area */}
       {!preview ? (
-        <textarea value={content} onChange={(e) => { setContent(e.target.value); setEditorBlurred(false); }}
-          onBlur={() => setEditorBlurred(true)} placeholder="Write your chapter here..."
-          className="form-control mb-2" rows={16} />
+        <textarea
+          value={content}
+          onChange={(e) => { setContent(e.target.value); setEditorBlurred(false); }}
+          onBlur={() => setEditorBlurred(true)}
+          placeholder="Write your chapter here..."
+          className="w-full min-h-[400px] rounded-lg bg-neutral-900 border border-neutral-800 p-4 text-sm text-neutral-100 leading-relaxed placeholder:text-neutral-600 focus:outline-none focus:border-neutral-600 resize-y"
+        />
       ) : (
-        <div className="card card-body mb-2 chapter-prose" style={{ minHeight: 400 }}>
-          {content || <span className="text-body-tertiary">Nothing to preview</span>}
+        <div className="w-full min-h-[400px] rounded-lg bg-neutral-900 border border-neutral-800 p-4 text-sm text-neutral-300 whitespace-pre-wrap leading-relaxed">
+          {content || <span className="text-neutral-600">Nothing to preview</span>}
         </div>
       )}
 
-      <div className="d-flex justify-content-between small mb-2">
-        <span className={byteCount === 0 ? "text-body-tertiary" : showLengthError ? "text-danger" : "text-body-secondary"}>
+      {/* Byte count */}
+      <div className="flex items-center justify-between mt-2 text-xs">
+        <span
+          className={
+            byteCount === 0
+              ? "text-neutral-500"
+              : showLengthError
+                ? "text-red-400"
+                : "text-neutral-400"
+          }
+        >
           {byteCount.toLocaleString()} bytes
-          {novel && <span className="text-body-tertiary"> / {minLen.toLocaleString()}&ndash;{maxLen.toLocaleString()} allowed</span>}
+          {novel && (
+            <span className="text-neutral-600">
+              {" "}/ {minLen.toLocaleString()}&ndash;{maxLen.toLocaleString()} allowed
+            </span>
+          )}
         </span>
-        {content && content === lastSavedContent.current && <span className="text-body-tertiary">Draft saved</span>}
+        {content && content === lastSavedContent.current && (
+          <span className="text-neutral-600">Draft saved</span>
+        )}
       </div>
 
-      {showLengthError && <div className="text-danger small mb-2">{tooShort ? `Content is too short. Minimum is ${minLen.toLocaleString()} bytes.` : `Content is too long. Maximum is ${maxLen.toLocaleString()} bytes.`}</div>}
-      {(error || tx.isError) && <div className="alert alert-danger small">{error || tx.error}</div>}
-      {tx.isBusy && <div className="alert alert-warning small py-2">{tx.isPending ? "Waiting for signature..." : "Confirming on-chain..."}</div>}
-      {tx.isSuccess && <div className="alert alert-success small">Chapter submitted! Redirecting...</div>}
+      {/* Byte range warning */}
+      {showLengthError && (
+        <p className="mt-2 text-xs text-red-400">
+          {tooShort
+            ? `Content is too short. Minimum is ${minLen.toLocaleString()} bytes.`
+            : `Content is too long. Maximum is ${maxLen.toLocaleString()} bytes.`}
+        </p>
+      )}
 
-      <div className="d-flex align-items-center gap-3 mt-3">
-        <button onClick={handleSubmit} disabled={!isConnected || !bytesInRange || byteCount === 0 || tx.isBusy || tx.isSuccess}
-          className="btn btn-primary btn-lg">
-          {tx.isBusy ? txStatusLabel(tx.status, "Submit") : `Submit (${stakeDisplay} ${TOKEN_SYMBOL})`}
-        </button>
-        {!isConnected && <span className="small text-body-tertiary">Connect wallet to submit</span>}
+      {/* Error */}
+      {(error || tx.isError) && (
+        <div className="mt-4 rounded-lg bg-red-950/50 border border-red-900 p-3 text-sm text-red-300">
+          {error || tx.error}
+        </div>
+      )}
+
+      {/* Progress indicator */}
+      {tx.isBusy && (
+        <div className="mt-4 rounded-lg bg-neutral-900 border border-neutral-800 p-4">
+          <div className="flex items-center gap-2">
+            <StepIndicator active={true} done={false} />
+            <span className="text-sm text-amber-400">
+              {tx.isPending ? "Waiting for signature..." : "Confirming on-chain..."}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {tx.isSuccess && (
+        <div className="mt-4 rounded-lg bg-green-950/50 border border-green-900 p-3 text-sm text-green-300">
+          Chapter submitted! Redirecting...
+        </div>
+      )}
+
+      {/* Submit button */}
+      <div className="mt-6 flex items-center gap-3">
+        <Button
+          onClick={handleSubmit}
+          disabled={
+            !isConnected ||
+            !bytesInRange ||
+            byteCount === 0 ||
+            tx.isBusy ||
+            tx.isSuccess
+          }
+          size="lg"
+          className="px-6"
+        >
+          {tx.isBusy
+            ? txStatusLabel(tx.status, "Submit")
+            : `Submit (${stakeDisplay} ${TOKEN_SYMBOL})`}
+        </Button>
+        {!isConnected && (
+          <span className="text-xs text-neutral-500">Connect wallet to submit</span>
+        )}
       </div>
     </div>
+  );
+}
+
+function StepIndicator({ active, done }: { active: boolean; done: boolean }) {
+  if (done) {
+    return (
+      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-green-900 text-green-300 text-xs">
+        &#10003;
+      </span>
+    );
+  }
+  if (active) {
+    return (
+      <span className="flex h-5 w-5 items-center justify-center rounded-full border-2 border-amber-500 animate-pulse">
+        <span className="h-2 w-2 rounded-full bg-amber-500" />
+      </span>
+    );
+  }
+  return (
+    <span className="flex h-5 w-5 items-center justify-center rounded-full border-2 border-neutral-700">
+      <span className="h-2 w-2 rounded-full bg-neutral-700" />
+    </span>
   );
 }
