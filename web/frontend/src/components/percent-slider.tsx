@@ -1,18 +1,19 @@
 "use client";
 
 interface PercentSliderProps {
+  /** Value in basis points (0-10000) */
   value: number;
   onChange: (bps: number) => void;
-  min?: number;
-  max?: number;
-  step?: number;
+  min?: number;  // bps
+  max?: number;  // bps
+  step?: number; // bps
 }
 
 export function PercentSlider({ value, onChange, min = 0, max = 5000, step = 100 }: PercentSliderProps) {
   const percent = Math.round(value / 100);
 
   return (
-    <div className="d-flex align-items-center gap-2">
+    <div className="flex items-center gap-3">
       <input
         type="range"
         min={min}
@@ -20,13 +21,14 @@ export function PercentSlider({ value, onChange, min = 0, max = 5000, step = 100
         step={step}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="form-range flex-grow-1"
+        className="flex-1 h-1.5 accent-white cursor-pointer"
       />
-      <span className="small fw-medium text-nowrap" style={{ width: 40, textAlign: "right" }}>{percent}%</span>
+      <span className="text-sm text-neutral-100 w-10 text-right tabular-nums">{percent}%</span>
     </div>
   );
 }
 
+/** Percent slider for direct percentage values (0-100), stored as integer */
 export function RawPercentSlider({ value, onChange, min = 0, max = 50, step = 5 }: {
   value: number;
   onChange: (v: number) => void;
@@ -35,7 +37,7 @@ export function RawPercentSlider({ value, onChange, min = 0, max = 50, step = 5 
   step?: number;
 }) {
   return (
-    <div className="d-flex align-items-center gap-2">
+    <div className="flex items-center gap-3">
       <input
         type="range"
         min={min}
@@ -43,9 +45,9 @@ export function RawPercentSlider({ value, onChange, min = 0, max = 50, step = 5 
         step={step}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="form-range flex-grow-1"
+        className="flex-1 h-1.5 accent-white cursor-pointer"
       />
-      <span className="small fw-medium text-nowrap" style={{ width: 40, textAlign: "right" }}>{value}%</span>
+      <span className="text-sm text-neutral-100 w-10 text-right tabular-nums">{value}%</span>
     </div>
   );
 }

@@ -18,5 +18,9 @@ export function VotedBadge({ novelId, votingRoundId, chapterId }: VotedBadgeProp
 
   if (!voted) return null;
 
-  return <span className="badge bg-success" title="You voted for this"><i className="bi bi-check" /></span>;
+  return (
+    <span className="inline-flex items-center text-green-400 text-xs" title="You voted for this">
+      &#10003;
+    </span>
+  );
 }
