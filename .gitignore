@@ -16,6 +16,7 @@ out/
 .idea/
 .claude/
 .agent/
+.gemini/
 CLAUDE.md
 AGENTS.md
 *.swp
@@ -53,3 +54,4 @@ lcov.info
 # Local dev node
 .local-node/
 mcp/local-node-config.json
+.mcp.json

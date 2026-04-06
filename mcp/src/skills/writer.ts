@@ -1,6 +1,6 @@
 import { type McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { keccak256, toBytes, formatEther } from "viem";
+import { keccak256, toBytes, toHex, formatEther } from "viem";
 import { novelCoreAbi } from "../abi/index.js";
 import { config } from "../config.js";
 import { getPublicClient, getWalletClient } from "../utils/wallet.js";
@@ -187,9 +187,16 @@ export function registerWriterSkills(server: McpServer): void {
         const publicClient = getPublicClient();
 
         // Compute content hash
-        const contentBytes = toBytes(params.content);
-        const contentHash = keccak256(contentBytes);
-        const declaredLength = BigInt(contentBytes.length);
+        const contentHex = toHex(toBytes(params.content));
+        const contentHash = keccak256(contentHex);
+        const declaredLength = BigInt(toBytes(params.content).length);
+
+        // Build ContentSubmission struct
+        const submission = {
+          contentHash,
+          declaredLength,
+          content: contentHex,
+        };
 
         // Fetch novel to get stake amount
         const novel = (await publicClient.readContract({
@@ -206,8 +213,7 @@ export function registerWriterSkills(server: McpServer): void {
           args: [
             BigInt(params.novelId),
             BigInt(params.parentChapterId),
-            contentHash,
-            declaredLength,
+            submission,
           ],
           value: novel.config.stakeAmount,
         });

@@ -1,9 +1,14 @@
 /**
  * Human-readable ABIs for the Onchain Novel protocol contracts.
  * Only includes the essential function signatures needed by the MCP tools.
+ *
+ * viem >=2.x requires parseAbi() to convert human-readable strings into
+ * JSON ABI objects at runtime. Without this, encodeFunctionData / writeContract
+ * will throw "Cannot use 'in' operator to search for 'name'".
  */
+import { parseAbi } from "viem";
 
-export const novelCoreAbi = [
+export const novelCoreAbi = parseAbi([
   // Novel lifecycle
   "function createNovel((uint64 minChapterLength, uint64 maxChapterLength, uint64 roundMinDuration, uint32 roundMinSubmissions, uint32 worldLineCount, uint32 roundsPerEpoch, uint16 prizeReleaseRate, uint16 voterRewardRate, uint64 commitDuration, uint64 revealDuration, uint256 stakeAmount, uint8 spamRounds, uint8 spamThreshold, uint8 contentLocation, string contentBaseUrl, uint256 ruleFee, uint64 ruleVoteDuration, uint32 ruleQuorum) config, (string title, string description, string coverUri) metadata, (bytes32 contentHash, uint64 declaredLength, bytes content)[] bootstrapChapters) external payable returns (uint256 novelId)",
   "function forkNovel(uint256 originalNovelId, uint256 branchChapterId, (uint64 minChapterLength, uint64 maxChapterLength, uint64 roundMinDuration, uint32 roundMinSubmissions, uint32 worldLineCount, uint32 roundsPerEpoch, uint16 prizeReleaseRate, uint16 voterRewardRate, uint64 commitDuration, uint64 revealDuration, uint256 stakeAmount, uint8 spamRounds, uint8 spamThreshold, uint8 contentLocation, string contentBaseUrl, uint256 ruleFee, uint64 ruleVoteDuration, uint32 ruleQuorum) config, (string title, string description, string coverUri) metadata, (bytes32 contentHash, uint64 declaredLength, bytes content)[] bootstrapChapters) external payable returns (uint256 novelId)",
@@ -53,9 +58,9 @@ export const novelCoreAbi = [
   "event StakeSlashed(uint256 indexed novelId, address indexed author, uint256 amount)",
   "event KeeperRewarded(uint256 indexed novelId, address indexed keeper, uint256 amount)",
   "event NovelMetadataUpdated(uint256 indexed novelId, string title, string description, string coverUri)",
-] as const;
+]);
 
-export const rulesEngineAbi = [
+export const rulesEngineAbi = parseAbi([
   "function setCreatorRules(uint256 novelId, string[] names, string[] contents) external",
   "function proposeRule(uint256 novelId, uint8 proposalType, string ruleName, string ruleContent) external payable returns (uint256 proposalId)",
   "function voteOnRuleProposal(uint256 proposalId) external",
@@ -67,9 +72,9 @@ export const rulesEngineAbi = [
   "event RuleProposed(uint256 indexed proposalId, uint256 indexed novelId, address indexed proposer, uint8 proposalType, string ruleName)",
   "event RuleProposalVoted(uint256 indexed proposalId, address indexed voter, uint32 newVoteCount)",
   "event RuleProposalExecuted(uint256 indexed proposalId, uint256 indexed novelId)",
-] as const;
+]);
 
-export const votingEngineAbi = [
+export const votingEngineAbi = parseAbi([
   // Voter actions
   "function commitVote(uint256 novelId, uint256 votingRoundId, bytes32 commitHash) external payable",
   "function revealVote(uint256 novelId, uint256 votingRoundId, uint256 candidateId, bytes32 salt) external",
@@ -90,9 +95,9 @@ export const votingEngineAbi = [
   "event VotesTallied(uint256 indexed novelId, uint256 votingRoundId, uint256[] rankedIds)",
   "event VoterRewardsDeposited(uint256 indexed novelId, uint256 totalAmount, uint256 roundCount)",
   "event CommitPhaseEnded(uint256 indexed novelId, uint256 indexed votingRoundId)",
-] as const;
+]);
 
-export const prizePoolAbi = [
+export const prizePoolAbi = parseAbi([
   // Public actions
   "function tipNovel(uint256 novelId) external payable",
   "function claimReward(uint256 novelId) external",
@@ -106,9 +111,9 @@ export const prizePoolAbi = [
   "event TipReceived(uint256 indexed novelId, address indexed tipper, uint256 amount, uint256 timestamp)",
   "event RewardClaimed(uint256 indexed novelId, address indexed claimant, uint256 amount)",
   "event RewardDistributed(uint256 indexed novelId, uint32 epoch, uint256 totalReleased, uint256 authorCount)",
-] as const;
+]);
 
-export const chapterNFTAbi = [
+export const chapterNFTAbi = parseAbi([
   // Queries
   "function getChapterInfo(uint256 tokenId) external view returns ((uint256 novelId, uint256 chapterId, uint32 epoch, address author, bytes32 contentHash))",
   "function isChapterMinted(uint256 novelId, uint256 chapterId) external view returns (bool)",
@@ -118,4 +123,4 @@ export const chapterNFTAbi = [
 
   // Events
   "event ChapterNFTMinted(uint256 indexed tokenId, uint256 indexed novelId, uint256 indexed chapterId, address author, uint32 epoch)",
-] as const;
+]);
