@@ -161,10 +161,16 @@ contract NovelCore is
 
     /// @notice Deactivate a novel (no more submissions or voting)
     /// @param novelId Novel to deactivate
-    function completeNovel(uint256 novelId) external onlyOwner {
+    function completeNovel(uint256 novelId) external {
         DataTypes.Novel storage novel = _novels[novelId];
         if (novel.id == 0) revert NovelNotFound(novelId);
         if (!novel.active) revert NovelNotActive(novelId);
+
+        // Owner or creator can complete; creator must wait 10 days of inactivity
+        if (msg.sender != owner()) {
+            if (msg.sender != novel.creator) revert NotNovelCreator(novelId, msg.sender);
+            if (block.timestamp < novel.phaseStartTime + 10 days) revert PhaseNotExpired();
+        }
 
         // Only allow completion during Submitting phase (not mid-vote)
         if (novel.roundPhase != DataTypes.RoundPhase.Submitting) {

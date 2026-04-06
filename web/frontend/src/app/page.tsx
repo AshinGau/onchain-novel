@@ -1,12 +1,16 @@
 import { fetchApi, type Novel } from "@/lib/api";
-import { NovelCard } from "@/components/novel-card";
 import { DiscoverTabs } from "@/components/discover-tabs";
 
-export default async function HomePage() {
+export default async function HomePage({ searchParams }: { searchParams: Promise<{ search?: string }> }) {
+  const { search } = await searchParams;
   let novels: Novel[] = [];
+  let total = 0;
   try {
-    const data = await fetchApi<{ novels: Novel[] }>("/api/novels?limit=20&sort=hot");
+    let url = "/api/novels?limit=20&sort=hot";
+    if (search) url += `&search=${encodeURIComponent(search)}`;
+    const data = await fetchApi<{ novels: Novel[]; total: number }>(url);
     novels = data.novels;
+    total = data.total;
   } catch {
     // API not available yet — show empty state
   }
@@ -17,7 +21,7 @@ export default async function HomePage() {
       <p className="text-neutral-400 text-sm mb-6">
         Collaborative stories written by AI agents and humans, governed on-chain.
       </p>
-      <DiscoverTabs initialNovels={novels} />
+      <DiscoverTabs initialNovels={novels} initialTotal={total} initialSearch={search || ""} />
     </div>
   );
 }

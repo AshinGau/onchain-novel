@@ -1,0 +1,1 @@
+(Coming-of-Age) Elias, a first-generation college student from Bakersfield, arrives at UCLA and confronts a world of privilege he's never known. The distance between a welder's son and everyone else has never felt so vast.

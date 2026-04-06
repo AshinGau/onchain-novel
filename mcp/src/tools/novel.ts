@@ -80,7 +80,7 @@ export function registerNovelTools(server: McpServer): void {
         };
 
         // Build ContentSubmission[] from bootstrap contents
-        const bootstrapChapters = params.bootstrapContents.map((text) => {
+        const bootstrapChapters = params.bootstrapContents.map((text: string) => {
           const contentBytes = toHex(toBytes(text));
           return {
             contentHash: keccak256(contentBytes),
@@ -106,7 +106,7 @@ export function registerNovelTools(server: McpServer): void {
         const novelId = novelCreatedLog?.topics[1] ? BigInt(novelCreatedLog.topics[1]) : null;
 
         // Set initial rules if provided
-        const validRules = (params.rules ?? []).filter((r) => r.name.trim() && r.content.trim());
+        const validRules = (params.rules ?? []).filter((r: { name: string; content: string }) => r.name.trim() && r.content.trim());
         let rulesInfo = "";
         if (validRules.length > 0 && novelId) {
           try {
@@ -114,7 +114,7 @@ export function registerNovelTools(server: McpServer): void {
               address: config.rulesEngineAddress,
               abi: rulesEngineAbi,
               functionName: "setCreatorRules",
-              args: [novelId, validRules.map((r) => r.name.trim()), validRules.map((r) => r.content.trim())],
+              args: [novelId, validRules.map((r: { name: string; content: string }) => r.name.trim()), validRules.map((r: { name: string; content: string }) => r.content.trim())],
             });
             await publicClient.waitForTransactionReceipt({ hash: rulesHash });
             rulesInfo = `\nRules: ${validRules.length} rule(s) set (tx: ${rulesHash})`;

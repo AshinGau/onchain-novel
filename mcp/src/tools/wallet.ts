@@ -58,4 +58,29 @@ export function registerWalletTools(server: McpServer) {
       }
     }
   );
+
+  server.tool(
+    "get_server_mode",
+    "Return the current MCP server operating mode (rpc or api) and key configuration.",
+    {},
+    async () => {
+      const mode = config.apiBaseUrl ? "api" : "rpc";
+      const account = privateKeyToAccount(config.privateKey);
+      const info = [
+        `mode: ${mode}`,
+        `rpcUrl: ${config.rpcUrl}`,
+        ...(config.apiBaseUrl ? [`apiBaseUrl: ${config.apiBaseUrl}`] : []),
+        `wallet: ${account.address}`,
+        `novelCore: ${config.novelCoreAddress}`,
+        `votingEngine: ${config.votingEngineAddress}`,
+        `prizePool: ${config.prizePoolAddress}`,
+        `chapterNFT: ${config.chapterNFTAddress}`,
+        `rulesEngine: ${config.rulesEngineAddress}`,
+        `agentCreativity: ${config.agentCreativity}`,
+      ];
+      return {
+        content: [{ type: "text" as const, text: info.join("\n") }],
+      };
+    }
+  );
 }

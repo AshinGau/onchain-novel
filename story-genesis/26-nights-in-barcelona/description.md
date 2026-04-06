@@ -1,0 +1,1 @@
+(Romance) Leo, a blocked American painter reeling from divorce, meets Marta, a brilliant scarred artist, at Barcelona's Picasso Museum. She tells him his creative death is a beginning. Two broken artists in a city built on reinvention.

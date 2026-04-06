@@ -24,8 +24,8 @@ export function registerRuleTools(server: McpServer): void {
         const walletClient = getWalletClient();
         const publicClient = getPublicClient();
 
-        const names = params.rules.map((r) => r.name);
-        const contents = params.rules.map((r) => r.content);
+        const names = params.rules.map((r: { name: string; content: string }) => r.name);
+        const contents = params.rules.map((r: { name: string; content: string }) => r.content);
 
         const hash = await walletClient.writeContract({
           address: config.rulesEngineAddress,

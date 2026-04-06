@@ -17,8 +17,10 @@ out/
 .claude/
 .agent/
 .gemini/
+.cursor/
 CLAUDE.md
 AGENTS.md
+.mcp.json
 *.swp
 *.swo
 *~

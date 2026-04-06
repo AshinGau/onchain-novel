@@ -1,4 +1,4 @@
-Chapter 3: The Architecture of Secrets
+Bootstrap Chapter 3: The Architecture of Secrets
 
 I found out about Desmond on a Tuesday, which is the most anticlimactic day for a revelation. Tuesdays have no personality. They exist only as proof that Monday wasn't the end of it.
 

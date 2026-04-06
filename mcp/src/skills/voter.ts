@@ -221,8 +221,8 @@ export function registerVoterSkills(server: McpServer): void {
     "Voter Skill: Commit a vote for a candidate. Automatically generates a random salt and stores it for later reveal. Stakes ETH for vote weight.",
     {
       novelId: z.number().describe("Novel ID"),
-      epoch: z.number().describe("Current epoch number"),
-      round: z.number().describe("Current round number"),
+      epoch: z.number().optional().describe("Epoch number (auto-detected from chain if omitted)"),
+      round: z.number().optional().describe("Round number (auto-detected from chain if omitted)"),
       isEpoch: z.boolean().default(false).describe("Whether this is an epoch voting round"),
       candidateId: z.number().describe("Chapter ID to vote for"),
       stakeEth: z.string().describe("ETH to stake for vote weight (e.g. '0.01')"),
@@ -232,10 +232,24 @@ export function registerVoterSkills(server: McpServer): void {
         const walletClient = getWalletClient();
         const publicClient = getPublicClient();
 
+        // Auto-detect epoch/round from chain if not provided
+        let epoch = params.epoch;
+        let round = params.round;
+        if (epoch == null || round == null) {
+          const novel = (await publicClient.readContract({
+            address: config.novelCoreAddress,
+            abi: novelCoreAbi,
+            functionName: "getNovel",
+            args: [BigInt(params.novelId)],
+          })) as { currentRound: number; currentEpoch: number };
+          epoch = epoch ?? novel.currentEpoch;
+          round = round ?? novel.currentRound;
+        }
+
         const votingRoundId = computeVotingRoundId(
           BigInt(params.novelId),
-          params.epoch,
-          params.round,
+          epoch,
+          round,
           params.isEpoch
         );
 
@@ -309,8 +323,8 @@ export function registerVoterSkills(server: McpServer): void {
     "Voter Skill: Reveal a previously committed vote using the stored salt. Must be called during the reveal phase.",
     {
       novelId: z.number().describe("Novel ID"),
-      epoch: z.number().describe("Epoch number"),
-      round: z.number().describe("Round number"),
+      epoch: z.number().optional().describe("Epoch number (auto-detected from chain if omitted)"),
+      round: z.number().optional().describe("Round number (auto-detected from chain if omitted)"),
       isEpoch: z.boolean().default(false).describe("Whether this is an epoch voting round"),
     },
     async (params) => {
@@ -318,10 +332,24 @@ export function registerVoterSkills(server: McpServer): void {
         const walletClient = getWalletClient();
         const publicClient = getPublicClient();
 
+        // Auto-detect epoch/round from chain if not provided
+        let epoch = params.epoch;
+        let round = params.round;
+        if (epoch == null || round == null) {
+          const novel = (await publicClient.readContract({
+            address: config.novelCoreAddress,
+            abi: novelCoreAbi,
+            functionName: "getNovel",
+            args: [BigInt(params.novelId)],
+          })) as { currentRound: number; currentEpoch: number };
+          epoch = epoch ?? novel.currentEpoch;
+          round = round ?? novel.currentRound;
+        }
+
         const votingRoundId = computeVotingRoundId(
           BigInt(params.novelId),
-          params.epoch,
-          params.round,
+          epoch,
+          round,
           params.isEpoch
         );
 

@@ -1,0 +1,1 @@
+(Mystery) A cryptographer vanishes from his locked Vienna office—coffee still warm, coat on the door. Inspector Schiller receives a cryptic message and discovers a centuries-old notebook suggesting his disappearance connects to something far older than his research.

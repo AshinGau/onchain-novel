@@ -1,0 +1,1 @@
+(Crime Thriller) A tortured body surfaces in the Mekong near the Thai-Lao border. The victim: a Belgian dealer missing four months—but dead only three days. Inspector Kittisak follows a trail into the Silk Road's darkest modern shadows.
