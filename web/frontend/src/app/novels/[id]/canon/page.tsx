@@ -93,7 +93,7 @@ export default async function CanonPage({
           </Link>
         ) : <div />}
 
-        <ChapterNav novelId={id} chapters={tocItems} currentIndex={currentIdx} />
+        <ChapterNav novelId={id} chapters={tocItems} currentIndex={currentIdx} forkSourceNovelId={novel.fork_source_novel_id} forkSourceChapterId={novel.fork_source_chapter_id} />
 
         {nextIdx !== null ? (
           <Link href={`/novels/${id}/canon?ch=${nextIdx}`}
