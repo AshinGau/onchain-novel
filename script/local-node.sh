@@ -130,7 +130,7 @@ start_frontend() {
         return
     fi
 
-    info "Starting frontend..."
+    info "Building frontend..."
     cd "$FRONTEND_DIR"
     NEXT_PUBLIC_API_URL="http://localhost:$API_PORT" \
     NEXT_PUBLIC_RPC_URL="$RPC" \
@@ -139,7 +139,24 @@ start_frontend() {
     NEXT_PUBLIC_VOTING_ENGINE_ADDRESS="$VOTING_ENGINE_ADDRESS" \
     NEXT_PUBLIC_PRIZE_POOL_ADDRESS="$PRIZE_POOL_ADDRESS" \
     NEXT_PUBLIC_RULES_ENGINE_ADDRESS="$RULES_ENGINE_ADDRESS" \
-    npx next dev --port "$FRONTEND_PORT" > "$DATA_DIR/frontend.log" 2>&1 &
+    npx next build > "$DATA_DIR/frontend-build.log" 2>&1
+
+    if [ $? -ne 0 ]; then
+        err "Frontend build failed. Logs:"
+        tail -20 "$DATA_DIR/frontend-build.log"
+        exit 1
+    fi
+    ok "Frontend built"
+
+    info "Starting frontend..."
+    NEXT_PUBLIC_API_URL="http://localhost:$API_PORT" \
+    NEXT_PUBLIC_RPC_URL="$RPC" \
+    NEXT_PUBLIC_CHAIN=foundry \
+    NEXT_PUBLIC_NOVEL_CORE_ADDRESS="$NOVEL_CORE_ADDRESS" \
+    NEXT_PUBLIC_VOTING_ENGINE_ADDRESS="$VOTING_ENGINE_ADDRESS" \
+    NEXT_PUBLIC_PRIZE_POOL_ADDRESS="$PRIZE_POOL_ADDRESS" \
+    NEXT_PUBLIC_RULES_ENGINE_ADDRESS="$RULES_ENGINE_ADDRESS" \
+    npx next start --port "$FRONTEND_PORT" > "$DATA_DIR/frontend.log" 2>&1 &
     save_pid "frontend" "$!"
     cd "$ROOT_DIR"
 
@@ -290,8 +307,17 @@ MCPEOF
     ok "MCP config written to mcp/local-node-config.json"
 
     # ── Start Backend ──
-    info "Starting backend..."
+    info "Building backend..."
     cd "$BACKEND_DIR"
+    npx tsc > "$DATA_DIR/backend-build.log" 2>&1
+    if [ $? -ne 0 ]; then
+        err "Backend build failed. Logs:"
+        tail -20 "$DATA_DIR/backend-build.log"
+        exit 1
+    fi
+    ok "Backend built"
+
+    info "Starting backend..."
     DATABASE_URL="$DB_URL" \
     RPC_URL="$RPC" \
     NOVEL_CORE_ADDRESS="$NOVEL_CORE_ADDRESS" \
@@ -303,7 +329,7 @@ MCPEOF
     INDEXER_BATCH_SIZE=100 \
     INDEXER_POLL_INTERVAL_MS=2000 \
     PORT=$API_PORT \
-    npx tsx src/index.ts > "$DATA_DIR/backend.log" 2>&1 &
+    node dist/index.js > "$DATA_DIR/backend.log" 2>&1 &
     local backend_pid=$!
     save_pid "backend" "$backend_pid"
     cd "$ROOT_DIR"
