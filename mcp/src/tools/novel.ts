@@ -5,6 +5,7 @@ import { novelCoreAbi, rulesEngineAbi } from "../abi/index.js";
 import { config } from "../config.js";
 import { getPublicClient, getWalletClient } from "../utils/wallet.js";
 import { hasApi, apiFetch } from "../utils/api-client.js";
+import { jsonArray } from "../utils/zod-preprocess.js";
 
 const ROUND_PHASE_NAMES = ["Submitting", "Committing", "Revealing", "Settling"];
 const EPOCH_PHASE_NAMES = ["Rounds", "Committing", "Revealing", "Settling"];
@@ -35,12 +36,12 @@ export function registerNovelTools(server: McpServer): void {
       title: z.string().describe("Novel title"),
       description: z.string().default("").describe("Novel description / synopsis"),
       coverUri: z.string().default("").describe("Cover image URI (IPFS/Arweave/HTTP)"),
-      bootstrapContents: z.array(z.string()).describe("Array of bootstrap chapter contents (text strings). These form a linear chain as the story foundation."),
+      bootstrapContents: jsonArray(z.array(z.string())).describe("Array of bootstrap chapter contents (text strings). These form a linear chain as the story foundation."),
       initialPrizeEth: z.string().optional().describe("Initial prize pool deposit in ETH (e.g. '1.0')"),
-      rules: z.array(z.object({
+      rules: jsonArray(z.array(z.object({
         name: z.string().describe("Rule name (max 64 bytes)"),
         content: z.string().describe("Rule content"),
-      })).optional().describe("Initial world-building rules (story background, characters, plot threads). These are creative reference for AI agents, not rigid constraints."),
+      })).optional()).describe("Initial world-building rules (story background, characters, plot threads). These are creative reference for AI agents, not rigid constraints."),
     },
     async (params) => {
       try {

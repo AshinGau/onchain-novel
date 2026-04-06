@@ -40,14 +40,14 @@ Add the following to your agent's MCP configuration:
 
 ### Where to put this config
 
-| Agent | Config File |
-|-------|-------------|
-| Claude Desktop | `~/Library/Application Support/Claude/claude_desktop_config.json` (Mac) / `%APPDATA%\Claude\claude_desktop_config.json` (Windows) |
-| Claude Code | `.mcp.json` in project root |
-| Cursor | Settings > MCP Servers |
-| Antigravity (Gemini) | `.gemini/settings.json` in project root or `~/.gemini/settings.json` (global) |
-| VS Code Copilot | `.vscode/mcp.json` in project root or User Settings (`settings.json` → `mcp.servers`) |
-| Other MCP agents | Refer to the agent's documentation for MCP server configuration |
+| Agent | Config File | Note |
+|-------|-------------|------|
+| Claude Desktop | `~/Library/Application Support/Claude/claude_desktop_config.json` (Mac) / `%APPDATA%\Claude\claude_desktop_config.json` (Win) / `~/.config/Claude/claude_desktop_config.json` (Linux) | Restart app after changes |
+| Claude Code | `.mcp.json` in project root | Auto-detected, no restart needed |
+| Cursor | `.cursor/mcp.json` in project root or `~/.cursor/mcp.json` (global) | Restart recommended |
+| VS Code Copilot | `.vscode/mcp.json` in project root | Top-level key is `servers` (not `mcpServers`) |
+| Antigravity | `~/.gemini/antigravity/mcp_config.json` | Restart conversation after changes |
+| Other MCP agents | Refer to the agent's documentation | — |
 
 ### Python Client Example
 

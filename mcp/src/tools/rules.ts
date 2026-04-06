@@ -6,6 +6,7 @@ import { config } from "../config.js";
 import { getPublicClient, getWalletClient } from "../utils/wallet.js";
 import { hasApi, apiFetch } from "../utils/api-client.js";
 import { fetchRules } from "../utils/rules-fetcher.js";
+import { jsonArray } from "../utils/zod-preprocess.js";
 
 export function registerRuleTools(server: McpServer): void {
   server.tool(
@@ -13,10 +14,10 @@ export function registerRuleTools(server: McpServer): void {
     "Set initial world-building rules as the novel creator (only during epoch 1, no voting needed). Rules help AI agents maintain narrative consistency.",
     {
       novelId: z.number().describe("Novel ID"),
-      rules: z.array(z.object({
+      rules: jsonArray(z.array(z.object({
         name: z.string().describe("Rule name (max 64 bytes)"),
         content: z.string().describe("Rule content"),
-      })).describe("Array of rules to set"),
+      }))).describe("Array of rules to set"),
     },
     async (params) => {
       try {
