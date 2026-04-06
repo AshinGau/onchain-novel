@@ -22,6 +22,8 @@ interface StoryTreeProps {
   connectedAddress?: string;
   continuable?: boolean;
   activeWorldLineIds?: Set<string>;
+  forkSourceNovelId?: string | null;
+  forkSourceChapterId?: string | null;
 }
 
 // Chapters injected as epoch anchors carry this flag
@@ -53,7 +55,7 @@ function countDescendants(id: string, childrenOf: Map<string, DisplayChapter[]>)
   return count;
 }
 
-function TreeNode({ chapter: ch, childrenOf, depth, novelId, votingRoundId, connectedAddress, continuable, activeWorldLineIds }: {
+function TreeNode({ chapter: ch, childrenOf, depth, novelId, votingRoundId, connectedAddress, continuable, activeWorldLineIds, forkSourceNovelId, forkSourceChapterId }: {
   chapter: DisplayChapter;
   childrenOf: Map<string, DisplayChapter[]>;
   depth: number;
@@ -62,27 +64,37 @@ function TreeNode({ chapter: ch, childrenOf, depth, novelId, votingRoundId, conn
   connectedAddress?: string;
   continuable: boolean;
   activeWorldLineIds?: Set<string>;
+  forkSourceNovelId?: string | null;
+  forkSourceChapterId?: string | null;
 }) {
   const children = childrenOf.get(ch.id) || [];
   const [collapsed, setCollapsed] = useState(false);
   const isOwn = !!connectedAddress && ch.author.toLowerCase() === connectedAddress.toLowerCase();
   const isAnchor = !!ch._anchor;
   const hasChildren = children.length > 0;
+  const isForkRoot = ch.round === 0 && ch.epoch === 0 && !ch.is_canon && !!forkSourceNovelId;
   const badge = isAnchor ? null : getChapterBadge(ch, continuable, activeWorldLineIds);
 
   const borderColor = isAnchor
     ? "border-amber-600 border-dashed bg-amber-950/30"
-    : ch.is_canon
-      ? "border-amber-600 bg-amber-950/30"
-      : ch.is_world_line
-        ? "border-blue-700 bg-blue-950/20"
-        : "border-neutral-800 bg-neutral-900";
+    : isForkRoot
+      ? "border-purple-700 border-dashed bg-purple-950/20"
+      : ch.is_canon
+        ? "border-amber-600 bg-amber-950/30"
+        : ch.is_world_line
+          ? "border-blue-700 bg-blue-950/20"
+          : "border-neutral-800 bg-neutral-900";
+
+  // Fork root links to the source novel's chapter detail page
+  const href = isForkRoot
+    ? `/chapters/${forkSourceChapterId}`
+    : `/chapters/${ch.id}`;
 
   return (
     <div className={depth > 0 ? "ml-5 border-l border-neutral-800 pl-3" : ""}>
       <div className="relative group/node">
         <Link
-          href={`/chapters/${ch.id}`}
+          href={href}
           className={`block rounded-lg border p-2 text-sm transition-colors hover:border-neutral-500 mb-1 ${borderColor}`}
         >
           <div className="flex items-center gap-1.5 flex-wrap">
@@ -90,16 +102,25 @@ function TreeNode({ chapter: ch, childrenOf, depth, novelId, votingRoundId, conn
               <span className="text-neutral-600 text-xs italic">from prev epoch ·</span>
             )}
             <span className="text-neutral-500 text-xs">
-              {ch.round === 0 && ch.epoch === 0 ? `Bootstrap ${ch.chapter_index + 1}` : ch.round === 0 ? "Genesis" : `R${ch.round}`}
+              {isForkRoot
+                ? `Forked from Novel #${forkSourceNovelId}`
+                : ch.round === 0 && ch.epoch === 0 ? `Bootstrap ${ch.chapter_index + 1}` : ch.round === 0 ? "Genesis" : `R${ch.round}`}
             </span>
-            <span className="font-mono text-xs">{ch.round === 0 && ch.epoch === 0 ? `(ID.${ch.id})` : `#${ch.chapter_index}(ID.${ch.id})`}</span>
-            <span className={`text-xs ${isOwn ? "text-green-400" : "text-neutral-400"}`}>
-              {isOwn ? "You" : shortenAddress(ch.author)}
-            </span>
+            {!isForkRoot && (
+              <span className="font-mono text-xs">{ch.round === 0 && ch.epoch === 0 ? `(ID.${ch.id})` : `#${ch.chapter_index}(ID.${ch.id})`}</span>
+            )}
+            {isForkRoot && (
+              <span className="font-mono text-xs">Candidate(ID.{forkSourceChapterId})</span>
+            )}
+            {!isForkRoot && (
+              <span className={`text-xs ${isOwn ? "text-green-400" : "text-neutral-400"}`}>
+                {isOwn ? "You" : shortenAddress(ch.author)}
+              </span>
+            )}
             {badge && (
               <Badge variant="secondary" className={`text-[10px] px-1 py-0 ${badge.className}`}>{badge.label}</Badge>
             )}
-            {isOwn && !isAnchor && (
+            {isOwn && !isAnchor && !isForkRoot && (
               <Badge variant="secondary" className="text-[10px] px-1 py-0 bg-green-900/50 text-green-400 border-green-700">Mine</Badge>
             )}
             {votingRoundId && !isAnchor && (
@@ -130,6 +151,8 @@ function TreeNode({ chapter: ch, childrenOf, depth, novelId, votingRoundId, conn
           connectedAddress={connectedAddress}
           continuable={continuable}
           activeWorldLineIds={activeWorldLineIds}
+          forkSourceNovelId={forkSourceNovelId}
+          forkSourceChapterId={forkSourceChapterId}
         />
       ))}
     </div>
@@ -138,7 +161,7 @@ function TreeNode({ chapter: ch, childrenOf, depth, novelId, votingRoundId, conn
 
 // ── Epoch section ─────────────────────────────────────────────────
 
-function EpochSection({ epoch, data, loading, onExpand, novelId, votingRoundId, connectedAddress, continuable, isCurrentEpoch, activeWorldLineIds }: {
+function EpochSection({ epoch, data, loading, onExpand, novelId, votingRoundId, connectedAddress, continuable, isCurrentEpoch, activeWorldLineIds, forkSourceNovelId, forkSourceChapterId }: {
   epoch: number;
   data: EpochData | undefined;
   loading: boolean;
@@ -149,6 +172,8 @@ function EpochSection({ epoch, data, loading, onExpand, novelId, votingRoundId, 
   continuable: boolean;
   isCurrentEpoch: boolean;
   activeWorldLineIds?: Set<string>;
+  forkSourceNovelId?: string | null;
+  forkSourceChapterId?: string | null;
 }) {
   // Merge anchors into display chapters
   const allChapters: DisplayChapter[] = [];
@@ -217,6 +242,8 @@ function EpochSection({ epoch, data, loading, onExpand, novelId, votingRoundId, 
               connectedAddress={connectedAddress}
               continuable={continuable}
               activeWorldLineIds={activeWorldLineIds}
+              forkSourceNovelId={forkSourceNovelId}
+              forkSourceChapterId={forkSourceChapterId}
             />
           ))}
         </div>
@@ -227,7 +254,7 @@ function EpochSection({ epoch, data, loading, onExpand, novelId, votingRoundId, 
 
 // ── Main component ────────────────────────────────────────────────
 
-export function StoryTree({ epochData, maxEpoch, loadingEpochs, onExpandEpoch, novelId, votingRoundId, connectedAddress, continuable, activeWorldLineIds }: StoryTreeProps) {
+export function StoryTree({ epochData, maxEpoch, loadingEpochs, onExpandEpoch, novelId, votingRoundId, connectedAddress, continuable, activeWorldLineIds, forkSourceNovelId, forkSourceChapterId }: StoryTreeProps) {
   const epochs = Array.from({ length: maxEpoch }, (_, i) => i + 1);
 
   return (
@@ -245,6 +272,8 @@ export function StoryTree({ epochData, maxEpoch, loadingEpochs, onExpandEpoch, n
           continuable={!!continuable}
           isCurrentEpoch={epoch === maxEpoch}
           activeWorldLineIds={activeWorldLineIds}
+          forkSourceNovelId={forkSourceNovelId}
+          forkSourceChapterId={forkSourceChapterId}
         />
       ))}
     </div>

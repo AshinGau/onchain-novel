@@ -13,9 +13,11 @@ interface ChapterNavProps {
   novelId: string;
   chapters: TocItem[];
   currentIndex: number;
+  forkSourceNovelId?: string | null;
+  forkSourceChapterId?: string | null;
 }
 
-export function ChapterNav({ novelId, chapters, currentIndex }: ChapterNavProps) {
+export function ChapterNav({ novelId, chapters, currentIndex, forkSourceNovelId, forkSourceChapterId }: ChapterNavProps) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -35,6 +37,13 @@ export function ChapterNav({ novelId, chapters, currentIndex }: ChapterNavProps)
               <button onClick={() => setOpen(false)} className="text-neutral-500 hover:text-white text-lg leading-none">&times;</button>
             </div>
             <div className="overflow-y-auto flex-1">
+              {forkSourceNovelId && (
+                <Link href={`/chapters/${forkSourceChapterId}`} onClick={() => setOpen(false)}
+                  className="flex items-center justify-between px-5 py-2.5 border-b border-neutral-800/50 text-sm text-purple-400 hover:bg-purple-950/20 transition-colors">
+                  <span>Fork Origin</span>
+                  <span className="text-xs text-neutral-500">Novel #{forkSourceNovelId}</span>
+                </Link>
+              )}
               {chapters.map((ch) => (
                 <Link key={ch.index} href={`/novels/${novelId}/canon?ch=${ch.index}`} onClick={() => setOpen(false)}
                   className={`flex items-center justify-between px-5 py-2.5 border-b border-neutral-800/50 last:border-b-0 text-sm transition-colors ${

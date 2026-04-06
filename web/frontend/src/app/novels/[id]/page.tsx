@@ -261,7 +261,7 @@ export default async function NovelDetailPage({ params }: { params: Promise<{ id
       {(tree.length > 0 || novel.current_epoch > 1) && (
         <div className="mb-6">
           <h2 className="font-semibold mb-3">Story Tree</h2>
-          <ConnectedStoryTree initialChapters={tree} initialAnchors={treeAnchors} currentEpoch={novel.current_epoch} novelId={id} votingRoundId={novel.active && (novel.round_phase === 1 || novel.round_phase === 2) ? roundVotingId : undefined} continuable={novel.active && novel.epoch_phase === 0 && novel.round_phase === 0} activeWorldLineIds={new Set(worldlines.map(wl => wl.id))} />
+          <ConnectedStoryTree initialChapters={tree} initialAnchors={treeAnchors} currentEpoch={novel.current_epoch} novelId={id} votingRoundId={novel.active && (novel.round_phase === 1 || novel.round_phase === 2) ? roundVotingId : undefined} continuable={novel.active && novel.epoch_phase === 0 && novel.round_phase === 0} activeWorldLineIds={new Set(worldlines.map(wl => wl.id))} forkSourceNovelId={novel.fork_source_novel_id} forkSourceChapterId={novel.fork_source_chapter_id} />
         </div>
       )}
 

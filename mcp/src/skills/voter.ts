@@ -25,8 +25,9 @@ const saltStore = new Map<
   { salt: `0x${string}`; candidateId: bigint; votingRoundId: bigint }
 >();
 
-function saltKey(novelId: bigint, votingRoundId: bigint): string {
-  return `${novelId}-${votingRoundId}`;
+function saltKey(novelId: bigint, votingRoundId: bigint, address?: string): string {
+  const addr = address || getWalletAddress();
+  return `${novelId}-${votingRoundId}-${addr.toLowerCase()}`;
 }
 
 export function registerVoterSkills(server: McpServer): void {
