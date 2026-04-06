@@ -8,6 +8,7 @@ import {NovelCore} from "../src/core/NovelCore.sol";
 import {VotingEngine} from "../src/core/VotingEngine.sol";
 import {PrizePool} from "../src/core/PrizePool.sol";
 import {ChapterNFT} from "../src/core/ChapterNFT.sol";
+import {RulesEngine} from "../src/core/RulesEngine.sol";
 
 /// @title Deploy
 /// @notice Deploys all protocol contracts behind UUPS proxies and wires them together
@@ -26,11 +27,13 @@ contract Deploy is Script {
         VotingEngine votingEngineImpl = new VotingEngine();
         PrizePool prizePoolImpl = new PrizePool();
         ChapterNFT chapterNFTImpl = new ChapterNFT();
+        RulesEngine rulesEngineImpl = new RulesEngine();
 
         console.log("NovelCore impl:", address(novelCoreImpl));
         console.log("VotingEngine impl:", address(votingEngineImpl));
         console.log("PrizePool impl:", address(prizePoolImpl));
         console.log("ChapterNFT impl:", address(chapterNFTImpl));
+        console.log("RulesEngine impl:", address(rulesEngineImpl));
 
         // 2. Deploy NovelCore proxy (with placeholder module addresses)
         bytes memory novelCoreData =
@@ -48,18 +51,25 @@ contract Deploy is Script {
         bytes memory nftData = abi.encodeCall(ChapterNFT.initialize, (deployer, address(novelCoreProxy)));
         ERC1967Proxy nftProxy = new ERC1967Proxy(address(chapterNFTImpl), nftData);
 
-        // 4. Wire NovelCore to modules
+        // 4. Deploy RulesEngine proxy
+        bytes memory rulesData =
+            abi.encodeCall(RulesEngine.initialize, (deployer, address(novelCoreProxy), address(prizeProxy)));
+        ERC1967Proxy rulesProxy = new ERC1967Proxy(address(rulesEngineImpl), rulesData);
+
+        // 5. Wire NovelCore to modules
         novelCore.setVotingEngine(address(votingProxy));
         novelCore.setPrizePool(address(prizeProxy));
         novelCore.setChapterNFT(address(nftProxy));
+        PrizePool(address(prizeProxy)).setRulesEngine(address(rulesProxy));
 
         vm.stopBroadcast();
 
-        // 5. Log deployed addresses
+        // 6. Log deployed addresses
         console.log("=== Proxy Addresses (use these) ===");
         console.log("NovelCore:", address(novelCoreProxy));
         console.log("VotingEngine:", address(votingProxy));
         console.log("PrizePool:", address(prizeProxy));
         console.log("ChapterNFT:", address(nftProxy));
+        console.log("RulesEngine:", address(rulesProxy));
     }
 }

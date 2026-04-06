@@ -19,6 +19,7 @@ export const env = {
   VOTING_ENGINE_ADDRESS: optional("VOTING_ENGINE_ADDRESS", "") as `0x${string}`,
   PRIZE_POOL_ADDRESS: optional("PRIZE_POOL_ADDRESS", "") as `0x${string}`,
   CHAPTER_NFT_ADDRESS: optional("CHAPTER_NFT_ADDRESS", "") as `0x${string}`,
+  RULES_ENGINE_ADDRESS: optional("RULES_ENGINE_ADDRESS", "") as `0x${string}`,
   INDEXER_START_BLOCK: BigInt(optional("INDEXER_START_BLOCK", "0")),
   INDEXER_BATCH_SIZE: parseInt(optional("INDEXER_BATCH_SIZE", "500")),
   INDEXER_POLL_INTERVAL_MS: parseInt(optional("INDEXER_POLL_INTERVAL_MS", "5000")),

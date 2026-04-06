@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAccount, usePublicClient } from "wagmi";
 import { parseEther, keccak256, toHex, toBytes } from "viem";
-import { NOVEL_CORE_ADDRESS, novelCoreAbi } from "@/lib/contracts";
+import { NOVEL_CORE_ADDRESS, novelCoreAbi, RULES_ENGINE_ADDRESS, rulesEngineAbi } from "@/lib/contracts";
 import { TOKEN_SYMBOL } from "@/lib/config";
 import { type NovelConfigForm, DEFAULT_CONFIG, validateAllFields } from "@/lib/novel-config";
 import { ConfigForm, inputBase, labelClass, hintClass } from "@/components/config-form";
@@ -13,7 +13,7 @@ import { NovelMetadataFields } from "@/components/novel-metadata-fields";
 import { FieldTooltip } from "@/components/field-tooltip";
 import { useTxAction, txStatusLabel } from "@/hooks/use-tx-action";
 
-interface GenesisChapter {
+interface BootstrapChapter {
   content: string;
 }
 
@@ -31,7 +31,7 @@ export default function CreateNovelPage() {
   const [description, setDescription] = useState("");
   const [coverUri, setCoverUri] = useState("");
   const [config, setConfig] = useState<NovelConfigForm>(DEFAULT_CONFIG);
-  const [chapters, setChapters] = useState<GenesisChapter[]>([{ content: "" }]);
+  const [chapters, setChapters] = useState<BootstrapChapter[]>([{ content: "" }]);
   const [initialPrize, setInitialPrize] = useState("");
   const [creatorRules, setCreatorRules] = useState<CreatorRule[]>([]);
   const [validationError, setValidationError] = useState("");
@@ -63,8 +63,8 @@ export default function CreateNovelPage() {
         const novelId = BigInt(novelCreatedLog.topics[1]);
         const validRules = creatorRules.filter(r => r.name.trim() && r.content.trim());
         ruleTx.writeContract({
-          address: NOVEL_CORE_ADDRESS,
-          abi: novelCoreAbi,
+          address: RULES_ENGINE_ADDRESS,
+          abi: rulesEngineAbi,
           functionName: "setCreatorRules",
           args: [novelId, validRules.map(r => r.name.trim()), validRules.map(r => r.content.trim())],
         });
@@ -83,15 +83,11 @@ export default function CreateNovelPage() {
     setValidationError("");
     if (!isConnected) { setValidationError("Please connect your wallet first."); return; }
     if (!title.trim()) { setValidationError("Title is required."); return; }
-    if (chapters.some((ch) => !ch.content.trim())) { setValidationError("All genesis chapters must have content."); return; }
-    if (chapters.length > config.worldLineCount) {
-      setValidationError(`Genesis chapters (${chapters.length}) cannot exceed World Line Count (${config.worldLineCount}).`);
-      return;
-    }
+    if (chapters.some((ch) => !ch.content.trim())) { setValidationError("All bootstrap chapters must have content."); return; }
     const configError = validateAllFields(config);
     if (configError) { setValidationError(configError); return; }
 
-    const genesisChapters = chapters.map((ch) => {
+    const bootstrapChapters = chapters.map((ch) => {
       const contentBytes = toHex(toBytes(ch.content));
       const contentHash = keccak256(contentBytes);
       const declaredLength = BigInt(new TextEncoder().encode(ch.content).length);
@@ -129,7 +125,7 @@ export default function CreateNovelPage() {
           ruleQuorum: config.ruleQuorum,
         },
         { title: title.trim(), description: description.trim(), coverUri: coverUri.trim() },
-        genesisChapters,
+        bootstrapChapters,
       ],
       value,
     });
@@ -154,23 +150,23 @@ export default function CreateNovelPage() {
           <ConfigForm config={config} onChange={setConfig} />
         </section>
 
-        {/* Genesis Chapters */}
+        {/* Bootstrap Chapters */}
         <section className="rounded-lg bg-neutral-900 border border-neutral-800 p-5">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="font-semibold">Genesis Chapters</h2>
+            <h2 className="font-semibold">Bootstrap Chapters</h2>
             <button type="button" onClick={() => setChapters((prev) => [...prev, { content: "" }])}
               className="rounded-lg bg-neutral-800 border border-neutral-700 px-3 py-1.5 text-sm hover:bg-neutral-700 transition-colors">
-              + Add Genesis
+              + Add Chapter
             </button>
           </div>
           <p className="text-xs text-neutral-500 mb-4">
-            At least 1 genesis chapter is required. Each becomes an initial world line (max {config.worldLineCount}).
+            Write the initial chapters of your story. These form a linear chain that sets the foundation before collaboration opens.
           </p>
           <div className="space-y-4">
             {chapters.map((ch, i) => (
               <div key={i} className="rounded-lg border border-neutral-700 p-3">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium text-neutral-300">Genesis {i + 1}</span>
+                  <span className="text-sm font-medium text-neutral-300">Bootstrap {i + 1}</span>
                   <div className="flex items-center gap-3">
                     <span className="text-xs text-neutral-500">{byteCount(ch.content)} bytes</span>
                     {chapters.length > 1 && (
@@ -180,7 +176,7 @@ export default function CreateNovelPage() {
                   </div>
                 </div>
                 <textarea value={ch.content} onChange={(e) => setChapters((prev) => prev.map((c, j) => j === i ? { content: e.target.value } : c))}
-                  placeholder="Write your genesis chapter..." rows={8} className={`${inputBase} border-neutral-700`} />
+                  placeholder="Write your chapter..." rows={8} className={`${inputBase} border-neutral-700`} />
               </div>
             ))}
           </div>

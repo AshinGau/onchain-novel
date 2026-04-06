@@ -8,6 +8,7 @@ import {NovelCore} from "../src/core/NovelCore.sol";
 import {VotingEngine} from "../src/core/VotingEngine.sol";
 import {PrizePool} from "../src/core/PrizePool.sol";
 import {ChapterNFT} from "../src/core/ChapterNFT.sol";
+import {RulesEngine} from "../src/core/RulesEngine.sol";
 import {DataTypes} from "../src/libraries/DataTypes.sol";
 
 contract RulesTest is Test {
@@ -15,6 +16,7 @@ contract RulesTest is Test {
     VotingEngine public votingEngine;
     PrizePool public prizePool;
     ChapterNFT public chapterNFT;
+    RulesEngine public rulesEngine;
 
     address public owner = address(0x1001);
     address public creator = address(0x1010);
@@ -49,10 +51,17 @@ contract RulesTest is Test {
         ERC1967Proxy nftProxy = new ERC1967Proxy(address(chapterNFTImpl), nftData);
         chapterNFT = ChapterNFT(address(nftProxy));
 
+        RulesEngine rulesEngineImpl = new RulesEngine();
+        bytes memory rulesData =
+            abi.encodeCall(RulesEngine.initialize, (owner, address(novelCoreProxy), address(prizeProxy)));
+        ERC1967Proxy rulesProxy = new ERC1967Proxy(address(rulesEngineImpl), rulesData);
+        rulesEngine = RulesEngine(address(rulesProxy));
+
         vm.startPrank(owner);
         novelCore.setVotingEngine(address(votingEngine));
         novelCore.setPrizePool(address(prizePool));
         novelCore.setChapterNFT(address(chapterNFT));
+        prizePool.setRulesEngine(address(rulesEngine));
         vm.stopPrank();
 
         vm.deal(creator, 100 ether);
@@ -83,7 +92,8 @@ contract RulesTest is Test {
             ruleQuorum: 2
         });
 
-        defaultMetadata = DataTypes.NovelMetadata({title: "Rules Test Novel", description: "A test novel", coverUri: ""});
+        defaultMetadata =
+            DataTypes.NovelMetadata({title: "Rules Test Novel", description: "A test novel", coverUri: ""});
     }
 
     // ============================================================
@@ -109,7 +119,9 @@ contract RulesTest is Test {
 
     function _createNovel() internal returns (uint256 novelId) {
         bytes memory genesis = new bytes(200);
-        for (uint256 i = 0; i < 200; i++) genesis[i] = bytes1(uint8(65 + (i % 26)));
+        for (uint256 i = 0; i < 200; i++) {
+            genesis[i] = bytes1(uint8(65 + (i % 26)));
+        }
 
         vm.prank(creator);
         novelId = novelCore.createNovel{value: 1 ether}(defaultConfig, defaultMetadata, _genesisSubmissions(genesis));
@@ -171,9 +183,13 @@ contract RulesTest is Test {
         bytes32 es2 = bytes32("es2");
 
         vm.prank(voter1);
-        votingEngine.commitVote{value: 0.1 ether}(novelId, epochVotingId, keccak256(abi.encodePacked(worldLines[0], es1)));
+        votingEngine.commitVote{value: 0.1 ether}(
+            novelId, epochVotingId, keccak256(abi.encodePacked(worldLines[0], es1))
+        );
         vm.prank(voter2);
-        votingEngine.commitVote{value: 0.05 ether}(novelId, epochVotingId, keccak256(abi.encodePacked(worldLines[0], es2)));
+        votingEngine.commitVote{value: 0.05 ether}(
+            novelId, epochVotingId, keccak256(abi.encodePacked(worldLines[0], es2))
+        );
 
         vm.warp(t0 + 13 days);
         novelCore.closeEpochCommit(novelId);
@@ -186,7 +202,11 @@ contract RulesTest is Test {
         novelCore.settleEpoch(novelId);
     }
 
-    function _votingRoundId(uint256 novelId, uint32 epoch, uint32 round, bool isEpoch) internal pure returns (uint256) {
+    function _votingRoundId(uint256 novelId, uint32 epoch, uint32 round, bool isEpoch)
+        internal
+        pure
+        returns (uint256)
+    {
         return uint256(keccak256(abi.encodePacked(novelId, epoch, round, isEpoch)));
     }
 
@@ -205,12 +225,12 @@ contract RulesTest is Test {
         contents[1] = "A rogue AI named Zero";
 
         vm.prank(creator);
-        novelCore.setCreatorRules(novelId, names, contents);
+        rulesEngine.setCreatorRules(novelId, names, contents);
 
-        assertEq(novelCore.getRule(novelId, "setting"), "A cyberpunk city in 2099");
-        assertEq(novelCore.getRule(novelId, "protagonist"), "A rogue AI named Zero");
+        assertEq(rulesEngine.getRule(novelId, "setting"), "A cyberpunk city in 2099");
+        assertEq(rulesEngine.getRule(novelId, "protagonist"), "A rogue AI named Zero");
 
-        string[] memory ruleNames = novelCore.getRuleNames(novelId);
+        string[] memory ruleNames = rulesEngine.getRuleNames(novelId);
         assertEq(ruleNames.length, 2);
     }
 
@@ -223,16 +243,16 @@ contract RulesTest is Test {
         contents[0] = "Original setting";
 
         vm.prank(creator);
-        novelCore.setCreatorRules(novelId, names, contents);
+        rulesEngine.setCreatorRules(novelId, names, contents);
 
         // Update the same rule
         contents[0] = "Updated setting";
         vm.prank(creator);
-        novelCore.setCreatorRules(novelId, names, contents);
+        rulesEngine.setCreatorRules(novelId, names, contents);
 
-        assertEq(novelCore.getRule(novelId, "setting"), "Updated setting");
+        assertEq(rulesEngine.getRule(novelId, "setting"), "Updated setting");
         // Should not create duplicate entries
-        string[] memory ruleNames = novelCore.getRuleNames(novelId);
+        string[] memory ruleNames = rulesEngine.getRuleNames(novelId);
         assertEq(ruleNames.length, 1);
     }
 
@@ -246,8 +266,8 @@ contract RulesTest is Test {
         contents[0] = "Too late";
 
         vm.prank(creator);
-        vm.expectRevert(abi.encodeWithSelector(NovelCore.CreatorRulesLocked.selector, novelId));
-        novelCore.setCreatorRules(novelId, names, contents);
+        vm.expectRevert(abi.encodeWithSelector(RulesEngine.CreatorRulesLocked.selector, novelId));
+        rulesEngine.setCreatorRules(novelId, names, contents);
     }
 
     function test_NonCreatorCannotSetRules() public {
@@ -259,8 +279,8 @@ contract RulesTest is Test {
         contents[0] = "Hacker attempt";
 
         vm.prank(author1);
-        vm.expectRevert(abi.encodeWithSelector(NovelCore.NotNovelCreator.selector, novelId, author1));
-        novelCore.setCreatorRules(novelId, names, contents);
+        vm.expectRevert(abi.encodeWithSelector(RulesEngine.NotNovelCreator.selector, novelId, author1));
+        rulesEngine.setCreatorRules(novelId, names, contents);
     }
 
     function test_InvalidRuleName() public {
@@ -272,8 +292,8 @@ contract RulesTest is Test {
         contents[0] = "Some content";
 
         vm.prank(creator);
-        vm.expectRevert(NovelCore.InvalidRuleName.selector);
-        novelCore.setCreatorRules(novelId, names, contents);
+        vm.expectRevert(RulesEngine.InvalidRuleName.selector);
+        rulesEngine.setCreatorRules(novelId, names, contents);
     }
 
     // ============================================================
@@ -286,11 +306,11 @@ contract RulesTest is Test {
         uint256 poolBefore = prizePool.getPoolBalance(novelId);
 
         vm.prank(author1);
-        uint256 proposalId = novelCore.proposeRule{value: 0.001 ether}(
+        uint256 proposalId = rulesEngine.proposeRule{value: 0.001 ether}(
             novelId, DataTypes.RuleProposalType.Add, "new_rule", "A new world rule"
         );
 
-        DataTypes.RuleProposal memory p = novelCore.getRuleProposal(proposalId);
+        DataTypes.RuleProposal memory p = rulesEngine.getRuleProposal(proposalId);
         assertEq(p.novelId, novelId);
         assertEq(p.proposer, author1);
         assertEq(uint8(p.proposalType), uint8(DataTypes.RuleProposalType.Add));
@@ -307,20 +327,16 @@ contract RulesTest is Test {
         uint256 novelId = _createNovel();
 
         vm.prank(author1);
-        vm.expectRevert(abi.encodeWithSelector(NovelCore.InsufficientRuleFee.selector, 0.0005 ether, 0.001 ether));
-        novelCore.proposeRule{value: 0.0005 ether}(
-            novelId, DataTypes.RuleProposalType.Add, "new_rule", "Content"
-        );
+        vm.expectRevert(abi.encodeWithSelector(RulesEngine.InsufficientRuleFee.selector, 0.0005 ether, 0.001 ether));
+        rulesEngine.proposeRule{value: 0.0005 ether}(novelId, DataTypes.RuleProposalType.Add, "new_rule", "Content");
     }
 
     function test_ProposeDeleteNonExistentRule() public {
         uint256 novelId = _createNovel();
 
         vm.prank(author1);
-        vm.expectRevert(abi.encodeWithSelector(NovelCore.RuleNotFound.selector, "ghost"));
-        novelCore.proposeRule{value: 0.001 ether}(
-            novelId, DataTypes.RuleProposalType.Delete, "ghost", ""
-        );
+        vm.expectRevert(abi.encodeWithSelector(RulesEngine.RuleNotFound.selector, "ghost"));
+        rulesEngine.proposeRule{value: 0.001 ether}(novelId, DataTypes.RuleProposalType.Delete, "ghost", "");
     }
 
     function test_ProposeAddDuplicateRule() public {
@@ -332,14 +348,12 @@ contract RulesTest is Test {
         names[0] = "setting";
         contents[0] = "Original";
         vm.prank(creator);
-        novelCore.setCreatorRules(novelId, names, contents);
+        rulesEngine.setCreatorRules(novelId, names, contents);
 
         // Propose adding a rule with the same name
         vm.prank(author1);
-        vm.expectRevert(abi.encodeWithSelector(NovelCore.RuleAlreadyExists.selector, "setting"));
-        novelCore.proposeRule{value: 0.001 ether}(
-            novelId, DataTypes.RuleProposalType.Add, "setting", "Duplicate"
-        );
+        vm.expectRevert(abi.encodeWithSelector(RulesEngine.RuleAlreadyExists.selector, "setting"));
+        rulesEngine.proposeRule{value: 0.001 ether}(novelId, DataTypes.RuleProposalType.Add, "setting", "Duplicate");
     }
 
     // ============================================================
@@ -352,76 +366,73 @@ contract RulesTest is Test {
 
         // Propose a new rule
         vm.prank(author1);
-        uint256 proposalId = novelCore.proposeRule{value: 0.001 ether}(
+        uint256 proposalId = rulesEngine.proposeRule{value: 0.001 ether}(
             novelId, DataTypes.RuleProposalType.Add, "plot_twist", "The AI becomes sentient"
         );
 
         // First vote (quorum = 2, so not yet executed)
         vm.prank(creator);
-        novelCore.voteOnRuleProposal(proposalId);
+        rulesEngine.voteOnRuleProposal(proposalId);
 
-        DataTypes.RuleProposal memory p = novelCore.getRuleProposal(proposalId);
+        DataTypes.RuleProposal memory p = rulesEngine.getRuleProposal(proposalId);
         assertEq(p.voteCount, 1);
         assertFalse(p.executed);
 
         // Second vote reaches quorum
         vm.prank(author1);
-        novelCore.voteOnRuleProposal(proposalId);
+        rulesEngine.voteOnRuleProposal(proposalId);
 
-        p = novelCore.getRuleProposal(proposalId);
+        p = rulesEngine.getRuleProposal(proposalId);
         assertEq(p.voteCount, 2);
         assertTrue(p.executed);
 
         // Rule is now set
-        assertEq(novelCore.getRule(novelId, "plot_twist"), "The AI becomes sentient");
+        assertEq(rulesEngine.getRule(novelId, "plot_twist"), "The AI becomes sentient");
     }
 
     function test_NonCanonAuthorCannotVote() public {
         uint256 novelId = _createNovel();
 
         vm.prank(author1);
-        uint256 proposalId = novelCore.proposeRule{value: 0.001 ether}(
-            novelId, DataTypes.RuleProposalType.Add, "rule1", "Content"
-        );
+        uint256 proposalId =
+            rulesEngine.proposeRule{value: 0.001 ether}(novelId, DataTypes.RuleProposalType.Add, "rule1", "Content");
 
         // author2 is NOT a canon author (no epoch settled)
         vm.prank(author2);
-        vm.expectRevert(abi.encodeWithSelector(NovelCore.NotCanonAuthor.selector, novelId, author2));
-        novelCore.voteOnRuleProposal(proposalId);
+        vm.expectRevert(abi.encodeWithSelector(RulesEngine.NotCanonAuthor.selector, novelId, author2));
+        rulesEngine.voteOnRuleProposal(proposalId);
     }
 
     function test_CannotVoteTwice() public {
         uint256 novelId = _createNovel();
 
         vm.prank(author1);
-        uint256 proposalId = novelCore.proposeRule{value: 0.001 ether}(
-            novelId, DataTypes.RuleProposalType.Add, "rule1", "Content"
-        );
+        uint256 proposalId =
+            rulesEngine.proposeRule{value: 0.001 ether}(novelId, DataTypes.RuleProposalType.Add, "rule1", "Content");
 
         // Creator votes once
         vm.prank(creator);
-        novelCore.voteOnRuleProposal(proposalId);
+        rulesEngine.voteOnRuleProposal(proposalId);
 
         // Creator tries to vote again
         vm.prank(creator);
-        vm.expectRevert(abi.encodeWithSelector(NovelCore.AlreadyVotedOnProposal.selector, proposalId, creator));
-        novelCore.voteOnRuleProposal(proposalId);
+        vm.expectRevert(abi.encodeWithSelector(RulesEngine.AlreadyVotedOnProposal.selector, proposalId, creator));
+        rulesEngine.voteOnRuleProposal(proposalId);
     }
 
     function test_VoteAfterExpiry() public {
         uint256 novelId = _createNovel();
 
         vm.prank(author1);
-        uint256 proposalId = novelCore.proposeRule{value: 0.001 ether}(
-            novelId, DataTypes.RuleProposalType.Add, "rule1", "Content"
-        );
+        uint256 proposalId =
+            rulesEngine.proposeRule{value: 0.001 ether}(novelId, DataTypes.RuleProposalType.Add, "rule1", "Content");
 
         // Warp past vote duration
         vm.warp(block.timestamp + 3 days + 1);
 
         vm.prank(creator);
-        vm.expectRevert(abi.encodeWithSelector(NovelCore.ProposalExpired.selector, proposalId));
-        novelCore.voteOnRuleProposal(proposalId);
+        vm.expectRevert(abi.encodeWithSelector(RulesEngine.ProposalExpired.selector, proposalId));
+        rulesEngine.voteOnRuleProposal(proposalId);
     }
 
     // ============================================================
@@ -436,29 +447,28 @@ contract RulesTest is Test {
         names[0] = "old_rule";
         contents[0] = "This rule is outdated";
         vm.prank(creator);
-        novelCore.setCreatorRules(novelId, names, contents);
+        rulesEngine.setCreatorRules(novelId, names, contents);
 
         // Verify rule exists
-        assertEq(novelCore.getRule(novelId, "old_rule"), "This rule is outdated");
+        assertEq(rulesEngine.getRule(novelId, "old_rule"), "This rule is outdated");
 
         // Run epoch to make authors canon
         _runFullEpoch(novelId);
 
         // Propose deletion
         vm.prank(author1);
-        uint256 proposalId = novelCore.proposeRule{value: 0.001 ether}(
-            novelId, DataTypes.RuleProposalType.Delete, "old_rule", ""
-        );
+        uint256 proposalId =
+            rulesEngine.proposeRule{value: 0.001 ether}(novelId, DataTypes.RuleProposalType.Delete, "old_rule", "");
 
         // Vote to reach quorum
         vm.prank(creator);
-        novelCore.voteOnRuleProposal(proposalId);
+        rulesEngine.voteOnRuleProposal(proposalId);
         vm.prank(author1);
-        novelCore.voteOnRuleProposal(proposalId);
+        rulesEngine.voteOnRuleProposal(proposalId);
 
         // Rule should be deleted
-        assertEq(bytes(novelCore.getRule(novelId, "old_rule")).length, 0);
-        string[] memory ruleNames = novelCore.getRuleNames(novelId);
+        assertEq(bytes(rulesEngine.getRule(novelId, "old_rule")).length, 0);
+        string[] memory ruleNames = rulesEngine.getRuleNames(novelId);
         assertEq(ruleNames.length, 0);
     }
 

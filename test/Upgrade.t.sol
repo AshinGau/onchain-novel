@@ -128,7 +128,7 @@ contract UpgradeTest is Test {
         DataTypes.Novel memory novelAfter = novelCore.getNovel(novelId);
         assertEq(novelAfter.id, novelBefore.id);
         assertEq(novelAfter.creator, novelBefore.creator);
-        assertEq(novelAfter.genesisChapterCount, novelBefore.genesisChapterCount);
+        assertEq(novelAfter.bootstrapChapterCount, novelBefore.bootstrapChapterCount);
         assertTrue(novelAfter.active);
         assertEq(novelCore.getNovelCount(), novelCount);
         assertEq(novelCore.getChapterCount(), chapterCount);

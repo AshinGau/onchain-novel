@@ -114,6 +114,7 @@ export default function ForkNovelPage({
           ruleQuorum: config.ruleQuorum,
         },
         { title: title.trim(), description: description.trim(), coverUri: coverUri.trim() },
+        [], // empty bootstrap chapters (fork root only)
       ],
       value: parseEther(forkFee),
     });

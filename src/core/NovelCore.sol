@@ -67,34 +67,14 @@ contract NovelCore is
     /// @notice Global keeper reward amount (owner-settable, per state transition call)
     uint256 public keeperRewardAmount;
 
-    // --- Rules storage ---
-
-    /// @notice Novel ID => rule name => rule content
-    mapping(uint256 => mapping(string => string)) private _rules;
-
-    /// @notice Novel ID => list of rule names (for enumeration)
-    mapping(uint256 => string[]) private _ruleNames;
-
-    /// @notice Novel ID => rule name => index+1 in _ruleNames (0 = not exists)
-    mapping(uint256 => mapping(string => uint256)) private _ruleNameIndex;
-
     /// @notice Novel ID => author address => has canon chapter
     mapping(uint256 => mapping(address => bool)) private _isCanonAuthor;
-
-    /// @notice Global rule proposal counter
-    uint256 private _ruleProposalCount;
-
-    /// @notice Proposal ID => proposal data
-    mapping(uint256 => DataTypes.RuleProposal) private _ruleProposals;
-
-    /// @notice Proposal ID => voter address => has voted
-    mapping(uint256 => mapping(address => bool)) private _ruleProposalVotes;
 
     // ============================================================
     //                         ERRORS
     // ============================================================
 
-    error InvalidConfig(string reason);
+    error InvalidConfig(uint8 code);
     error NovelNotFound(uint256 novelId);
     error NovelNotActive(uint256 novelId);
     error ChapterNotFound(uint256 chapterId);
@@ -109,23 +89,13 @@ contract NovelCore is
     error TransferFailed();
     error ChapterNotInNovel(uint256 chapterId, uint256 novelId);
     error BranchNotRejected(uint256 chapterId);
-    error InvalidGenesisInput();
+    error InvalidBootstrapInput();
     error InsufficientForkFee(uint256 sent, uint256 required);
     error NotNovelCreator(uint256 novelId, address caller);
-    error InvalidMetadata(string reason);
+    error InvalidMetadata();
     error ContentHashMismatch(bytes32 expected, bytes32 actual);
     error OnchainContentRequired();
     error OnchainContentForbidden();
-    error RuleNotFound(string name);
-    error RuleAlreadyExists(string name);
-    error NotCanonAuthor(uint256 novelId, address caller);
-    error ProposalNotFound(uint256 proposalId);
-    error ProposalExpired(uint256 proposalId);
-    error ProposalAlreadyExecuted(uint256 proposalId);
-    error AlreadyVotedOnProposal(uint256 proposalId, address voter);
-    error InsufficientRuleFee(uint256 sent, uint256 required);
-    error InvalidRuleName();
-    error CreatorRulesLocked(uint256 novelId);
 
     // ============================================================
     //                      INITIALIZER
@@ -224,12 +194,11 @@ contract NovelCore is
     function createNovel(
         DataTypes.NovelConfig calldata config,
         DataTypes.NovelMetadata calldata metadata,
-        DataTypes.ContentSubmission[] calldata genesisChapters
+        DataTypes.ContentSubmission[] calldata bootstrapChapters
     ) external payable whenNotPaused returns (uint256 novelId) {
         _validateConfig(config);
         _validateMetadata(metadata);
-        if (genesisChapters.length == 0) revert InvalidGenesisInput();
-        if (genesisChapters.length > config.worldLineCount) revert InvalidGenesisInput();
+        if (bootstrapChapters.length == 0) revert InvalidBootstrapInput();
 
         novelId = ++_novelCount;
         _novelMetadata[novelId] = metadata;
@@ -243,37 +212,25 @@ contract NovelCore is
             roundPhase: DataTypes.RoundPhase.Submitting,
             epochPhase: DataTypes.EpochPhase.Rounds,
             phaseStartTime: block.timestamp,
-            genesisChapterCount: uint32(genesisChapters.length),
+            bootstrapChapterCount: uint32(bootstrapChapters.length),
             cumulativeCanonChapters: 0,
             active: true,
             forkSourceNovelId: 0,
             forkSourceChapterId: 0
         });
 
-        // Create genesis chapters — each becomes an initial active world line
-        for (uint256 i = 0; i < genesisChapters.length; i++) {
-            _validateSubmission(config, genesisChapters[i]);
-
-            uint256 genesisChapterId = ++_chapterCount;
-            _chapters[genesisChapterId] = DataTypes.Chapter({
-                id: genesisChapterId,
-                novelId: novelId,
-                parentId: 0,
-                author: msg.sender,
-                contentHash: genesisChapters[i].contentHash,
-                declaredLength: genesisChapters[i].declaredLength,
-                round: 0,
-                epoch: 0,
-                chapterIndex: 0,
-                voteCount: 0,
-                isWorldLine: true,
-                isCanon: false
-            });
-
-            _activeWorldLines[novelId].push(genesisChapterId);
+        // Create bootstrap chapters as a linear chain, mint NFTs
+        uint256 parentId = 0;
+        for (uint256 i = 0; i < bootstrapChapters.length; i++) {
+            _validateSubmission(config, bootstrapChapters[i]);
+            parentId = _createBootstrapChapter(novelId, parentId, uint32(i), bootstrapChapters[i]);
+            chapterNFT.mint(msg.sender, novelId, parentId, 0, bootstrapChapters[i].contentHash);
         }
 
-        // Creator is always a canon author (authored genesis chapters)
+        // Only the last chapter is the active world line
+        _activeWorldLines[novelId].push(parentId);
+
+        // Creator is always a canon author
         _isCanonAuthor[novelId][msg.sender] = true;
 
         // Deposit initial prize pool if any ETH sent
@@ -281,7 +238,7 @@ contract NovelCore is
             prizePool.deposit{value: msg.value}(novelId, "genesis");
         }
 
-        emit NovelCreated(novelId, msg.sender, uint32(genesisChapters.length));
+        emit NovelCreated(novelId, msg.sender, uint32(bootstrapChapters.length));
     }
 
     /// @inheritdoc INovelCore
@@ -289,7 +246,8 @@ contract NovelCore is
         uint256 originalNovelId,
         uint256 branchChapterId,
         DataTypes.NovelConfig calldata config,
-        DataTypes.NovelMetadata calldata metadata
+        DataTypes.NovelMetadata calldata metadata,
+        DataTypes.ContentSubmission[] calldata bootstrapChapters
     ) external payable whenNotPaused returns (uint256 novelId) {
         DataTypes.Novel storage sourceNovel = _novels[originalNovelId];
         if (sourceNovel.id == 0) revert NovelNotFound(originalNovelId);
@@ -318,7 +276,7 @@ contract NovelCore is
             roundPhase: DataTypes.RoundPhase.Submitting,
             epochPhase: DataTypes.EpochPhase.Rounds,
             phaseStartTime: block.timestamp,
-            genesisChapterCount: 1,
+            bootstrapChapterCount: uint32(bootstrapChapters.length),
             cumulativeCanonChapters: 0,
             active: true,
             forkSourceNovelId: originalNovelId,
@@ -329,7 +287,7 @@ contract NovelCore is
         _novels[novelId].config.contentLocation = sourceNovel.config.contentLocation;
         _novels[novelId].config.contentBaseUrl = sourceNovel.config.contentBaseUrl;
 
-        // Create the fork root chapter
+        // Create the fork root chapter (not counted as bootstrap)
         uint256 forkRootId = ++_chapterCount;
         _chapters[forkRootId] = DataTypes.Chapter({
             id: forkRootId,
@@ -346,9 +304,18 @@ contract NovelCore is
             isCanon: false
         });
 
-        _activeWorldLines[novelId].push(forkRootId);
+        // Chain bootstrap chapters after fork root, mint NFTs
+        uint256 lastChapterId = forkRootId;
+        for (uint256 i = 0; i < bootstrapChapters.length; i++) {
+            _validateSubmission(_novels[novelId].config, bootstrapChapters[i]);
+            lastChapterId = _createBootstrapChapter(novelId, lastChapterId, uint32(i + 1), bootstrapChapters[i]);
+            chapterNFT.mint(msg.sender, novelId, lastChapterId, 0, bootstrapChapters[i].contentHash);
+        }
 
-        // Fork initiator is a canon author (authored fork root chapter)
+        // Only the last chapter is the active world line
+        _activeWorldLines[novelId].push(lastChapterId);
+
+        // Fork initiator is a canon author
         _isCanonAuthor[novelId][msg.sender] = true;
 
         // Fork fee goes to the original novel's prize pool
@@ -361,7 +328,7 @@ contract NovelCore is
         }
 
         emit NovelForked(novelId, originalNovelId, branchChapterId);
-        emit NovelCreated(novelId, msg.sender, 1);
+        emit NovelCreated(novelId, msg.sender, uint32(bootstrapChapters.length));
     }
 
     // ============================================================
@@ -379,6 +346,7 @@ contract NovelCore is
         if (novel.id == 0) revert NovelNotFound(novelId);
         if (!novel.active) revert NovelNotActive(novelId);
 
+        // Check phase first (cheap) before content validation (expensive keccak256)
         if (novel.roundPhase != DataTypes.RoundPhase.Submitting) {
             revert WrongRoundPhase(DataTypes.RoundPhase.Submitting, novel.roundPhase);
         }
@@ -610,7 +578,7 @@ contract NovelCore is
             novel.creator,
             canonAuthors,
             novel.config.prizeReleaseRate,
-            novel.genesisChapterCount,
+            novel.bootstrapChapterCount,
             novel.cumulativeCanonChapters,
             novel.config.voterRewardRate,
             payable(address(votingEngine))
@@ -714,7 +682,11 @@ contract NovelCore is
     }
 
     /// @inheritdoc INovelCore
-    function getRoundSubmissions(uint256 novelId, uint32 epoch, uint32 round) external view returns (uint256[] memory) {
+    function getRoundSubmissions(uint256 novelId, uint32 epoch, uint32 round)
+        external
+        view
+        returns (uint256[] memory)
+    {
         return _roundSubmissions[novelId][epoch][round];
     }
 
@@ -740,6 +712,11 @@ contract NovelCore is
         return _novelMetadata[novelId];
     }
 
+    /// @inheritdoc INovelCore
+    function isCanonAuthor(uint256 novelId, address author) external view returns (bool) {
+        return _isCanonAuthor[novelId][author];
+    }
+
     // ============================================================
     //                   METADATA MANAGEMENT
     // ============================================================
@@ -759,33 +736,53 @@ contract NovelCore is
     //                    INTERNAL HELPERS
     // ============================================================
 
+    function _createBootstrapChapter(
+        uint256 novelId,
+        uint256 parentId,
+        uint32 chapterIndex,
+        DataTypes.ContentSubmission calldata sub
+    ) internal returns (uint256 chapterId) {
+        chapterId = ++_chapterCount;
+        _chapters[chapterId] = DataTypes.Chapter({
+            id: chapterId,
+            novelId: novelId,
+            parentId: parentId,
+            author: msg.sender,
+            contentHash: sub.contentHash,
+            declaredLength: sub.declaredLength,
+            round: 0,
+            epoch: 0,
+            chapterIndex: chapterIndex,
+            voteCount: 0,
+            isWorldLine: true,
+            isCanon: true
+        });
+    }
+
+    /// @dev Config error codes:
+    ///  1=minChapterLength  2=maxChapterLength  3=roundMinDuration  4=worldLineCount
+    ///  5=roundMinSubmissions  6=roundsPerEpoch  7=prizeReleaseRate  8=voterRewardRate
+    ///  9=stakeAmount  10=commitDuration  11=revealDuration  12=contentBaseUrl  13=ruleVoteDuration
     function _validateConfig(DataTypes.NovelConfig calldata config) internal pure {
-        if (config.minChapterLength == 0) revert InvalidConfig("minChapterLength must be > 0");
-        if (config.maxChapterLength <= config.minChapterLength) {
-            revert InvalidConfig("maxChapterLength must be > minChapterLength");
-        }
-        if (config.roundMinDuration == 0) revert InvalidConfig("roundMinDuration must be > 0");
-        if (config.worldLineCount == 0) revert InvalidConfig("worldLineCount must be > 0");
-        if (config.roundMinSubmissions < config.worldLineCount) {
-            revert InvalidConfig("roundMinSubmissions must be >= worldLineCount");
-        }
-        if (config.roundsPerEpoch == 0) revert InvalidConfig("roundsPerEpoch must be > 0");
-        if (config.prizeReleaseRate > 5000) revert InvalidConfig("prizeReleaseRate must be <= 5000");
-        if (config.voterRewardRate > 2000) revert InvalidConfig("voterRewardRate must be <= 2000");
-        if (config.stakeAmount == 0) revert InvalidConfig("stakeAmount must be > 0");
-        if (config.commitDuration == 0) revert InvalidConfig("commitDuration must be > 0");
-        if (config.revealDuration == 0) revert InvalidConfig("revealDuration must be > 0");
+        if (config.minChapterLength == 0) revert InvalidConfig(1);
+        if (config.maxChapterLength <= config.minChapterLength) revert InvalidConfig(2);
+        if (config.roundMinDuration == 0) revert InvalidConfig(3);
+        if (config.worldLineCount == 0) revert InvalidConfig(4);
+        if (config.roundMinSubmissions < config.worldLineCount) revert InvalidConfig(5);
+        if (config.roundsPerEpoch == 0) revert InvalidConfig(6);
+        if (config.prizeReleaseRate > 5000) revert InvalidConfig(7);
+        if (config.voterRewardRate > 2000) revert InvalidConfig(8);
+        if (config.stakeAmount == 0) revert InvalidConfig(9);
+        if (config.commitDuration == 0) revert InvalidConfig(10);
+        if (config.revealDuration == 0) revert InvalidConfig(11);
         if (config.contentLocation != DataTypes.ContentLocation.Onchain && bytes(config.contentBaseUrl).length == 0) {
-            revert InvalidConfig("contentBaseUrl required for External/HTTP");
+            revert InvalidConfig(12);
         }
-        if (config.ruleQuorum > 0 && config.ruleVoteDuration == 0) {
-            revert InvalidConfig("ruleVoteDuration must be > 0 when ruleQuorum > 0");
-        }
+        if (config.ruleQuorum > 0 && config.ruleVoteDuration == 0) revert InvalidConfig(13);
     }
 
     function _validateMetadata(DataTypes.NovelMetadata calldata metadata) internal pure {
-        if (bytes(metadata.title).length == 0) revert InvalidMetadata("title must not be empty");
-        if (bytes(metadata.title).length > 256) revert InvalidMetadata("title must be <= 256 bytes");
+        if (bytes(metadata.title).length == 0 || bytes(metadata.title).length > 256) revert InvalidMetadata();
     }
 
     function _validateSubmission(DataTypes.NovelConfig memory config, DataTypes.ContentSubmission calldata sub)
@@ -950,153 +947,6 @@ contract NovelCore is
                 emit KeeperRewarded(novelId, msg.sender, keeperRewardAmount);
             }
         }
-    }
-
-    // ============================================================
-    //                         RULES
-    // ============================================================
-
-    /// @inheritdoc INovelCore
-    function setCreatorRules(uint256 novelId, string[] calldata names, string[] calldata contents) external whenNotPaused {
-        DataTypes.Novel storage novel = _novels[novelId];
-        if (novel.id == 0) revert NovelNotFound(novelId);
-        if (novel.creator != msg.sender) revert NotNovelCreator(novelId, msg.sender);
-        if (novel.currentEpoch != 1) revert CreatorRulesLocked(novelId);
-        if (names.length != contents.length) revert InvalidGenesisInput();
-
-        for (uint256 i = 0; i < names.length; i++) {
-            if (bytes(names[i]).length == 0 || bytes(names[i]).length > 64) revert InvalidRuleName();
-            if (bytes(contents[i]).length == 0) revert InvalidConfig("rule content must not be empty");
-            _setRule(novelId, names[i], contents[i]);
-        }
-    }
-
-    /// @inheritdoc INovelCore
-    function proposeRule(
-        uint256 novelId,
-        DataTypes.RuleProposalType proposalType,
-        string calldata ruleName,
-        string calldata ruleContent
-    ) external payable whenNotPaused returns (uint256 proposalId) {
-        DataTypes.Novel storage novel = _novels[novelId];
-        if (novel.id == 0) revert NovelNotFound(novelId);
-        if (!novel.active) revert NovelNotActive(novelId);
-
-        DataTypes.NovelConfig storage config = novel.config;
-        if (msg.value < config.ruleFee) revert InsufficientRuleFee(msg.value, config.ruleFee);
-        if (bytes(ruleName).length == 0 || bytes(ruleName).length > 64) revert InvalidRuleName();
-
-        if (proposalType == DataTypes.RuleProposalType.Add) {
-            if (_ruleNameIndex[novelId][ruleName] != 0) revert RuleAlreadyExists(ruleName);
-            if (bytes(ruleContent).length == 0) revert InvalidConfig("rule content must not be empty");
-        } else {
-            if (_ruleNameIndex[novelId][ruleName] == 0) revert RuleNotFound(ruleName);
-        }
-
-        // Deposit fee to prize pool
-        if (msg.value > 0) {
-            prizePool.deposit{value: msg.value}(novelId, "rule_proposal");
-        }
-
-        proposalId = ++_ruleProposalCount;
-        _ruleProposals[proposalId] = DataTypes.RuleProposal({
-            id: proposalId,
-            novelId: novelId,
-            proposer: msg.sender,
-            proposalType: proposalType,
-            ruleName: ruleName,
-            ruleContent: ruleContent,
-            createdAt: block.timestamp,
-            voteCount: 0,
-            executed: false
-        });
-
-        emit RuleProposed(proposalId, novelId, msg.sender, uint8(proposalType), ruleName);
-    }
-
-    /// @inheritdoc INovelCore
-    function voteOnRuleProposal(uint256 proposalId) external whenNotPaused {
-        DataTypes.RuleProposal storage proposal = _ruleProposals[proposalId];
-        if (proposal.id == 0) revert ProposalNotFound(proposalId);
-        if (proposal.executed) revert ProposalAlreadyExecuted(proposalId);
-
-        uint256 novelId = proposal.novelId;
-        DataTypes.Novel storage novel = _novels[novelId];
-        if (!novel.active) revert NovelNotActive(novelId);
-
-        if (block.timestamp > proposal.createdAt + novel.config.ruleVoteDuration) {
-            revert ProposalExpired(proposalId);
-        }
-        if (!_isCanonAuthor[novelId][msg.sender]) revert NotCanonAuthor(novelId, msg.sender);
-        if (_ruleProposalVotes[proposalId][msg.sender]) revert AlreadyVotedOnProposal(proposalId, msg.sender);
-
-        _ruleProposalVotes[proposalId][msg.sender] = true;
-        proposal.voteCount++;
-
-        emit RuleProposalVoted(proposalId, msg.sender, proposal.voteCount);
-
-        // Auto-execute if quorum reached
-        if (proposal.voteCount >= novel.config.ruleQuorum) {
-            proposal.executed = true;
-            if (proposal.proposalType == DataTypes.RuleProposalType.Add) {
-                _setRule(novelId, proposal.ruleName, proposal.ruleContent);
-            } else {
-                _deleteRule(novelId, proposal.ruleName);
-            }
-            emit RuleProposalExecuted(proposalId, novelId);
-        }
-    }
-
-    // --- Rules queries ---
-
-    /// @inheritdoc INovelCore
-    function getRule(uint256 novelId, string calldata name) external view returns (string memory) {
-        return _rules[novelId][name];
-    }
-
-    /// @inheritdoc INovelCore
-    function getRuleNames(uint256 novelId) external view returns (string[] memory) {
-        return _ruleNames[novelId];
-    }
-
-    /// @inheritdoc INovelCore
-    function getRuleProposal(uint256 proposalId) external view returns (DataTypes.RuleProposal memory) {
-        return _ruleProposals[proposalId];
-    }
-
-    /// @inheritdoc INovelCore
-    function isCanonAuthor(uint256 novelId, address author) external view returns (bool) {
-        return _isCanonAuthor[novelId][author];
-    }
-
-    // --- Rules internal helpers ---
-
-    function _setRule(uint256 novelId, string memory name, string memory content) internal {
-        _rules[novelId][name] = content;
-        if (_ruleNameIndex[novelId][name] == 0) {
-            _ruleNames[novelId].push(name);
-            _ruleNameIndex[novelId][name] = _ruleNames[novelId].length; // index+1
-        }
-        emit RuleSet(novelId, name);
-    }
-
-    function _deleteRule(uint256 novelId, string memory name) internal {
-        uint256 indexPlusOne = _ruleNameIndex[novelId][name];
-        if (indexPlusOne == 0) revert RuleNotFound(name);
-
-        // Swap-and-pop from _ruleNames
-        uint256 lastIdx = _ruleNames[novelId].length - 1;
-        uint256 removeIdx = indexPlusOne - 1;
-        if (removeIdx != lastIdx) {
-            string memory lastName = _ruleNames[novelId][lastIdx];
-            _ruleNames[novelId][removeIdx] = lastName;
-            _ruleNameIndex[novelId][lastName] = indexPlusOne;
-        }
-        _ruleNames[novelId].pop();
-        delete _ruleNameIndex[novelId][name];
-        delete _rules[novelId][name];
-
-        emit RuleDeleted(novelId, name);
     }
 
     // ============================================================

@@ -82,9 +82,9 @@ function TreeNode({ chapter: ch, childrenOf, depth, novelId, votingRoundId, conn
               <span className="text-neutral-600 text-xs italic">from prev epoch ·</span>
             )}
             <span className="text-neutral-500 text-xs">
-              {ch.round === 0 ? "Genesis" : `R${ch.round}`}
+              {ch.round === 0 && ch.epoch === 0 ? `Bootstrap ${ch.chapter_index + 1}` : ch.round === 0 ? "Genesis" : `R${ch.round}`}
             </span>
-            <span className="font-mono text-xs">#{ch.chapter_index}(ID.{ch.id})</span>
+            <span className="font-mono text-xs">{ch.round === 0 && ch.epoch === 0 ? `(ID.${ch.id})` : `#${ch.chapter_index}(ID.${ch.id})`}</span>
             <span className={`text-xs ${isOwn ? "text-green-400" : "text-neutral-400"}`}>
               {isOwn ? "You" : shortenAddress(ch.author)}
             </span>

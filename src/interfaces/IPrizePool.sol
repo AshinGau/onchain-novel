@@ -43,7 +43,7 @@ interface IPrizePool {
         address creator,
         address[] calldata authors,
         uint16 releaseRate,
-        uint32 genesisChapterCount,
+        uint32 bootstrapChapterCount,
         uint32 cumulativeCanonChapters,
         uint16 voterRewardRate,
         address payable votingEngine

@@ -12,7 +12,7 @@ const EPOCH_PHASE_NAMES = ["Rounds", "Committing", "Revealing", "Settling"];
 export function registerNovelTools(server: McpServer): void {
   server.tool(
     "create_novel",
-    "Create a new collaborative novel on-chain. Requires genesis content hash(es) and novel configuration. Send ETH to fund the initial prize pool.",
+    "Create a new collaborative novel on-chain with bootstrap chapters forming a linear chain. Send ETH to fund the initial prize pool.",
     {
       minChapterLength: z.number().describe("Minimum content bytes per chapter"),
       maxChapterLength: z.number().describe("Maximum content bytes per chapter"),
@@ -35,7 +35,7 @@ export function registerNovelTools(server: McpServer): void {
       title: z.string().describe("Novel title"),
       description: z.string().default("").describe("Novel description / synopsis"),
       coverUri: z.string().default("").describe("Cover image URI (IPFS/Arweave/HTTP)"),
-      genesisContents: z.array(z.string()).describe("Array of genesis chapter contents (text strings, stored on-chain for Onchain mode)"),
+      bootstrapContents: z.array(z.string()).describe("Array of bootstrap chapter contents (text strings). These form a linear chain as the story foundation."),
       initialPrizeEth: z.string().optional().describe("Initial prize pool deposit in ETH (e.g. '1.0')"),
       rules: z.array(z.object({
         name: z.string().describe("Rule name (max 64 bytes)"),
@@ -78,8 +78,8 @@ export function registerNovelTools(server: McpServer): void {
           coverUri: params.coverUri,
         };
 
-        // Build ContentSubmission[] from genesis contents
-        const genesisChapters = params.genesisContents.map((text) => {
+        // Build ContentSubmission[] from bootstrap contents
+        const bootstrapChapters = params.bootstrapContents.map((text) => {
           const contentBytes = toHex(toBytes(text));
           return {
             contentHash: keccak256(contentBytes),
@@ -92,7 +92,7 @@ export function registerNovelTools(server: McpServer): void {
           address: config.novelCoreAddress,
           abi: novelCoreAbi,
           functionName: "createNovel",
-          args: [novelConfig, metadata, genesisChapters],
+          args: [novelConfig, metadata, bootstrapChapters],
           value,
         });
 
@@ -167,7 +167,7 @@ export function registerNovelTools(server: McpServer): void {
             `Current Round: ${novel.current_round} (${ROUND_PHASE_NAMES[novel.round_phase as number]})`,
             `Current Epoch: ${novel.current_epoch} (${EPOCH_PHASE_NAMES[novel.epoch_phase as number]})`,
             `Phase Start: ${novel.phase_start_time}`,
-            `Genesis Chapters: ${novel.genesis_chapter_count}`,
+            `Bootstrap Chapters: ${novel.bootstrap_chapter_count}`,
             `Cumulative Canon: ${novel.cumulative_canon_chapters}`,
             `Stake: ${formatEther(BigInt(cfg.stakeAmount as string))} ETH`,
             `World Lines: ${cfg.worldLineCount}`,
@@ -236,7 +236,7 @@ export function registerNovelTools(server: McpServer): void {
           roundPhase: number;
           epochPhase: number;
           phaseStartTime: bigint;
-          genesisChapterCount: number;
+          bootstrapChapterCount: number;
           cumulativeCanonChapters: number;
           active: boolean;
           forkSourceNovelId: bigint;
@@ -252,7 +252,7 @@ export function registerNovelTools(server: McpServer): void {
           `Current Round: ${n.currentRound} (${ROUND_PHASE_NAMES[n.roundPhase]})`,
           `Current Epoch: ${n.currentEpoch} (${EPOCH_PHASE_NAMES[n.epochPhase]})`,
           `Phase Start: ${new Date(Number(n.phaseStartTime) * 1000).toISOString()}`,
-          `Genesis Chapters: ${n.genesisChapterCount}`,
+          `Bootstrap Chapters: ${n.bootstrapChapterCount}`,
           `Cumulative Canon: ${n.cumulativeCanonChapters}`,
           `Stake: ${formatEther(n.config.stakeAmount)} ETH`,
           `World Lines: ${n.config.worldLineCount}`,
@@ -418,6 +418,7 @@ export function registerNovelTools(server: McpServer): void {
             BigInt(params.branchChapterId),
             novelConfig,
             forkMetadata,
+            [], // empty bootstrap chapters (fork root only)
           ],
           value,
         });
