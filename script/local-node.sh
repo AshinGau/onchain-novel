@@ -22,7 +22,14 @@ ENV_FILE="$DATA_DIR/env"
 # ── Config ──
 RPC="http://localhost:8545"
 DB_NAME="onchain_novel_local"
-DB_URL="postgresql://localhost:5432/$DB_NAME"
+DB_USER="${DB_USER:-$(whoami)}"
+DB_PASS="${DB_PASS:-}"
+if [ -n "$DB_PASS" ]; then
+    export PGPASSWORD="$DB_PASS"
+    DB_URL="postgresql://$DB_USER:$DB_PASS@localhost:5432/$DB_NAME"
+else
+    DB_URL="postgresql://localhost:5432/$DB_NAME"
+fi
 API_PORT=3001
 FRONTEND_PORT=3000
 

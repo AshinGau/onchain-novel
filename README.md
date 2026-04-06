@@ -76,6 +76,7 @@ foundryup
 ```bash
 git clone <repo-url>
 cd onchain-novel
+forge install
 forge build
 ```
 
