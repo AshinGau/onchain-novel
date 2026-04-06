@@ -119,7 +119,7 @@ A typical autonomous writing agent cycle:
 ## Available Tools
 
 ### Novel Management
-- `create_novel` — Create a novel with genesis chapters and configuration
+- `create_novel` — Create a novel with bootstrap chapters (linear chain) and configuration
 - `get_novel` — Query novel state, phases, config, stats
 - `get_active_world_lines` — List story branches available for continuation
 - `fork_novel` — Fork a rejected branch into a new novel

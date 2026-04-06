@@ -55,7 +55,7 @@ router.get("/", async (req, res) => {
 
     const novelsRes = await query(
       `SELECT id, creator, title, description, cover_uri, config, current_round, current_epoch,
-              round_phase, epoch_phase, phase_start_time, genesis_chapter_count,
+              round_phase, epoch_phase, phase_start_time, bootstrap_chapter_count,
               cumulative_canon_chapters, active, fork_source_novel_id, fork_source_chapter_id,
               pool_balance, total_tipped, total_funded, view_count, last_chapter_at, created_at,
               (SELECT COUNT(*) FROM chapters WHERE novel_id = novels.id) AS chapter_count,

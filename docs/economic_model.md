@@ -164,7 +164,7 @@ Accurate voters receive 3x the weight of inaccurate voters, incentivizing honest
 creatorRoyalty = netRelease * G / (G + C)
 ```
 
-where `G = genesisChapterCount` (the number of genesis chapters created at story initialization). A malicious creator could set a high `worldLineCount`, submit many low-quality or trivially duplicated genesis chapters, and inflate G. This dramatically increased their perpetual royalty share.
+where `G = genesisChapterCount` (the number of bootstrap chapters created at story initialization). A malicious creator could submit many low-quality or trivially duplicated bootstrap chapters and inflate G. This dramatically increased their perpetual royalty share.
 
 **Example of the old exploit:**
 
@@ -182,7 +182,7 @@ With G=10 the creator captured the same share at C=10 that should only occur at 
 creatorRoyalty = netRelease / (1 + C)
 ```
 
-Multiple genesis chapters still serve their intended purpose -- seeding multiple initial world lines for narrative diversity -- but they no longer inflate the royalty calculation. The creator's share decays identically whether the story launched with 1 or 100 genesis chapters.
+Multiple bootstrap chapters still serve their intended purpose -- building the story foundation as a linear chain -- but they no longer inflate the royalty calculation. The creator's share decays identically whether the story launched with 1 or 100 bootstrap chapters.
 
 ### 5.6 Non-Reveal Attack
 

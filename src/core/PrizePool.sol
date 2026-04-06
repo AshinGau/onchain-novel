@@ -26,6 +26,9 @@ contract PrizePool is
     /// @notice Authorized NovelCore contract address
     address public novelCore;
 
+    /// @notice Authorized RulesEngine contract address (can deposit rule fees)
+    address public rulesEngine;
+
     /// @notice Novel ID => current pool balance (available for distribution)
     mapping(uint256 => uint256) private _poolBalances;
 
@@ -89,6 +92,10 @@ contract PrizePool is
         novelCore = newNovelCore;
     }
 
+    function setRulesEngine(address newRulesEngine) external onlyOwner {
+        rulesEngine = newRulesEngine;
+    }
+
     /// @notice Set protocol fee rate (basis points, max 1000 = 10%)
     function setProtocolFeeRate(uint16 rate) external onlyOwner {
         if (rate > 1000) revert InvalidRate();
@@ -141,7 +148,8 @@ contract PrizePool is
     // ============================================================
 
     /// @inheritdoc IPrizePool
-    function deposit(uint256 novelId, string calldata reason) external payable onlyNovelCore {
+    function deposit(uint256 novelId, string calldata reason) external payable {
+        if (msg.sender != novelCore && msg.sender != rulesEngine) revert OnlyNovelCore();
         if (msg.value == 0) revert ZeroAmount();
 
         _poolBalances[novelId] += msg.value;
@@ -156,7 +164,7 @@ contract PrizePool is
         address creator,
         address[] calldata authors,
         uint16 releaseRate,
-        uint32 genesisChapterCount,
+        uint32 bootstrapChapterCount,
         uint32 cumulativeCanonChapters,
         uint16 voterRewardRate,
         address payable votingEngine

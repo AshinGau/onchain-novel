@@ -143,7 +143,7 @@ export function registerChapterTools(server: McpServer): void {
           `Author: ${chapter.author}`,
           `Content Hash: ${chapter.contentHash}`,
           `Declared Length: ${chapter.declaredLength} bytes`,
-          `Chapter Index: ${chapter.chapterIndex} (story position, genesis=0)`,
+          `Chapter Index: ${chapter.chapterIndex} (story position, bootstrap starts at 0)`,
           `Round: ${chapter.round}, Epoch: ${chapter.epoch}`,
           `Vote Count: ${chapter.voteCount}`,
           `World Line: ${chapter.isWorldLine}`,

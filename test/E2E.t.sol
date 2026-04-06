@@ -98,16 +98,17 @@ contract E2ETest is Test {
         uint256 novelId = novelCore.createNovel{value: 10 ether}(config, defaultMetadata, _multiGenesisSubmissions());
 
         DataTypes.Novel memory novel = novelCore.getNovel(novelId);
-        assertEq(novel.genesisChapterCount, 2);
+        assertEq(novel.bootstrapChapterCount, 2);
         assertEq(prizePool.getPoolBalance(novelId), 10 ether);
 
+        // Only last bootstrap chapter is the active world line (linear chain)
         uint256[] memory worldLines = novelCore.getActiveWorldLines(novelId);
-        assertEq(worldLines.length, 2);
+        assertEq(worldLines.length, 1);
 
-        // --- 5 Authors submit chapters on different world lines ---
+        // --- 5 Authors submit chapters on the world line ---
         uint256[] memory chapterIds = new uint256[](5);
         for (uint256 i = 0; i < 5; i++) {
-            uint256 parentId = worldLines[i % 2]; // Alternate between genesis chapters
+            uint256 parentId = worldLines[0];
             bytes memory chContent = bytes(
                 string.concat(
                     "Chapter content from author ",
@@ -376,11 +377,13 @@ contract E2ETest is Test {
         assertFalse(ch1Data.isCanon);
 
         vm.prank(authors[1]);
-        uint256 forkedNovelId = novelCore.forkNovel{value: 2 ether}(novelId, ch1, config, defaultMetadata);
+        DataTypes.ContentSubmission[] memory emptyBootstrap = new DataTypes.ContentSubmission[](0);
+        uint256 forkedNovelId =
+            novelCore.forkNovel{value: 2 ether}(novelId, ch1, config, defaultMetadata, emptyBootstrap);
 
         DataTypes.Novel memory forked = novelCore.getNovel(forkedNovelId);
         assertEq(forked.creator, creatorAddr); // Creator royalty flows to original creator
-        assertEq(forked.genesisChapterCount, 1);
+        assertEq(forked.bootstrapChapterCount, 0);
         assertEq(forked.forkSourceNovelId, novelId);
         assertTrue(forked.active);
         // Fork pool = 2 - 0.01 (fork fee) = 1.99 ETH

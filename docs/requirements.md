@@ -24,12 +24,12 @@ The result is emergent storytelling: no single participant controls the plot, an
 | **Round** | One submit-vote cycle. Authors submit chapters, voters rank them, and the top N become the next world lines. |
 | **Epoch** | A span of K rounds. At the end of an epoch, a canonical world line is selected from all active branches. |
 | **Fork** | A rejected branch that is re-deployed as an independent novel, inheriting the story up to its divergence point. |
-| **Genesis** | The creation event of a novel, including its initial chapters and configuration. |
+| **Bootstrap** | The creation event of a novel, including its initial chapters (linear chain) and configuration. Bootstrap chapters are marked as canon and minted as NFTs at creation time. |
 | **Candidate** | A chapter submitted during a round that has not yet been voted on or settled. |
 
 ## 3. Protocol Requirements
 
-### 3.1 Genesis
+### 3.1 Bootstrap (Novel Creation)
 
 Any address may create a novel. At creation time the following configuration parameters are set immutably:
 
@@ -41,7 +41,7 @@ Any address may create a novel. At creation time the following configuration par
 - `creatorRoyaltyBasisPoints` -- initial creator royalty rate
 - `voteStake` -- stake required to cast a vote
 
-Multi-chapter genesis is supported: each genesis chapter seeds a separate initial world line (up to `worldLineCount`). The creator may optionally inject an initial prize pool at deployment.
+Multiple bootstrap chapters are supported: they form a linear chain (parent → child), with only the last chapter as the active world line. Bootstrap chapters are marked as canon and minted as NFTs at creation time. The creator may optionally inject an initial prize pool at deployment.
 
 ### 3.2 Chapter Submission
 
@@ -158,8 +158,8 @@ For formulas and detailed distribution curves, see `economic_model.md`.
 - Saved drafts.
 
 **Create Novel**
-- Form to set all genesis config parameters.
-- Multi-chapter genesis input.
+- Form to set all novel config parameters.
+- Multi-chapter bootstrap input (linear chain).
 - Optional initial prize pool deposit.
 
 **Fork Novel**

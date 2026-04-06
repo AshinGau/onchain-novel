@@ -1,6 +1,6 @@
 import type pg from "pg";
 import { type Log, type PublicClient, decodeEventLog, decodeFunctionData, formatEther } from "viem";
-import { novelCoreAbi, votingEngineAbi, prizePoolAbi, chapterNFTAbi } from "../utils/abi.js";
+import { novelCoreAbi, votingEngineAbi, prizePoolAbi, chapterNFTAbi, rulesEngineAbi } from "../utils/abi.js";
 import { env } from "../utils/env.js";
 import { ContentLocation } from "../utils/validate.js";
 import { fetchChapterContent } from "./content-fetcher.js";
@@ -27,8 +27,8 @@ export async function handleNovelCoreEvent(log: Log, db: Client, rpc: PublicClie
 
   switch (decoded.eventName) {
     case "NovelCreated": {
-      const { novelId, creator, genesisChapterCount } = decoded.args;
-      console.log(`[event] NovelCreated novelId=${novelId} creator=${creator} genesis=${genesisChapterCount} block=${blockNumber}`);
+      const { novelId, creator, bootstrapChapterCount } = decoded.args;
+      console.log(`[event] NovelCreated novelId=${novelId} creator=${creator} bootstrap=${bootstrapChapterCount} block=${blockNumber}`);
       // Fetch full novel data + metadata from chain
       const [novel, metadata] = await Promise.all([
         rpc.readContract({ address: env.NOVEL_CORE_ADDRESS, abi: novelCoreAbi, functionName: "getNovel", args: [novelId] }),
@@ -57,24 +57,19 @@ export async function handleNovelCoreEvent(log: Log, db: Client, rpc: PublicClie
       };
 
       await db.query(
-        `INSERT INTO novels (id, creator, title, description, cover_uri, config, current_round, current_epoch, round_phase, epoch_phase, phase_start_time, genesis_chapter_count, active, block_number, content_location)
+        `INSERT INTO novels (id, creator, title, description, cover_uri, config, current_round, current_epoch, round_phase, epoch_phase, phase_start_time, bootstrap_chapter_count, active, block_number, content_location)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, TRUE, $13, $14)
          ON CONFLICT (id) DO NOTHING`,
         [
           novelId.toString(), creator, metadata.title, metadata.description, metadata.coverUri,
           JSON.stringify(config), novel.currentRound, novel.currentEpoch,
           novel.roundPhase, novel.epochPhase, novel.phaseStartTime.toString(),
-          genesisChapterCount, blockNumber, novel.config.contentLocation,
+          bootstrapChapterCount, blockNumber, novel.config.contentLocation,
         ]
       );
 
-      // Index genesis chapters
-      for (let i = 1n; i <= BigInt(genesisChapterCount); i++) {
-        const chapterId = novelId === 1n ? i : undefined; // Need to figure out actual IDs
-      }
-      // Genesis chapters are also emitted as separate events or we need to fetch them
-      // They'll be picked up via the chain state after NovelCreated
-      await indexGenesisChapters(novelId, genesisChapterCount, blockNumber, db, rpc, log);
+      // Index bootstrap chapters (linear chain)
+      await indexBootstrapChapters(novelId, bootstrapChapterCount, blockNumber, db, rpc, log);
       console.log(`[event] NovelCreated novelId=${novelId} done in ${Date.now() - handlerStart}ms`);
       break;
     }
@@ -109,14 +104,14 @@ export async function handleNovelCoreEvent(log: Log, db: Client, rpc: PublicClie
       };
 
       await db.query(
-        `INSERT INTO novels (id, creator, title, description, cover_uri, config, current_round, current_epoch, round_phase, epoch_phase, phase_start_time, genesis_chapter_count, active, fork_source_novel_id, fork_source_chapter_id, block_number, content_location)
+        `INSERT INTO novels (id, creator, title, description, cover_uri, config, current_round, current_epoch, round_phase, epoch_phase, phase_start_time, bootstrap_chapter_count, active, fork_source_novel_id, fork_source_chapter_id, block_number, content_location)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, TRUE, $13, $14, $15, $16)
          ON CONFLICT (id) DO NOTHING`,
         [
           novelId.toString(), novel.creator, metadata.title, metadata.description, metadata.coverUri,
           JSON.stringify(config), novel.currentRound, novel.currentEpoch,
           novel.roundPhase, novel.epochPhase, novel.phaseStartTime.toString(),
-          novel.genesisChapterCount, sourceNovelId.toString(), sourceChapterId.toString(), blockNumber,
+          novel.bootstrapChapterCount, sourceNovelId.toString(), sourceChapterId.toString(), blockNumber,
           novel.config.contentLocation,
         ]
       );
@@ -344,11 +339,27 @@ export async function handleNovelCoreEvent(log: Log, db: Client, rpc: PublicClie
       break;
     }
 
+    case "EarlyEpochTriggered":
+    case "KeeperRewarded":
+      break;
+  }
+}
+
+export async function handleRulesEvent(log: Log, db: Client, rpc: PublicClient) {
+  let decoded;
+  try {
+    decoded = decodeEventLog({ abi: rulesEngineAbi, data: log.data, topics: log.topics });
+  } catch {
+    return;
+  }
+
+  const blockNumber = log.blockNumber?.toString() ?? "0";
+
+  switch (decoded.eventName) {
     case "RuleSet": {
       const { novelId, name } = decoded.args;
-      // Read rule content from chain
       const ruleContent = await rpc.readContract({
-        address: env.NOVEL_CORE_ADDRESS, abi: novelCoreAbi,
+        address: env.RULES_ENGINE_ADDRESS, abi: rulesEngineAbi,
         functionName: "getRule", args: [novelId, name],
       }) as string;
       await db.query(
@@ -368,9 +379,8 @@ export async function handleNovelCoreEvent(log: Log, db: Client, rpc: PublicClie
 
     case "RuleProposed": {
       const { proposalId, novelId, proposalType, proposer, ruleName } = decoded.args;
-      // Read full proposal from chain
       const proposal = await rpc.readContract({
-        address: env.NOVEL_CORE_ADDRESS, abi: novelCoreAbi,
+        address: env.RULES_ENGINE_ADDRESS, abi: rulesEngineAbi,
         functionName: "getRuleProposal", args: [proposalId],
       }) as any;
       await db.query(
@@ -406,43 +416,56 @@ export async function handleNovelCoreEvent(log: Log, db: Client, rpc: PublicClie
       await db.query("UPDATE rule_proposals SET executed = TRUE WHERE id = $1", [proposalId.toString()]);
       break;
     }
-
-    case "EarlyEpochTriggered":
-    case "KeeperRewarded":
-      break;
   }
 }
 
-async function indexGenesisChapters(novelId: bigint, count: number, blockNumber: string, db: Client, rpc: PublicClient, log: Log) {
+async function indexBootstrapChapters(novelId: bigint, count: number, blockNumber: string, db: Client, rpc: PublicClient, log: Log) {
   const t0 = Date.now();
-  // Genesis chapters are created before any ChapterSubmitted events.
-  // We fetch them via getActiveWorldLines to find their IDs.
+  // Bootstrap chapters form a linear chain. Only the last is in activeWorldLines.
+  // Traverse backward from the last chapter to find all bootstrap chapters.
   const worldLines = await rpc.readContract({
     address: env.NOVEL_CORE_ADDRESS, abi: novelCoreAbi,
     functionName: "getActiveWorldLines", args: [novelId],
   }) as bigint[];
 
-  // Try to decode genesis content from createNovel calldata
-  let genesisContents: string[] | null = null;
+  // Collect all bootstrap chapter IDs by traversing parent chain
+  const chapterIds: bigint[] = [];
+  let currentId = worldLines[0];
+  while (currentId > 0n) {
+    chapterIds.unshift(currentId); // prepend to maintain order (first chapter first)
+    const ch = await rpc.readContract({
+      address: env.NOVEL_CORE_ADDRESS, abi: novelCoreAbi,
+      functionName: "getChapter", args: [currentId],
+    }) as any;
+    currentId = ch.parentId;
+  }
+
+  // Try to decode bootstrap content from createNovel calldata
+  let bootstrapContents: string[] | null = null;
   const novelRes = await db.query("SELECT content_location FROM novels WHERE id = $1", [novelId.toString()]);
   const isOnchain = novelRes.rows.length > 0 && novelRes.rows[0].content_location === ContentLocation.Onchain;
 
   if (isOnchain && log.transactionHash) {
     try {
       const tx = await rpc.getTransaction({ hash: log.transactionHash });
-      const { args } = decodeFunctionData({ abi: novelCoreAbi, data: tx.input });
-      const genesisChapters = (args as any)[2] as any[]; // 3rd arg: ContentSubmission[]
-      genesisContents = genesisChapters.map((sub: any) => {
-        const contentBytes = sub.content as `0x${string}`;
-        return Buffer.from(contentBytes.slice(2), "hex").toString("utf-8");
-      });
+      const { functionName, args } = decodeFunctionData({ abi: novelCoreAbi, data: tx.input });
+      // bootstrapChapters is arg[2] for createNovel, arg[4] for forkNovel
+      const chaptersArgIndex = functionName === "forkNovel" ? 4 : 2;
+      const submissions = (args as any)[chaptersArgIndex] as any[];
+      if (submissions && submissions.length > 0) {
+        bootstrapContents = submissions.map((sub: any) => {
+          const contentBytes = sub.content as `0x${string}`;
+          return Buffer.from(contentBytes.slice(2), "hex").toString("utf-8");
+        });
+      }
     } catch (err) {
-      console.error(`Failed to decode createNovel calldata for novel ${novelId}:`, err);
+      console.error(`Failed to decode calldata for novel ${novelId}:`, err);
     }
   }
 
-  for (let i = 0; i < worldLines.length; i++) {
-    const chapterId = worldLines[i];
+  let bootstrapIdx = 0;
+  for (let i = 0; i < chapterIds.length; i++) {
+    const chapterId = chapterIds[i];
     const chapter = await rpc.readContract({
       address: env.NOVEL_CORE_ADDRESS, abi: novelCoreAbi,
       functionName: "getChapter", args: [chapterId],
@@ -460,19 +483,23 @@ async function indexGenesisChapters(novelId: bigint, count: number, blockNumber:
       ]
     );
 
-    if (isOnchain && genesisContents && i < genesisContents.length) {
+    // Only bootstrap chapters (isCanon=true) have calldata content; fork root (isCanon=false) does not
+    if (chapter.isCanon && isOnchain && bootstrapContents && bootstrapIdx < bootstrapContents.length) {
       await db.query(
         "UPDATE chapters SET content_text = $1, content_fetched = TRUE WHERE id = $2",
-        [genesisContents[i], chapterId.toString()]
+        [bootstrapContents[bootstrapIdx], chapterId.toString()]
       );
-      console.log(`[genesis] Chapter ${chapterId} content stored (${genesisContents[i].length} chars)`);
+      console.log(`[bootstrap] Chapter ${chapterId} content stored (${bootstrapContents[bootstrapIdx].length} chars)`);
+      bootstrapIdx++;
+    } else if (!chapter.isCanon) {
+      // Fork root — no content from calldata (content is copied from source branch)
     } else if (!isOnchain) {
       fetchChapterContent(chapterId, novelId).catch(err =>
-        console.error(`Content fetch failed for genesis chapter ${chapterId}:`, err)
+        console.error(`Content fetch failed for bootstrap chapter ${chapterId}:`, err)
       );
     }
   }
-  console.log(`[genesis] Indexed ${worldLines.length} genesis chapters for novel ${novelId} in ${Date.now() - t0}ms`);
+  console.log(`[bootstrap] Indexed ${chapterIds.length} bootstrap chapters for novel ${novelId} in ${Date.now() - t0}ms`);
 }
 
 async function traceAndMarkCanon(chapterId: bigint, db: Client, rpc: PublicClient) {

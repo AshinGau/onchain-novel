@@ -10,7 +10,7 @@ interface INovelCore {
     //                          EVENTS
     // ============================================================
 
-    event NovelCreated(uint256 indexed novelId, address indexed creator, uint32 genesisChapterCount);
+    event NovelCreated(uint256 indexed novelId, address indexed creator, uint32 bootstrapChapterCount);
     event NovelForked(uint256 indexed novelId, uint256 indexed sourceNovelId, uint256 sourceChapterId);
     event ChapterSubmitted(
         uint256 indexed novelId,
@@ -30,40 +30,34 @@ interface INovelCore {
     event NovelCompleted(uint256 indexed novelId);
     event NovelMetadataUpdated(uint256 indexed novelId, string title, string description, string coverUri);
 
-    // --- Rules events ---
-    event RuleSet(uint256 indexed novelId, string name);
-    event RuleDeleted(uint256 indexed novelId, string name);
-    event RuleProposed(
-        uint256 indexed proposalId, uint256 indexed novelId, address indexed proposer, uint8 proposalType, string ruleName
-    );
-    event RuleProposalVoted(uint256 indexed proposalId, address indexed voter, uint32 newVoteCount);
-    event RuleProposalExecuted(uint256 indexed proposalId, uint256 indexed novelId);
-
     // ============================================================
     //                     NOVEL LIFECYCLE
     // ============================================================
 
-    /// @notice Create a new novel with multi-chapter genesis and optional initial prize pool
+    /// @notice Create a new novel with bootstrap chapters forming a linear chain
     /// @param config Novel configuration parameters
     /// @param metadata Novel display metadata (title, description, cover)
-    /// @param genesisChapters Array of content submissions for genesis chapters
+    /// @param bootstrapChapters Array of content submissions for bootstrap chapters (linear chain)
     /// @return novelId The ID of the newly created novel
     function createNovel(
         DataTypes.NovelConfig calldata config,
         DataTypes.NovelMetadata calldata metadata,
-        DataTypes.ContentSubmission[] calldata genesisChapters
+        DataTypes.ContentSubmission[] calldata bootstrapChapters
     ) external payable returns (uint256 novelId);
 
-    /// @notice Fork a novel from a rejected branch
+    /// @notice Fork a novel from a rejected branch, optionally with bootstrap chapters
     /// @param originalNovelId Source novel ID
     /// @param branchChapterId Chapter to fork from
     /// @param config Configuration for the new novel
+    /// @param metadata Novel display metadata
+    /// @param bootstrapChapters Optional bootstrap chapters after fork root
     /// @return novelId The ID of the forked novel
     function forkNovel(
         uint256 originalNovelId,
         uint256 branchChapterId,
         DataTypes.NovelConfig calldata config,
-        DataTypes.NovelMetadata calldata metadata
+        DataTypes.NovelMetadata calldata metadata,
+        DataTypes.ContentSubmission[] calldata bootstrapChapters
     ) external payable returns (uint256 novelId);
 
     // ============================================================
@@ -119,7 +113,10 @@ interface INovelCore {
     function getNovel(uint256 novelId) external view returns (DataTypes.Novel memory);
     function getChapter(uint256 chapterId) external view returns (DataTypes.Chapter memory);
     function getActiveWorldLines(uint256 novelId) external view returns (uint256[] memory);
-    function getRoundSubmissions(uint256 novelId, uint32 epoch, uint32 round) external view returns (uint256[] memory);
+    function getRoundSubmissions(uint256 novelId, uint32 epoch, uint32 round)
+        external
+        view
+        returns (uint256[] memory);
     function getNovelCount() external view returns (uint256);
     function getChapterCount() external view returns (uint256);
     function getClaimableStake(uint256 novelId, address author) external view returns (uint256);
@@ -132,27 +129,6 @@ interface INovelCore {
     /// @notice Update novel metadata (only callable by novel creator)
     function updateNovelMetadata(uint256 novelId, DataTypes.NovelMetadata calldata metadata) external;
 
-    // ============================================================
-    //                         RULES
-    // ============================================================
-
-    /// @notice Set rules as the novel creator (only during epoch 1, no voting needed)
-    function setCreatorRules(uint256 novelId, string[] calldata names, string[] calldata contents) external;
-
-    /// @notice Propose adding or deleting a rule (requires fee, goes to prize pool)
-    function proposeRule(
-        uint256 novelId,
-        DataTypes.RuleProposalType proposalType,
-        string calldata ruleName,
-        string calldata ruleContent
-    ) external payable returns (uint256 proposalId);
-
-    /// @notice Vote on a rule proposal (canon authors only)
-    function voteOnRuleProposal(uint256 proposalId) external;
-
-    // --- Rules queries ---
-    function getRule(uint256 novelId, string calldata name) external view returns (string memory);
-    function getRuleNames(uint256 novelId) external view returns (string[] memory);
-    function getRuleProposal(uint256 proposalId) external view returns (DataTypes.RuleProposal memory);
+    /// @notice Check if an address is a canon author for a novel
     function isCanonAuthor(uint256 novelId, address author) external view returns (bool);
 }

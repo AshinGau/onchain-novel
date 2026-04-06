@@ -3,7 +3,7 @@ import { foundry } from "viem/chains";
 import { getClient, query } from "../db/index.js";
 import { env } from "../utils/env.js";
 import { novelCoreAbi, votingEngineAbi, prizePoolAbi, chapterNFTAbi } from "../utils/abi.js";
-import { handleNovelCoreEvent, handleVotingEvent, handlePrizePoolEvent, handleNFTEvent } from "./handlers.js";
+import { handleNovelCoreEvent, handleVotingEvent, handlePrizePoolEvent, handleNFTEvent, handleRulesEvent } from "./handlers.js";
 import { fetchChapterContent } from "./content-fetcher.js";
 
 let currentRpcIndex = 0;
@@ -160,6 +160,8 @@ async function processLog(log: Log, dbClient: pg.PoolClient, rpcClient: PublicCl
     await handlePrizePoolEvent(log, dbClient);
   } else if (env.CHAPTER_NFT_ADDRESS && address === env.CHAPTER_NFT_ADDRESS.toLowerCase()) {
     await handleNFTEvent(log, dbClient);
+  } else if (env.RULES_ENGINE_ADDRESS && address === env.RULES_ENGINE_ADDRESS.toLowerCase()) {
+    await handleRulesEvent(log, dbClient, rpcClient);
   }
 }
 
@@ -173,6 +175,7 @@ export async function startIndexer() {
   if (env.VOTING_ENGINE_ADDRESS) addresses.push(env.VOTING_ENGINE_ADDRESS);
   if (env.PRIZE_POOL_ADDRESS) addresses.push(env.PRIZE_POOL_ADDRESS);
   if (env.CHAPTER_NFT_ADDRESS) addresses.push(env.CHAPTER_NFT_ADDRESS);
+  if (env.RULES_ENGINE_ADDRESS) addresses.push(env.RULES_ENGINE_ADDRESS);
 
   // Main loop
   while (true) {

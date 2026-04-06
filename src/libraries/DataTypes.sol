@@ -71,7 +71,7 @@ library DataTypes {
         RoundPhase roundPhase;
         EpochPhase epochPhase;
         uint256 phaseStartTime; // Timestamp when current phase started
-        uint32 genesisChapterCount; // Number of genesis chapters (for creator royalty decay)
+        uint32 bootstrapChapterCount; // Number of bootstrap chapters (creator-authored, uploaded at creation)
         uint32 cumulativeCanonChapters; // Total canon chapters across all settled epochs
         bool active; // Whether the novel is active
         uint256 forkSourceNovelId; // 0 if original, otherwise the source novel ID

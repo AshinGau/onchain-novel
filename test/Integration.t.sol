@@ -159,7 +159,7 @@ contract IntegrationTest is Test {
         assertEq(novel.currentRound, 1);
         assertEq(novel.currentEpoch, 1);
         assertTrue(novel.active);
-        assertEq(novel.genesisChapterCount, 1);
+        assertEq(novel.bootstrapChapterCount, 1);
         assertEq(novel.cumulativeCanonChapters, 0);
         assertEq(uint8(novel.roundPhase), uint8(DataTypes.RoundPhase.Submitting));
 
@@ -175,25 +175,30 @@ contract IntegrationTest is Test {
         assertEq(prizePool.getPoolBalance(novelId), 0);
     }
 
-    function test_CreateNovelMultiGenesis() public {
+    function test_CreateNovelMultiBootstrap() public {
         vm.prank(creator);
         uint256 novelId =
             novelCore.createNovel{value: 2 ether}(defaultConfig, defaultMetadata, _multiGenesisSubmissions());
 
         DataTypes.Novel memory novel = novelCore.getNovel(novelId);
-        assertEq(novel.genesisChapterCount, 2);
+        assertEq(novel.bootstrapChapterCount, 2);
 
+        // Only the last bootstrap chapter is the active world line (linear chain)
         uint256[] memory worldLines = novelCore.getActiveWorldLines(novelId);
-        assertEq(worldLines.length, 2);
+        assertEq(worldLines.length, 1);
 
-        // Each genesis chapter exists and is a world line
-        for (uint256 i = 0; i < 2; i++) {
-            DataTypes.Chapter memory ch = novelCore.getChapter(worldLines[i]);
-            assertTrue(ch.isWorldLine);
-            assertEq(ch.author, creator);
-            assertEq(ch.round, 0);
-            assertEq(ch.epoch, 0);
-        }
+        // Second chapter is the active world line
+        DataTypes.Chapter memory ch2 = novelCore.getChapter(worldLines[0]);
+        assertTrue(ch2.isWorldLine);
+        assertTrue(ch2.isCanon);
+        assertEq(ch2.chapterIndex, 1);
+
+        // First chapter is parent of second
+        DataTypes.Chapter memory ch1 = novelCore.getChapter(ch2.parentId);
+        assertTrue(ch1.isWorldLine);
+        assertTrue(ch1.isCanon);
+        assertEq(ch1.chapterIndex, 0);
+        assertEq(ch1.parentId, 0);
     }
 
     // ============================================================
@@ -400,15 +405,17 @@ contract IntegrationTest is Test {
 
         // Fork fee = stakeAmount (0.01 ETH) goes to original pool, rest to fork pool
         uint256 originalPoolBefore = prizePool.getPoolBalance(novelId);
+        DataTypes.ContentSubmission[] memory emptyBootstrap = new DataTypes.ContentSubmission[](0);
         vm.prank(author2);
-        uint256 forkedNovelId = novelCore.forkNovel{value: 0.5 ether}(novelId, ch2, defaultConfig, defaultMetadata);
+        uint256 forkedNovelId =
+            novelCore.forkNovel{value: 0.5 ether}(novelId, ch2, defaultConfig, defaultMetadata, emptyBootstrap);
 
         assertEq(forkedNovelId, 2);
         DataTypes.Novel memory forked = novelCore.getNovel(forkedNovelId);
-        assertEq(forked.creator, creator); // Creator royalty goes to original creator, not fork caller
+        assertEq(forked.creator, creator); // Creator royalty flows to original creator
         assertEq(forked.forkSourceNovelId, novelId);
         assertEq(forked.forkSourceChapterId, ch2);
-        assertEq(forked.genesisChapterCount, 1);
+        assertEq(forked.bootstrapChapterCount, 0);
         assertTrue(forked.active);
         // Fork pool = 0.5 - 0.01 (fork fee) = 0.49 ETH
         assertEq(prizePool.getPoolBalance(forkedNovelId), 0.49 ether);

@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS novels (
   round_phase     SMALLINT NOT NULL DEFAULT 0,
   epoch_phase     SMALLINT NOT NULL DEFAULT 0,
   phase_start_time BIGINT NOT NULL DEFAULT 0,
-  genesis_chapter_count INT NOT NULL DEFAULT 0,
+  bootstrap_chapter_count INT NOT NULL DEFAULT 0,
   cumulative_canon_chapters INT NOT NULL DEFAULT 0,
   active          BOOLEAN NOT NULL DEFAULT TRUE,
   fork_source_novel_id   BIGINT,
