@@ -10,7 +10,7 @@ import { z, type ZodTypeAny } from "zod";
  *   jsonArray(z.array(z.string()))
  *   jsonArray(z.array(z.object({ ... })).optional())
  */
-export function jsonArray<T extends ZodTypeAny>(schema: T): z.ZodEffects<T> {
+export function jsonArray<T extends ZodTypeAny>(schema: T) {
   return z.preprocess((val) => {
     if (typeof val === "string") {
       try {
@@ -21,5 +21,5 @@ export function jsonArray<T extends ZodTypeAny>(schema: T): z.ZodEffects<T> {
       }
     }
     return val;
-  }, schema) as unknown as z.ZodEffects<T>;
+  }, schema);
 }

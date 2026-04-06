@@ -1,0 +1,1 @@
+(Science Fiction) In near-future San Francisco, Mara guides dying clients through consciousness uploading. Her current client asks the question haunting every transition: is the person who wakes up in the digital afterlife really me—or just a copy?

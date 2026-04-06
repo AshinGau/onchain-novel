@@ -1,0 +1,1 @@
+(Historical Fiction) In 1990s Saigon, young Minh is raised by Ba Tam, a lottery seller who claims to be his aunt. As he grows older, fragments of truth surface—his father worked with the Americans, and the secret of his death touches everyone around him.

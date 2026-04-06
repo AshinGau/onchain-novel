@@ -1,6 +1,10 @@
 # MCP Server Lifecycle Test Plan (Multi-User, Compact)
 
-> 4 novels × 4 epochs, 4 chapters/round, 7 roles.
+> **⚠️ 本测试计划的核心目的是测试 MCP onchain-novel server 的工具调用能力。**
+> **所有操作必须通过调用 MCP onchain-novel server 提供的 tool 来执行，禁止编写脚本或直接调用合约。**
+> **每一步都应使用对应的 MCP tool（如 `create_novel`、`submit_chapter`、`voter_cast_vote` 等）。**
+
+> 2 novels × 3 epochs × 2 rounds/epoch, 3 chapters/round, 7 roles.
 > All duration = **1s** (except ruleVoteDuration).
 > 测试覆盖: 创建、提交、投票、keeper推进、claim、tip、fork、rules、complete.
 
@@ -20,14 +24,14 @@
 
 ---
 
-## Phase 0: Create 4 Novels [CREATOR]
+## Phase 0: Create 2 Novels [CREATOR]
+
+> 使用 MCP tool: `switch_wallet` → `create_novel`
 
 | # | title | bootstrap | initialPrizeEth | roundsPerEpoch | worldLineCount | roundMinSubmissions | stakeAmount | prizeReleaseRate | voterRewardRate |
 |---|-------|-----------|-----------------|----------------|----------------|---------------------|-------------|------------------|-----------------|
-| 1 | "Alpha" | ["Genesis: silence."] | "1.0" | 2 | 2 | 4 | "0.01" | 3000 | 1000 |
-| 2 | "Beta" | ["Genesis: glass city."] | "2.0" | 2 | 2 | 4 | "0.02" | 2500 | 1500 |
-| 3 | "Gamma" | ["Genesis: machine wakes."] | "0.5" | 2 | 2 | 4 | "0.01" | 4000 | 500 |
-| 4 | "Delta" | ["Genesis: fire rains."] | "3.0" | 2 | 2 | 4 | "0.01" | 2000 | 2000 |
+| 1 | "Alpha" | ["Genesis: silence."] | "1.0" | 2 | 2 | 3 | "0.01" | 3000 | 1000 |
+| 2 | "Beta" | ["Genesis: glass city."] | "2.0" | 2 | 2 | 3 | "0.02" | 2500 | 1500 |
 
 **共同参数:**
 ```
@@ -44,36 +48,41 @@ ruleVoteDuration: 259200, ruleQuorum: 2
 
 ## Phase 1: Set Creator Rules [CREATOR]
 
+> 使用 MCP tool: `set_creator_rules` → `get_rules`
+
 | Novel | rules |
 |-------|-------|
 | 1 | [{name:"setting", content:"Silent world"}, {name:"tone", content:"Mysterious"}] |
 | 2 | [{name:"setting", content:"Glass city"}, {name:"protagonist", content:"Architect"}] |
-| 3 | [{name:"setting", content:"Machine realm"}, {name:"genre", content:"Sci-fi"}] |
-| 4 | [{name:"setting", content:"Apocalypse"}, {name:"tone", content:"Dramatic"}] |
 
 **验证:** `get_rules` for each
 
 ---
 
-## Phase 2: Epoch Loop (×4 epochs per novel)
+## Phase 2: Epoch Loop (×3 epochs per novel)
 
-### 每个 Round 的标准操作 (roundsPerEpoch=2)
+> **所有操作均通过 MCP tool 逐步调用，不得编写自动化脚本。**
+> 使用 MCP tools: `switch_wallet`, `get_active_world_lines`, `submit_chapter`, `keeper_check_and_advance`, `get_round_submissions`, `voter_cast_vote`, `voter_reveal`, `sweep_unrevealed`, `claim_voting_reward`, `claim_reward`, `get_pending_reward`, `get_pool_balance`
+
+### 每个 Round 的标准操作 (roundsPerEpoch=2, 3 chapters/round)
 
 ```
 1. get_active_world_lines(novelId) → 拿到 parentChapterId
 
-2. [WRITER_A] submit_chapter × 2
+2. [WRITER_A] submit_chapter × 2 (两条世界线各1篇)
      content: "n{N}_e{E}_r{R}_wA_{i}"
-   [WRITER_B] submit_chapter × 2
+   [WRITER_B] submit_chapter × 1
      content: "n{N}_e{E}_r{R}_wB_{i}"
+   (共 3 chapters 满足 roundMinSubmissions=3)
 
 3. [KEEPER] keeper_check_and_advance  → close_submissions
 
 4. get_round_submissions(novelId, epoch, round) → 拿到实际 chapterId 列表
    选择: Voter A → Writer A 的第1章, Voter B → Writer B 的第1章
 
-5. [VOTER_A] voter_cast_vote(candidateId=WA_ch1, stakeEth="0.05")
-   [VOTER_B] voter_cast_vote(candidateId=WB_ch1, stakeEth="0.03")
+5. [VOTER_A] voter_cast_vote(candidateId=WA_ch1, stakeEth=按投票策略)
+   [VOTER_B] voter_cast_vote(candidateId=WB_ch1, stakeEth=按投票策略)
+   (Epoch 1: A=0.05/B=0.03; Epoch 2: A=0.03/B=0.05; Epoch 3: 共识)
 
 6. [KEEPER] keeper_check_and_advance  → close_commit
 
@@ -115,20 +124,23 @@ ruleVoteDuration: 259200, ruleQuorum: 2
 
 ### 投票策略
 
-- **Epoch 1-2:** Voter A/B 投不同章节(分歧) → 测试准确/不准确差异
-- **Epoch 3-4:** Voter A/B 投同一章节(共识) → 测试一致投票
+- **Epoch 1:** Voter A(0.05) → Writer A, Voter B(0.03) → Writer B → **Writer A wins** (高stake胜)
+- **Epoch 2:** Voter A(0.03) → Writer A, Voter B(0.05) → Writer B → **Writer B wins** (反转stake，确保两个writer都有canon章节和收益)
+- **Epoch 3:** Voter A/B 投同一章节(共识) → 测试一致投票
 
 ---
 
 ## Phase 3: Tip [TIPPER + others]
+
+> 使用 MCP tool: `switch_wallet` → `tip_novel` → `get_pool_balance`
 
 在 Epoch 2 完成后执行:
 
 ```
 [TIPPER]   tip_novel(1, "0.5")
 [TIPPER]   tip_novel(2, "1.0")
-[VOTER_A]  tip_novel(3, "0.3")
-[WRITER_A] tip_novel(4, "0.2")
+[VOTER_A]  tip_novel(1, "0.3")
+[WRITER_A] tip_novel(2, "0.2")
 ```
 
 每次 tip 后 `get_pool_balance` 验证。
@@ -136,6 +148,8 @@ ruleVoteDuration: 259200, ruleQuorum: 2
 ---
 
 ## Phase 4: Rules Change [WRITER_A + WRITER_B]
+
+> 使用 MCP tool: `switch_wallet` → `propose_rule` → `vote_on_rule_proposal` → `get_rules` → `get_rule_proposals`
 
 在 Epoch 2 完成后(两个 writer 都有 canon 章节)执行:
 
@@ -153,6 +167,8 @@ ruleVoteDuration: 259200, ruleQuorum: 2
 
 ## Phase 5: Fork [WRITER_B]
 
+> 使用 MCP tool: `get_round_submissions` → `switch_wallet` → `fork_novel` → `get_novel` → `get_pool_balance`，然后对 fork 小说执行 Phase 2 流程
+
 在 Epoch 2 完成后执行:
 
 ```
@@ -161,7 +177,7 @@ ruleVoteDuration: 259200, ruleQuorum: 2
      originalNovelId: 1,
      branchChapterId: <rejected chapter>,
      title: "Fork of Alpha",
-     roundMinSubmissions: 4, worldLineCount: 2, roundsPerEpoch: 2,
+     roundMinSubmissions: 3, worldLineCount: 2, roundsPerEpoch: 2,
      ... (同Phase 0共同参数),
      initialPrizeEth: "0.5"
    )
@@ -174,16 +190,17 @@ ruleVoteDuration: 259200, ruleQuorum: 2
 
 ## Phase 6: Complete & Query
 
+> 使用 MCP tool: `complete_novel`, `update_novel_metadata`, `discover_novels`, `get_novel_stats`, `read_canon`, `get_my_chapters`, `get_chapter`, `get_chapter_context`
+
 ```
 [CREATOR] complete_novel(novelId: 1)
-[CREATOR] complete_novel(novelId: 2)
-[CREATOR] update_novel_metadata(novelId: 3, title: "Gamma Revised")
+[CREATOR] update_novel_metadata(novelId: 2, title: "Beta Revised")
 
 discover_novels(sort:"hot", filter:"all")
 discover_novels(sort:"pool", filter:"active")
 discover_novels(filter:"completed")
 
-get_novel_stats(novelId: 1..4 + fork)
+get_novel_stats(novelId: 1..2 + fork)
 read_canon(novelId: 1)
 read_canon(novelId: 2)
 
@@ -202,12 +219,12 @@ get_chapter_context(chapterId: <某canon章节>)
 
 | Role | Novel | Income Type | Amount (ETH) |
 |------|-------|-------------|-------------|
-| Creator | 1-4 | Royalty | ? |
-| Writer A | 1-4 | Author Reward | ? |
-| Writer B | 1-4 | Author Reward | ? |
-| Voter A | 1-4 | Voting Reward | ? |
-| Voter B | 1-4 | Voting Reward | ? |
-| Keeper | 1-4 | Keeper Reward | ? |
+| Creator | 1-2 | Royalty | ? |
+| Writer A | 1-2 | Author Reward | ? |
+| Writer B | 1-2 | Author Reward | ? |
+| Voter A | 1-2 | Voting Reward | ? |
+| Voter B | 1-2 | Voting Reward | ? |
+| Keeper | 1-2 | Keeper Reward | ? |
 
 全局汇总:
 - 每个角色: 总收入 / 总支出 / 净收益
@@ -218,17 +235,17 @@ get_chapter_context(chapterId: <某canon章节>)
 
 ## 操作量估算
 
-| 操作 | 每小说每epoch | ×4 epoch | ×4 novel | 总计 |
+| 操作 | 每小说每epoch | ×3 epoch | ×2 novel | 总计 |
 |------|-------------|---------|---------|------|
-| submit_chapter | 4×2 rounds | 32 | 128 | ~128 |
-| keeper_advance | 2×2+2 | 24 | 96 | ~96 |
-| voter_cast_vote | (2+1)×2 | 24 | 96 | ~96 |
-| voter_reveal | (2+1)×2 | 24 | 96 | ~96 |
-| claim | ~6 | 24 | 96 | ~96 |
-| switch_wallet | ~12 | 48 | 192 | ~192 |
-| **Total** | | | | **~800** |
+| submit_chapter | 3×2 rounds = 6 | 18 | 36 | ~36 |
+| keeper_advance | 3×2 rounds + 2 epoch = 8 | 24 | 48 | ~48 |
+| voter_cast_vote | (2+1)×2 = 6 | 18 | 36 | ~36 |
+| voter_reveal | (2+1)×2 = 6 | 18 | 36 | ~36 |
+| claim | ~6 | 18 | 36 | ~36 |
+| switch_wallet | ~10 | 30 | 60 | ~60 |
+| **Total** | | | | **~252** |
 
-加上 tip/fork/rules/query ≈ **~900 MCP calls**
+加上 tip/fork(1 epoch)/rules/query ≈ **~350 MCP tool calls**
 
 ---
 

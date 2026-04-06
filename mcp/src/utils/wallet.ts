@@ -6,6 +6,7 @@ import {
   type WalletClient,
   type Transport,
   type Chain,
+  type Account,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { foundry } from "viem/chains";
@@ -33,7 +34,7 @@ export function getPublicClient(): PublicClient<Transport, Chain> {
  * Create a wallet client for sending transactions.
  * Requires PRIVATE_KEY env var to be set.
  */
-export function getWalletClient(): WalletClient {
+export function getWalletClient(): WalletClient<Transport, Chain, Account> {
   if (!config.privateKey) {
     throw new Error("PRIVATE_KEY environment variable is not set");
   }
@@ -42,7 +43,7 @@ export function getWalletClient(): WalletClient {
     account,
     chain: getChain(),
     transport: http(config.rpcUrl),
-  });
+  }) as WalletClient<Transport, Chain, Account>;
 }
 
 /**

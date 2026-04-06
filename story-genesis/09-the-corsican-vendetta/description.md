@@ -1,0 +1,1 @@
+(Crime Drama) In Corsica's mountain village of Cozzano, Anto Ferracci buries his father—found with his throat cut. The killing reopens a generations-old vendetta. His mother begs him to break the cycle, but Anto already knows who did it.

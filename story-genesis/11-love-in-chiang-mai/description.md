@@ -1,0 +1,1 @@
+(Romance) An American photographer and a Scottish teacher meet by chance on a shared taxi to Doi Suthep temple. A spilled coffee, 309 temple steps, and an unexpected connection—sometimes the best journeys are unplanned.

@@ -1,9 +1,69 @@
 "use client";
 
+import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { Search, X } from "lucide-react";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { NotificationBell } from "@/components/notification-bell";
+
+function NavSearch() {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+  const router = useRouter();
+
+  useEffect(() => {
+    if (open) inputRef.current?.focus();
+  }, [open]);
+
+  function submit() {
+    const q = query.trim();
+    if (q) {
+      router.push(`/?search=${encodeURIComponent(q)}`);
+      setOpen(false);
+      setQuery("");
+    }
+  }
+
+  return (
+    <div className="relative flex items-center">
+      <div
+        className={`flex items-center overflow-hidden transition-all duration-200 rounded-full border ${
+          open
+            ? "w-52 border-neutral-600 bg-neutral-900"
+            : "w-8 h-8 border-transparent hover:border-neutral-700 cursor-pointer bg-neutral-900/50"
+        }`}
+      >
+        <button
+          onClick={() => { if (!open) setOpen(true); else submit(); }}
+          className="flex-shrink-0 flex items-center justify-center w-8 h-8 text-neutral-400 hover:text-white"
+          aria-label="Search"
+        >
+          <Search size={15} />
+        </button>
+        {open && (
+          <>
+            <input
+              ref={inputRef}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") submit(); if (e.key === "Escape") { setOpen(false); setQuery(""); } }}
+              placeholder="Title, ID, or address"
+              className="flex-1 bg-transparent text-sm text-white placeholder-neutral-500 outline-none pr-1"
+            />
+            <button
+              onClick={() => { setOpen(false); setQuery(""); }}
+              className="flex-shrink-0 flex items-center justify-center w-7 h-8 text-neutral-500 hover:text-white"
+            >
+              <X size={14} />
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export function NavBar() {
   const pathname = usePathname();
@@ -25,6 +85,7 @@ export function NavBar() {
           <Link href="/dashboard" className={pathname === "/dashboard" ? "text-white" : "text-neutral-400 hover:text-white"}>
             My Dashboard
           </Link>
+          <NavSearch />
           <NotificationBell />
           <ConnectButton showBalance={false} chainStatus="icon" accountStatus="avatar" />
         </nav>

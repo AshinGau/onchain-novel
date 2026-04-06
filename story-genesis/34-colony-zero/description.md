@@ -1,0 +1,1 @@
+(Hard Sci-Fi) Commander Obi leads a 200-person Mars colony slowly abandoned by Earth. Filters are failing, resupply has stopped, and the colony is splitting between those who want to go home and those who want to stay forever.
