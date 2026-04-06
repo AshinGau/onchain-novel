@@ -1,0 +1,260 @@
+=== CHAPTER 1: THE WEIGHT OF RED DUST ===
+
+
+The dust was killing them slowly, and Adaeze Obi had the spreadsheets to prove it.
+
+She sat in the command module of Habitat Alpha, the oldest and most decrepit of Colony Zero's four pressurized structures, reviewing the quarterly maintenance report on her tablet while the ventilation system wheezed overhead like an emphysematic lung. The HEPA filters -- designed for a five-year mission, now grinding through year seven -- were capturing only eighty-one percent of particulate matter below 2.5 microns. The remaining nineteen percent settled in lungs, in joints, in the delicate membranes of eyes and sinuses. Dr. Yuki Tanaka's medical reports made the consequences clear: chronic cough in forty-three percent of colonists. Elevated iron in bloodwork across the board. Two cases of what she'd tentatively diagnosed as silicosis, though the Martian variant was novel enough that Yuki had taken to calling it "areosis" in her notes, with the weary humor of a physician inventing diseases she had no capacity to cure.
+
+Adaeze closed the maintenance report and opened the next file in her queue. Resource allocation. The numbers hadn't improved since yesterday, or the day before, or the week before that. Colony Zero had been designed as a bridgehead -- a proof of concept meant to be resupplied every twenty-six months during optimal transfer windows. The last resupply had arrived eleven months late, carrying sixty percent of its projected payload after a thruster malfunction forced the cargo vessel to jettison four modules. Among the lost: replacement HEPA filters, a backup water reclamation unit, and three hundred kilograms of medical supplies.
+
+The next resupply window had opened four months ago. Nothing had launched.
+
+She knew because she'd asked, repeatedly, during the daily communication windows. Earth's replies had grown progressively vaguer. Budget restructuring. Launch vehicle certification delays. Geopolitical complications. The phrases blurred together into a white noise of bureaucratic hedging that Adaeze, who had spent twelve years navigating the politics of the Nigerian Space Research and Development Agency before being recruited for the colony program, recognized as the sound of people preparing to abandon a commitment without saying so outright.
+
+Two hundred souls. That was the number she returned to, the anchor point, the weight that kept her from drifting into the administrative abstractions that made it possible to forget what the spreadsheets actually represented. Two hundred human beings breathing contaminated air on a planet that would kill them in ninety seconds if they stepped outside without a suit. The youngest was Tomoko, born six months ago to structural engineer Kenji Mori and botanist Liu Mei -- the first human being born on another world, an event that had generated a brief flurry of media attention on Earth before being swallowed by whatever crisis was consuming the news cycle that week. The oldest was Sergei Volkov, sixty-eight, a geochemist who had volunteered for the colony knowing he would almost certainly die here, and who seemed entirely at peace with that fact in a way that Adaeze found both admirable and faintly unsettling.
+
+A knock on the bulkhead frame. Adaeze looked up.
+
+"Commander." It was Priya Sharma, her communications officer, a compact woman with close-cropped hair and the perpetually strained expression of someone who spent her days listening to the void. "You asked me to flag anything unusual from the morning uplink."
+
+"I did."
+
+"Earth's response to your resupply inquiry came in. It's..." Priya paused, choosing her words. "Nonresponsive."
+
+"Nonresponsive how?"
+
+"They acknowledged receipt of your message. They provided a weather update for Jezero Crater that we didn't request. They transmitted the usual batch of personal correspondence. But the resupply question -- they just didn't address it. Like it wasn't in our transmission."
+
+Adaeze set her tablet down. "That's the third time."
+
+"Fourth. I went back through the logs."
+
+The ventilation system cycled, and for a moment the only sound was the mechanical rasp of air being pushed through failing filters. Adaeze studied Priya's face and saw her own unease reflected there -- not panic, not yet, but the particular tension of competent people recognizing a pattern they couldn't yet explain.
+
+"Log it," Adaeze said. "And flag it for my weekly report to the colony council."
+
+"Already done." Priya hesitated in the doorway. "Commander -- the Returnist caucus is meeting again tonight. Hab Delta common room. Fischer's been talking to people."
+
+"Fischer is always talking to people. It's his primary function."
+
+"He's getting better at it."
+
+After Priya left, Adaeze allowed herself thirty seconds of stillness. She pressed her palms flat against the cold surface of her desk -- stamped aluminum, manufactured in Toulouse, shipped 225 million kilometers at a cost that would have funded a hospital -- and breathed. The air tasted faintly of iron. It always did, now.
+
+She thought about Karl Fischer. German-born systems analyst, charismatic in the way of people who mistake certainty for intelligence. He'd arrived on the second crew rotation with strong opinions and a gift for articulating grievances that others felt but couldn't name. The Returnist movement had existed before Fischer, but he had given it structure and a political identity. The Returnists wanted Colony Zero reclassified as a temporary research station. They wanted Earth to send a return vehicle. The fact that no return vehicle existed -- that the colony was designed as a one-way commitment, that launching two hundred people off Mars was borderline impossible -- none of this dampened Fischer's certainty. His logic was superficially sound and practically insane, which made it exactly the kind of argument that thrived in desperation.
+
+Against the Returnists stood the Rooters, who wanted to cut the cord with Earth entirely. Expand the greenhouses. Dig deeper wells. Commit to Mars. They had no single leader, which was part of their problem.
+
+Adaeze belonged to neither faction, which meant both suspected her of belonging to the other. Fine. Her job was not to be popular. Her job was to keep two hundred people alive on a world that wanted them dead.
+
+She picked up her tablet and walked to the morning briefing.
+
+---
+
+The command center occupied the central module of Habitat Alpha -- a hexagonal space, twelve meters across, low-ceilinged, ringed by six workstations dedicated to the systems that kept them alive. The lighting was the shade of blue-white that the photobiology team had determined was optimal for circadian regulation and absolutely optimal for making everyone look vaguely ill.
+
+Her department heads were already assembled. Priya at comms. Tomasz Kowalski at life support, a tall Pole with the haunted eyes of a man who knew exactly how close they were to catastrophic failure at any given moment. Liu Wei at agriculture, managing the greenhouses with the protective intensity of a parent. Dr. Yuki Tanaka at the medical station, small and precise, her dark hair pulled back in a knot that Adaeze had never seen her adjust in seven years. And Ravi Patel at geology, leaning back in his chair with the deceptive calm of a man whose mind was always running calculations three layers deeper than the conversation around him.
+
+"Morning reports," Adaeze said. "Tomasz, start us off."
+
+Tomasz pulled up his display. "Oxygen generation is nominal. CO2 scrubbers in Hab Beta are showing increased degradation -- I've swapped in our last set of backup cartridges, which gives us approximately ninety days before we need to improvise. Water reclamation is at ninety-four percent efficiency, down from ninety-six last month. The two percent loss is cumulative." He paused. "We're losing about three liters per day to system inefficiency. I can't recover it without replacement membranes we don't have."
+
+"Options?" Adaeze asked.
+
+"I'm working with Ravi's team on extracting water ice from the northern deposits. If we can increase our ice-mining output by fifteen percent, we can offset the reclamation losses. But that requires additional EVA hours, which means additional suit wear, which means--"
+
+"Additional maintenance on suits we can't replace. I understand. Ravi?"
+
+Ravi straightened in his chair. He was thirty-four, Chennai-born, with the kind of lean, angular frame that seemed designed for Martian gravity -- he'd adapted faster than anyone, moving through the low-g corridors with a fluid economy of motion that made the rest of them look like they were wading through syrup. His specialty was areology -- Martian geology -- but seven years of colony life had made him a passable mining engineer, hydrologist, and, in one memorable emergency, dentist.
+
+"Ice mining is proceeding on schedule," he said. "We've identified three new subsurface deposits in grid sector seven that look promising. But that's not what I wanted to talk about this morning." He tapped his tablet, and a schematic appeared on the central display: a topographic cross-section of the terrain east of the colony, overlaid with drill path projections. "We started the expansion bore yesterday. Mining shaft E-7, targeting the basalt layer for construction aggregate. At thirty-eight meters, everything was normal. Basalt, regolith intrusions, the usual. At forty meters--" He tapped again. The display zoomed in on a section of the bore data.
+
+Adaeze leaned forward. The data showed a clean progression of density readings -- the predictable gradient of Martian subsurface geology -- and then, at precisely 40.2 meters, a vertical line. Not a gradual change. A wall.
+
+"The drill hit something," Ravi said. "Material density reading of 19,300 kilograms per cubic meter."
+
+Silence. The number hung in the air. Adaeze saw Tomasz frown. Yuki set down her medical file.
+
+"That's the density of tungsten," Tomasz said.
+
+"Or gold," Ravi said. "Or a sensor malfunction. Which is what I assumed." His voice was level, unhurried, but Adaeze noticed his hands were still on the tablet. Pressing down. "So I pulled the drill. Ran diagnostics on the sensor. Clean. Re-drilled a parallel bore two meters east. Same depth. Same reading." He let that land. "Then I ran a lateral sonar pulse." A new image. "The object extends at least twelve meters in every direction from the bore point. Flat upper surface. And it's not natural."
+
+"Define 'not natural,'" Adaeze said, keeping her voice level.
+
+"I mean it has right angles, Commander. The sonar return shows a geometric profile. Flat planes meeting at ninety-degree intersections. That doesn't happen in geology. Not in basalt, not in regolith, not in any formation I've ever seen on Mars or read about on Earth."
+
+The room was very quiet. The ventilation system wheezed.
+
+"Could it be from the colony?" Liu Wei asked. "Old equipment? A buried module?"
+
+"At forty meters? No. The colony's subsurface infrastructure doesn't go below twelve meters, and it's all accounted for. Besides, nothing we've built would give a density reading of 19,300." Ravi paused. "And the geology above it is undisturbed. Whatever this is, it's been down there since before we arrived. Long before."
+
+"How long?" Adaeze asked.
+
+"Based on the stratigraphic layer -- and this is a rough estimate -- the regolith above the object has been accumulating for a minimum of a hundred million years. Possibly much longer." He looked around the room. "I need to excavate."
+
+The silence that followed was the particular kind that Adaeze had learned to recognize over seven years of commanding a colony on Mars: the silence of people whose mental models of reality had just been handed something that didn't fit. She watched it move through them -- Tomasz blinking rapidly, Liu Wei's lips parting, Yuki going very still, Priya turning slowly from her console. Each of them arriving, by their own cognitive path, at the same destination.
+
+Something was buried under Mars.
+
+"How certain are you?" Adaeze asked. It was the question a commander was supposed to ask -- the one that gave the room permission to be skeptical, to pump the brakes, to suggest mundane explanations. She asked it knowing that Ravi Patel was the most careful scientist she'd ever worked with, and that he would not have brought this to a morning briefing if he had any doubt.
+
+"I've run the drill test four times and the sonar twice," Ravi said. "I'm certain the object exists. I'm certain it's artificial. I'm certain it's not ours. Beyond that--" He spread his hands. "I need to get down there."
+
+Adaeze looked at Yuki, whose expression hadn't changed. The doctor met her eyes and gave a fractional nod that communicated: I'm thinking what you're thinking, but I'll follow your lead.
+
+"What do you need?" Adaeze asked Ravi.
+
+"A full excavation team. Four EVA-rated crew minimum, with the heavy drill rig and the excavation arm. I'll need to widen the shaft to at least three meters diameter to get imaging equipment down. Forty-eight hours for initial assessment."
+
+"That's a significant resource commitment," Tomasz said. "We've got the Hab Beta scrubber replacement scheduled, and the ice-mining expansion--"
+
+"I know," Adaeze said. "But if Ravi's data is accurate, we may be looking at the most significant discovery in human history. That changes the calculus." She looked around the table. "This stays within this room until I say otherwise. No logs, no personal communications, no casual mentions in the mess hall. Ravi, I'm authorizing your excavation. Take whoever you need. Tomasz, shift the scrubber work to a skeleton crew and buy us the EVA hours. Questions?"
+
+There were none. Or rather, there were thousands, but none that could be answered in this room.
+
+"Dismissed."
+
+---
+
+Yuki Tanaka had been a physician for seventeen years and a Martian for seven, and she had learned that the two vocations required the same fundamental skill: the ability to remain functional while carrying the full weight of what you knew.
+
+On Earth, this had meant treating patients in the overwhelmed wards of Osaka University Hospital during the pandemic years, maintaining diagnostic clarity while surrounded by suffering she couldn't alleviate fast enough. On Mars, it meant conducting weekly health assessments on two hundred colonists while tracking the slow, systemic degradation that the colony's failing infrastructure was inflicting on their bodies, and doing so with a professional calm that concealed the fact that she had no way to stop it.
+
+She had fourteen cases of chronic respiratory inflammation. Seven cases of bone density loss exceeding predicted models, despite the exercise protocols. Three colonists showing early signs of radiation-induced cellular damage that the habitat shielding should have prevented. And now, as of six weeks ago, a case she hadn't told anyone about: her own.
+
+The tremor in her left hand had started as an intermittent twitch, easily dismissed as fatigue. Then it became a flutter, visible when she held her hand flat. Now it was a persistent, fine oscillation that she could suppress with concentration but that reasserted itself the moment her attention wandered. She'd run her own bloodwork, her own neurological assessments, and arrived at a differential diagnosis that she was not yet ready to confirm because confirming it would mean acknowledging that the colony's only physician was developing a condition she couldn't treat with the supplies she had.
+
+She pushed the thought aside -- she was good at that, after seven years of pushing aside thoughts that would paralyze her if given full rein -- and focused on the task at hand. She was in Hab Gamma's medical bay, a space roughly the size of a large closet, reviewing the health records of the four crew members Ravi had requested for his excavation team.
+
+Ravi Patel: fit, no chronic conditions, vitamin D supplementation current. Good.
+
+Kwame Asante: structural engineer, thirty-one, one of the colony's strongest EVA workers. History of knee inflammation from a suit malfunction in year three, but currently asymptomatic. Cleared.
+
+Sasha Volkov: Sergei's granddaughter, twenty-six, geochemist, born in Moscow, the youngest member of the science team. No significant medical history. Cleared.
+
+Jin-ho Park: mining specialist, forty, Seoul-born. The one she hesitated over. Jin-ho had come to her two weeks ago with complaints of persistent headache and visual disturbances -- floaters, brief episodes of blurred vision. She'd found elevated intracranial pressure, likely caused by the prolonged effects of Martian gravity on cerebrospinal fluid dynamics. It wasn't immediately dangerous, but it was the kind of condition that heavy physical exertion and pressure changes could aggravate.
+
+She flagged Jin-ho for a pre-EVA assessment and added a note to his file: monitor ICP during excavation activities, limit to surface-level support only, no shaft descent.
+
+Then she sat back and let herself think about what Ravi had reported.
+
+Something artificial, forty meters beneath the Martian surface, older than a hundred million years.
+
+Yuki was not, by nature, a person who experienced wonder easily. Her temperament was clinical, her emotional register narrow by disposition rather than suppression. She had chosen medicine for its precision, its falsifiability, its insistence on evidence. She had volunteered for the colony program not out of frontier romanticism but because the medical challenges of long-term extraterrestrial habitation represented the most complex problem set available to her specialty, and she was the kind of person who oriented toward complexity the way others oriented toward comfort.
+
+But sitting in her tiny medical bay, listening to the ventilation system's labored breathing and the background hum of a habitat holding back a lethal planet, she felt something shift. A recalibration. The kind of internal adjustment that happened when the boundary conditions of your reality suddenly expanded.
+
+If Ravi was right -- and Ravi was almost always right -- then everything she had understood about Mars, about the solar system, about the history of life in the universe, was about to change. And she would be the physician responsible for the physical and psychological welfare of the people who would be doing the changing.
+
+She looked at her left hand. It was trembling.
+
+She pressed it flat against the desk, held it there until the tremor subsided, and went back to work.
+
+---
+
+The excavation began at 0600 the following morning, Martian local time.
+
+Adaeze watched from the Hab Alpha observation port as the team suited up in the airlock. The Martian dawn was a thin, anemic affair -- a pale salmon glow creeping across the eastern horizon, filtered through an atmosphere so thin it barely qualified as one. The sky would never achieve the blue she remembered from Lagos, from those childhood mornings watching the sun climb over the lagoon. Mars offered gradients of pink and amber and a particular shade of butterscotch that the first colonists had found beautiful and that Adaeze, seven years in, found merely accurate. This was what dawn looked like when your atmosphere was one percent the density of Earth's. Pretty, in the way of things that are trying to kill you.
+
+She tracked the team's progress on her console. Four figures in white EVA suits moved across the rust-colored terrain toward mining shaft E-7, roughly eight hundred meters east of the colony. The suits were bulky, pressurized to 29.6 kilopascals with a nitrogen-oxygen mix, insulated against surface temperatures that currently stood at minus sixty-three Celsius. Each suit carried six hours of life support. Each suit had been used hundreds of times beyond its design life. Each suit was one micrometeorite puncture, one seal failure, one battery malfunction away from becoming a coffin.
+
+This was the calculus of Mars. Everything was simultaneously mundane and lethal. You checked your seals and you went to work and you tried not to think about the fact that the only thing between you and the void was a layer of composite fabric and polymer that was never meant to last this long.
+
+"Team is at the shaft," Ravi's voice crackled over the comm. The delay was negligible at this distance -- radio waves moved at the speed of light, and eight hundred meters was nothing. It was only when you talked to Earth that the delay became existential: between four and twenty-four minutes each way, depending on orbital positions. Conversations with Mission Control weren't conversations. They were serial monologues, separated by gulfs of silence that made every exchange feel like shouting into a canyon and waiting to see if anything shouted back.
+
+"Copy, Ravi. Proceed with shaft expansion." Adaeze switched to the private command channel. "Priya, anything from Earth on the overnight batch?"
+
+"Personal correspondence, standard telemetry acknowledgments, and a news digest," Priya said. "No response to your resupply query. Again."
+
+"And the discovery notification?"
+
+"I sent it flagged priority one, as you directed. It'll reach Earth in about eight minutes at current distance. Response window opens in sixteen minutes minimum."
+
+Adaeze nodded. She'd debated whether to inform Earth at all -- the part of her that had learned political caution in the corridors of NASRDA whispered that information was leverage, and you didn't give away leverage without knowing who was listening. But protocol was clear, and more importantly, the discovery was too significant to conceal. If Ravi's readings were accurate, Colony Zero had just stumbled onto something that would reshape every scientific discipline, every philosophical framework, every theological tradition on Earth. That kind of information didn't belong to her. It belonged to the species.
+
+The hours that followed were a study in controlled anticipation. Adaeze split her attention between the excavation feed and the colony's routine operations, because routine operations didn't stop for paradigm-shifting discoveries. The greenhouses still needed tending. The water reclamation system still needed monitoring. Hab Beta's CO2 scrubbers still needed replacement. Two hundred people still needed to eat, breathe, sleep, and manage the thousand small crises that constituted daily life on Mars.
+
+She handled a dispute between two agricultural workers over greenhouse allocation. She reviewed and approved Tomasz's revised maintenance schedule. She declined a request from Karl Fischer for a formal colony-wide forum on "the future of the settlement," recognizing it for what it was -- a Returnist organizing tool dressed up as democratic process. She ate lunch standing up in the command center: reconstituted protein paste and hydroponic lettuce, the lettuce being the only fresh food the colony produced in quantities sufficient for regular consumption. It tasted like chlorophyll and mineral water. She ate it without tasting it.
+
+At 1423, Ravi's voice came through on the command channel, and she could hear something in it she'd never heard before. Ravi Patel, who had maintained an almost preternatural calm through dust storms, equipment failures, a near-fatal suit breach in year four, and the daily grind of doing science on a planet that actively resisted being understood -- Ravi sounded shaken.
+
+"Commander. You need to come out here."
+
+"Report, Ravi."
+
+"The shaft expansion is complete. We've reached the object's upper surface. And Commander--" A pause. She heard him breathing, the sound amplified by the suit microphone. "It's not just dense. It's warm. Whatever's down there, it's generating heat."
+
+Adaeze stared at the comm console. Her reflection stared back from the dark screen beside it: a forty-seven-year-old woman with close-cropped gray hair, deep brown skin mapped with fine lines from years of Martian ultraviolet that the habitat shielding didn't fully block, and eyes that had learned to show nothing while processing everything.
+
+"Define 'warm,'" she said.
+
+"Surface temperature of the object is twenty-two degrees Celsius. Ambient regolith temperature at that depth is minus forty. Commander, this thing is radiating thermal energy. It's been doing it for at least a hundred million years. And that's not -- that's not possible. No natural radioisotope decay profile produces a sustained thermal output at this level for that duration. Whatever is powering this, it's not physics as we understand it."
+
+The ventilation system wheezed. Somewhere in the hab, someone laughed at something -- a bright, human sound that felt like it came from a different universe.
+
+"I'm suiting up," Adaeze said. "Don't touch anything until I get there."
+
+"Commander -- one more thing."
+
+"Go ahead."
+
+"The sonar mapping is complete. The object isn't a slab. It's a structure. It has internal voids. Chambers." Another pause. Ravi's breathing. The thin whisper of Martian wind against his suit microphone. "Commander, I think it has a door."
+
+Adaeze closed her eyes. When she opened them, she was already moving.
+
+---
+
+The walk to shaft E-7 took eleven minutes in a pressure suit, across a landscape that never stopped being alien no matter how many times you crossed it. The regolith crunched beneath her boots -- a sound transmitted through the suit's ground contact, felt more than heard. The sky was the color of a bruise, salmon fading to purple at the zenith, and Phobos hung in the east like a misshapen coin, close enough that you could see it move if you watched long enough.
+
+Adaeze had walked this terrain hundreds of times, and it still made her heart beat faster. Not from fear -- she'd made her peace with Mars long ago -- but from the sheer, unrelenting strangeness of it. She had grown up in Lagos, a city of twenty million people, where the air smelled of diesel and suya smoke and the ocean, where the sky was a hazy blue obscured by the exhalations of human civilization. Here, the air was a near-vacuum of carbon dioxide, the ground was iron oxide rust, and the silence was so total that you could hear your own blood moving.
+
+She reached the shaft. Ravi and Kwame were standing at the rim, their helmet lights angled downward. The shaft had been expanded to three meters in diameter, braced with extruded aluminum supports, and descended into darkness. A work platform with a winch system had been rigged at the top.
+
+"Show me," Adaeze said.
+
+The descent took four minutes. The winch lowered them slowly, and Adaeze watched the strata of Mars pass by in the shaft walls: surface regolith, a layer of aeolian deposit, compacted basalt, more regolith, a seam of what looked like ancient sedimentary rock -- evidence of the water that had once flowed here, billions of years ago. And then, at forty meters, the wall of the shaft changed.
+
+She saw it before the helmet lights fully illuminated it. A surface that was too smooth, too regular, too precise to be natural. Dark -- not black, but a deep, lustrous gray, like polished graphite. The shaft had been widened at this depth to create a small work area, and the team had cleared roughly four square meters of the object's upper surface.
+
+It was flat. Perfectly, impossibly flat. Not the flat of eroded stone or settled sediment, but the flat of machined metal, of engineered surfaces, of intention.
+
+Adaeze knelt and placed her gloved hand against it. Even through the suit's insulation, she could feel it: warmth. Steady, gentle, unmistakable. Like pressing your hand against a living thing.
+
+"The density readings are confirmed across the entire exposed surface," Ravi said, crouching beside her. "Uniform. No variation. Whatever this material is, it's homogeneous at a level that doesn't occur in nature. And look--" He directed his helmet light to the edge of the cleared area, where the object's surface met the surrounding rock. "No transition zone. No weathering gradient. It's as if the regolith just... settled around it. Like the object was here first, and Mars grew over it."
+
+"Because it was," Adaeze said quietly. "And the door?"
+
+Ravi pointed to the far side of the work area. "Sonar shows a rectangular void in the object's surface, approximately two meters by one meter, extending inward. The material density drops to zero at that point -- it's open space. But there's a surface feature above it." He moved to the spot and brushed away a thin layer of remaining dust.
+
+Adaeze saw it. A seam. Ruler-straight, running horizontally across the object's surface, and below it a second seam running vertically, and together they delineated a rectangle that was exactly the proportions Ravi had described. Not a natural crack. Not a fracture line. A seam. Precise. Deliberate.
+
+A door.
+
+She stood up. Her heart was hammering now, and she let it. This was not a moment for composure. This was a moment for the full, overwhelming weight of what they were seeing.
+
+"Ravi," she said. "How old did you say the stratigraphic layer is?"
+
+"Minimum estimate: one hundred fifty million years. Maximum--" He shrugged, a gesture barely visible in the bulky suit. "I'd need more sophisticated dating. But the rock layer immediately above the object is consistent with late Amazonian period deposits. This thing could be five hundred million years old. It could be older."
+
+Five hundred million years. Before complex life existed on Earth. Before fish, before plants on land, before anything more sophisticated than worms and jellyfish. Someone -- something -- had built this structure beneath the surface of Mars and then left it here, warm and waiting, while the entire drama of terrestrial evolution played out 225 million kilometers away.
+
+"Get the full survey team down here," Adaeze said. "And Ravi -- I want a complete non-invasive analysis before we touch that door. Spectroscopy, thermal imaging, electromagnetic field readings, everything we have. We do this right."
+
+"Understood."
+
+She took one last look at the surface. Smooth. Warm. Patient.
+
+Then she keyed her comm to the private command channel. "Priya."
+
+"Here, Commander."
+
+"Any response from Earth yet?"
+
+A pause. "Negative. It's been six hours since our priority one transmission. We're well within the response window. There should have been something by now."
+
+Adaeze looked up through the shaft at the small circle of Martian sky visible at the top, pale and distant and empty.
+
+"Keep listening," she said. "And let me know the moment you hear anything. Anything at all."
+
+She began the ascent, rising slowly out of the darkness, leaving the warm impossibility below. And though she didn't know it yet -- though none of them knew it -- the silence from Earth had already begun.

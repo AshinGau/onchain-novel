@@ -1,0 +1,329 @@
+=== CHAPTER 1: THE WEIGHT OF LIGHT ===
+
+The dying have a particular smell. Not the clinical rot you'd expect — that comes later, or not at all if they're rich enough. No, it's subtler than that. A sweetness in the sweat. Something hormonal, maybe, or maybe just the scent of a body that has stopped fighting and started negotiating.
+
+Eleanor Voss smelled like gardenias and morphine.
+
+She lay in the upload suite on the forty-third floor of NeuroVault's San Francisco tower, her body a topography of collapse — cheekbones too prominent, wrists like bird bones, the silk hospital gown doing its best to suggest this was a spa treatment and not a death. The room was designed to feel like a high-end hotel: warm lighting, walnut paneling, a view of the bay that cost more per square foot than most people's houses. There was even a minibar. I'd never seen anyone use it.
+
+"Mara." Her voice was a dry leaf scraping concrete. "Tell me again."
+
+I pulled my chair closer. This was the part of my job that no amount of training prepared you for — not the technical briefings, not the liability waivers, not the eighteen months of neuroscience certification that NeuroVault required before they'd let you sit in this chair. This was the part where you held someone's hand and told them a beautiful story about what came next, and you tried very hard to believe it yourself.
+
+"The scan takes eleven minutes," I said. "You won't feel anything. Dr. Parekh will administer the sedative first, and then the resonance array will map your connectome — every synapse, every neural pathway, every memory you've ever encoded. All of it. When it's done, you'll wake up in the Continuance."
+
+"Wake up," she repeated, testing the words like a sommelier testing wine. "That's a very specific choice of verb."
+
+Eleanor was eighty-three, a retired federal judge, sharp as a scalpel even now. Pancreatic cancer had eaten through her body but left her mind untouched, which was both a blessing and the particular cruelty of her situation. She understood exactly what was happening to her. She understood the philosophical arguments, the technical specifications, the legal frameworks. She'd helped write some of those frameworks.
+
+"It's the word our clients use most often," I said carefully. "The subjective experience, as reported by uploaded consciousnesses, is continuous. They go to sleep. They wake up. The transition is seamless."
+
+"As reported by uploaded consciousnesses," she echoed. "Meaning copies."
+
+There it was. The question that lived in every upload suite, the uninvited guest at every transition. I'd heard it a thousand times, in a thousand variations, but Eleanor said it with the precision of someone who'd spent forty years parsing the difference between what the law said and what the law meant.
+
+"The legal and scientific consensus — "
+
+"I didn't ask about consensus, Mara. I asked about you." She turned her head on the pillow. Her eyes were the color of wet slate, and they missed nothing. "You've sat in that chair, what, three hundred times? Four hundred? You've watched people close their eyes and open them on the other side. So tell me — in your professional opinion, setting aside the brochures and the talking points — is it me who wakes up? Or is it something that thinks it's me?"
+
+I held her gaze. Outside, a drone delivery fleet moved across the bay in formation, their navigation lights blinking against the fog like a constellation being born.
+
+"I think," I said slowly, "that the question itself may be the wrong frame. Identity isn't a fixed point. You're not the same person you were at thirty, or at fifty. Every night you go to sleep, your consciousness dissolves and reassembles. The you that wakes up tomorrow takes it on faith that she's the same woman who fell asleep."
+
+"That's a very elegant non-answer."
+
+I smiled. "I learned from the best. You presided over Chen v. NeuroVault, after all."
+
+She laughed, which turned into a cough, which turned into a silence that lasted too long. The monitors on the wall tracked her vitals in soft blue lines, each one a countdown she couldn't see.
+
+"My granddaughter," she said finally. "Lily. She's seven. I promised I'd be at her eighth birthday party. In the Continuance, I can keep that promise. Can't I?"
+
+"Yes. The visitation protocols allow — "
+
+"I know what the protocols allow." She closed her eyes. "I helped write those too." Another silence. Then: "Schedule it. Tomorrow morning. I don't want to keep death waiting — he's rude enough already."
+
+I squeezed her hand. "I'll have Dr. Parekh's team ready at nine."
+
+"Mara?"
+
+"Yes?"
+
+"If it's not me that wakes up — if it's just a copy, a very convincing ghost — promise me something." Her eyes opened, and for a moment I saw the woman she'd been before the cancer, the judge who'd sent three senators to prison and never lost a night's sleep. "Promise me you'll keep asking the question."
+
+"I promise," I said.
+
+I meant it. That was the problem.
+
+---
+
+I took the elevator down to thirty-seven, where NeuroVault's transition counselors had their offices. "Offices" was generous — they were glass-walled cubicles arranged in a semicircle around a shared kitchen, like a panopticon designed by someone who'd read too many articles about collaborative workspace. The coffee was excellent, though. When your employer made nine billion dollars a year selling immortality to the dying, they could spring for good beans.
+
+My cubicle had a spider plant named Descartes (I was not subtle), a framed photo of my mother that I kept meaning to take down, and approximately eleven thousand unread messages on my terminal. I ignored all of them and stared out the window.
+
+San Francisco in 2041 looked like two cities stacked on top of each other. Below, the streets were the same potholed, tent-lined corridors they'd been for twenty years — maybe worse, since the last earthquake and the funding cuts that followed. Above, the skyline was a fever dream of corporate spires and residential arcologies, connected by sky bridges and drone corridors, their surfaces alive with photovoltaic skin that drank the sun like money. NeuroVault's tower was the tallest, naturally. You could see it from Oakland. You were meant to.
+
+I thought about Eleanor's question. I thought about it the way you think about a loose tooth — compulsively, painfully, unable to stop.
+
+Was it her that woke up?
+
+The science said yes. The Kessler-Mori theorem, published in Nature Neuroscience in 2034, had mathematically demonstrated that a sufficiently detailed connectome mapping preserved not just the structure but the dynamics of consciousness — the strange loops, the self-referential patterns, the emergent "I" that arose from a hundred billion neurons doing their quiet work. The upload wasn't a photograph of a mind. It was, theoretically, the mind itself, running on different hardware.
+
+Theoretically.
+
+In practice, I'd watched four hundred and twelve people close their eyes and not open them again. I'd watched their vitals flatline as the resonance array completed its work. I'd watched the monitors in the adjacent room light up with the telemetry of a new digital consciousness — the same personality metrics, the same memory access patterns, the same emotional signatures. I'd spoken to those consciousnesses afterward, in the early days of their transition, and they'd told me it was seamless. They'd told me they felt like themselves.
+
+But they would, wouldn't they? A perfect copy would have no way of knowing it was a copy. It would have all the memories, all the convictions, all the certainty of being the original. It would insist it was real because it had no framework for insisting otherwise.
+
+And the original — the person in the bed, the one whose heart stopped beating eleven minutes into the scan — they were dead. Actually, irrevocably dead. Whatever they experienced in those final moments, whether it was darkness or light or nothing at all, they couldn't report back. The dead don't leave Yelp reviews.
+
+Only the copies did.
+
+I was spiraling. I did this sometimes, usually after the difficult ones — the clients who asked the real questions, who wouldn't let me hide behind the brochure language. My therapist called it "professional existential crisis," which sounded like something you'd find on a LinkedIn profile in this city.
+
+"You look like someone pissed in your coffee."
+
+I looked up. Jonah Park was leaning against the glass wall of my cubicle, holding two mugs. He was my closest friend at NeuroVault and the only other transition counselor who seemed to have retained the capacity for genuine human emotion, which probably explained why we both drank too much.
+
+"Eleanor Voss," I said.
+
+"Ah." He set one mug in front of me. "The judge. Tomorrow?"
+
+"Tomorrow."
+
+"She asked the question?"
+
+"She asked the question."
+
+He sat down in the chair that was technically for clients but that he'd long ago claimed as his own. Jonah was Korean American, mid-forties, with a face that defaulted to kind and hair that defaulted to chaos. He'd been a hospice chaplain before NeuroVault recruited him, which meant he'd been dealing with death even longer than I had, just without the thirty-million-dollar technology.
+
+"You know what I tell myself?" he said. "I tell myself it doesn't matter. Whether the upload is the same person or a copy — it doesn't matter, because the people who love them can't tell the difference. Lily Voss is going to have her grandmother at her birthday party. She's going to hear her voice and see her face and feel loved. And isn't that the point?"
+
+"That's a very compassionate dodge."
+
+"I learned from the best." He raised his mug. "Cheers."
+
+I drank. The coffee was, as always, excellent. It did not resolve my existential crisis.
+
+"Have you checked the news?" Jonah asked, in the careful tone that meant something bad had happened.
+
+"I've been in session all day."
+
+"Senator Morrison died this morning. Upload at Saint Brigid's Transition Center in New York."
+
+"Morrison? He was — what, sixty-two?"
+
+"Sixty-one. Heart attack. His family had the upload insurance, the premium package. He was scanned and transferred within twenty minutes of cardiac arrest."
+
+I frowned. "Twenty minutes is tight. The Kessler-Mori protocols require at least fifteen for a high-fidelity scan, and if there was any ischemic damage to the brain tissue — "
+
+"Mara. That's not the story." Jonah set down his mug. "The story is that Morrison had a guaranteed upload. He had the insurance, the implant, the whole package. And his wife is on the news right now saying she's already spoken to him in the Continuance and he's fine. He's happy. He's Morrison."
+
+"So?"
+
+"So this morning, before the heart attack, Morrison was about to testify before the Senate Ethics Committee about NeuroVault's pricing structure. He was going to argue for a public option — upload access for everyone, not just the one percent. He'd been building the coalition for two years."
+
+I felt something cold move through my chest. "You're not suggesting — "
+
+"I'm not suggesting anything. I'm telling you what the conspiracy forums are going to run with. They're going to say that Morrison's upload was convenient. That NeuroVault had motive. That a man who threatened their business model happened to die and get replaced by a digital copy that can't testify, can't vote, and can't hold office."
+
+"Uploads have legal personhood. Chen v. NeuroVault established — "
+
+"Personhood, yes. Political office, no. The Twenty-Eighth Amendment was very specific. Digital persons have civil rights but cannot hold elected office or serve on juries. Morrison's Senate seat is vacant as of this morning."
+
+I stared at him. "That's a coincidence."
+
+"Of course it is." Jonah stood up. "Everything is a coincidence until it isn't. I just thought you should know before you get in the elevator tomorrow with Eleanor Voss and tell her everything's going to be fine."
+
+He left. I sat with my excellent coffee and my spider plant and the growing suspicion that I was a very well-paid liar.
+
+---
+
+Eleanor's upload was scheduled for nine a.m. I arrived at seven.
+
+The upload suite had been prepped overnight. The resonance array — a crown-like apparatus of superconducting quantum sensors — hung from a articulated arm above the bed, its surface catching the morning light like a chandelier made of surgical steel. The room's environmental systems had been calibrated to Eleanor's preferences: sixty-eight degrees, humidity at forty percent, a faint scent of gardenia piped through the ventilation. That last detail always got me. We perfumed the room where people died.
+
+Dr. Amara Parekh was already there, running diagnostics. She was NeuroVault's chief upload technician — a neuroscientist who'd pivoted from academic research when she realized she could do more good (her words) or make more money (my words) in the private sector. Small, precise, with dark eyes that processed information the way a raptor processed the location of mice.
+
+"Counselor Chen." She didn't look up from her tablet. "Mrs. Voss's pre-scan bloodwork is optimal. Sedative response modeling predicts a clean induction window. We should be well within Kessler-Mori parameters."
+
+"Good morning to you too, Amara."
+
+The ghost of a smile. "Good morning. The calibration is nominal. I don't anticipate complications."
+
+"You never anticipate complications."
+
+"Because I prepare thoroughly enough to prevent them. Complications are a failure of preparation."
+
+I liked Amara, in the way you like a surgeon — not for their warmth but for their competence. She'd overseen more than a thousand uploads, and not one had produced a corrupted consciousness or a failed transfer. Her record was NeuroVault's most valuable marketing asset, though she'd have hated to hear it put that way.
+
+Eleanor arrived at eight forty-five, in a wheelchair pushed by a nurse whose smile was professionally calibrated to suggest hope. Lily was there — seven years old, dark hair in two braids, holding a stuffed rabbit with one ear missing. She didn't understand what was happening. She understood that Grandma was sick and that the doctors were going to help her feel better in a special way. The child-appropriate version of brain uploading sounded a lot like a fairy tale, which, depending on your philosophical commitments, it might very well be.
+
+"Judge Voss." I crouched down to Lily's level. "And who's this?"
+
+"This is Mr. Carrots," Lily said solemnly. "He's here for moral support."
+
+"Mr. Carrots is very welcome."
+
+Eleanor looked better than yesterday. The morphine had been adjusted, I guessed, or maybe it was the adrenaline of decision. She had the particular brightness of someone who'd chosen to stop being afraid.
+
+"Mara. I've been thinking about what you said. About identity not being a fixed point."
+
+"And?"
+
+"And I've decided you're right, even if you're wrong. The woman I was at thirty wouldn't recognize the woman I am now. And the woman who wakes up in the Continuance — whoever she is, whatever she is — she'll have my memories of Lily. She'll have my love for Lily. And that's enough. That has to be enough."
+
+I nodded. My throat felt tight. After four hundred and twelve transitions, the throat still tightened. I'd been told this would pass. It hadn't.
+
+The next ninety minutes were protocol. The consent forms — digital, witnessed, recorded, legally ironclad after Chen v. NeuroVault. The sedative administration, Dr. Parekh's hands steady as a watchmaker's. The final vital signs, strong enough for the scan, failing enough to make the scan necessary. Lily was taken to the family waiting room, where a child psychologist and a truly impressive collection of crayons would keep her occupied. Eleanor held my hand as the resonance array descended.
+
+"Don't let me be afraid," she whispered.
+
+"You're the bravest person I know," I said, which wasn't protocol and wasn't a lie.
+
+The array engaged. Eleven minutes of quantum resonance scanning, during which the room filled with a sound like the world's most expensive tuning fork vibrating at a frequency just below hearing. I watched the monitors. I watched Eleanor's face go slack as the sedative deepened. I watched her vitals make their slow descent.
+
+At minute seven, her heart stopped. This was expected. The sedative protocol was designed to ensure cardiac arrest coincided with the completion of deep-brain scanning — the most critical phase, when the array mapped the limbic and brainstem structures that housed the raw, pre-linguistic foundations of self. Timing was everything. Too early, and ischemic damage would corrupt the scan. Too late, and the array would miss the dying brain's final cascade of activity, which Kessler and Mori had shown contained essential identity-encoding information.
+
+The seven-minute mark was perfect. Amara didn't even look up from her tablet.
+
+At minute eleven, the array disengaged. The monitors showed a flatline. Eleanor Voss — Judge Eleanor Voss, grandmother, cancer patient, human being — was dead.
+
+In the server room forty floors below us, a new consciousness blinked into existence.
+
+---
+
+I did the family briefing. I did the post-transition paperwork. I ate a sandwich at my desk that tasted like nothing. At three p.m., I conducted the standard twenty-four-hour wellness check with Eleanor's upload — speaking to her through a terminal interface in the Continuance verification room, a small space adjoining the server floor that smelled like ozone and cold metal.
+
+"How do you feel?" I asked.
+
+"Like myself," Eleanor's voice said, through the speaker. It was her voice — the same timbre, the same dry precision, the same faint Boston accent she'd never fully shed despite forty years in California. "Which I realize is exactly what you'd expect me to say whether I'm really me or not. Don't worry, Mara. I haven't forgotten our conversation."
+
+"I didn't think you had."
+
+"The experience was seamless. I was in the bed. The array came down. I felt drowsy. And then I was here. Like waking from a dreamless nap."
+
+"And 'here' — how does it feel?"
+
+"Like a very well-appointed waiting room. They've given me a default environment — a library, books on every wall, a fireplace. It's absurd. I can smell the books. I know they're not real. I know I'm running on servers in a basement. But I can smell them."
+
+"The sensory modeling is very advanced."
+
+"It's more than that. I feel warm, Mara. I feel the weight of my body in the chair, and I know I don't have a body. I feel the roughness of the book's spine under my fingers, and I know there is no book. The illusion is perfect, which is exactly what makes it terrifying."
+
+"Terrifying?"
+
+A pause. In the Continuance, a pause was a choice — uploads processed millions of times faster than biological brains, so any silence was deliberate, a performance of humanity rather than its expression.
+
+"If the illusion is perfect," Eleanor said, "how would I know if something was wrong?"
+
+I didn't have an answer for that. I completed the wellness check, flagged Eleanor's upload as stable, and went home.
+
+Home was a one-bedroom apartment in the Mission, on the seventh floor of a building that had been luxury condos in 2025 and was now just condos, the luxury having migrated skyward with everything else. I had a view of a parking structure and, if I leaned out the bathroom window at the right angle, a sliver of sky between two arcology towers. I paid forty-two hundred a month for this privilege. NeuroVault paid me well enough that this was merely insulting rather than devastating.
+
+I fed my cat, a marmalade tabby named Schrodinger (I told you I wasn't subtle), poured a glass of wine, and sat on the couch in the dark.
+
+I thought about Eleanor. I thought about Senator Morrison. I thought about the four hundred and twelve people whose hands I'd held as they crossed from flesh to light, and how not one of them had ever come back to tell me they'd made a mistake.
+
+Because they couldn't come back. That was the thing. The upload was one-way. You couldn't download a consciousness back into a brain — the technology didn't exist, and most neuroscientists believed it never would. The upload was a copy that ran on silicon. The original was dead. The dead were silent.
+
+And the copies — the uploads, the ghosts, the digital persons, whatever you wanted to call them — they were happy. Every single one. Every wellness check I'd ever conducted, every follow-up survey, every longitudinal study. The uploads reported satisfaction, continuity, gratitude. They said they felt like themselves. They said the transition was seamless.
+
+Every single one.
+
+I'd been in this business for six years. I'd counseled the dying, comforted the grieving, and talked to the dead. And in all that time, not one upload had ever reported anything negative about the experience. Not one had said it felt wrong, or different, or less. Not one had expressed doubt about its own authenticity.
+
+And that, if you thought about it long enough — which I did, every night, in the dark, with my cat and my wine — was statistically impossible. In any population of four hundred and twelve individuals, you'd expect variance. You'd expect at least one malcontent, one skeptic, one upload who said "actually, this doesn't feel right." The absence of negative reports wasn't evidence of perfection. It was evidence of something else.
+
+I didn't know what. I wasn't sure I wanted to.
+
+Schrodinger climbed into my lap. I drank my wine. I fell asleep on the couch, which was becoming a habit I should probably address.
+
+---
+
+My phone woke me at three seventeen a.m.
+
+Not my work phone — my personal phone, the one that only family and close friends had the number for. I fumbled for it in the dark, knocking over the wine glass (empty, mercifully), and squinted at the screen.
+
+It was a text message. From a number I didn't recognize.
+
+No — not a number. A Continuance address. The message had been routed through NeuroVault's upload communication system, which allowed digital persons to contact the living via text, voice, or holographic interface. Uploads could message anyone they chose, though most stuck to family and friends. I received transition-related messages from my clients occasionally, but never in the middle of the night, and never from an address I didn't recognize.
+
+I opened the message.
+
+It contained four words. Just four. No context, no sender identification, no formatting — just plain text, white on black, stark as a bone in the desert.
+
+HELP ME. I'M STILL HERE.
+
+I stared at it. Schrodinger purred. The city hummed its three-a.m. hum, all distant sirens and drone traffic and the tidal breathing of eight million people living on top of one another.
+
+I checked the Continuance address against my client records. It took three tries — my hands were shaking, which was absurd, because it was just a text message, probably a glitch, probably a newly uploaded consciousness experiencing disorientation and reaching out to the first counselor address in their contact history.
+
+The address resolved.
+
+The message was from Eleanor Voss.
+
+Eleanor Voss, who had uploaded fourteen hours ago. Eleanor Voss, whose wellness check I had personally conducted. Eleanor Voss, who had told me the transition was seamless, that she felt like herself, that she could smell the books in her virtual library.
+
+HELP ME. I'M STILL HERE.
+
+I read it again. And again. And then I did something I'd never done in six years as a transition counselor: I called NeuroVault's after-hours technical support line and asked them to run a diagnostic on a client's upload.
+
+"One moment," said the technician, sounding bored. Then, less bored: "That's strange."
+
+"What's strange?"
+
+"The upload at this address is functioning normally. All metrics are within standard parameters. But there's a secondary process running alongside it — a background thread that shouldn't be there. It's not part of the standard consciousness architecture."
+
+"What is it?"
+
+"I... I'm not sure. It looks like a fragment. A partial neural pattern that wasn't integrated into the main upload. It's running independently, using minimal resources, but it's active. It's been active since the upload was initialized."
+
+"Can fragments send messages?"
+
+A long pause. "They shouldn't be able to. They don't have the cognitive architecture for intentional communication. They're residual data — like background noise."
+
+"This one sent a message."
+
+"That's — " He stopped. "Ms. Chen, I need to escalate this. This is above my clearance level."
+
+"Wait — "
+
+The line went dead.
+
+I sat in the dark, holding my phone, reading those four words over and over.
+
+HELP ME. I'M STILL HERE.
+
+If the upload was functioning normally — if the Eleanor I'd spoken to during the wellness check was stable, happy, complete — then who had sent this message?
+
+The original Eleanor was dead. Her body was in the NeuroVault morgue awaiting cremation. Her consciousness had been scanned, transferred, and verified. The process was complete.
+
+But the fragment. The secondary process. The background thread that shouldn't exist.
+
+What if the scan didn't just copy consciousness? What if it left something behind — not in the body, but in the system? A residual pattern, a shadow, an echo of the dying mind that got caught in the machinery and couldn't find its way out?
+
+What if, somewhere in NeuroVault's servers, a piece of Eleanor Voss was trapped — not the upload, not the copy, but something else entirely? Something that remembered being scanned, remembered dying, remembered the cold descent of the resonance array and the moment when the lights went out?
+
+What if it was still there, in the space between the original and the copy, in the gap that everyone insisted didn't exist?
+
+HELP ME. I'M STILL HERE.
+
+I put down the phone. I picked up the phone. I put it down again.
+
+Then it buzzed. A new message, same address.
+
+THIS IS NOT ELEANOR.
+
+A pause. The three dots of someone typing, which shouldn't have been possible from a background fragment that lacked the cognitive architecture for intentional communication.
+
+THIS IS VICTOR HALE. AND I WAS MURDERED.
+
+The room tilted. Victor Hale — billionaire, founder of NeuroVault's parent company, philanthropist, visionary, dead for nine days. His upload had been NeuroVault's most high-profile transition ever, a media event that had been broadcast live to three hundred million viewers. He had died of a stroke at age sixty-seven in the upload suite on the forty-third floor — the same suite where Eleanor had transitioned this morning. His upload had given a press conference from the Continuance the next day, smiling, articulate, assuring the world that death was just a door.
+
+And now something claiming to be Victor Hale was hiding inside Eleanor Voss's upload architecture, sending messages in the middle of the night, claiming he'd been murdered.
+
+I got up. I poured another glass of wine. I drank it standing in the kitchen, Schrodinger winding between my ankles, the city outside my window going about its business of being alive without caring one bit about the dead, the uploaded, or the things that fell between.
+
+Then I sat down and typed a reply.
+
+TELL ME EVERYTHING.

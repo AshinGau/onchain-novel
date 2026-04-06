@@ -1,0 +1,282 @@
+=== CHAPTER 2: THE GEOMETRY OF THE IMPOSSIBLE ===
+
+
+Ravi Patel had spent his adult life studying dead worlds, and he thought he understood what that meant.
+
+Mars was a corpse. Not a metaphor -- a literal description. The planet had once been alive in the geological sense: tectonically active, magnetically shielded, wrapped in an atmosphere thick enough to sustain liquid water. Then it had died. The core cooled, the magnetic field collapsed, the solar wind stripped the atmosphere molecule by molecule over hundreds of millions of years, and the water either froze or evaporated into space. What remained was a husk: beautiful, complex, geologically fascinating, but dead. Understanding Mars meant understanding death on a planetary scale, and Ravi had made peace with that. He found it intellectually satisfying in the way that any complete system was satisfying, even a system whose final state was entropy.
+
+Now, kneeling on a surface that was warm to the touch forty meters beneath the Martian regolith, surrounded by equipment that was measuring things his education said shouldn't exist, he was being forced to confront the possibility that his understanding was wrong. Not incomplete -- he was comfortable with incomplete; all scientific understanding was incomplete by definition. Wrong. Fundamentally, categorically wrong in a way that meant the dead world he'd spent seven years studying was not, had never been, what he thought it was.
+
+The excavation had been underway for seventy-two hours. Ravi's team -- now expanded to eight, with Adaeze's authorization -- had cleared a working area of approximately twenty square meters on the object's upper surface. They had erected a pressurized work tent over the shaft opening, which meant they could operate without full EVA suits, though they still wore respirators and thermal gear. The tent's heating elements brought the air temperature to a tolerable five degrees Celsius, supplemented by the steady warmth radiating from the object itself.
+
+Twenty-two degrees. The number had not changed in three days of continuous monitoring. Not 21.8, not 22.3. Twenty-two point zero zero, to the limit of their instrument precision. As if the object was maintaining a set point. As if it was thermostatically controlled.
+
+"Ravi." Sasha Volkov's voice, muffled by her respirator, came from the far end of the excavation area. She was crouched over a portable spectrometer, her pale face illuminated by the instrument's readout screen. "You need to see these results."
+
+He crossed the exposed surface carefully -- they'd laid down a grid of non-conductive matting to protect it, though from what, he wasn't sure -- and looked over Sasha's shoulder.
+
+"X-ray fluorescence," she said, pointing to a spectral analysis displayed on the screen. "I've run it six times. The results are consistent and they make no sense."
+
+"Walk me through it."
+
+"The surface material is primarily composed of iridium, osmium, and rhenium -- all platinum-group metals, all extremely dense, which explains the 19,300 reading. But the isotopic ratios are wrong. On Earth, iridium-191 and iridium-193 occur in a roughly 37-to-63 ratio. This material has them at exactly 50-50."
+
+Ravi stared at the numbers. "That's not natural."
+
+"It's not possible. Not through any geological process, not through any industrial process I'm aware of. To achieve a perfect 50-50 isotopic ratio, you'd need to separate individual atoms and reassemble them. Even our most advanced mass separation techniques on Earth can't do that at bulk scale." She looked up at him. "Ravi, this material was manufactured. Atom by atom."
+
+He took the spectrometer and ran the scan again himself. The same results. He moved to a different spot on the surface -- three meters away -- and ran it again. Identical. The material was not merely artificial; it was artificial at a level of precision that exceeded anything human civilization could achieve. And it had been sitting under the Martian surface since before the dinosaurs.
+
+"Log it," he said. "And send the data to Commander Obi. Priority channel."
+
+He stood and surveyed the excavation. The exposed surface was dark gray, almost black in the work tent's LED lighting, and it had a quality that he could only describe as depth -- not transparency, but a sense that the surface extended inward, as if you were looking at the topmost layer of something unfathomably thick. Under the grid matting, it was smooth to the point of abstraction. When they'd tested surface roughness, the profilometer had returned readings at the single-nanometer level. Smoother than any optical mirror. Smoother than any material science could produce.
+
+And then there were the patterns.
+
+They'd found them on the second day, after clearing a larger area. The surface wasn't entirely uniform. Incised into it -- or rather, emerging from it, as if grown rather than carved -- were lines. Fine, precise lines that formed geometric figures: circles, triangles, hexagons, interlocking and overlapping in arrangements that seemed to shift depending on the angle of observation. Not optical illusions -- the lines were physically present, measurable with calipers -- but the brain's interpretation of their arrangement changed as you moved around them. From one angle, a cluster of hexagons. From another, the same lines formed a spiral. From a third, something that almost looked like writing.
+
+And the lines were warm. Warmer than the surrounding surface by precisely 0.7 degrees. Not hot -- you couldn't feel the difference through a glove -- but the thermal imaging cameras showed them clearly: a web of faintly glowing geometry spread across the object like a circuit diagram drawn by something that thought in shapes humans could almost but not quite comprehend.
+
+Ravi had spent hours staring at those patterns, photographing them, measuring them, trying to find a mathematical key. He'd identified what he believed were recursive structures -- smaller versions of larger patterns nested within them, like fractals, but with a regularity that fractals in nature didn't possess. Natural fractals were self-similar but noisy. These were self-similar and perfect. Every iteration identical to the last, down to the nanometer.
+
+He was a geologist. He studied rocks and minerals and the processes that formed them. He was not qualified for this. Nobody was qualified for this. This was a problem for which the qualification didn't exist, because the problem itself had been, until seventy-two hours ago, impossible.
+
+He pulled out his personal recorder -- a habit from his graduate days, talking through problems aloud -- and spoke quietly into it.
+
+"Day three of excavation. Surface analysis continues to defy explanation. Material composition suggests manufacturing capability far beyond current human technology. Isotopic ratios indicate atom-level precision. Surface geometry displays recursive mathematical properties that may encode information, though the encoding system -- if it is one -- doesn't correspond to any known mathematical framework. Thermal output remains constant at 22.0 degrees Celsius. The door structure identified on day one remains sealed. Non-invasive imaging suggests internal chambers extending at least thirty meters below the upper surface, but ground-penetrating radar returns are confused by the material's density. We are seeing the outside of something very large, and we cannot see inside."
+
+He paused, then added: "I am experiencing a persistent sense of being observed. I am recording this because I want a clear record that this is a subjective impression, not a data point. There is no evidence of active scanning, no electromagnetic emissions beyond the thermal output, no indication that the object is aware of our presence in any way. But the feeling persists. I note it for completeness."
+
+He clicked off the recorder and went back to work.
+
+---
+
+Yuki Tanaka set up a field medical station in the pressurized tent on the second day, after her initial assessment of the excavation team showed elevated cortisol levels, disrupted sleep patterns, and what she clinically categorized as "heightened sympathetic nervous system activation" -- which, in less clinical terms, meant that everyone who spent time near the object was scared in a way that they couldn't fully articulate and that didn't diminish with familiarity.
+
+This was, she reasoned, an appropriate physiological response to proximity to something that shouldn't exist. Fear was an adaptive mechanism, and in this case, it was adapting to the correct stimulus. The human nervous system had evolved to respond to predators, heights, darkness, and social threats. It had not evolved to respond to alien artifacts buried beneath the surface of another planet. That it was responding at all -- that the excavation team's amygdalae were firing distress signals in the presence of a warm, silent, geometrically patterned surface -- suggested either a remarkable flexibility in the human threat detection system or something about the object itself that registered as threatening on a level below conscious awareness.
+
+Yuki was interested in both possibilities, but she could only study the first. She didn't have instruments for the second.
+
+"Deep breath," she told Kwame Asante, who was sitting on the fold-out examination bench while she measured his blood pressure. The big structural engineer complied, his chest expanding against the thermal suit. "And out."
+
+"Am I dying?" Kwame asked, with the particular humor of people who asked that question frequently on Mars and always half-meant it.
+
+"Your blood pressure is elevated. 142 over 91. Your resting heart rate has increased from your baseline of 68 to 79. You've lost one point two kilograms since the excavation began, which given the physical demands of the work is expected, but I want you eating more." She removed the cuff. "How are you sleeping?"
+
+"I'm not," he said, matter-of-factly. "I lie down, I close my eyes, I see the patterns. Those lines on the surface. They keep... arranging themselves. In my head. Like my brain is trying to solve them."
+
+"That's called hypnagogic imagery. It's common when you've been staring at complex visual stimuli for extended periods. Your visual cortex is replaying and processing what it's seen."
+
+"I know what hypnagogic imagery is, Doc. I had it when I was studying for my structural engineering exams -- I'd see load-bearing calculations in my sleep. This is different."
+
+"Different how?"
+
+Kwame hesitated. He was a careful man -- Yuki had always appreciated that about him. He didn't say things he didn't mean, and he didn't speculate casually. When he spoke again, he chose his words with visible deliberation.
+
+"When I studied for exams, my brain was replaying things I'd already learned. Rearranging existing knowledge. This feels like my brain is trying to learn something new. Like the patterns are teaching it something, and it's struggling to keep up." He paused. "I know how that sounds."
+
+"It sounds like a description of cognitive processing under novel stimulus conditions," Yuki said, keeping her voice neutral. "Your brain is encountering visual data that doesn't fit existing categories, so it's working harder to integrate it. That's normal and expected."
+
+"Is it normal that Sasha's experiencing the same thing? And Jin-ho? And Ravi?"
+
+Yuki didn't answer immediately. She had, in fact, already documented identical reports from all four excavation team members. Hypnagogic imagery of the surface patterns, with the consistent subjective impression that the imagery was pedagogical -- teaching, not merely replaying. She had categorized it as a shared response to shared stimuli, which was the clinically responsible categorization.
+
+But she had also spent forty minutes the previous night, alone in her medical bay, looking at the photographs Ravi had sent her of the surface patterns, and she had felt something. Not fear. Not the sympathetic activation she was documenting in the excavation team. Something closer to recognition. As if the shapes were almost familiar, as if she had seen them before in a context she couldn't place. The feeling was brief and she had dismissed it as pattern-matching apophenia -- the human brain's tendency to perceive meaning in random stimuli. But it had lingered.
+
+"Get some rest," she told Kwame. "I'm going to recommend reduced shifts for the excavation team. Eight hours maximum exposure per day."
+
+"You think the object is affecting us?"
+
+"I think you're working in a high-stress, novel environment with insufficient sleep and elevated cortisol, and I think those conditions affect cognition and perception in well-documented ways. The object is a stimulus, not a cause." She handed him a foil packet. "Melatonin. Take two milligrams thirty minutes before you intend to sleep. And eat."
+
+Kwame took the packet, nodded, and ducked out of the field station. Yuki watched him go, then turned to her medical log and stared at it for a long time before typing:
+
+_Observation: All excavation team members reporting hypnagogic imagery consistent with intense visual processing. Subjective reports include unusual quality of "instruction" or "communication." No objective evidence of external cognitive influence. Recommend continued monitoring. Note to self: I am experiencing similar phenomena after brief exposure to photographic documentation. Confounding factor: I am aware of team reports and may be experiencing confirmation bias. Will attempt blinded review of imagery to control for suggestion effects._
+
+She saved the entry, encrypted it per medical confidentiality protocols, and looked at her left hand. The tremor was worse today. Stress, probably. Everything was stress, here. Mars itself was a chronic stressor from which there was no relief, no vacation, no respite. You woke up stressed and you went to sleep stressed and the only variable was the intensity.
+
+She pressed her hand flat against the desk. Held it there. Went back to work.
+
+---
+
+On the fourth day, they opened the door.
+
+It wasn't intentional. Ravi's protocol called for at least another week of non-invasive study before attempting to access the interior -- assuming they could determine how to access the interior at all. The seams he'd identified were visible but featureless; there was no handle, no mechanism, no obvious means of operation. The working hypothesis was that the door, if it was a door, might require a key or tool or technology they didn't possess.
+
+The hypothesis was wrong.
+
+Sasha was the one who triggered it. She was taking close-range photographs of the pattern lines near the seam, using a macro lens pressed almost against the surface, when her gloved hand brushed one of the geometric figures directly -- not through the non-conductive matting, but skin-to-surface through a tear in her outer glove that she hadn't noticed.
+
+The effect was immediate.
+
+The lines brightened. Not dramatically -- the change was subtle enough that, in a well-lit environment, you might have missed it. But in the perpetual dimness of the excavation tent, where the LED work lights cast hard shadows and the only other illumination came from equipment screens, the change was unmistakable. The geometric patterns flared from their baseline faint warmth to a visible luminescence, a soft amber glow that traced the network of lines across the exposed surface like veins lighting up with circulating energy.
+
+Sasha jerked her hand back. "It's -- I touched it, it's--"
+
+"Everyone stop," Ravi said, his voice sharp with the particular authority of a scientist whose experiment had just departed from the protocol. He was already moving toward Sasha, his eyes on the surface. The glow was spreading. It started from the point of contact and moved outward in waves, each wave illuminating a wider circle of pattern lines, and where the waves reached the seam lines of the door, they concentrated.
+
+The seams began to glow brighter than the surrounding surface. The amber deepened to gold. And then, with a sound that Ravi would later describe as "like a sigh made of stone," the door opened.
+
+Not swung open. Not slid open. The material within the seam boundaries simply ceased to be solid. One moment it was there -- the same impossibly dense, impossibly smooth surface as everything else -- and the next, it was... absent. The rectangle defined by the seams was now an opening, roughly two meters by one meter, leading into darkness.
+
+Warm air flowed out. Not Martian air -- Ravi's suit sensors registered it immediately: nitrogen-oxygen mix, approximately twenty-one percent O2, temperature twenty-two degrees Celsius, humidity forty percent. Breathable. Earth-standard. Flowing from a chamber that had been sealed beneath the Martian surface for a hundred million years minimum.
+
+"Nobody move," Ravi said. His voice was steady, but his hands were trembling. He activated his suit radio. "Commander Obi, this is Patel. The structure is open. Repeat: the structure has opened. We need you down here immediately."
+
+The silence that followed -- ten seconds, fifteen -- felt geological.
+
+"On my way," Adaeze's voice said. "Do not enter. Do not approach the opening. Ravi, is everyone safe?"
+
+"Affirmative. Sasha made inadvertent contact with the surface. The structure responded. No one is injured."
+
+"Hold position."
+
+Ravi held position. He stood three meters from the opening, flanked by Sasha and Kwame, and he looked into the darkness beyond the threshold. His helmet light penetrated perhaps five meters before the beam seemed to be absorbed -- not reflected back, not scattered, just gently consumed. But in those five meters, he could see the beginning of what lay inside.
+
+Walls. Smooth, made of the same dark material as the exterior surface. And on those walls, more patterns. But not the fine geometric lines of the outer surface. These were larger. Bolder. And they were moving.
+
+Not physically -- the material was static. But the luminescent glow that had spread across the outer surface had penetrated the interior, and the wall patterns were cycling through configurations. Shapes formed, held, dissolved, reformed. Circles became hexagons became spirals became something that looked like a branching tree became something that looked like a wave became something that Ravi's visual cortex absolutely refused to process, a shape that occupied three dimensions in a way that his brain insisted was wrong, that turned corners that didn't exist, that folded in on itself and emerged somewhere else.
+
+He looked away. His heart was pounding. Kwame had taken a step back, and Sasha was standing very still with her eyes closed.
+
+"Are you all right?" Ravi asked her.
+
+"I'm fine," she said, without opening her eyes. "It's the same shapes. The ones I've been seeing when I try to sleep. They're the same shapes, Ravi."
+
+He didn't know what to say to that. He waited for the Commander.
+
+---
+
+Adaeze arrived in fourteen minutes, which she'd spent descending the shaft while simultaneously receiving a compressed briefing from Ravi, issuing orders to Tomasz to seal the hab observation ports (she didn't want the rest of the colony seeing unusual activity at the excavation site), and trying to process the fact that the artifact had just responded to human touch by opening a door and exhaling Earth-standard air.
+
+She stood at the edge of the opening and felt the warm air on her face. She'd removed her helmet -- the atmosphere readings were confirmed, the air was breathable -- and the sensation was surreal: standing in a pressurized tent on Mars, forty meters underground, breathing air that came from inside an alien structure, and the air was better than what they breathed in the habs. Cleaner. Warmer. It smelled of nothing -- not recycled, not filtered, not the faint metallic taint that every breath in Colony Zero carried. Just... air. Pure, unremarkable, impossible air.
+
+"Talk to me, Ravi."
+
+"The structure has an internal atmosphere that appears self-sustaining. Nitrogen-oxygen at Earth-standard ratios. No detectable toxins, no pathogens in the preliminary bio-scan. The air has been in there for a minimum of one hundred fifty million years, and it's fresh."
+
+"That's not possible."
+
+"Correct. It's not possible. It's happening." He gestured toward the opening. "The interior geometry is..." He trailed off, unusual for him. Ravi always had words. "Commander, I think you need to see it."
+
+She looked at the opening. The warm air. The faint amber glow from within, painting the threshold in light that seemed to pulse with a rhythm that was almost -- not quite -- like breathing.
+
+"Safety protocol," she said. "Tethered entry, two people, ten-minute limit. Full suit with independent air supply regardless of the internal atmosphere -- we're not trusting alien air. Continuous communication with the surface. Ravi, you're with me. Kwame, you're anchor. If we lose comms for more than thirty seconds, you pull us out."
+
+"Understood," Kwame said. He looked relieved to have a job that didn't involve entering the structure.
+
+They suited up. Tether lines secured to the winch. Helmet lights on, cameras recording. Adaeze stepped over the threshold first, because that was what commanders did: they went first into the unknown so that others could follow into the known.
+
+The interior was larger than the sonar mapping had suggested. The ceiling -- visible in the helmet light -- was four meters high, arching gently, and the walls extended forward into darkness that swallowed the light beam at what Ravi estimated was twenty meters. The floor was the same material as everything else: dark, smooth, warm. Their boots made no sound on it. The tether line trailed behind them, the only connection to the world above.
+
+The walls were alive with patterns.
+
+That was the wrong word -- nothing here was alive. But the patterns moved. The luminescent lines cycled through configurations that were, Adaeze realized, responding to their presence. As she and Ravi moved deeper into the structure, the wall patterns near them brightened while patterns behind them dimmed. The structure was tracking them. Not with sensors or cameras or any mechanism she could identify, but with the patterns themselves, which flowed along the walls in a wave that followed their progress like a spotlight.
+
+"Are you recording this?" she asked Ravi.
+
+"Everything. Commander -- look at the floor."
+
+She looked down. The floor, which had been featureless at the entrance, now displayed patterns of its own. Not the same as the walls -- these were simpler, more orderly. Lines radiating from where they stood, extending deeper into the structure. Like a path. Like directions.
+
+"It's guiding us," Ravi said. There was wonder in his voice, and beneath it, the thin edge of fear.
+
+"Or herding us," Adaeze said. "We follow the path. Six more minutes."
+
+They walked. The corridor -- it was clearly a corridor now, not a chamber -- extended straight ahead, then opened into a larger space. A room. Roughly circular, perhaps fifteen meters in diameter, with a ceiling that rose to a dome six meters overhead. And in the center of the room, a structure.
+
+It rose from the floor like a pillar, two meters tall, half a meter in diameter, made of the same dark material but with a surface entirely covered in the luminescent pattern lines. And unlike the walls, where the patterns cycled through multiple configurations, this pillar displayed a single stable image.
+
+It took Adaeze several seconds to understand what she was seeing. The pattern was three-dimensional -- rendered on the pillar's curved surface but creating the illusion of depth, like a hologram etched in light. It depicted a sphere. And on that sphere, continents. Oceans. Cloud patterns.
+
+"Ravi," she breathed.
+
+"I see it."
+
+It was Earth. Not a photograph -- a diagram, a schematic, rendered in the geometric visual language of whoever had built this place. But unmistakably Earth. The continents were wrong -- arranged in configurations that Adaeze didn't recognize, that didn't match any current or historical geography she knew. Pangaea? No -- the shapes were different. Something older, or something other.
+
+"Those aren't modern continents," Ravi said, his voice hushed, analytical even through the awe. "And they're not Pangaea. The configuration -- if I'm reading this right -- it looks like Rodinia. The supercontinent that existed roughly 900 million to 700 million years ago." He stared at the pillar. "They had a map of Earth. And they drew it showing the geography of the Neoproterozoic era. Nine hundred million years ago."
+
+"Or," Adaeze said slowly, "they drew it showing the geography of their time."
+
+The silence that followed was not empty. The structure hummed around them -- a vibration felt in the bones rather than heard, the mechanical respiration of something vast and patient. The pillar's image shifted. The continents moved. Not randomly -- they drifted, reformed, split, collided. A time-lapse. The geological history of Earth compressed into seconds, the continents rearranging themselves from Rodinia to Pannotia to Pangaea to the modern configuration, and then beyond -- continuing to drift, continuing to change, showing configurations that hadn't happened yet. A future geography. Predictions, or plans.
+
+And then the image changed entirely. The sphere remained, but the continents vanished. The oceans vanished. The sphere became featureless, a blank circle, and then it began to pulse. Slow, rhythmic, like a heartbeat. And with each pulse, it dimmed slightly.
+
+Pulse. Dimmer. Pulse. Dimmer. Pulse. Dimmer.
+
+Adaeze watched the light die in slow, measured increments, and something cold settled in her chest that had nothing to do with the temperature.
+
+"What is that?" Ravi asked.
+
+"I don't know," Adaeze said. "But I think we should get back to the surface."
+
+They retreated. The patterns on the walls followed them out, brightening as they passed, dimming behind them, and the last thing Adaeze saw before she crossed the threshold back into the excavation tent was the doorway itself -- the seams glowing gold, the impossible air flowing outward -- and beyond it, in the darkness, the faint pulse of the pillar.
+
+Getting weaker. Getting dimmer. Like a countdown.
+
+---
+
+The colony council met at 2100 hours in Hab Alpha's conference space, which was a generous name for a table and eight chairs wedged between the life support monitoring station and a wall of spare parts storage. Adaeze had decided -- after four hours of internal debate that she conducted while simultaneously managing the colony's evening operations -- that the discovery could no longer be contained within the excavation team.
+
+She told them everything. The density readings, the impossible material, the patterns, the door, the breathable air, the pillar, the image of Earth, the pulsing light. She presented Ravi's data, Sasha's spectral analysis, Yuki's medical observations. She withheld nothing.
+
+The silence after she finished lasted eleven seconds. She counted.
+
+Karl Fischer spoke first. "So we're sitting on an alien artifact of unknown origin and purpose, our people are experiencing psychological effects from exposure to it, and you waited four days to inform the colony council."
+
+"I informed the council at the earliest point at which I had verified data to present. Premature disclosure of unverified anomalies would have--"
+
+"Would have allowed the democratically elected representatives of this colony to participate in decisions that affect all of us. Commander, you unilaterally authorized a major resource expenditure, redirected personnel from critical infrastructure maintenance, and concealed a discovery of existential significance. That's not command authority. That's autocracy."
+
+Adaeze regarded Fischer across the table. He was a lean man with sharp features and gray eyes that never quite settled, always scanning, evaluating, calculating advantage. She didn't dislike him. He was intelligent, principled in his way, and genuinely concerned for the welfare of the colonists. He was also a political animal of the first order, and she could see him constructing the narrative in real time: the Commander who hid the alien discovery, who made decisions alone, who couldn't be trusted.
+
+"Noted," she said. "I'll address your procedural concerns in a separate session. Right now, we need to discuss what we've found and what to do about it."
+
+"What we do is obvious," said Liu Wei, the agriculturalist, who was not on the colony council but had been invited because Adaeze valued her judgment. "We study it. Carefully, methodically, with full scientific protocols. This is the most important discovery in human history."
+
+"This is a threat," said Tomasz, and the flat certainty in his voice surprised Adaeze. The life support engineer was not a fearful man, but he was a systems thinker, and his mind went immediately to failure modes. "An unknown structure of unknown origin, buried on a planet we are dependent on for survival, which responds to human touch and has already demonstrated the ability to affect the cognition of people who work near it. We don't know what it is, what it wants, or what it can do. The precautionary principle demands that we seal the shaft and restrict access until we understand more."
+
+"We understand more by studying it, Tomasz, not by burying it."
+
+"We study a sample. We take material from the surface, bring it back to the habs, analyze it in a controlled environment. We don't send people inside an alien structure that's already giving them nightmares."
+
+"Has anyone contacted Earth about this?" asked Amara Diallo, the colony council's elected chair, a Senegalese atmospheric scientist with a diplomat's instinct for the question no one had asked.
+
+The room went quiet.
+
+"I transmitted a priority one discovery notification to Earth on day one," Adaeze said. "No response has been received."
+
+"That's unusual," Amara said.
+
+"It is. Priya is investigating. There may be a technical issue with our relay satellites, or Earth may be evaluating how to respond to a communication of this magnitude. I don't want to speculate."
+
+"The timing," Fischer said, and for once his tone was not adversarial but genuinely thoughtful. "Earth has been progressively less responsive for months. Resupply is delayed. Our questions go unanswered. And now we find something under the surface that someone -- something -- put here a hundred million years ago, and suddenly Earth has nothing to say to us." He looked around the table. "Does anyone else find that suggestive?"
+
+"Suggestive of what?" Tomasz asked.
+
+Fischer didn't answer. He didn't need to. The suggestion hung in the recycled air of the conference room like a contaminant, seeping into the minds of everyone present: the idea that the discovery and the silence might be connected. That whatever was buried under Mars and whatever was happening on Earth might not be separate mysteries but one.
+
+"I want 24-hour monitoring of the excavation site," Adaeze said, reasserting control of the meeting. "Shifts of four, eight hours maximum per Yuki's medical recommendation. No one enters the structure without my explicit authorization. Ravi, I want a complete non-invasive survey of the exterior -- every square meter we can access. Sasha, focus on material analysis; I want to know if there's any way to determine the exact age of this thing. Yuki, I want psych evaluations on everyone who's been exposed, including me."
+
+She paused. "And Priya stays on comms. Around the clock. We keep calling Earth until Earth answers."
+
+The meeting adjourned. People filed out in ones and twos, their conversations muted, their faces carrying the particular expression of human beings whose cognitive load had just exceeded capacity. Adaeze watched them go and wondered how long she had before the excavation team's reports leaked to the general population. Hours, probably. In a colony of two hundred, there were no secrets. Only delays.
+
+Fischer lingered at the door. "Commander."
+
+"Fischer."
+
+"Whatever our disagreements about process -- this changes things. You know that."
+
+"I know it."
+
+"The Returnists have been asking Earth for a ship. If Earth is going silent, that conversation becomes very different." He paused. "And if there's something under Mars that's been here longer than life on Earth -- the people who want to put down roots might want to think carefully about whose roots they're planting next to."
+
+He left. Adaeze sat alone in the conference room and listened to the hab breathe. The ventilation system. The hum of electronics. The faint, ever-present whisper of Mars pressing against the walls, patient and cold and full of secrets that were, day by day, hour by hour, revealing themselves.
+
+She thought about the pillar. The image of Earth. The pulsing light, growing dimmer.
+
+She thought about two hundred people who had nowhere else to go.
+
+She went back to work.

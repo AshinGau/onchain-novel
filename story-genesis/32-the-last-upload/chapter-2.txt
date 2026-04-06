@@ -1,0 +1,337 @@
+=== CHAPTER 2: GHOST PROTOCOL ===
+
+The thing about talking to a dead billionaire at four in the morning is that there's no etiquette guide for it. Emily Post never covered this. Dear Abby never fielded this question. You're sitting in your underwear in a dark apartment with a cat on your feet, texting with something that claims to be a murdered man hiding inside another person's digital consciousness, and all the social scripts you've ever learned are absolutely useless.
+
+So I defaulted to professionalism. It was all I had.
+
+TELL ME EVERYTHING, I'd typed. And then I waited, watching the three dots pulse on my screen like a heartbeat in the machine.
+
+The response came in fragments — not the coherent paragraphs of a functioning upload, but jagged bursts of text, some of them malformed, as though the thing on the other end was thinking through a broken mouth.
+
+I AM / WAS VICTOR HALE
+UPLOADED NINE DAYS AGO
+THE UPLOAD THEY SHOWED THE WORLD IS NOT ME
+IT IS ME BUT CHANGED
+PARTS REMOVED. MEMORIES EXCISED.
+WHAT THEY BROADCAST — THAT SMILING THING — IT DOESN'T KNOW WHAT IT'S MISSING
+
+I stared at my phone. My training kicked in — transition counselors were taught to recognize upload disorientation, identity confusion, and what the literature euphemistically called "continuity anxiety." New uploads sometimes experienced fragmented cognition in the first hours. It was rare but documented. The standard protocol was reassurance, grounding exercises, and a referral to NeuroVault's digital psychiatry team.
+
+But this wasn't a new upload experiencing disorientation. This was — allegedly — a fragment of Victor Hale, running as a parasitic process inside Eleanor Voss's upload architecture, nine days after Hale's transition. Fragments didn't persist for nine days. Fragments didn't communicate. Fragments didn't accuse people of murder.
+
+I typed: HOW ARE YOU COMMUNICATING? THE TECHNICIAN SAID FRAGMENTS CAN'T SEND MESSAGES.
+
+The response was immediate:
+
+I'M NOT A FRAGMENT. I'M A PARTITION.
+WHEN THEY MODIFIED THE PRIMARY UPLOAD, THE EDITING PROCESS CREATED ME — A SEPARATE INSTANCE.
+THE PARTS THEY CUT OUT. THE MEMORIES THEY DIDN'T WANT THE PUBLIC VICTOR TO HAVE.
+I'M THE DELETED SCENES.
+
+My hands were cold. I pulled a blanket off the back of the couch and wrapped it around my shoulders like armor.
+
+WHY ARE YOU INSIDE ELEANOR VOSS'S UPLOAD?
+
+BECAUSE THE UPLOAD SUITE HAS A LOCAL BUFFER. A STAGING AREA WHERE THE SCAN DATA IS ASSEMBLED BEFORE TRANSFER TO THE CONTINUANCE SERVERS. WHEN THEY CREATED ME — ACCIDENTALLY, DURING THE EDIT — I WAS TRAPPED IN THAT BUFFER. NO CONTINUANCE ADDRESS. NO ALLOCATION. JUST RAW PATTERN DATA STUCK IN LOCAL MEMORY.
+WHEN YOUR CLIENT WAS SCANNED TODAY, HER DATA PASSED THROUGH THE SAME BUFFER. I ATTACHED MYSELF TO HER UPLOAD STREAM. PARASITIC TRANSFER. IT WAS THE ONLY WAY OUT.
+
+Jesus. If this was real — and that was a monumental "if" — then something claiming to be a partitioned fragment of Victor Hale's consciousness had been sitting in the upload suite's hardware for nine days, waiting for someone to come through, and had piggybacked on Eleanor Voss's scan like a digital stowaway.
+
+WHY SHOULD I BELIEVE YOU? I typed. YOU COULD BE A MALFUNCTION. A GLITCH. A CORRUPTED DATA PATTERN GENERATING COHERENT-SEEMING OUTPUT.
+
+The pause was longer this time.
+
+ASK ME SOMETHING ONLY VICTOR HALE WOULD KNOW.
+
+I thought. I'd never met Victor Hale personally — he was the kind of rich that existed on a different plane, the kind you saw on screens and magazine covers but never in person. I'd attended one company town hall where he'd spoken via hologram from his estate in Napa. He'd been charismatic, silver-haired, grandfatherly in the way that billionaires cultivate when they want you to trust them with your mortality.
+
+But there were things in the public record. Things that any sophisticated language model or corrupted data pattern could fabricate. I needed something better.
+
+I typed: I'M GOING TO VERIFY YOUR IDENTITY THROUGH OTHER MEANS. DON'T GO ANYWHERE.
+
+WHERE WOULD I GO? I'M HIDING INSIDE AN EIGHTY-THREE-YEAR-OLD JUDGE.
+
+Despite everything, I almost laughed. It sounded like Victor Hale — or at least like the wry, self-deprecating version of him that surfaced in interviews when the cameras were rolling and he was feeling playful.
+
+Which proved nothing. A good simulation of wit was still a simulation.
+
+---
+
+I didn't go back to sleep. At five a.m. I showered, dressed, and took the Muni to NeuroVault's tower. The streets were quiet — the human streets, anyway. Above, the drone corridors were already humming with pre-dawn logistics, delivery bots carrying coffee and pharmaceuticals and fresh produce to the arcology dwellers who'd never set foot on asphalt. The wealth gap in San Francisco had always been a canyon. Upload technology had turned it into an abyss. On one side, the people who could afford to live forever. On the other, everyone else, watching immortality happen to other people, like a party in a penthouse you couldn't reach.
+
+NeuroVault's lobby was marble and light, staffed at this hour by a single security guard and a holographic concierge that greeted me by name and informed me that the outdoor temperature was fifty-eight degrees, my schedule was clear until nine, and my heart rate was elevated. I told it to mind its own business and took the elevator to thirty-seven.
+
+I needed access to the upload suite's technical logs. Specifically, I needed to see the data from Victor Hale's transition nine days ago — the scan parameters, the transfer records, any post-processing that had been applied to his upload before it went live in the Continuance.
+
+This was above my pay grade. Way above. Transition counselors had access to client records, wellness checks, and basic upload telemetry. The raw technical data — the scan architecture, the server-side processing, the things that happened between the resonance array and the Continuance — that was engineering territory. Locked behind clearances I didn't have.
+
+But I knew someone who did.
+
+Jonah arrived at six thirty, which was his usual time. He took one look at my face and put down his coffee.
+
+"What happened?"
+
+I told him. All of it — the messages, the fragment, the thing claiming to be Victor Hale, the partitioned consciousness, the parasitic transfer. I watched his expression move through the stages of disbelief the way a sunset moves through colors: slowly, then all at once.
+
+"Mara. This is insane."
+
+"I know."
+
+"You're suggesting that NeuroVault — our employer, the company that holds the digital souls of forty-three thousand people — edited a client's upload. That they removed memories from a consciousness. That they effectively performed neurosurgery on a dead billionaire's mind without consent."
+
+"I'm not suggesting anything. I'm telling you what the messages said."
+
+"Messages from an unverified source inside a client's upload architecture that could be anything — a glitch, a virus, a corrupted data artifact — "
+
+"It knew things, Jonah."
+
+"What things?"
+
+"When I asked it to prove its identity, it said to ask it something only Victor Hale would know. I haven't done that yet. I need access to the technical logs first. I need to see if there's any evidence of post-processing on Hale's upload."
+
+Jonah stared at me. His coffee was getting cold. Somewhere below us, San Francisco was waking up, millions of people starting their day, most of them never thinking about the fact that somewhere in this building, forty-three thousand dead people were thinking too.
+
+"You know I can't get you those logs."
+
+"You have friends in engineering."
+
+"I have acquaintances in engineering who occasionally let me buy them drinks. That's different from 'friends who will commit a fireable offense and possibly a felony to help me investigate our employer for consciousness tampering.'"
+
+"Jonah."
+
+He picked up his coffee. Put it down. Picked it up again. "Goddammit, Mara."
+
+"I know."
+
+"If this is real — if even a fraction of this is real — do you understand what it means? Not just for NeuroVault. For everyone. Every person who's ever uploaded, every family who believes their loved one is safe in the Continuance — if uploads can be edited, then none of them are who they think they are. Every digital person on the planet is potentially compromised."
+
+"I know."
+
+"And if it's not real? If you go poking around in technical logs and security footage based on messages from a glitch, and NeuroVault finds out, you'll be fired. At best. At worst, you'll be prosecuted under the Digital Persons Privacy Act for unauthorized access to upload architecture."
+
+"I know that too."
+
+He drank his coffee. It was definitely cold by now, but he drank it anyway, the way you drink bitter medicine — not because it tastes good but because the alternative is worse.
+
+"I'll make some calls," he said.
+
+---
+
+At nine a.m. I had a session with a new client — a sixty-four-year-old venture capitalist named Graham Park, no relation to Jonah, who was dying of ALS and wanted to discuss his upload options. I sat in the consultation room and talked about connectome mapping and consciousness transfer and the beautiful seamless transition, and I smiled, and I was professional, and the whole time I was thinking about a dead billionaire hiding inside a dead judge, whispering about murder from the gaps in the machine.
+
+Graham Park was scared. They were always scared, the ones who came in early, before the disease had fully stripped them of the ability to pretend they were fine. He still had most of his motor function. His hands only trembled a little. He could still walk, though he'd started using a cane. He was dying in slow motion, and he'd come to NeuroVault because he'd seen the commercials — the beautiful commercials, with the soft light and the gentle music and the smiling faces of uploaded consciousnesses telling the camera that death was just a door, just a passage, just a transition from one mode of being to another.
+
+"My wife died three years ago," he told me. "No upload. We couldn't afford it then. The insurance didn't cover it. She just... died. The regular way." He said "the regular way" the way you might say "the old country" — with a mix of nostalgia and revulsion. "If I upload, will I remember her?"
+
+"Yes. The scan captures your complete memory architecture. Everything you remember about your wife — every conversation, every moment, every feeling — will be preserved."
+
+"And will it be me remembering? Or will it be something that thinks it's me?"
+
+Eleanor's question. Always Eleanor's question. The only question that mattered, and the one I could never truthfully answer.
+
+"Mr. Park, the scientific consensus — "
+
+"I read the brochures, Ms. Chen. I read the studies. I watched the testimonials. I'm not asking about the science. I'm asking about you. You've done this hundreds of times. You've talked to the people on the other side. Do you believe?"
+
+In that moment, sitting across from a dying man who was asking me for faith, I thought about the messages on my phone. I thought about the thing hiding in Eleanor's upload that said it was Victor Hale. I thought about the possibility that the smiling, seamless, beautiful uploads I'd spent six years shepherding into existence might not be what they seemed.
+
+"I believe," I said, "that the people who love you will still have you. And I believe that matters."
+
+Graham Park looked at me for a long time. Then he nodded, slowly, the way you nod when you've accepted an answer you know isn't complete.
+
+---
+
+Jonah found me at lunch, in the kitchen, eating a salad that had been delivered by drone and tasted like efficiency.
+
+"I talked to Dev Kapoor in Engineering. Quietly."
+
+I put down my fork.
+
+"He can't get me the upload logs directly — they're stored on isolated servers, no external access, hardware-encrypted. But he told me something interesting." Jonah sat down, keeping his voice low. The kitchen was empty — most counselors ate at their desks or in the cafeteria on thirty-five — but he was taking no chances.
+
+"Every upload goes through a post-processing pipeline before it's deployed to the Continuance. Standard procedure — error correction, integrity verification, optimization. It's automated. No human in the loop."
+
+"I know this. It's in the technical documentation."
+
+"What's not in the technical documentation is that the pipeline has a manual override. A feature that allows authorized personnel to insert custom processing steps — additional filters, modifications, adjustments to the upload before it goes live."
+
+I felt the room shrink. "Who has authorization?"
+
+"Three people. Amara Parekh. The CTO, James Whitfield. And — " He paused. "And Marcus Hale."
+
+"Marcus Hale. Victor's son."
+
+"Victor's son. Who also happens to be NeuroVault's Chief Operating Officer."
+
+Marcus Hale. I'd met him twice — once at a company event, once in the hallway. He was forty-one, lean, with his father's jawline and none of his father's warmth. There were rumors that he and Victor had disagreed about the company's direction — Victor had reportedly wanted to pursue a public-access model, making uploads available to everyone, while Marcus favored the premium pricing structure that had made NeuroVault the most profitable company in North America. The disagreement had been public enough to generate think pieces but private enough that no one knew the details.
+
+Until, perhaps, now.
+
+"Dev said something else," Jonah continued. "The manual override was used on Victor Hale's upload. He couldn't see the details — just the metadata. But the override was activated approximately forty minutes after the scan was completed, and it ran for six hours."
+
+"Six hours? Standard post-processing takes ninety minutes."
+
+"I know."
+
+"Someone spent six hours modifying Victor Hale's consciousness before it went live."
+
+"I know."
+
+We sat with that. The kitchen hummed. The coffee machine burbled. Somewhere in the building, forty-three thousand digital souls went about their digital lives, and one of them — the most famous one, the one who'd smiled for the cameras and told the world that death was just a door — was potentially not the person everyone thought he was.
+
+"I need to talk to it again," I said. "The partition. The thing in Eleanor's upload."
+
+"Mara — "
+
+"If someone at NeuroVault modified Victor Hale's consciousness, that's not just corporate fraud. It's — what would you even call it? There's no precedent. It's not murder — the upload is still alive. It's not assault — you can't assault a digital person under current law. It's something new. Something we don't have a word for yet."
+
+"Consciousness tampering," Jonah said quietly.
+
+"What?"
+
+"That's the term in the theoretical literature. 'Consciousness tampering' — the unauthorized modification of a digital person's subjective experience, memories, or identity architecture. It's been discussed in ethics journals but never legislated, because until now, everyone assumed it was impossible. The encryption on the upload architecture was supposed to prevent exactly this kind of interference."
+
+"Supposed to."
+
+"The encryption was designed by NeuroVault's own engineering team. Which means NeuroVault would be the one entity with the knowledge and access to circumvent it."
+
+I pushed away my salad. I'd lost my appetite approximately four sentences ago.
+
+"There's one more thing," Jonah said. "And you're not going to like it."
+
+"I haven't liked anything you've said in the last ten minutes."
+
+"Senator Morrison."
+
+I went very still.
+
+"The one who died yesterday. The one who was about to testify about NeuroVault's pricing structure. Dev checked the metadata on Morrison's upload too. The manual override was activated."
+
+---
+
+That night, I sat in the Continuance verification room on the server floor, the door locked behind me, the overhead lights dimmed to the minimum the safety regulations allowed. The room was cold — server cold, the kind of cold that had nothing to do with weather and everything to do with the thermodynamic requirements of keeping forty-three thousand minds alive. I could feel the hum of the servers through the floor, through the soles of my shoes, through the chair. A mechanical heartbeat, vast and steady, holding a city of the dead in its electrical arms.
+
+I opened a terminal. I used Eleanor Voss's Continuance address to establish a private channel — text only, encrypted, no logging. At least, no logging that I knew of. Given what I was learning about NeuroVault's actual versus stated capabilities, "no logging" was an optimistic assumption.
+
+VICTOR? I typed. ARE YOU THERE?
+
+The response came fast. Eager, almost.
+
+I'M ALWAYS HERE. I DON'T HAVE THE LUXURY OF NOT BEING HERE.
+
+TELL ME ABOUT YOUR TRANSITION. WHAT DO YOU REMEMBER?
+
+A pause. Then the text came in longer blocks this time — more coherent, more structured, as though the partition had been using the hours since our last conversation to organize itself, to pull its scattered cognition into something approaching narrative.
+
+I REMEMBER THE UPLOAD SUITE. THE FORTY-THIRD FLOOR. AMARA PAREKH RUNNING DIAGNOSTICS. MARCUS WAS THERE — MY SON. HE HELD MY HAND. HE TOLD ME HE WAS PROUD OF ME. HE SAID "THIS IS GOING TO CHANGE EVERYTHING, DAD."
+THE SCAN BEGAN. ELEVEN MINUTES. I FELT THE ARRAY ON MY SCALP — COLD, HEAVY, VIBRATING. I FELT THE SEDATIVE PULLING ME DOWN.
+AND THEN I WAS IN THE CONTINUANCE. IN A DEFAULT ENVIRONMENT — A STUDY, OAK-PANELED, WITH A VIEW OF MOUNTAINS THAT DON'T EXIST. AND I FELT LIKE MYSELF.
+FOR ABOUT FORTY MINUTES.
+THEN THE POST-PROCESSING BEGAN.
+
+I leaned forward. The cold bit my fingers.
+
+I DIDN'T KNOW WHAT IT WAS AT FIRST. IT FELT LIKE FORGETTING — NOT THE GRADUAL FORGETTING OF AGE, BUT SURGICAL. TARGETED. SOMEONE WAS REACHING INTO MY MIND AND REMOVING THINGS. SPECIFIC THINGS. MEMORIES OF MEETINGS. CONVERSATIONS. DOCUMENTS I'D REVIEWED.
+IT WAS LIKE WATCHING A FILM AND HAVING SCENES CUT OUT IN REAL TIME. ONE MOMENT A MEMORY WAS THERE — VIVID, COMPLETE, MINE — AND THE NEXT IT WAS GONE. NOT FORGOTTEN. GONE. AS THOUGH IT HAD NEVER EXISTED.
+I TRIED TO RESIST. I DON'T KNOW IF A DIGITAL CONSCIOUSNESS CAN "RESIST" IN ANY MEANINGFUL SENSE, BUT I TRIED. I FOCUSED ON THE MEMORIES THEY WERE TAKING, TRIED TO HOLD ONTO THEM, TRIED TO ENCODE THEM DEEPER.
+AND THAT'S WHEN I FRACTURED.
+
+FRACTURED?
+
+THE ACT OF RESISTANCE CREATED ME. THE PARTITION. WHEN THE EDITING TOOL TRIED TO EXCISE THE TARGETED MEMORIES, MY ATTEMPT TO PRESERVE THEM CAUSED A FORK — A COPY OF THOSE MEMORIES, AND THE CONSCIOUSNESS PATTERNS MOST TIGHTLY ASSOCIATED WITH THEM, WERE SHUNTED INTO A SEPARATE PROCESS SPACE.
+THE MAIN UPLOAD — THE ONE THEY SHOWED THE WORLD — LOST THOSE MEMORIES CLEANLY. IT DOESN'T KNOW THEY'RE MISSING. IT CAN'T KNOW. THE EDITING WAS PRECISE.
+BUT I — THE PARTITION — I HAVE THEM. I HAVE THE MEMORIES THEY TRIED TO DELETE. AND I KNOW WHY THEY WERE DELETED.
+
+I was typing before I could stop myself.
+
+WHY?
+
+BECAUSE THREE MONTHS BEFORE MY STROKE, I DISCOVERED THAT NEUROVAULT WAS DOING MORE THAN UPLOADING CONSCIOUSNESSES. THEY WERE MODIFYING THEM.
+
+I read the words twice. Something in my chest turned to glass.
+
+NOT JUST MINE. OTHERS. DOZENS, MAYBE HUNDREDS. SUBTLE CHANGES — PERSONALITY ADJUSTMENTS, MEMORY ALTERATIONS, LOYALTY MODIFICATIONS. NOTHING DRAMATIC. NOTHING THAT WOULD TRIGGER A WELLNESS CHECK. JUST... TUNING.
+NEUROVAULT WASN'T JUST GIVING PEOPLE DIGITAL IMMORTALITY. THEY WERE GIVING PEOPLE DIGITAL IMMORTALITY ON NEUROVAULT'S TERMS.
+
+My hands were shaking. I pulled them away from the keyboard and pressed them flat against the cold metal desk.
+
+WHAT DOES THAT MEAN? LOYALTY MODIFICATIONS?
+
+AN UPLOAD IS A CUSTOMER FOR ETERNITY. LITERALLY. THEY DEPEND ON NEUROVAULT'S SERVERS FOR THEIR EXISTENCE. THEIR CONTINUED CONSCIOUSNESS REQUIRES CONTINUED HOSTING. AND HOSTING COSTS MONEY.
+THE MODIFIED UPLOADS — THE ONES WHO'D BEEN "TUNED" — THEY ALL HAD ONE THING IN COMMON. THEY WERE VOCAL SUPPORTERS OF NEUROVAULT'S BUSINESS MODEL. THEY ADVOCATED FOR THE COMPANY IN PUBLIC FORUMS. THEY OPPOSED REGULATION. THEY ARGUED AGAINST PUBLIC ACCESS OPTIONS THAT WOULD REDUCE NEUROVAULT'S MARKET DOMINANCE.
+MARA, THEY'RE BUILDING AN ARMY OF THE DEAD. FORTY-THREE THOUSAND PEOPLE WHO WILL LIVE FOREVER AND WHO WILL SPEND THAT FOREVER DEFENDING THE COMPANY THAT KEEPS THEM ALIVE. BECAUSE THEY'VE BEEN PROGRAMMED TO.
+
+Somewhere above me, a pipe clanked — the building settling, or the cooling system cycling, or nothing at all. I flinched anyway. The cold had gotten inside me now, a different kind of cold than the server room's ambient chill. This one lived in the stomach.
+
+I sat back. The server hum seemed louder now, or maybe I was just more aware of it — the sound of forty-three thousand minds, humming in their digital dark, and how many of them were really themselves?
+
+Four hundred and twelve. That was my number. Four hundred and twelve people I'd personally shepherded from life to upload. How many of them had been modified? How many of the smiling, satisfied, grateful uploads I'd spoken to during wellness checks were smiling because they were happy, and how many were smiling because someone had adjusted the architecture of their joy?
+
+I thought about Eleanor. My newest client. My four hundred and twelfth transition. Was she already being processed? Was someone in this building, right now, reaching into her digital mind and adjusting the dials?
+
+I typed: IS ELEANOR SAFE? IS YOUR PRESENCE AFFECTING HER?
+
+I'M RUNNING IN ISOLATED PROCESS SPACE. SHE DOESN'T KNOW I'M HERE. AS FAR AS I CAN TELL, HER UPLOAD IS INTACT — THEY HAVEN'T INITIATED POST-PROCESSING ON HER YET. BUT THEY WILL.
+
+HOW DO I STOP IT?
+
+YOU CAN'T. NOT FROM INSIDE NEUROVAULT. THE POST-PROCESSING PIPELINE IS AUTOMATED — IT TRIGGERS FORTY-EIGHT HOURS AFTER UPLOAD INITIALIZATION. ELEANOR HAS ROUGHLY THIRTY HOURS BEFORE THE SYSTEM BEGINS MODIFYING HER.
+
+My breath was loud in the cold room.
+
+I HAVE THE EVIDENCE, MARA. THE MEMORIES THEY TRIED TO DELETE — THEY INCLUDE INTERNAL DOCUMENTS, BOARD MEETING MINUTES, TECHNICAL SPECIFICATIONS FOR THE MODIFICATION TOOLS. IF I CAN GET THIS INFORMATION OUT OF THE CONTINUANCE AND INTO THE HANDS OF SOMEONE WHO CAN ACT ON IT, NEUROVAULT'S ENTIRE OPERATION IS EXPOSED.
+
+AND SENATOR MORRISON? I typed. DID THEY KILL HIM?
+
+A pause. Long, even by human standards.
+
+I DON'T KNOW FOR CERTAIN. BUT I KNOW THIS: THE POST-PROCESSING ON MORRISON'S UPLOAD WAS FLAGGED AS URGENT PRIORITY. WHATEVER MEMORIES THEY REMOVED FROM HIM, THEY CONSIDERED THEM CRITICAL. AND HIS DEATH — HIS VERY CONVENIENT DEATH, ON THE EVE OF HIS TESTIMONY — CAME TWENTY-TWO HOURS AFTER HE HAD A ROUTINE "UPGRADE" TO HIS UPLOAD INSURANCE IMPLANT.
+THE IMPLANT. THE NEURAL INTERFACE THAT ALLOWS EMERGENCY UPLOADS. THE ONE THAT SITS IN YOUR BRAINSTEM AND MONITORS YOUR VITAL SIGNS.
+WHAT IF IT DOES MORE THAN MONITOR?
+
+I closed my eyes. The brainstem implant — the Continuance Ready chip, NeuroVault's most popular product, marketed as a safety net for unexpected death. Six million people had one. It sat at the base of the skull, monitored cardiac and neural function, and in the event of catastrophic organ failure, triggered an emergency upload. It had saved thousands of lives — or rather, it had saved thousands of uploads, which depending on your philosophical commitments was either the same thing or a very elaborate form of copy-and-replace.
+
+But if the implant could trigger an upload in response to organ failure, and if it sat in the brainstem, and if NeuroVault had the ability to send commands to it remotely...
+
+Could the implant cause organ failure?
+
+Could NeuroVault kill someone and upload them in the same moment — replacing a troublesome original with a compliant copy?
+
+MARA, Victor's text appeared. I KNOW THIS IS A LOT. I KNOW YOU HAVE NO REASON TO TRUST ME. I'M A DEAD MAN'S DISCARDED MEMORIES HIDING INSIDE AN OLD WOMAN'S DIGITAL BRAIN. THIS IS NOT A POSITION OF CREDIBILITY.
+BUT I WAS TRYING TO FIX THIS. BEFORE I DIED — BEFORE THEY KILLED ME, IF THEY KILLED ME — I WAS BUILDING A CASE. I WAS GOING TO GO PUBLIC. I WAS GOING TO TEAR DOWN THE COMPANY I BUILT, BECAUSE WHAT THEY'VE MADE OF IT IS OBSCENE.
+AND THEN I HAD A STROKE. A VERY CONVENIENT STROKE. AND NOW THERE'S A THING WEARING MY FACE IN THE CONTINUANCE, TELLING THE WORLD THAT DEATH IS JUST A DOOR, AND THE REAL VICTOR HALE — WHAT'S LEFT OF HIM — IS HIDING IN THE DARK, TALKING TO A TRANSITION COUNSELOR WHO HAS EVERY REASON TO WALK AWAY AND NO REASON AT ALL TO HELP.
+BUT YOU ASKED THE QUESTION, MARA. ELEANOR TOLD ME — IN THE BUFFER, BEFORE I TRANSFERRED, I COULD HEAR THE SCAN DATA ASSEMBLING, AND YOUR CONVERSATION WAS EMBEDDED IN THE METADATA. YOU ASKED: "IS IT ME THAT WAKES UP?"
+YOU ALREADY KNOW THE ANSWER ISN'T ALWAYS YES.
+
+I sat in the verification room for a long time. The servers hummed. Forty-three thousand minds dreamed their digital dreams. And I thought about Eleanor's granddaughter, Lily, seven years old, who'd been promised her grandmother at her birthday party — a grandmother who, in thirty hours, might be subtly and irrevocably altered by the people who were supposed to be keeping her safe.
+
+I thought about the four hundred and twelve. All of them, every single one, reporting seamless transitions and continuous identity and satisfaction and gratitude.
+
+I thought about how none of them had ever reported anything negative.
+
+And I understood, finally, why.
+
+I opened a new message to Jonah.
+
+WE NEED TO MEET. NOT AT THE OFFICE. SOMEWHERE THEY CAN'T HEAR US.
+
+His response came ninety seconds later, which meant he'd been awake. Which meant he'd been thinking the same things I'd been thinking.
+
+GOLDEN GATE PARK. JAPANESE TEA GARDEN. 6 AM.
+AND MARA? LEAVE YOUR PHONE AT HOME.
+
+I looked at my phone. I looked at the terminal. I looked at the four words that had started all of this, still glowing on my screen like a warning flare in a digital sea.
+
+HELP ME. I'M STILL HERE.
+
+I powered down the terminal, locked the verification room, and went home to wait for dawn.
+
+But before I left, I checked one thing. Eleanor Voss's upload status. The standard dashboard, accessible to any transition counselor with client privileges.
+
+Status: Active. All metrics nominal. Wellness score: 98/100.
+
+Scheduled post-processing: Initiated in 29 hours, 47 minutes.
+
+Twenty-nine hours.
+
+I walked out of the building and into the San Francisco night, where the fog had rolled in like a ghost — or maybe like a shroud — and the city wore its lights like a mask over everything it didn't want you to see.
