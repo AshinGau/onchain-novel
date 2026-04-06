@@ -22,21 +22,22 @@
 ### 2. 合约架构
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                    UUPS Proxy Layer                  │
-├──────────┬──────────────┬───────────┬────────────────┤
-│NovelCore │ VotingEngine │ PrizePool │  ChapterNFT    │
-│状态机     │ Commit-Reveal│ 奖金管理   │  ERC-721       │
-│章节树     │ Stake-to-Vote│ 打赏 & 分配│  版权 NFT      │
-│协调中枢   │ 投票引擎      │ Pull 领取  │  元数据管理     │
-└──────────┴──────────────┴───────────┴────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│                         UUPS Proxy Layer                        │
+├──────────┬─────────────┬──────────────┬───────────┬─────────────┤
+│NovelCore │ RulesEngine │ VotingEngine │ PrizePool │  ChapterNFT │
+│状态机     │ 规则治理     │ Commit-Reveal│ 奖金管理   │  ERC-721    │
+│章节树     │ 提案投票     │ Stake-to-Vote│ 打赏 & 分配│  版权 NFT   │
+│协调中枢   │ 世界观管理   │ 投票引擎      │ Pull 领取  │  元数据管理  │
+└──────────┴─────────────┴──────────────┴───────────┴─────────────┘
 ```
 
 | 合约 | 职责 |
 |------|------|
-| **NovelCore** | 小说创建、章节提交、Round/Epoch 状态机、保证金管理、污染追踪、Keeper 奖励、提前 Epoch 触发 |
+| **NovelCore** | 小说创建（Bootstrap 引导章节）、章节提交、Round/Epoch 状态机、保证金管理、污染追踪、Keeper 奖励 |
+| **RulesEngine** | 世界观规则治理：创作者规则（Epoch 1）、提案投票（Canon 作者）。通过 view 调用读取 NovelCore 状态 |
 | **VotingEngine** | Commit-Reveal Stake-to-Vote、计票排名、未揭示质押扫荡、准确性奖励追踪与分发 |
-| **PrizePool** | 创世注入、读者打赏、三层 Epoch 分配（创世者→作者→投票者）、Keeper 奖励、Pull 领取 |
+| **PrizePool** | 初始注入、读者打赏、三层 Epoch 分配（创作者→作者→投票者）、Keeper 奖励、Pull 领取。接受 NovelCore 和 RulesEngine 的存款 |
 | **ChapterNFT** | ERC-721 铸造、章节版权证明、ERC-2981 版税、元数据查询 |
 
 ---

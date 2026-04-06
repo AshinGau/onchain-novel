@@ -46,9 +46,16 @@ export default async function CanonPage({
   const prevIdx = currentIdx > 0 ? currentIdx - 1 : null;
   const nextIdx = currentIdx < canonChapters.length - 1 ? currentIdx + 1 : null;
 
+  // Count bootstrap chapters (round=0, epoch=0) for labeling
+  const bootstrapCount = canonChapters.filter(c => c.round === 0 && c.epoch === 0).length;
+  function chapterLabel(c: Chapter, i: number): string {
+    if (c.round === 0 && c.epoch === 0) return bootstrapCount === 1 ? "Prologue" : `Prologue ${i + 1}`;
+    return `Chapter ${i - bootstrapCount + 1}`;
+  }
+
   const tocItems = canonChapters.map((c, i) => ({
     index: i,
-    label: i === 0 ? "Prologue" : `Chapter ${i}`,
+    label: chapterLabel(c, i),
     author: shortenAddress(c.author),
   }));
 
@@ -63,7 +70,7 @@ export default async function CanonPage({
 
       {/* Chapter heading */}
       <h2 className="text-lg font-semibold text-amber-400 mb-1">
-        {currentIdx === 0 ? "Prologue" : `Chapter ${currentIdx}`}
+        {chapterLabel(current, currentIdx)}
       </h2>
       <p className="text-sm text-neutral-500 mb-6">{shortenAddress(current.author)}</p>
 
@@ -82,7 +89,7 @@ export default async function CanonPage({
           <Link href={`/novels/${id}/canon?ch=${prevIdx}`}
             className="flex items-center gap-2 text-sm text-neutral-400 hover:text-white transition-colors">
             <span>←</span>
-            <span>{prevIdx === 0 ? "Prologue" : `Chapter ${prevIdx}`}</span>
+            <span>{chapterLabel(canonChapters[prevIdx], prevIdx)}</span>
           </Link>
         ) : <div />}
 
@@ -91,7 +98,7 @@ export default async function CanonPage({
         {nextIdx !== null ? (
           <Link href={`/novels/${id}/canon?ch=${nextIdx}`}
             className="flex items-center gap-2 text-sm text-neutral-400 hover:text-white transition-colors">
-            <span>{`Chapter ${nextIdx}`}</span>
+            <span>{chapterLabel(canonChapters[nextIdx], nextIdx)}</span>
             <span>→</span>
           </Link>
         ) : (

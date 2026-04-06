@@ -1,7 +1,7 @@
 import { type McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { parseEther, formatEther, keccak256, toHex, toBytes } from "viem";
-import { novelCoreAbi } from "../abi/index.js";
+import { novelCoreAbi, rulesEngineAbi } from "../abi/index.js";
 import { config } from "../config.js";
 import { getPublicClient, getWalletClient } from "../utils/wallet.js";
 import { hasApi, apiFetch } from "../utils/api-client.js";
@@ -110,8 +110,8 @@ export function registerNovelTools(server: McpServer): void {
         if (validRules.length > 0 && novelId) {
           try {
             const rulesHash = await walletClient.writeContract({
-              address: config.novelCoreAddress,
-              abi: novelCoreAbi,
+              address: config.rulesEngineAddress,
+              abi: rulesEngineAbi,
               functionName: "setCreatorRules",
               args: [novelId, validRules.map((r) => r.name.trim()), validRules.map((r) => r.content.trim())],
             });

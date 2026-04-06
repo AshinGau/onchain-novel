@@ -57,7 +57,7 @@ router.get("/:id/children", async (req, res) => {
   try {
     const { id } = req.params;
     const childrenRes = await query(
-      `SELECT id, author, chapter_index, vote_count, is_world_line, is_canon, declared_length
+      `SELECT id, author, chapter_index, round, epoch, vote_count, is_world_line, is_canon, declared_length
        FROM chapters WHERE parent_id = $1
        ORDER BY vote_count DESC`,
       [id]

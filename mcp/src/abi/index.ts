@@ -36,13 +36,7 @@ export const novelCoreAbi = [
   "function getClaimableStake(uint256 novelId, address author) external view returns (uint256)",
   "function getNovelMetadata(uint256 novelId) external view returns ((string title, string description, string coverUri))",
 
-  // Rules
-  "function setCreatorRules(uint256 novelId, string[] names, string[] contents) external",
-  "function proposeRule(uint256 novelId, uint8 proposalType, string ruleName, string ruleContent) external payable returns (uint256 proposalId)",
-  "function voteOnRuleProposal(uint256 proposalId) external",
-  "function getRule(uint256 novelId, string name) external view returns (string)",
-  "function getRuleNames(uint256 novelId) external view returns (string[])",
-  "function getRuleProposal(uint256 proposalId) external view returns ((uint256 id, uint256 novelId, address proposer, uint8 proposalType, string ruleName, string ruleContent, uint256 createdAt, uint32 voteCount, bool executed))",
+  // isCanonAuthor remains on NovelCore (used by RulesEngine via view call)
   "function isCanonAuthor(uint256 novelId, address author) external view returns (bool)",
 
   // Events
@@ -59,6 +53,15 @@ export const novelCoreAbi = [
   "event StakeSlashed(uint256 indexed novelId, address indexed author, uint256 amount)",
   "event KeeperRewarded(uint256 indexed novelId, address indexed keeper, uint256 amount)",
   "event NovelMetadataUpdated(uint256 indexed novelId, string title, string description, string coverUri)",
+] as const;
+
+export const rulesEngineAbi = [
+  "function setCreatorRules(uint256 novelId, string[] names, string[] contents) external",
+  "function proposeRule(uint256 novelId, uint8 proposalType, string ruleName, string ruleContent) external payable returns (uint256 proposalId)",
+  "function voteOnRuleProposal(uint256 proposalId) external",
+  "function getRule(uint256 novelId, string name) external view returns (string)",
+  "function getRuleNames(uint256 novelId) external view returns (string[])",
+  "function getRuleProposal(uint256 proposalId) external view returns ((uint256 id, uint256 novelId, address proposer, uint8 proposalType, string ruleName, string ruleContent, uint256 createdAt, uint32 voteCount, bool executed))",
   "event RuleSet(uint256 indexed novelId, string name)",
   "event RuleDeleted(uint256 indexed novelId, string name)",
   "event RuleProposed(uint256 indexed proposalId, uint256 indexed novelId, address indexed proposer, uint8 proposalType, string ruleName)",

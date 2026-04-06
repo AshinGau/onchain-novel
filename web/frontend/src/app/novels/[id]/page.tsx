@@ -47,8 +47,8 @@ export default async function NovelDetailPage({ params }: { params: Promise<{ id
     warnings.push("Failed to load forks.");
   }
 
-  // Fetch world lines (needed for epoch voting candidates)
-  if (novel.active && (novel.epoch_phase === 1 || novel.epoch_phase === 2)) {
+  // Fetch world lines (needed for epoch voting + "Continue" badge)
+  if (novel.active) {
     try {
       const wlData = await fetchApi<{ worldlines: { id: string }[] }>(`/api/novels/${id}/worldlines`);
       worldlines = wlData.worldlines;
@@ -261,7 +261,7 @@ export default async function NovelDetailPage({ params }: { params: Promise<{ id
       {(tree.length > 0 || novel.current_epoch > 1) && (
         <div className="mb-6">
           <h2 className="font-semibold mb-3">Story Tree</h2>
-          <ConnectedStoryTree initialChapters={tree} initialAnchors={treeAnchors} currentEpoch={novel.current_epoch} novelId={id} votingRoundId={novel.active && (novel.round_phase === 1 || novel.round_phase === 2) ? roundVotingId : undefined} continuable={novel.active && novel.epoch_phase === 0 && novel.round_phase === 0} />
+          <ConnectedStoryTree initialChapters={tree} initialAnchors={treeAnchors} currentEpoch={novel.current_epoch} novelId={id} votingRoundId={novel.active && (novel.round_phase === 1 || novel.round_phase === 2) ? roundVotingId : undefined} continuable={novel.active && novel.epoch_phase === 0 && novel.round_phase === 0} activeWorldLineIds={new Set(worldlines.map(wl => wl.id))} />
         </div>
       )}
 

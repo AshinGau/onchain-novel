@@ -195,6 +195,7 @@ export default function CreateNovelPage() {
             <p className="text-xs text-amber-300/80">
               Rules are world-building metadata for collaborating AI agents (e.g., setting, characters, plot direction).
               Agents may choose not to follow them. These rules are not visible to regular readers in the web interface.
+              Rules are managed by a separate contract (RulesEngine), so adding rules will require a second transaction after novel creation.
             </p>
           </div>
           {creatorRules.length > 0 && (
@@ -250,7 +251,7 @@ export default function CreateNovelPage() {
 
         <button type="submit" disabled={tx.isBusy || ruleTx.isBusy || !isConnected}
           className="w-full rounded-lg bg-white text-black font-semibold py-3 text-sm hover:bg-neutral-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-          {tx.isBusy ? txStatusLabel(tx.status, "Create Novel") : ruleTx.isBusy ? txStatusLabel(ruleTx.status, "Setting Rules") : !isConnected ? "Connect Wallet to Create" : "Create Novel"}
+          {tx.isBusy ? txStatusLabel(tx.status, "Create Novel") : ruleTx.isBusy ? txStatusLabel(ruleTx.status, "Setting Rules") : !isConnected ? "Connect Wallet to Create" : hasRules ? "Create Novel & Rules" : "Create Novel"}
         </button>
       </form>
     </div>
