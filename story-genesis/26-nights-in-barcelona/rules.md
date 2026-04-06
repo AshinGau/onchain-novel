@@ -1,0 +1,24 @@
+# Rules: Nights in Barcelona
+
+## Setting
+Contemporary Barcelona, summer. Key locations: the Gothic Quarter (Barri Gotic), El Raval, Eixample, Passeig de Gracia, Barceloneta beach, the Boqueria market, the Picasso Museum courtyard. The city is a living character -- its medieval architecture, Gaudi landmarks (Sagrada Familia, Casa Batllo), night markets, rooftop views, and Mediterranean heat shape every scene. Atmosphere oscillates between ecclesiastical solemnity by day and sensual chaos by night: flamenco leaking from windows, jasmine in stone cracks, hash and sofrito and salt air. The art world of Barcelona -- galleries on Carrer del Doctor Dou, the MACBA, group shows in the Born -- provides the social context. Time period is present-day.
+
+## Characters
+- **Leo Crane** -- American painter, 30s. On residency in Barcelona, fleeing a creative block and a failed marriage (separation agreement filed in Brooklyn). Previously made large-format oils that sold to collectors who matched them to furniture. Lives in a rented studio on Carrer del Consell de Cent. Tendency toward control in his art and his emotions. His gallerist is in Chelsea, NYC. Prone to self-deprecation as armor. Marta's touch and challenge reawakened his ability to paint. His best work is raw, physical, two-figure compositions.
+- **Marta** -- Spanish painter, from Triana (Seville). Late 20s to early 30s. Cropped dark hair, lean, muscular arms from large-scale work. A thin scar runs from her jaw to her chin, continuing down her neck and across her left shoulder -- origin unexplained but linked to past domestic violence. Came to Barcelona seven years ago to escape Andreu. Works in a fourth-floor Raval studio. Her paintings are large, violent, beautiful -- figures in transformation. She paints by instinct rather than analysis. Fiercely independent but still entangled with Andreu's influence. Philosophy: resist naming things; stay in the space of becoming.
+- **Andreu Soler** -- Collector, patron, sometime curator at MACBA. Wealthy, cultured, controlling. Silver-templed, sharp-boned, deep-set sherry-colored eyes. Lives in a Modernista apartment on the Passeig de Gracia. Owns twelve of Marta's paintings spanning seven years. His generosity is his weapon -- he controls through beauty, attention, and withdrawal rather than overt force. Previously in a three-year relationship with Marta. Now proposing a two-person show for Leo and Marta, asking for "access" to watch them work -- a calculated move to re-enter Marta's life.
+
+## Story Rules
+- **Genre**: Literary erotic drama. Sex is an extension of the artistic and emotional themes, never gratuitous. Physical intimacy is described through the language of painting -- brushstrokes, pigment, color, canvas.
+- **Narrative voice**: Close third-person, Leo's POV. Lyrical, sensory-rich prose. Long sentences. Barcelona's architecture, food, sounds, and smells must be woven into every scene.
+- **Pacing**: Slow burn. Tension builds through artistic collaboration before physical intimacy. Each chapter covers weeks of story time.
+- **Art as metaphor**: Painting is the central metaphor for connection, vulnerability, and power. Every significant relationship moment involves making art.
+- **Avoid**: Sentimentality, easy resolutions, one-dimensional villainy for Andreu (he must remain genuinely charming and genuinely dangerous), explicit moralizing. Do not reduce Marta to a muse -- she is Leo's artistic equal or superior.
+- **Tone**: The scar is the story's recurring image -- a wound that has become more interesting than what it replaced. This applies to all characters.
+
+## Plot Direction
+- **The show**: Andreu's proposed two-person exhibition (October deadline, two months away) is the immediate dramatic engine. Leo and Marta must decide whether to accept his patronage and what "access" truly means.
+- **The triangle**: Andreu is positioning himself as a third element in Leo and Marta's creative/sexual dynamic. The story is heading toward a confrontation about art, ownership, and intimacy.
+- **Leo's artistic evolution**: He has rediscovered the ability to paint through Marta. The question is whether his art can survive Andreu's influence or whether Andreu's gaze will corrupt the raw, physical quality of the work.
+- **Marta's autonomy**: She escaped Andreu once. The central tension is whether accepting his offer is pragmatic survival or self-betrayal. Her line -- "we were both already broken" -- suggests she may be willing to take the risk.
+- **Open threads**: Andreu obtained Leo's phone number without permission. Leo and Marta's relationship has not been named ("Don't name it yet"). The dragon-house (Casa Batllo) as an emblem of beauty that is also malevolent. Whether Marta's scar has a more specific origin story connected to Andreu.

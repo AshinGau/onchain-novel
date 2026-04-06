@@ -265,6 +265,30 @@ EOF
     # Load contract addresses
     source "$ENV_FILE"
 
+    # ── Generate MCP local config ──
+    MCP_CONFIG="$ROOT_DIR/mcp/local-node-config.json"
+    cat > "$MCP_CONFIG" <<MCPEOF
+{
+  "mcpServers": {
+    "onchain-novel": {
+      "command": "npx",
+      "args": ["tsx", "$ROOT_DIR/mcp/src/index.ts"],
+      "env": {
+        "RPC_URL": "$RPC",
+        "NOVEL_CORE_ADDRESS": "$NOVEL_CORE_ADDRESS",
+        "VOTING_ENGINE_ADDRESS": "$VOTING_ENGINE_ADDRESS",
+        "PRIZE_POOL_ADDRESS": "$PRIZE_POOL_ADDRESS",
+        "CHAPTER_NFT_ADDRESS": "$CHAPTER_NFT_ADDRESS",
+        "RULES_ENGINE_ADDRESS": "$RULES_ENGINE_ADDRESS",
+        "PRIVATE_KEY": "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d",
+        "API_BASE_URL": "http://localhost:$API_PORT"
+      }
+    }
+  }
+}
+MCPEOF
+    ok "MCP config written to mcp/local-node-config.json"
+
     # ── Start Backend ──
     info "Starting backend..."
     cd "$BACKEND_DIR"
@@ -317,6 +341,7 @@ EOF
     echo "    VotingEngine:  $VOTING_ENGINE_ADDRESS"
     echo "    PrizePool:     $PRIZE_POOL_ADDRESS"
     echo "    ChapterNFT:    $CHAPTER_NFT_ADDRESS"
+    echo "    RulesEngine:   $RULES_ENGINE_ADDRESS"
     echo ""
     echo -e "${CYAN}──────────────────────────────────────────────────────────────${NC}"
     echo -e "${CYAN}  MetaMask Setup${NC}"

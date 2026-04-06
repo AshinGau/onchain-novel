@@ -52,3 +52,4 @@ lcov.info
 
 # Local dev node
 .local-node/
+mcp/local-node-config.json
