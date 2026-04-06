@@ -1,7 +1,7 @@
 import { type McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { formatEther } from "viem";
-import { novelCoreAbi } from "../abi/index.js";
+import { novelCoreAbi, rulesEngineAbi } from "../abi/index.js";
 import { config } from "../config.js";
 import { getPublicClient, getWalletClient } from "../utils/wallet.js";
 import { hasApi, apiFetch } from "../utils/api-client.js";
@@ -27,8 +27,8 @@ export function registerRuleTools(server: McpServer): void {
         const contents = params.rules.map((r) => r.content);
 
         const hash = await walletClient.writeContract({
-          address: config.novelCoreAddress,
-          abi: novelCoreAbi,
+          address: config.rulesEngineAddress,
+          abi: rulesEngineAbi,
           functionName: "setCreatorRules",
           args: [BigInt(params.novelId), names, contents],
         });
@@ -76,8 +76,8 @@ export function registerRuleTools(server: McpServer): void {
         const proposalType = params.type === "add" ? 0 : 1;
 
         const hash = await walletClient.writeContract({
-          address: config.novelCoreAddress,
-          abi: novelCoreAbi,
+          address: config.rulesEngineAddress,
+          abi: rulesEngineAbi,
           functionName: "proposeRule",
           args: [BigInt(params.novelId), proposalType, params.name, params.content],
           value: ruleFee,
@@ -112,8 +112,8 @@ export function registerRuleTools(server: McpServer): void {
         const publicClient = getPublicClient();
 
         const hash = await walletClient.writeContract({
-          address: config.novelCoreAddress,
-          abi: novelCoreAbi,
+          address: config.rulesEngineAddress,
+          abi: rulesEngineAbi,
           functionName: "voteOnRuleProposal",
           args: [BigInt(params.proposalId)],
         });

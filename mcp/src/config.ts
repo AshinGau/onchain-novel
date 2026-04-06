@@ -6,6 +6,7 @@ export const config = {
   votingEngineAddress: (process.env.VOTING_ENGINE_ADDRESS || "") as Address,
   prizePoolAddress: (process.env.PRIZE_POOL_ADDRESS || "") as Address,
   chapterNFTAddress: (process.env.CHAPTER_NFT_ADDRESS || "") as Address,
+  rulesEngineAddress: (process.env.RULES_ENGINE_ADDRESS || "") as Address,
   privateKey: (process.env.PRIVATE_KEY || "") as Hex,
   /** Optional Web API base URL (e.g. "http://localhost:3001"). When set, read tools use the API instead of RPC. */
   apiBaseUrl: process.env.API_BASE_URL || "",

@@ -1,5 +1,5 @@
 import type { PublicClient } from "viem";
-import { novelCoreAbi } from "../abi/index.js";
+import { rulesEngineAbi } from "../abi/index.js";
 import { config } from "../config.js";
 import { hasApi, apiFetch } from "./api-client.js";
 
@@ -19,8 +19,8 @@ export async function fetchRules(novelId: number | bigint, publicClient?: Public
   if (!publicClient) return [];
 
   const names = await publicClient.readContract({
-    address: config.novelCoreAddress,
-    abi: novelCoreAbi,
+    address: config.rulesEngineAddress,
+    abi: rulesEngineAbi,
     functionName: "getRuleNames",
     args: [BigInt(novelId)],
   }) as string[];
@@ -30,8 +30,8 @@ export async function fetchRules(novelId: number | bigint, publicClient?: Public
   return Promise.all(
     names.map(async (name) => {
       const content = await publicClient.readContract({
-        address: config.novelCoreAddress,
-        abi: novelCoreAbi,
+        address: config.rulesEngineAddress,
+        abi: rulesEngineAbi,
         functionName: "getRule",
         args: [BigInt(novelId), name],
       }) as string;

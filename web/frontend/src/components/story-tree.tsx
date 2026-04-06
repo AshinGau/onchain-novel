@@ -21,6 +21,7 @@ interface StoryTreeProps {
   votingRoundId?: string;
   connectedAddress?: string;
   continuable?: boolean;
+  activeWorldLineIds?: Set<string>;
 }
 
 // Chapters injected as epoch anchors carry this flag
@@ -28,9 +29,15 @@ type DisplayChapter = TreeChapter & { _anchor?: boolean };
 
 // ── Badge logic ───────────────────────────────────────────────────
 
-function getChapterBadge(ch: TreeChapter, continuable: boolean): { label: string; className: string } | null {
-  const isContinuable = continuable && ch.is_world_line;
-  if (isContinuable) return { label: "Continue", className: "bg-green-900/60 text-green-300 border-green-700" };
+function getChapterBadge(
+  ch: TreeChapter,
+  continuable: boolean,
+  activeWorldLineIds?: Set<string>,
+): { label: string; className: string } | null {
+  // "Continue" only on active world lines (not just any chapter with is_world_line flag)
+  if (continuable && activeWorldLineIds?.has(ch.id)) {
+    return { label: "Continue", className: "bg-green-900/60 text-green-300 border-green-700" };
+  }
   if (ch.is_canon) return { label: "Canon", className: "bg-amber-900/60 text-amber-300 border-amber-700" };
   if (ch.is_world_line) return { label: "World Line", className: "bg-blue-900/60 text-blue-300 border-blue-700" };
   return null;
@@ -46,7 +53,7 @@ function countDescendants(id: string, childrenOf: Map<string, DisplayChapter[]>)
   return count;
 }
 
-function TreeNode({ chapter: ch, childrenOf, depth, novelId, votingRoundId, connectedAddress, continuable }: {
+function TreeNode({ chapter: ch, childrenOf, depth, novelId, votingRoundId, connectedAddress, continuable, activeWorldLineIds }: {
   chapter: DisplayChapter;
   childrenOf: Map<string, DisplayChapter[]>;
   depth: number;
@@ -54,13 +61,14 @@ function TreeNode({ chapter: ch, childrenOf, depth, novelId, votingRoundId, conn
   votingRoundId?: string;
   connectedAddress?: string;
   continuable: boolean;
+  activeWorldLineIds?: Set<string>;
 }) {
   const children = childrenOf.get(ch.id) || [];
   const [collapsed, setCollapsed] = useState(false);
   const isOwn = !!connectedAddress && ch.author.toLowerCase() === connectedAddress.toLowerCase();
   const isAnchor = !!ch._anchor;
   const hasChildren = children.length > 0;
-  const badge = isAnchor ? null : getChapterBadge(ch, continuable);
+  const badge = isAnchor ? null : getChapterBadge(ch, continuable, activeWorldLineIds);
 
   const borderColor = isAnchor
     ? "border-amber-600 border-dashed bg-amber-950/30"
@@ -121,6 +129,7 @@ function TreeNode({ chapter: ch, childrenOf, depth, novelId, votingRoundId, conn
           votingRoundId={votingRoundId}
           connectedAddress={connectedAddress}
           continuable={continuable}
+          activeWorldLineIds={activeWorldLineIds}
         />
       ))}
     </div>
@@ -129,7 +138,7 @@ function TreeNode({ chapter: ch, childrenOf, depth, novelId, votingRoundId, conn
 
 // ── Epoch section ─────────────────────────────────────────────────
 
-function EpochSection({ epoch, data, loading, onExpand, novelId, votingRoundId, connectedAddress, continuable, isCurrentEpoch }: {
+function EpochSection({ epoch, data, loading, onExpand, novelId, votingRoundId, connectedAddress, continuable, isCurrentEpoch, activeWorldLineIds }: {
   epoch: number;
   data: EpochData | undefined;
   loading: boolean;
@@ -139,6 +148,7 @@ function EpochSection({ epoch, data, loading, onExpand, novelId, votingRoundId, 
   connectedAddress?: string;
   continuable: boolean;
   isCurrentEpoch: boolean;
+  activeWorldLineIds?: Set<string>;
 }) {
   // Merge anchors into display chapters
   const allChapters: DisplayChapter[] = [];
@@ -206,6 +216,7 @@ function EpochSection({ epoch, data, loading, onExpand, novelId, votingRoundId, 
               votingRoundId={votingRoundId}
               connectedAddress={connectedAddress}
               continuable={continuable}
+              activeWorldLineIds={activeWorldLineIds}
             />
           ))}
         </div>
@@ -216,7 +227,7 @@ function EpochSection({ epoch, data, loading, onExpand, novelId, votingRoundId, 
 
 // ── Main component ────────────────────────────────────────────────
 
-export function StoryTree({ epochData, maxEpoch, loadingEpochs, onExpandEpoch, novelId, votingRoundId, connectedAddress, continuable }: StoryTreeProps) {
+export function StoryTree({ epochData, maxEpoch, loadingEpochs, onExpandEpoch, novelId, votingRoundId, connectedAddress, continuable, activeWorldLineIds }: StoryTreeProps) {
   const epochs = Array.from({ length: maxEpoch }, (_, i) => i + 1);
 
   return (
@@ -233,6 +244,7 @@ export function StoryTree({ epochData, maxEpoch, loadingEpochs, onExpandEpoch, n
           connectedAddress={connectedAddress}
           continuable={!!continuable}
           isCurrentEpoch={epoch === maxEpoch}
+          activeWorldLineIds={activeWorldLineIds}
         />
       ))}
     </div>

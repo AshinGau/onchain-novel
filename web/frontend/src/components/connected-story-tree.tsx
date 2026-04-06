@@ -10,13 +10,14 @@ interface EpochData {
   anchors: TreeChapter[];
 }
 
-export function ConnectedStoryTree({ initialChapters, initialAnchors, currentEpoch, novelId, votingRoundId, continuable }: {
+export function ConnectedStoryTree({ initialChapters, initialAnchors, currentEpoch, novelId, votingRoundId, continuable, activeWorldLineIds }: {
   initialChapters: TreeChapter[];
   initialAnchors?: TreeChapter[];
   currentEpoch: number;
   novelId: string;
   votingRoundId?: string;
   continuable?: boolean;
+  activeWorldLineIds?: Set<string>;
 }) {
   const { address } = useAccount();
 
@@ -65,6 +66,7 @@ export function ConnectedStoryTree({ initialChapters, initialAnchors, currentEpo
       votingRoundId={votingRoundId}
       connectedAddress={address}
       continuable={continuable}
+      activeWorldLineIds={activeWorldLineIds}
     />
   );
 }

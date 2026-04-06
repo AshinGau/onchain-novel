@@ -14,6 +14,8 @@ interface SiblingChapter {
   id: string;
   author: string;
   chapter_index: number;
+  round: number;
+  epoch: number;
   vote_count: string;
   is_world_line: boolean;
   is_canon: boolean;
@@ -45,6 +47,12 @@ export default async function ChapterPage({ params }: { params: Promise<{ id: st
   try {
     const childData = await fetchApi<{ children: SiblingChapter[] }>(`/api/chapters/${id}/children`);
     children = childData.children;
+  } catch {}
+
+  let isActiveWorldLine = false;
+  try {
+    const wlData = await fetchApi<{ worldlines: { id: string }[] }>(`/api/novels/${chapter.novel_id}/worldlines`);
+    isActiveWorldLine = wlData.worldlines.some(wl => wl.id === id);
   } catch {}
 
   let comments: { id: number; author_address: string | null; content: string; created_at: string }[] = [];
@@ -153,7 +161,7 @@ export default async function ChapterPage({ params }: { params: Promise<{ id: st
 
       {/* Actions */}
       <div className="flex gap-2 mt-4 border-t border-neutral-800 pt-4">
-        {chapter.is_world_line && novel?.active && novel.epoch_phase === 0 && novel.round_phase === 0 && (
+        {isActiveWorldLine && novel?.active && novel.epoch_phase === 0 && novel.round_phase === 0 && (
           <Link href={`/write/${chapter.novel_id}/${chapter.id}`}>
             <Button variant="outline">Continue this story</Button>
           </Link>

@@ -152,16 +152,35 @@ router.get("/:id/tree", async (req, res) => {
         params
       );
 
-      // For epoch >= 2, fetch anchor chapters (parents from previous epochs)
+      // For epoch >= 2, fetch anchor chapters from previous epochs.
+      // Anchors are the active worldlines (canon winners from last epoch) —
+      // they always appear as the "root" of the current epoch's tree.
       let anchors: typeof chaptersRes.rows = [];
       if (epoch >= 2) {
+        // Collect parent IDs that point outside the current epoch
         const chapterIds = new Set(chaptersRes.rows.map((c) => c.id as string));
         const externalParentIds = chaptersRes.rows
           .map((c) => c.parent_id as string)
           .filter((pid) => pid && pid !== "0" && !chapterIds.has(pid));
 
-        if (externalParentIds.length > 0) {
-          const unique = [...new Set(externalParentIds)];
+        // Active worldlines (leaf world-line chapters) are always anchors
+        const wlRes = await query(
+          `SELECT id FROM chapters c WHERE c.novel_id = $1 AND c.is_world_line = TRUE
+             AND NOT EXISTS (
+               SELECT 1 FROM chapters child
+               WHERE child.parent_id = c.id AND child.novel_id = $1 AND child.is_world_line = TRUE
+             )`,
+          [id]
+        );
+        const anchorIds = new Set([
+          ...externalParentIds,
+          ...wlRes.rows.map((r) => r.id as string),
+        ]);
+        // Remove IDs already in current epoch chapters
+        for (const cid of chapterIds) anchorIds.delete(cid);
+
+        if (anchorIds.size > 0) {
+          const unique = [...anchorIds];
           const placeholders = unique.map((_: string, i: number) => `$${i + 2}`).join(",");
           const anchorRes = await query(
             `SELECT id, parent_id, author, chapter_index, round, epoch, vote_count,
@@ -214,9 +233,13 @@ router.get("/:id/worldlines", async (req, res) => {
   try {
     const { id } = req.params;
     const wlRes = await query(
-      `SELECT id, parent_id, author, content_hash, chapter_index, round, epoch, vote_count
-       FROM chapters WHERE novel_id = $1 AND is_world_line = TRUE
-       ORDER BY id ASC`,
+      `SELECT c.id, c.parent_id, c.author, c.content_hash, c.chapter_index, c.round, c.epoch, c.vote_count
+       FROM chapters c WHERE c.novel_id = $1 AND c.is_world_line = TRUE
+         AND NOT EXISTS (
+           SELECT 1 FROM chapters child
+           WHERE child.parent_id = c.id AND child.novel_id = $1 AND child.is_world_line = TRUE
+         )
+       ORDER BY c.id ASC`,
       [id]
     );
     res.json({ worldlines: wlRes.rows });
