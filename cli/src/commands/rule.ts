@@ -7,7 +7,7 @@ import {
   getRuleNames,
   getRule,
   getRuleProposal,
-} from "onchain-novel-shared";
+} from "../shared/index.js";
 import { getWalletClient, getPublicClient, getContracts } from "../utils/client.js";
 import { apiGet } from "../utils/api.js";
 import { header, kv, success, error, txHash } from "../utils/format.js";
@@ -15,7 +15,7 @@ import chalk from "chalk";
 
 function requireRulesEngine(contracts: ReturnType<typeof getContracts>): `0x${string}` {
   if (!contracts.rulesEngine) {
-    error("RulesEngine contract address not configured. Run 'onchain-novel config set contracts.rulesEngine <address>'.");
+    error("RulesEngine contract address not configured. Run 'onchain-novel-cli config set contracts.rulesEngine <address>'.");
     return process.exit(1);
   }
   return contracts.rulesEngine;

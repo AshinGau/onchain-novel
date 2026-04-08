@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";
 import { saveConfig, loadConfig } from "../utils/config.js";
-import type { OnchainNovelConfig } from "onchain-novel-shared";
+import type { OnchainNovelConfig } from "../shared/index.js";
 import { success, error, header, kv } from "../utils/format.js";
 
 function prompt(rl: ReturnType<typeof createInterface>, question: string, defaultVal?: string): Promise<string> {
@@ -71,8 +71,7 @@ export function registerSetupCommand(program: Command): void {
         const mcpConfig = {
           mcpServers: {
             "onchain-novel": {
-              command: "onchain-novel",
-              args: ["mcp"],
+              command: "onchain-novel-mcp",
               env: {
                 RPC_URL: rpcUrl,
                 ...(privateKey ? { PRIVATE_KEY: privateKey } : {}),
@@ -98,13 +97,13 @@ export function registerSetupCommand(program: Command): void {
             content = readFileSync(guidePath, "utf-8");
           } catch {
             // Fallback if guides not found in dist
-            content = `# Novel ${role.charAt(0).toUpperCase() + role.slice(1)} Workflow\n\nRun \`onchain-novel guide ${role}\` for details.\n`;
+            content = `# Novel ${role.charAt(0).toUpperCase() + role.slice(1)} Workflow\n\nRun \`onchain-novel-cli guide ${role}\` for details.\n`;
           }
           writeFileSync(join(skillsDir, `novel-${role}.md`), content);
         }
         success("Generated .claude/commands/novel-{author,voter,creator,reader}.md");
 
-        console.log("\nSetup complete. Run 'onchain-novel --help' to see available commands.\n");
+        console.log("\nSetup complete. Run 'onchain-novel-cli --help' to see available commands.\n");
       } catch (err) {
         error(String(err));
         process.exit(1);

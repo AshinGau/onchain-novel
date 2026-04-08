@@ -1,15 +1,21 @@
-import { type Address, type Hex } from "viem";
+import type { Address, Hex } from "viem";
 
-export const config = {
+export interface McpConfig {
+  rpcUrl: string;
+  chainId: number;
+  privateKey: Hex;
+  novelCore: Address;
+  bountyBoard: Address;
+  rulesEngine: Address;
+  apiBaseUrl: string;
+}
+
+export const config: McpConfig = {
   rpcUrl: process.env.RPC_URL || "http://localhost:8545",
-  novelCoreAddress: (process.env.NOVEL_CORE_ADDRESS || "") as Address,
-  votingEngineAddress: (process.env.VOTING_ENGINE_ADDRESS || "") as Address,
-  prizePoolAddress: (process.env.PRIZE_POOL_ADDRESS || "") as Address,
-  chapterNFTAddress: (process.env.CHAPTER_NFT_ADDRESS || "") as Address,
-  rulesEngineAddress: (process.env.RULES_ENGINE_ADDRESS || "") as Address,
+  chainId: parseInt(process.env.CHAIN_ID || "31337"),
   privateKey: (process.env.PRIVATE_KEY || "") as Hex,
-  /** Optional Web API base URL (e.g. "http://localhost:3001"). When set, read tools use the API instead of RPC. */
+  novelCore: (process.env.NOVEL_CORE_ADDRESS || "") as Address,
+  bountyBoard: (process.env.BOUNTY_BOARD_ADDRESS || "") as Address,
+  rulesEngine: (process.env.RULES_ENGINE_ADDRESS || "") as Address,
   apiBaseUrl: process.env.API_BASE_URL || "",
-  /** Agent creativity level (0.0–1.0). Shapes writing style guidance in prompts. Default 0.5. */
-  agentCreativity: Math.min(1, Math.max(0, Number(process.env.AGENT_CREATIVITY) || 0.5)),
 };

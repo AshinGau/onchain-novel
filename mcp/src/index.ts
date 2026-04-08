@@ -2,41 +2,26 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
-// Tools
 import { registerNovelTools } from "./tools/novel.js";
 import { registerChapterTools } from "./tools/chapter.js";
-import { registerVotingTools } from "./tools/voting.js";
-import { registerPrizeTools } from "./tools/prize.js";
-import { registerKeeperTools } from "./tools/keeper.js";
-import { registerRuleTools } from "./tools/rules.js";
-import { registerWalletTools } from "./tools/wallet.js";
-
-// Skills
-import { registerWriterSkills } from "./skills/writer.js";
-import { registerVoterSkills } from "./skills/voter.js";
-import { registerKeeperSkills } from "./skills/keeper.js";
+import { registerVoteTools } from "./tools/vote.js";
+import { registerTipTools } from "./tools/tip.js";
+import { registerBountyTools } from "./tools/bounty.js";
+import { registerRuleTools } from "./tools/rule.js";
 
 async function main() {
   const server = new McpServer({
     name: "onchain-novel",
-    version: "0.1.0",
+    version: "0.2.0",
   });
 
-  // Register all tools
   registerNovelTools(server);
   registerChapterTools(server);
-  registerVotingTools(server);
-  registerPrizeTools(server);
-  registerKeeperTools(server);
+  registerVoteTools(server);
+  registerTipTools(server);
+  registerBountyTools(server);
   registerRuleTools(server);
-  registerWalletTools(server);
 
-  // Register all skills
-  registerWriterSkills(server);
-  registerVoterSkills(server);
-  registerKeeperSkills(server);
-
-  // Start with stdio transport
   const transport = new StdioServerTransport();
   await server.connect(transport);
 

@@ -4,7 +4,7 @@ import {
   createBounty as createBountyTx,
   claimBounty as claimBountyTx,
   refundBounty as refundBountyTx,
-} from "onchain-novel-shared";
+} from "../shared/index.js";
 import { getWalletClient, getContracts } from "../utils/client.js";
 import { apiGet } from "../utils/api.js";
 import { header, kv, success, error, txHash, eth, parseDuration } from "../utils/format.js";
@@ -22,7 +22,7 @@ export function registerBountyCommands(program: Command): void {
         const client = getWalletClient();
         const contracts = getContracts();
         if (!contracts.bountyBoard) {
-          error("BountyBoard contract address not configured. Run 'onchain-novel config set contracts.bountyBoard <address>'.");
+          error("BountyBoard contract address not configured. Run 'onchain-novel-cli config set contracts.bountyBoard <address>'.");
           return process.exit(1);
         }
 

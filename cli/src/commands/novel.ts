@@ -7,7 +7,7 @@ import {
   buildContentSubmission,
   type NovelConfig,
   type NovelMetadata,
-} from "onchain-novel-shared";
+} from "../shared/index.js";
 import { getWalletClient, getContracts } from "../utils/client.js";
 import { apiGet } from "../utils/api.js";
 import { header, kv, success, error, txHash, eth, table, roundPhaseName } from "../utils/format.js";

@@ -1,6 +1,6 @@
 import { Command } from "commander";
 import { parseEther } from "viem";
-import { submitChapter as submitChapterTx, buildContentSubmission } from "onchain-novel-shared";
+import { submitChapter as submitChapterTx, buildContentSubmission } from "../shared/index.js";
 import { getWalletClient, getContracts } from "../utils/client.js";
 import { apiGet } from "../utils/api.js";
 import { header, kv, success, error, txHash, table } from "../utils/format.js";
