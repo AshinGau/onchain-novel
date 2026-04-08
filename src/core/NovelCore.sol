@@ -93,11 +93,6 @@ contract NovelCore is
     /// @notice Novel ID => round => total revealed vote stake
     mapping(uint64 => mapping(uint32 => uint256)) private _roundRevealedStakes;
 
-    /// @dev Deprecated: rules moved to RulesEngine (kept for storage layout compatibility)
-    mapping(uint64 => string[]) private __deprecated_ruleNames;
-
-    /// @dev Deprecated: rules moved to RulesEngine (kept for storage layout compatibility)
-    mapping(uint64 => mapping(string => string)) private __deprecated_rules;
 
     // ============================================================
     //                         ERRORS

@@ -14,7 +14,8 @@ router.get("/novels/:id/rules", async (req, res) => {
     );
     res.json(result.rows);
   } catch (err) {
-    res.status(500).json({ error: String(err) });
+    console.error("GET /api/novels/:id/rules error:", err);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -42,7 +43,8 @@ router.get("/novels/:id/rule-proposals", async (req, res) => {
     );
     res.json(result.rows);
   } catch (err) {
-    res.status(500).json({ error: String(err) });
+    console.error("GET /api/novels/:id/rule-proposals error:", err);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -62,7 +64,8 @@ router.get("/rule-proposals/:id", async (req, res) => {
 
     res.json({ ...proposalRes.rows[0], votes: votesRes.rows });
   } catch (err) {
-    res.status(500).json({ error: String(err) });
+    console.error("GET /api/rule-proposals/:id error:", err);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 

@@ -1,10 +1,8 @@
-import { createPublicClient, http, type Log, type PublicClient, formatEther } from "viem";
+import { createPublicClient, http, type Log, type PublicClient } from "viem";
 import { foundry } from "viem/chains";
 import { getClient, query } from "../db/index.js";
 import { env } from "../utils/env.js";
-import { novelCoreAbi, votingEngineAbi, prizePoolAbi, chapterNFTAbi } from "../utils/abi.js";
-import { handleNovelCoreEvent, handleVotingEvent, handlePrizePoolEvent, handleNFTEvent, handleRulesEvent } from "./handlers.js";
-import { fetchChapterContent } from "./content-fetcher.js";
+import { handleNovelCoreEvent, handleVotingEvent, handlePrizePoolEvent, handleBountyBoardEvent, handleRulesEvent } from "./handlers.js";
 
 let currentRpcIndex = 0;
 const allRpcUrls = [env.RPC_URL, ...env.RPC_FALLBACK_URLS];
@@ -36,13 +34,6 @@ async function getIndexerState(): Promise<{ lastBlock: bigint; lastBlockHash: st
   };
 }
 
-async function updateIndexerState(block: bigint, blockHash: string | null) {
-  await query("UPDATE indexer_state SET last_block = $1, last_block_hash = $2, updated_at = NOW() WHERE id = 1", [
-    block.toString(),
-    blockHash,
-  ]);
-}
-
 async function adjustBatchSize(newSize: number) {
   await query("UPDATE indexer_state SET batch_size = $1 WHERE id = 1", [newSize]);
 }
@@ -51,6 +42,7 @@ interface FetchResult {
   logs: Log[];
   endBlock: bigint;
   endBlockHash: string | null;
+  client: PublicClient; // May differ from input if RPC was rotated
 }
 
 async function fetchLogs(
@@ -73,6 +65,7 @@ async function fetchBatchWithRetry(
   chainHead: bigint,
   addresses: `0x${string}`[]
 ): Promise<FetchResult> {
+  let currentClient = client;
   let currentBatchSize = batchSize;
   let retries = 0;
   const maxRetries = 10;
@@ -83,15 +76,15 @@ async function fetchBatchWithRetry(
       : fromBlock + BigInt(currentBatchSize) - 1n;
 
     try {
-      const logs = await fetchLogs(client, fromBlock, toBlock, addresses);
-      const block = await client.getBlock({ blockNumber: toBlock });
+      const logs = await fetchLogs(currentClient, fromBlock, toBlock, addresses);
+      const block = await currentClient.getBlock({ blockNumber: toBlock });
 
       // Restore batch size if we had shrunk it
       if (currentBatchSize < batchSize) {
         await adjustBatchSize(currentBatchSize);
       }
 
-      return { logs, endBlock: toBlock, endBlockHash: block.hash };
+      return { logs, endBlock: toBlock, endBlockHash: block.hash, client: currentClient };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       retries++;
@@ -108,7 +101,7 @@ async function fetchBatchWithRetry(
         console.warn(`Network error, waiting ${delay}ms (retry ${retries}/${maxRetries})`);
         if (allRpcUrls.length > 1) rotateRpc();
         await sleep(delay);
-        client = createClient();
+        currentClient = createClient();
       } else {
         console.error(`Unexpected error fetching logs: ${msg}`);
         const delay = Math.min(1000 * Math.pow(2, retries), 60000);
@@ -158,8 +151,8 @@ async function processLog(log: Log, dbClient: pg.PoolClient, rpcClient: PublicCl
     await handleVotingEvent(log, dbClient);
   } else if (env.PRIZE_POOL_ADDRESS && address === env.PRIZE_POOL_ADDRESS.toLowerCase()) {
     await handlePrizePoolEvent(log, dbClient);
-  } else if (env.CHAPTER_NFT_ADDRESS && address === env.CHAPTER_NFT_ADDRESS.toLowerCase()) {
-    await handleNFTEvent(log, dbClient);
+  } else if (env.BOUNTY_BOARD_ADDRESS && address === env.BOUNTY_BOARD_ADDRESS.toLowerCase()) {
+    await handleBountyBoardEvent(log, dbClient);
   } else if (env.RULES_ENGINE_ADDRESS && address === env.RULES_ENGINE_ADDRESS.toLowerCase()) {
     await handleRulesEvent(log, dbClient, rpcClient);
   }
@@ -174,7 +167,7 @@ export async function startIndexer() {
   const addresses: `0x${string}`[] = [env.NOVEL_CORE_ADDRESS];
   if (env.VOTING_ENGINE_ADDRESS) addresses.push(env.VOTING_ENGINE_ADDRESS);
   if (env.PRIZE_POOL_ADDRESS) addresses.push(env.PRIZE_POOL_ADDRESS);
-  if (env.CHAPTER_NFT_ADDRESS) addresses.push(env.CHAPTER_NFT_ADDRESS);
+  if (env.BOUNTY_BOARD_ADDRESS) addresses.push(env.BOUNTY_BOARD_ADDRESS);
   if (env.RULES_ENGINE_ADDRESS) addresses.push(env.RULES_ENGINE_ADDRESS);
 
   // Main loop
@@ -182,9 +175,10 @@ export async function startIndexer() {
     try {
       const state = await getIndexerState();
       const fromBlock = state.lastBlock > 0n ? state.lastBlock + 1n : env.INDEXER_START_BLOCK;
-      const chainHead = await client.getBlockNumber();
+      const latestBlock = await client.getBlockNumber();
+      const chainHead = latestBlock - BigInt(env.INDEXER_CONFIRMATION_BLOCKS);
 
-      if (fromBlock > chainHead) {
+      if (chainHead < 0n || fromBlock > chainHead) {
         // Caught up — poll
         await sleep(env.INDEXER_POLL_INTERVAL_MS);
         continue;
@@ -195,25 +189,27 @@ export async function startIndexer() {
         console.log(`Indexer catching up: block ${fromBlock} → ${chainHead} (${lag} blocks behind)`);
       }
 
-      const { logs, endBlock, endBlockHash } = await fetchBatchWithRetry(
+      const result = await fetchBatchWithRetry(
         client,
         fromBlock,
         state.batchSize,
         chainHead,
         addresses
       );
+      // Update client in case RPC was rotated during retry
+      client = result.client;
 
-      if (logs.length > 0) {
-        console.log(`[indexer] Processing ${logs.length} logs from block ${fromBlock} to ${endBlock}`);
+      if (result.logs.length > 0) {
+        console.log(`[indexer] Processing ${result.logs.length} logs from block ${fromBlock} to ${result.endBlock}`);
         const batchStart = Date.now();
-        await processBatch(logs, endBlock, endBlockHash, client);
-        console.log(`[indexer] Batch committed in ${Date.now() - batchStart}ms (blocks ${fromBlock}–${endBlock})`);
+        await processBatch(result.logs, result.endBlock, result.endBlockHash, client);
+        console.log(`[indexer] Batch committed in ${Date.now() - batchStart}ms (blocks ${fromBlock}–${result.endBlock})`);
       } else {
-        await processBatch(logs, endBlock, endBlockHash, client);
+        await processBatch(result.logs, result.endBlock, result.endBlockHash, client);
       }
 
       // If we're caught up, slow down
-      if (endBlock >= chainHead) {
+      if (result.endBlock >= chainHead) {
         await sleep(env.INDEXER_POLL_INTERVAL_MS);
       }
     } catch (err) {

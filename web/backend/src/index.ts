@@ -5,12 +5,14 @@ import { env } from "./utils/env.js";
 import { startIndexer } from "./indexer/index.js";
 import { retryUnfetchedContent } from "./indexer/content-fetcher.js";
 import { syncPoolBalances } from "./utils/pool-sync.js";
+import { startKeeper } from "./keeper/index.js";
 import novelsRouter from "./api/novels.js";
 import chaptersRouter from "./api/chapters.js";
 import usersRouter from "./api/users.js";
-import notificationsRouter from "./api/notifications.js";
+
 import contentRouter from "./api/content.js";
 import rulesRouter from "./api/rules.js";
+import bountiesRouter from "./api/bounties.js";
 import { query } from "./db/index.js";
 
 const app = express();
@@ -38,7 +40,6 @@ const writeLimiter = rateLimit({ windowMs: 60000, max: 20, standardHeaders: true
 
 app.use("/api", apiLimiter);
 app.use("/api/chapters/*/comments", writeLimiter);
-app.use("/api/notifications/*/mark-read", writeLimiter);
 
 // Health check
 app.get("/health", async (_req, res) => {
@@ -61,8 +62,9 @@ app.get("/health", async (_req, res) => {
 app.use("/api/novels", novelsRouter);
 app.use("/api/chapters", chaptersRouter);
 app.use("/api/users", usersRouter);
-app.use("/api/notifications", notificationsRouter);
+
 app.use("/api/content", contentRouter);
+app.use("/api/bounties", bountiesRouter);
 app.use("/api", rulesRouter);
 
 // Start server
@@ -89,3 +91,6 @@ setInterval(() => {
     console.error("Pool balance sync error:", err)
   );
 }, 60 * 1000);
+
+// Start keeper (optional, only if KEEPER_PRIVATE_KEY configured)
+startKeeper();

@@ -18,7 +18,7 @@ router.get("/:address/votes", async (req, res) => {
     const offset = (page - 1) * limit;
 
     const votesRes = await query(
-      `SELECT v.*, n.title AS novel_title, n.round_phase, n.epoch_phase
+      `SELECT v.*, n.title AS novel_title, n.round_phase
        FROM votes v
        LEFT JOIN novels n ON n.id = v.novel_id
        WHERE LOWER(v.voter) = $1
@@ -50,20 +50,10 @@ router.get("/:address/rewards", async (req, res) => {
 
     // Unclaimed voting rewards (revealed but not claimed)
     const unclaimedVotesRes = await query(
-      `SELECT v.novel_id, v.voting_round_id, n.title AS novel_title
+      `SELECT v.novel_id, v.round, n.title AS novel_title
        FROM votes v
        LEFT JOIN novels n ON n.id = v.novel_id
        WHERE LOWER(v.voter) = $1 AND v.revealed = TRUE AND v.claimed = FALSE`,
-      [addr]
-    );
-
-    // Stake events
-    const stakeRes = await query(
-      `SELECT se.novel_id, se.event_type, SUM(se.amount) AS total_amount, n.title AS novel_title
-       FROM stake_events se
-       LEFT JOIN novels n ON n.id = se.novel_id
-       WHERE LOWER(se.author) = $1
-       GROUP BY se.novel_id, se.event_type, n.title`,
       [addr]
     );
 
@@ -91,7 +81,6 @@ router.get("/:address/rewards", async (req, res) => {
 
     res.json({
       unclaimedVotes: unclaimedVotesRes.rows,
-      stakeEvents: stakeRes.rows,
       rewardClaims: claimsRes.rows,
       participatedNovels: novelsRes.rows.map(r => ({ novel_id: r.novel_id, novel_title: r.novel_title || "" })),
     });
@@ -108,8 +97,8 @@ router.get("/:address/chapters", async (req, res) => {
     const addr = address.toLowerCase();
 
     const chaptersRes = await query(
-      `SELECT c.id, c.novel_id, c.chapter_index, c.round, c.epoch, c.vote_count,
-              c.is_world_line, c.is_canon, c.created_at, n.title AS novel_title
+      `SELECT c.id, c.novel_id, c.depth, c."timestamp",
+              c.is_world_line, c.created_at, n.title AS novel_title
        FROM chapters c
        LEFT JOIN novels n ON n.id = c.novel_id
        WHERE LOWER(c.author) = $1
@@ -120,28 +109,6 @@ router.get("/:address/chapters", async (req, res) => {
     res.json({ chapters: chaptersRes.rows });
   } catch (err) {
     console.error("GET /api/users/:address/chapters error:", err);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-// GET /api/users/:address/nfts — User's chapter NFTs
-router.get("/:address/nfts", async (req, res) => {
-  try {
-    const { address } = req.params;
-    const addr = address.toLowerCase();
-
-    const nftsRes = await query(
-      `SELECT cn.*, n.title AS novel_title
-       FROM chapter_nfts cn
-       LEFT JOIN novels n ON n.id = cn.novel_id
-       WHERE LOWER(cn.author) = $1
-       ORDER BY cn.block_number DESC`,
-      [addr]
-    );
-
-    res.json({ nfts: nftsRes.rows });
-  } catch (err) {
-    console.error("GET /api/users/:address/nfts error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });

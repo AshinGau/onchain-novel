@@ -4,9 +4,8 @@ pragma solidity ^0.8.28;
 import {DataTypes} from "../libraries/DataTypes.sol";
 
 /// @title IRulesEngine
-/// @notice Interface for the world-building rules governance module (V2)
-/// @dev Rule proposal voting eligibility is based on world-line authorship (replaces V1 canon authorship).
-///      Checks isWorldLineAuthor() on NovelCore instead of isCanonAuthor().
+/// @notice Interface for the world-building rules governance module
+/// @dev Rule proposal voting eligibility is based on world-line authorship via isWorldLineAuthor() on NovelCore.
 interface IRulesEngine {
     // ============================================================
     //                          EVENTS
