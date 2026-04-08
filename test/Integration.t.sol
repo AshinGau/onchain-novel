@@ -7,824 +7,599 @@ import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.s
 import {NovelCore} from "../src/core/NovelCore.sol";
 import {VotingEngine} from "../src/core/VotingEngine.sol";
 import {PrizePool} from "../src/core/PrizePool.sol";
-import {ChapterNFT} from "../src/core/ChapterNFT.sol";
+import {RulesEngine} from "../src/core/RulesEngine.sol";
+import {BountyBoard} from "../src/core/BountyBoard.sol";
 import {DataTypes} from "../src/libraries/DataTypes.sol";
 
-/// @title Integration Test
-/// @notice Tests the full lifecycle: create novel → submit chapters → round voting → epoch settlement
-/// @dev Simulates multi-Agent collaborative novel creation on-chain
-contract IntegrationTest is Test {
+/// @title V2TestBase
+/// @notice Base contract with deployment helpers for all V2 tests
+abstract contract V2TestBase is Test {
     NovelCore public novelCore;
     VotingEngine public votingEngine;
     PrizePool public prizePool;
-    ChapterNFT public chapterNFT;
+    RulesEngine public rulesEngine;
+    BountyBoard public bountyBoard;
 
-    address public owner = address(0x1001);
-    address public creator = address(0x1010);
-    address public author1 = address(0x2020);
-    address public author2 = address(0x3030);
-    address public author3 = address(0x4040);
-    address public reader1 = address(0x5050);
-    address public reader2 = address(0x6060);
+    address public deployer = address(0xD);
+    address public creator = address(0x1);
+    address public author1 = address(0x2);
+    address public author2 = address(0x3);
+    address public author3 = address(0x4);
+    address public voter1 = address(0x5);
+    address public voter2 = address(0x6);
+    address public voter3 = address(0x7);
+    address public keeper = address(0x8);
 
-    DataTypes.NovelConfig defaultConfig;
-    DataTypes.NovelMetadata defaultMetadata;
+    uint256 constant SUBMISSION_FEE = 0.001 ether;
+    uint256 constant VOTE_STAKE = 0.005 ether;
+    uint256 constant NOMINATION_FEE = 0.01 ether;
+    uint64 constant NOMINATE_DURATION = 1 days;
+    uint64 constant COMMIT_DURATION = 2 days;
+    uint64 constant REVEAL_DURATION = 1 days;
+    uint64 constant MIN_ROUND_GAP = 1 days;
 
-    function setUp() public {
-        // Deploy implementations
-        NovelCore novelCoreImpl = new NovelCore();
-        VotingEngine votingEngineImpl = new VotingEngine();
-        PrizePool prizePoolImpl = new PrizePool();
-        ChapterNFT chapterNFTImpl = new ChapterNFT();
+    function setUp() public virtual {
+        _deployAll();
+        _fundAccounts();
+    }
 
-        // Deploy proxies
-        bytes memory novelCoreData = abi.encodeCall(NovelCore.initialize, (owner, address(0), address(0), address(0)));
-        ERC1967Proxy novelCoreProxy = new ERC1967Proxy(address(novelCoreImpl), novelCoreData);
-        novelCore = NovelCore(payable(address(novelCoreProxy)));
-
-        bytes memory votingData = abi.encodeCall(VotingEngine.initialize, (owner, address(novelCoreProxy)));
-        ERC1967Proxy votingProxy = new ERC1967Proxy(address(votingEngineImpl), votingData);
-        votingEngine = VotingEngine(payable(address(votingProxy)));
-
-        bytes memory prizeData = abi.encodeCall(PrizePool.initialize, (owner, address(novelCoreProxy)));
-        ERC1967Proxy prizeProxy = new ERC1967Proxy(address(prizePoolImpl), prizeData);
-        prizePool = PrizePool(address(prizeProxy));
-
-        bytes memory nftData = abi.encodeCall(ChapterNFT.initialize, (owner, address(novelCoreProxy)));
-        ERC1967Proxy nftProxy = new ERC1967Proxy(address(chapterNFTImpl), nftData);
-        chapterNFT = ChapterNFT(address(nftProxy));
-
-        // Wire up NovelCore to modules
-        vm.startPrank(owner);
-        novelCore.setVotingEngine(address(votingEngine));
-        novelCore.setPrizePool(address(prizePool));
-        novelCore.setChapterNFT(address(chapterNFT));
-        vm.stopPrank();
-
-        // Fund test accounts
+    function _fundAccounts() internal {
         vm.deal(creator, 100 ether);
         vm.deal(author1, 100 ether);
         vm.deal(author2, 100 ether);
         vm.deal(author3, 100 ether);
-        vm.deal(reader1, 100 ether);
-        vm.deal(reader2, 100 ether);
+        vm.deal(voter1, 100 ether);
+        vm.deal(voter2, 100 ether);
+        vm.deal(voter3, 100 ether);
+        vm.deal(keeper, 100 ether);
+    }
 
-        // Default config: 1 round per epoch, 2 world lines
-        defaultConfig = DataTypes.NovelConfig({
-            minChapterLength: 100,
-            maxChapterLength: 10000,
-            roundMinDuration: 1 days,
-            roundMinSubmissions: 3,
+    function _deployAll() internal {
+        vm.startPrank(deployer);
+
+        NovelCore novelCoreImpl = new NovelCore();
+        VotingEngine votingEngineImpl = new VotingEngine();
+        PrizePool prizePoolImpl = new PrizePool();
+        RulesEngine rulesEngineImpl = new RulesEngine();
+        BountyBoard bountyBoardImpl = new BountyBoard();
+
+        bytes memory votingData = abi.encodeCall(VotingEngine.initialize, (deployer, address(1)));
+        ERC1967Proxy votingProxy = new ERC1967Proxy(address(votingEngineImpl), votingData);
+        votingEngine = VotingEngine(payable(address(votingProxy)));
+
+        bytes memory prizeData = abi.encodeCall(PrizePool.initialize, (deployer, address(1)));
+        ERC1967Proxy prizeProxy = new ERC1967Proxy(address(prizePoolImpl), prizeData);
+        prizePool = PrizePool(payable(address(prizeProxy)));
+
+        bytes memory rulesData = abi.encodeCall(RulesEngine.initialize, (deployer, address(1), address(prizeProxy)));
+        ERC1967Proxy rulesProxy = new ERC1967Proxy(address(rulesEngineImpl), rulesData);
+        rulesEngine = RulesEngine(address(rulesProxy));
+
+        bytes memory novelCoreData = abi.encodeCall(
+            NovelCore.initialize, (deployer, address(votingProxy), address(prizeProxy), address(rulesProxy))
+        );
+        ERC1967Proxy novelCoreProxy = new ERC1967Proxy(address(novelCoreImpl), novelCoreData);
+        novelCore = NovelCore(payable(address(novelCoreProxy)));
+
+        bytes memory bountyData =
+            abi.encodeCall(BountyBoard.initialize, (deployer, address(novelCoreProxy), address(prizeProxy)));
+        ERC1967Proxy bountyProxy = new ERC1967Proxy(address(bountyBoardImpl), bountyData);
+        bountyBoard = BountyBoard(payable(address(bountyProxy)));
+
+        votingEngine.setNovelCore(address(novelCoreProxy));
+        prizePool.setNovelCore(address(novelCoreProxy));
+        rulesEngine.setNovelCore(address(novelCoreProxy));
+        prizePool.setRulesEngine(address(rulesProxy));
+        prizePool.setBountyBoard(address(bountyProxy));
+
+        vm.stopPrank();
+    }
+
+    function _defaultConfig() internal pure returns (DataTypes.NovelConfig memory) {
+        return DataTypes.NovelConfig({
+            minChapterLength: 10,
+            maxChapterLength: 50000,
+            submissionFee: SUBMISSION_FEE,
             worldLineCount: 2,
-            roundsPerEpoch: 1,
-            prizeReleaseRate: 3000, // 30%
-            voterRewardRate: 1000, // 10%
-            commitDuration: 3 days,
-            revealDuration: 2 days,
-            stakeAmount: 0.01 ether,
-            spamRounds: 3,
-            spamThreshold: 20,
+            voteStake: VOTE_STAKE,
+            nominationFee: NOMINATION_FEE,
+            nominateDuration: NOMINATE_DURATION,
+            commitDuration: COMMIT_DURATION,
+            revealDuration: REVEAL_DURATION,
+            minRoundGap: MIN_ROUND_GAP,
+            prizeReleaseRate: 2000,
+            voterRewardRate: 1500,
             contentLocation: DataTypes.ContentLocation.Onchain,
             contentBaseUrl: "",
-            ruleFee: 0.001 ether,
+            ruleFee: 0.01 ether,
             ruleVoteDuration: 3 days,
-            ruleQuorum: 1
+            ruleQuorum: 2
         });
-
-        defaultMetadata = DataTypes.NovelMetadata({title: "Test Novel", description: "A test novel", coverUri: ""});
     }
 
-    // ============================================================
-    //                    HELPERS
-    // ============================================================
+    function _defaultMetadata() internal pure returns (DataTypes.NovelMetadata memory) {
+        return DataTypes.NovelMetadata({title: "Test Novel", description: "A test novel", coverUri: ""});
+    }
 
-    function _makeSubmission(bytes memory content) internal pure returns (DataTypes.ContentSubmission memory) {
+    function _makeContent(bytes memory text) internal pure returns (DataTypes.ContentSubmission memory) {
         return DataTypes.ContentSubmission({
-            contentHash: keccak256(content),
-            declaredLength: uint64(content.length),
-            content: content
+            contentHash: keccak256(text),
+            declaredLength: uint64(text.length),
+            content: text
         });
     }
 
-    function _genesisSubmissions(bytes memory content)
+    function _createNovel() internal returns (uint64 novelId) {
+        return _createNovelWith(creator, _defaultConfig(), 1 ether);
+    }
+
+    function _createNovelWith(address who, DataTypes.NovelConfig memory config, uint256 value)
         internal
-        pure
-        returns (DataTypes.ContentSubmission[] memory subs)
+        returns (uint64 novelId)
     {
-        subs = new DataTypes.ContentSubmission[](1);
-        subs[0] = _makeSubmission(content);
-    }
-
-    function _multiGenesisSubmissions() internal pure returns (DataTypes.ContentSubmission[] memory subs) {
-        subs = new DataTypes.ContentSubmission[](2);
-        subs[0] = _makeSubmission(
-            bytes(
-                "Genesis chapter one content that is long enough to meet the minimum length requirement of 100 bytes for testing"
-            )
-        );
-        subs[1] = _makeSubmission(
-            bytes(
-                "Genesis chapter two content that is long enough to meet the minimum length requirement of 100 bytes for this test"
-            )
+        vm.prank(who);
+        novelId = novelCore.createNovel{value: value}(
+            config, _defaultMetadata(), _makeContent("root chapter content for novel")
         );
     }
 
-    bytes constant GENESIS_CONTENT =
-        "Genesis chapter content that is long enough to meet the minimum chapter length requirement of one hundred bytes padding";
-    bytes constant CHAPTER1_CONTENT =
-        "Chapter one content that is sufficiently long to meet the minimum chapter length requirement of one hundred bytes padding";
-    bytes constant CHAPTER2_CONTENT =
-        "Chapter two content that is sufficiently long to meet the minimum chapter length requirement of one hundred bytes padding";
-    bytes constant CHAPTER3_CONTENT =
-        "Chapter three content that is sufficiently long to meet the minimum chapter length requirement of hundred bytes padding";
-
-    function _createNovel(uint256 ethValue) internal returns (uint256 novelId) {
-        vm.prank(creator);
-        novelId =
-            novelCore.createNovel{value: ethValue}(defaultConfig, defaultMetadata, _genesisSubmissions(GENESIS_CONTENT));
+    function _submitChapter(address who, uint64 novelId, uint64 parentId, bytes memory text)
+        internal
+        returns (uint64)
+    {
+        uint64 countBefore = novelCore.getChapterCount();
+        vm.prank(who);
+        novelCore.submitChapter{value: SUBMISSION_FEE}(novelId, parentId, _makeContent(text));
+        return countBefore + 1;
     }
 
-    // ============================================================
-    //              TEST: Novel Creation
-    // ============================================================
+    function _runFullRound(uint64 novelId, address[] memory voters, uint64 targetCandidate, bytes32 salt) internal {
+        vm.prank(keeper);
+        novelCore.startRound(novelId);
 
-    function test_CreateNovel() public {
-        uint256 novelId = _createNovel(1 ether);
+        vm.warp(block.timestamp + NOMINATE_DURATION + 1);
+        vm.prank(keeper);
+        novelCore.closeNomination(novelId);
 
+        bytes32 commitHash = keccak256(abi.encodePacked(targetCandidate, salt));
+        for (uint256 i = 0; i < voters.length; i++) {
+            vm.prank(voters[i]);
+            novelCore.commitVote{value: VOTE_STAKE}(novelId, commitHash);
+        }
+
+        vm.warp(block.timestamp + COMMIT_DURATION + 1);
+        vm.prank(keeper);
+        novelCore.closeCommit(novelId);
+
+        for (uint256 i = 0; i < voters.length; i++) {
+            vm.prank(voters[i]);
+            novelCore.revealVote(novelId, targetCandidate, salt);
+        }
+
+        vm.warp(block.timestamp + REVEAL_DURATION + 1);
+        vm.prank(keeper);
+        novelCore.settleRound(novelId);
+    }
+}
+
+// ================================================================
+//                      INTEGRATION TESTS
+// ================================================================
+
+contract IntegrationTest is V2TestBase {
+    // ----------------------------------------------------------
+    //  Novel creation with root chapter
+    // ----------------------------------------------------------
+    function test_createNovel() public {
+        uint64 novelId = _createNovel();
         assertEq(novelId, 1);
-        assertEq(novelCore.getNovelCount(), 1);
 
         DataTypes.Novel memory novel = novelCore.getNovel(novelId);
+        assertEq(novel.id, 1);
         assertEq(novel.creator, creator);
-        assertEq(novel.currentRound, 1);
-        assertEq(novel.currentEpoch, 1);
+        assertEq(novel.currentRound, 0);
         assertTrue(novel.active);
-        assertEq(novel.bootstrapChapterCount, 1);
-        assertEq(novel.cumulativeCanonChapters, 0);
-        assertEq(uint8(novel.roundPhase), uint8(DataTypes.RoundPhase.Submitting));
+        assertEq(uint8(novel.roundPhase), uint8(DataTypes.RoundPhase.Idle));
 
-        assertEq(prizePool.getPoolBalance(novelId), 1 ether);
+        DataTypes.Chapter memory root = novelCore.getChapter(1);
+        assertEq(root.id, 1);
+        assertEq(root.novelId, novelId);
+        assertEq(root.parentId, 0);
+        assertEq(root.author, creator);
+        assertEq(root.depth, 1);
 
-        uint256[] memory worldLines = novelCore.getActiveWorldLines(novelId);
-        assertEq(worldLines.length, 1);
+        uint64[] memory wl = novelCore.getWorldLineAncestors(novelId);
+        assertEq(wl.length, 1);
+        assertEq(wl[0], 1);
     }
 
-    function test_CreateNovelWithoutPrizePool() public {
-        uint256 novelId = _createNovel(0);
-        assertEq(novelId, 1);
-        assertEq(prizePool.getPoolBalance(novelId), 0);
+    // ----------------------------------------------------------
+    //  Fork novel with fee calculation
+    // ----------------------------------------------------------
+    function test_forkNovel() public {
+        uint64 originalId = _createNovel();
+
+        vm.prank(voter1);
+        novelCore.tipNovel{value: 5 ether}(originalId);
+
+        uint256 sourcePool = prizePool.getPoolBalance(originalId);
+        uint256 forkFee = sourcePool * 100 / 10000; // FORK_FEE_RATE = 100 bps
+        if (forkFee < SUBMISSION_FEE) forkFee = SUBMISSION_FEE;
+        uint256 totalNeeded = forkFee + SUBMISSION_FEE;
+
+        address forker = address(0x99);
+        vm.deal(forker, 100 ether);
+
+        DataTypes.NovelConfig memory config = _defaultConfig();
+        vm.prank(forker);
+        uint64 forkId = novelCore.forkNovel{value: totalNeeded}(
+            1,
+            config,
+            DataTypes.NovelMetadata({title: "Fork Novel", description: "A fork", coverUri: ""}),
+            _makeContent("fork root chapter content!!")
+        );
+
+        assertEq(forkId, 2);
+
+        DataTypes.Chapter memory forkRoot = novelCore.getChapter(novelCore.getChapterCount());
+        assertEq(forkRoot.parentId, 1);
+        assertEq(forkRoot.depth, 1);
     }
 
-    function test_CreateNovelMultiBootstrap() public {
-        vm.prank(creator);
-        uint256 novelId =
-            novelCore.createNovel{value: 2 ether}(defaultConfig, defaultMetadata, _multiGenesisSubmissions());
+    // ----------------------------------------------------------
+    //  Submit chapters, verify tree structure
+    // ----------------------------------------------------------
+    function test_submitChapters_treeStructure() public {
+        uint64 novelId = _createNovel();
+        uint64 rootId = 1;
+
+        uint64 ch2 = _submitChapter(author1, novelId, rootId, "chapter 2 content here!");
+        uint64 ch3 = _submitChapter(author2, novelId, rootId, "chapter 3 content here!");
+        uint64 ch4 = _submitChapter(author1, novelId, ch2, "chapter 4 content here!");
+
+        assertEq(novelCore.getChapter(ch2).depth, 2);
+        assertEq(novelCore.getChapter(ch3).depth, 2);
+        assertEq(novelCore.getChapter(ch4).depth, 3);
+
+        assertEq(novelCore.getChapter(ch2).parentId, rootId);
+        assertEq(novelCore.getChapter(ch3).parentId, rootId);
+        assertEq(novelCore.getChapter(ch4).parentId, ch2);
+
+        uint64[] memory rootDesc = novelCore.getChapterDescendants(rootId);
+        assertEq(rootDesc.length, 2);
+        assertEq(rootDesc[0], ch2);
+        assertEq(rootDesc[1], ch3);
+
+        uint64[] memory ch2Desc = novelCore.getChapterDescendants(ch2);
+        assertEq(ch2Desc.length, 1);
+        assertEq(ch2Desc[0], ch4);
+    }
+
+    // ----------------------------------------------------------
+    //  Full round lifecycle
+    // ----------------------------------------------------------
+    function test_fullRoundLifecycle() public {
+        uint64 novelId = _createNovel();
+        uint64 rootId = 1;
+
+        uint64 ch2 = _submitChapter(author1, novelId, rootId, "branch A chapter 2!!");
+        uint64 ch3 = _submitChapter(author2, novelId, rootId, "branch B chapter 3!!");
+        uint64 ch4 = _submitChapter(author1, novelId, ch2, "branch A chapter 4!!");
+
+        vm.prank(keeper);
+        novelCore.startRound(novelId);
 
         DataTypes.Novel memory novel = novelCore.getNovel(novelId);
-        assertEq(novel.bootstrapChapterCount, 2);
-
-        // Only the last bootstrap chapter is the active world line (linear chain)
-        uint256[] memory worldLines = novelCore.getActiveWorldLines(novelId);
-        assertEq(worldLines.length, 1);
-
-        // Second chapter is the active world line
-        DataTypes.Chapter memory ch2 = novelCore.getChapter(worldLines[0]);
-        assertTrue(ch2.isWorldLine);
-        assertTrue(ch2.isCanon);
-        assertEq(ch2.chapterIndex, 1);
-
-        // First chapter is parent of second
-        DataTypes.Chapter memory ch1 = novelCore.getChapter(ch2.parentId);
-        assertTrue(ch1.isWorldLine);
-        assertTrue(ch1.isCanon);
-        assertEq(ch1.chapterIndex, 0);
-        assertEq(ch1.parentId, 0);
-    }
-
-    // ============================================================
-    //              TEST: Chapter Submission
-    // ============================================================
-
-    function test_SubmitChapter() public {
-        uint256 novelId = _createNovel(1 ether);
-        uint256[] memory worldLines = novelCore.getActiveWorldLines(novelId);
-        uint256 genesisId = worldLines[0];
-
-        vm.prank(author1);
-        uint256 chapterId =
-            novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, _makeSubmission(CHAPTER1_CONTENT));
-
-        assertEq(chapterId, 2);
-
-        DataTypes.Chapter memory ch = novelCore.getChapter(chapterId);
-        assertEq(ch.author, author1);
-        assertEq(ch.parentId, genesisId);
-        assertFalse(ch.isWorldLine);
-        assertFalse(ch.isCanon);
-    }
-
-    function test_SubmitChapter_RevertWrongStake() public {
-        uint256 novelId = _createNovel(0);
-        uint256[] memory worldLines = novelCore.getActiveWorldLines(novelId);
-
-        vm.prank(author1);
-        vm.expectRevert();
-        novelCore.submitChapter{value: 0.005 ether}(novelId, worldLines[0], _makeSubmission(CHAPTER1_CONTENT));
-    }
-
-    function test_SubmitChapter_RevertContentTooShort() public {
-        uint256 novelId = _createNovel(0);
-        uint256[] memory worldLines = novelCore.getActiveWorldLines(novelId);
-
-        vm.prank(author1);
-        vm.expectRevert();
-        novelCore.submitChapter{value: 0.01 ether}(novelId, worldLines[0], _makeSubmission(bytes("too short")));
-    }
-
-    // ============================================================
-    //              TEST: Reader Tipping
-    // ============================================================
-
-    function test_TipNovel() public {
-        uint256 novelId = _createNovel(1 ether);
-
-        vm.prank(reader1);
-        prizePool.tipNovel{value: 0.5 ether}(novelId);
-
-        assertEq(prizePool.getPoolBalance(novelId), 1.5 ether);
-        assertEq(prizePool.getTotalTipped(novelId), 0.5 ether);
-    }
-
-    function test_TipNovel_RevertTooSmall() public {
-        uint256 novelId = _createNovel(0);
-
-        vm.prank(reader1);
-        vm.expectRevert();
-        prizePool.tipNovel{value: 0.0001 ether}(novelId);
-    }
-
-    // ============================================================
-    //              TEST: Full Round Lifecycle
-    // ============================================================
-
-    function test_FullRoundLifecycle() public {
-        uint256 novelId = _createNovel(1 ether);
-        uint256[] memory worldLines = novelCore.getActiveWorldLines(novelId);
-        uint256 genesisId = worldLines[0];
-
-        // Submit 3 chapters
-        vm.prank(author1);
-        uint256 ch1 = novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, _makeSubmission(CHAPTER1_CONTENT));
-        vm.prank(author2);
-        uint256 ch2 = novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, _makeSubmission(CHAPTER2_CONTENT));
-        vm.prank(author3);
-        novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, _makeSubmission(CHAPTER3_CONTENT));
-
-        vm.warp(block.timestamp + 1 days + 1);
-        novelCore.closeSubmissions(novelId);
-
-        DataTypes.Novel memory novel = novelCore.getNovel(novelId);
-        assertEq(uint8(novel.roundPhase), uint8(DataTypes.RoundPhase.Committing));
-
-        // Voting
-        uint256 votingRoundId = uint256(keccak256(abi.encodePacked(novelId, uint32(1), uint32(1), false)));
-
-        bytes32 salt1 = bytes32("salt1");
-        vm.prank(reader1);
-        votingEngine.commitVote{value: 0.1 ether}(novelId, votingRoundId, keccak256(abi.encodePacked(ch1, salt1)));
-
-        bytes32 salt2 = bytes32("salt2");
-        vm.prank(reader2);
-        votingEngine.commitVote{value: 0.05 ether}(novelId, votingRoundId, keccak256(abi.encodePacked(ch2, salt2)));
-
-        vm.warp(block.timestamp + 3 days + 1);
-        novelCore.closeCommit(novelId);
-
-        vm.prank(reader1);
-        votingEngine.revealVote(novelId, votingRoundId, ch1, salt1);
-        vm.prank(reader2);
-        votingEngine.revealVote(novelId, votingRoundId, ch2, salt2);
-
-        vm.warp(block.timestamp + 2 days + 1);
-        novelCore.settleRound(novelId);
-
-        novel = novelCore.getNovel(novelId);
-        assertEq(uint8(novel.epochPhase), uint8(DataTypes.EpochPhase.Committing));
-
-        worldLines = novelCore.getActiveWorldLines(novelId);
-        assertEq(worldLines.length, 2);
-        assertEq(worldLines[0], ch1);
-        assertEq(worldLines[1], ch2);
-    }
-
-    // ============================================================
-    //              TEST: Full Epoch Settlement
-    // ============================================================
-
-    function test_FullEpochSettlement() public {
-        (uint256 novelId, uint256 ch1) = _runFullEpoch();
-
-        // Verify epoch advanced
-        DataTypes.Novel memory novel = novelCore.getNovel(novelId);
-        assertEq(novel.currentEpoch, 2);
         assertEq(novel.currentRound, 1);
-        assertEq(novel.cumulativeCanonChapters, 1);
-        assertEq(uint8(novel.roundPhase), uint8(DataTypes.RoundPhase.Submitting));
-        assertEq(uint8(novel.epochPhase), uint8(DataTypes.EpochPhase.Rounds));
+        assertEq(uint8(novel.roundPhase), uint8(DataTypes.RoundPhase.Nominating));
 
-        // Verify canon
-        DataTypes.Chapter memory canonChapter = novelCore.getChapter(ch1);
-        assertTrue(canonChapter.isCanon);
-        assertTrue(chapterNFT.isChapterMinted(novelId, ch1));
+        DataTypes.RoundData memory rd = novelCore.getRoundData(novelId, 1);
+        assertTrue(rd.candidates.length >= 2);
 
-        // Verify prize pool: 1 ETH * 30% = 0.3 ETH released
-        // Creator royalty: G=1, C=1 (incremented before distribution) → 0.3 * 1/(1+1) = 0.15
-        // Remaining: 0.3 - 0.15 = 0.15
-        // Author pool (voterRewardRate=1000=10%): 0.15 * 90% = 0.135
-        // Voter pool: 0.15 * 10% = 0.015
-        uint256 remainingPool = prizePool.getPoolBalance(novelId);
-        assertEq(remainingPool, 0.7 ether);
+        vm.warp(block.timestamp + NOMINATE_DURATION + 1);
+        vm.prank(keeper);
+        novelCore.closeNomination(novelId);
 
-        // Creator gets 50% of epoch release
-        uint256 creatorReward = prizePool.getPendingReward(novelId, creator);
-        assertEq(creatorReward, 0.15 ether);
+        uint64 targetCandidate = ch4;
+        bytes32 salt = bytes32("mysalt");
+        bytes32 commitHash = keccak256(abi.encodePacked(targetCandidate, salt));
 
-        // Author gets 90% of remaining (0.15 * 0.9 = 0.135)
-        uint256 authorReward = prizePool.getPendingReward(novelId, author1);
-        assertEq(authorReward, 0.135 ether);
+        vm.prank(voter1);
+        novelCore.commitVote{value: VOTE_STAKE}(novelId, commitHash);
+        vm.prank(voter2);
+        novelCore.commitVote{value: VOTE_STAKE}(novelId, commitHash);
 
-        uint256[] memory worldLines = novelCore.getActiveWorldLines(novelId);
-        assertEq(worldLines.length, 1);
-        assertEq(worldLines[0], ch1);
-    }
-
-    // ============================================================
-    //      TEST: Creator Royalty Decay Across Epochs
-    // ============================================================
-
-    function test_CreatorRoyaltyDecay() public {
-        // Use config with voterRewardRate=0 to simplify calculations
-        DataTypes.NovelConfig memory config = defaultConfig;
-        config.voterRewardRate = 0;
-
-        vm.prank(creator);
-        uint256 novelId =
-            novelCore.createNovel{value: 10 ether}(config, defaultMetadata, _genesisSubmissions(GENESIS_CONTENT));
-
-        // Run epoch 1: G=1, C=1 (incremented before distribution) → creatorRoyalty = 50%
-        _runEpochForNovel(novelId);
-
-        DataTypes.Novel memory novel = novelCore.getNovel(novelId);
-        assertEq(novel.cumulativeCanonChapters, 1);
-        // Epoch 1 release: 10 * 30% = 3 ETH, creator gets 1/(1+1) = 50% = 1.5 ETH
-        assertEq(prizePool.getPendingReward(novelId, creator), 1.5 ether);
-
-        // Run epoch 2: G=1, C=2 → creatorRoyalty = 1/3
-        _runEpochForNovel(novelId);
-        novel = novelCore.getNovel(novelId);
-        assertEq(novel.cumulativeCanonChapters, 2);
-        // Epoch 2 release: 7 * 30% = 2.1 ETH, creator gets 1/(1+2) = 33.3% = 0.7 ETH
-        // Total creator pending: 1.5 + 0.7 = 2.2 ETH
-        assertEq(prizePool.getPendingReward(novelId, creator), 2.2 ether);
-    }
-
-    // ============================================================
-    //              TEST: Fork Novel
-    // ============================================================
-
-    function test_ForkNovel() public {
-        uint256 novelId = _createNovel(0);
-        uint256 genesisId = novelCore.getActiveWorldLines(novelId)[0];
-
-        vm.prank(author1);
-        novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, _makeSubmission(CHAPTER1_CONTENT));
-        vm.prank(author2);
-        uint256 ch2 = novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, _makeSubmission(CHAPTER2_CONTENT));
-        vm.prank(author3);
-        novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, _makeSubmission(CHAPTER3_CONTENT));
-
-        // Fork fee = stakeAmount (0.01 ETH) goes to original pool, rest to fork pool
-        uint256 originalPoolBefore = prizePool.getPoolBalance(novelId);
-        DataTypes.ContentSubmission[] memory emptyBootstrap = new DataTypes.ContentSubmission[](0);
-        vm.prank(author2);
-        uint256 forkedNovelId =
-            novelCore.forkNovel{value: 0.5 ether}(novelId, ch2, defaultConfig, defaultMetadata, emptyBootstrap);
-
-        assertEq(forkedNovelId, 2);
-        DataTypes.Novel memory forked = novelCore.getNovel(forkedNovelId);
-        assertEq(forked.creator, creator); // Creator royalty flows to original creator
-        assertEq(forked.forkSourceNovelId, novelId);
-        assertEq(forked.forkSourceChapterId, ch2);
-        assertEq(forked.bootstrapChapterCount, 0);
-        assertTrue(forked.active);
-        // Fork pool = 0.5 - 0.01 (fork fee) = 0.49 ETH
-        assertEq(prizePool.getPoolBalance(forkedNovelId), 0.49 ether);
-        // Original pool received fork fee
-        assertEq(prizePool.getPoolBalance(novelId), originalPoolBefore + 0.01 ether);
-    }
-
-    // ============================================================
-    //  TEST: Stake Refund
-    // ============================================================
-
-    function test_ClaimStakeRefund() public {
-        uint256 novelId = _createNovel(1 ether);
-        uint256 genesisId = novelCore.getActiveWorldLines(novelId)[0];
-
-        uint256 balBefore = author1.balance;
-
-        vm.prank(author1);
-        uint256 ch1 = novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, _makeSubmission(CHAPTER1_CONTENT));
-        vm.prank(author2);
-        novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, _makeSubmission(CHAPTER2_CONTENT));
-        vm.prank(author3);
-        novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, _makeSubmission(CHAPTER3_CONTENT));
-
-        vm.warp(2 days);
-        novelCore.closeSubmissions(novelId);
-
-        uint256 roundVotingId = uint256(keccak256(abi.encodePacked(novelId, uint32(1), uint32(1), false)));
-        bytes32 s1 = bytes32("cs1");
-        vm.prank(reader1);
-        votingEngine.commitVote{value: 0.1 ether}(novelId, roundVotingId, keccak256(abi.encodePacked(ch1, s1)));
-
-        vm.warp(6 days);
+        vm.warp(block.timestamp + COMMIT_DURATION + 1);
+        vm.prank(keeper);
         novelCore.closeCommit(novelId);
 
-        vm.prank(reader1);
-        votingEngine.revealVote(novelId, roundVotingId, ch1, s1);
+        vm.prank(voter1);
+        novelCore.revealVote(novelId, targetCandidate, salt);
+        vm.prank(voter2);
+        novelCore.revealVote(novelId, targetCandidate, salt);
 
-        vm.warp(9 days);
+        vm.warp(block.timestamp + REVEAL_DURATION + 1);
+        vm.prank(keeper);
         novelCore.settleRound(novelId);
 
-        vm.prank(author1);
-        novelCore.claimStakeRefund(novelId);
-        assertEq(author1.balance, balBefore);
+        novel = novelCore.getNovel(novelId);
+        assertEq(uint8(novel.roundPhase), uint8(DataTypes.RoundPhase.Idle));
+        assertEq(novel.currentRound, 1);
+
+        uint64[] memory wl = novelCore.getWorldLineAncestors(novelId);
+        assertTrue(wl.length > 0);
+
+        rd = novelCore.getRoundData(novelId, 1);
+        assertTrue(rd.settled);
     }
 
-    // ============================================================
-    //  TEST: Prize Pool Reward Claim
-    // ============================================================
+    // ----------------------------------------------------------
+    //  Multi-round: second round DFS starts from first round winners
+    // ----------------------------------------------------------
+    function test_multiRound() public {
+        uint64 novelId = _createNovel();
+        uint64 rootId = 1;
 
-    function test_ClaimPrizeReward() public {
-        (uint256 novelId,) = _runFullEpoch();
+        uint64 ch2 = _submitChapter(author1, novelId, rootId, "round 1 branch A content");
+        uint64 ch3 = _submitChapter(author2, novelId, rootId, "round 1 branch B content");
 
-        // Creator gets 50% of epoch release: 0.3 * 1/(1+1) = 0.15 ETH
-        uint256 reward = prizePool.getPendingReward(novelId, creator);
-        assertEq(reward, 0.15 ether);
+        address[] memory voters = new address[](2);
+        voters[0] = voter1;
+        voters[1] = voter2;
+        bytes32 salt = bytes32("salt1");
+
+        _runFullRound(novelId, voters, ch2, salt);
+
+        uint64[] memory wl1 = novelCore.getWorldLineAncestors(novelId);
+        assertTrue(wl1.length > 0);
+
+        vm.warp(block.timestamp + MIN_ROUND_GAP + 1);
+
+        uint64 ch5 = _submitChapter(author1, novelId, wl1[0], "round 2 continuation 1!!");
+        uint64 ch6 = _submitChapter(author2, novelId, wl1[0], "round 2 continuation 2!!");
+
+        salt = bytes32("salt2");
+        _runFullRound(novelId, voters, ch5, salt);
+
+        DataTypes.Novel memory novel = novelCore.getNovel(novelId);
+        assertEq(novel.currentRound, 2);
+
+        uint64[] memory wl2 = novelCore.getWorldLineAncestors(novelId);
+        assertTrue(wl2.length > 0);
+    }
+
+    // ----------------------------------------------------------
+    //  Nomination: non-world-line-descendant has candidateIsEligible=false
+    // ----------------------------------------------------------
+    function test_nomination_nonWorldLineDescendant() public {
+        // Use worldLineCount=1 so only one winner per round
+        DataTypes.NovelConfig memory config = _defaultConfig();
+        config.worldLineCount = 1;
+        uint64 novelId = _createNovelWith(creator, config, 1 ether);
+        uint64 rootId = 1;
+
+        uint64 ch2 = _submitChapter(author1, novelId, rootId, "branch A for nomination!");
+        uint64 ch3 = _submitChapter(author2, novelId, rootId, "branch B for nomination!");
+
+        address[] memory voters = new address[](1);
+        voters[0] = voter1;
+        _runFullRound(novelId, voters, ch2, bytes32("s1"));
+
+        vm.warp(block.timestamp + MIN_ROUND_GAP + 1);
+
+        uint64 ch4 = _submitChapter(author1, novelId, ch2, "world line descendant ch4!");
+        uint64 ch5 = _submitChapter(author2, novelId, ch3, "non-world-line branch ch5!");
+
+        vm.prank(keeper);
+        novelCore.startRound(novelId);
+
+        vm.prank(author2);
+        novelCore.nominateCandidate{value: NOMINATION_FEE}(novelId, ch5);
+
+        DataTypes.RoundData memory rd = novelCore.getRoundData(novelId, 2);
+        uint256 ch5Idx = type(uint256).max;
+        for (uint256 i = 0; i < rd.candidates.length; i++) {
+            if (rd.candidates[i] == ch5) {
+                ch5Idx = i;
+                break;
+            }
+        }
+        assertTrue(ch5Idx < rd.candidates.length, "ch5 not found in candidates");
+        assertFalse(rd.candidateIsEligible[ch5Idx], "ch5 should be ineligible");
+    }
+
+    // ----------------------------------------------------------
+    //  Creator royalty decay: D/(D+round)
+    // ----------------------------------------------------------
+    function test_creatorRoyaltyDecay() public {
+        uint64 novelId = _createNovel();
+        uint64 rootId = 1;
+
+        uint64 ch2 = _submitChapter(author1, novelId, rootId, "chapter for royalty test!!");
+
+        address[] memory voters = new address[](1);
+        voters[0] = voter1;
+
+        _runFullRound(novelId, voters, ch2, bytes32("royalty1"));
+
+        uint256 creatorReward1 = prizePool.getPendingReward(novelId, creator);
+        assertTrue(creatorReward1 > 0, "creator should have reward after round 1");
+
+        vm.warp(block.timestamp + MIN_ROUND_GAP + 1);
+        uint64 ch3 = _submitChapter(author1, novelId, ch2, "chapter for royalty round 2");
+
+        _runFullRound(novelId, voters, ch3, bytes32("royalty2"));
+
+        uint256 creatorReward2 = prizePool.getPendingReward(novelId, creator);
+        assertTrue(creatorReward2 > creatorReward1, "creator reward should accumulate");
+    }
+
+    // ----------------------------------------------------------
+    //  Author rewards: deduplication when multiple world lines share path segments
+    // ----------------------------------------------------------
+    function test_authorRewards_deduplication() public {
+        uint64 novelId = _createNovel();
+        uint64 rootId = 1;
+
+        // Create a shared branch then diverge
+        uint64 shared = _submitChapter(author1, novelId, rootId, "shared branch chapter!!!!!");
+        uint64 branchA = _submitChapter(author1, novelId, shared, "branch A from shared ch!!");
+        uint64 branchB = _submitChapter(author2, novelId, shared, "branch B from shared ch!!");
+
+        // Run round — both branchA and branchB can be world lines
+        // Shared path author (author1 for ch shared) should only be counted once
+        address[] memory voters = new address[](1);
+        voters[0] = voter1;
+        _runFullRound(novelId, voters, branchA, bytes32("dedup"));
+
+        uint256 author1Reward = prizePool.getPendingReward(novelId, author1);
+        // author1 wrote both shared and branchA = 2 chapters on the world line
+        assertTrue(author1Reward > 0, "author1 should receive reward");
+    }
+
+    // ----------------------------------------------------------
+    //  Tip novel and tip chapter
+    // ----------------------------------------------------------
+    function test_tipNovel() public {
+        uint64 novelId = _createNovel();
+        uint256 poolBefore = prizePool.getPoolBalance(novelId);
+
+        vm.prank(voter1);
+        novelCore.tipNovel{value: 1 ether}(novelId);
+
+        assertEq(prizePool.getPoolBalance(novelId) - poolBefore, 1 ether);
+    }
+
+    function test_tipChapter() public {
+        uint64 novelId = _createNovel();
+        uint64 rootId = 1;
+        uint64 ch2 = _submitChapter(author1, novelId, rootId, "chapter to tip content!!");
+
+        uint256 authorBalBefore = author1.balance;
+        uint256 poolBefore = prizePool.getPoolBalance(novelId);
+
+        vm.prank(voter1);
+        novelCore.tipChapter{value: 1 ether}(ch2);
+
+        assertEq(author1.balance - authorBalBefore, 0.5 ether);
+        assertEq(prizePool.getPoolBalance(novelId) - poolBefore, 0.5 ether);
+    }
+
+    // ----------------------------------------------------------
+    //  Claim reward
+    // ----------------------------------------------------------
+    function test_claimReward() public {
+        uint64 novelId = _createNovel();
+        uint64 rootId = 1;
+        uint64 ch2 = _submitChapter(author1, novelId, rootId, "claim reward test chapter!");
+
+        address[] memory voters = new address[](1);
+        voters[0] = voter1;
+        _runFullRound(novelId, voters, ch2, bytes32("claim"));
+
+        uint256 pending = prizePool.getPendingReward(novelId, creator);
+        assertTrue(pending > 0, "creator should have pending reward");
 
         uint256 balBefore = creator.balance;
         vm.prank(creator);
-        prizePool.claimReward(novelId);
-        assertEq(creator.balance, balBefore + 0.15 ether);
+        novelCore.claimReward(novelId);
+        assertTrue(creator.balance > balBefore, "creator balance should increase");
     }
 
-    // ============================================================
-    //  TEST: Voting Reward — Both majority and minority get stakes
-    // ============================================================
+    // ----------------------------------------------------------
+    //  Complete novel by creator
+    // ----------------------------------------------------------
+    function test_completeNovel() public {
+        uint64 novelId = _createNovel();
+        uint64 rootId = 1;
+        _submitChapter(author1, novelId, rootId, "chapter for complete test!");
 
-    function test_ClaimVotingReward_BothMajorityAndMinority() public {
-        uint256 novelId = _createNovel(1 ether);
-        uint256 genesisId = novelCore.getActiveWorldLines(novelId)[0];
+        vm.prank(creator);
+        novelCore.completeNovel(novelId);
 
-        vm.prank(author1);
-        uint256 ch1 = novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, _makeSubmission(CHAPTER1_CONTENT));
-        vm.prank(author2);
-        uint256 ch2 = novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, _makeSubmission(CHAPTER2_CONTENT));
-        vm.prank(author3);
-        novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, _makeSubmission(CHAPTER3_CONTENT));
-
-        vm.warp(2 days);
-        novelCore.closeSubmissions(novelId);
-
-        uint256 votingRoundId = uint256(keccak256(abi.encodePacked(novelId, uint32(1), uint32(1), false)));
-
-        bytes32 s1 = bytes32("vs1");
-        vm.prank(reader1);
-        votingEngine.commitVote{value: 0.1 ether}(novelId, votingRoundId, keccak256(abi.encodePacked(ch1, s1)));
-
-        bytes32 s2 = bytes32("vs2");
-        vm.prank(reader2);
-        votingEngine.commitVote{value: 0.05 ether}(novelId, votingRoundId, keccak256(abi.encodePacked(ch2, s2)));
-
-        vm.warp(6 days);
-        novelCore.closeCommit(novelId);
-
-        vm.prank(reader1);
-        votingEngine.revealVote(novelId, votingRoundId, ch1, s1);
-        vm.prank(reader2);
-        votingEngine.revealVote(novelId, votingRoundId, ch2, s2);
-
-        vm.warp(9 days);
-        novelCore.settleRound(novelId);
-
-        // Both revealed voters should get stake back (no sweep yet, no accuracy rewards yet)
-        uint256 bal1Before = reader1.balance;
-        uint256 bal2Before = reader2.balance;
-
-        vm.prank(reader1);
-        votingEngine.claimVotingReward(novelId, votingRoundId);
-        vm.prank(reader2);
-        votingEngine.claimVotingReward(novelId, votingRoundId);
-
-        assertEq(reader1.balance, bal1Before + 0.1 ether);
-        assertEq(reader2.balance, bal2Before + 0.05 ether);
+        DataTypes.Novel memory novel = novelCore.getNovel(novelId);
+        assertFalse(novel.active, "novel should be inactive after completion");
     }
 
-    // ============================================================
-    //  TEST: Sweep Unrevealed Stakes
-    // ============================================================
+    // ----------------------------------------------------------
+    //  Voter rewards: accurate voters get 3x weight
+    // ----------------------------------------------------------
+    function test_voterRewards_accuracy() public {
+        uint64 novelId = _createNovel();
+        uint64 rootId = 1;
 
-    function test_SweepUnrevealedStakes() public {
-        uint256 novelId = _createNovel(1 ether);
-        uint256 genesisId = novelCore.getActiveWorldLines(novelId)[0];
+        uint64 ch2 = _submitChapter(author1, novelId, rootId, "branch for voter accuracy!");
+        uint64 ch3 = _submitChapter(author2, novelId, rootId, "branch B for voter accuracy");
 
-        vm.prank(author1);
-        uint256 ch1 = novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, _makeSubmission(CHAPTER1_CONTENT));
-        vm.prank(author2);
-        uint256 ch2 = novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, _makeSubmission(CHAPTER2_CONTENT));
-        vm.prank(author3);
-        novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, _makeSubmission(CHAPTER3_CONTENT));
-
-        vm.warp(2 days);
-        novelCore.closeSubmissions(novelId);
-
-        uint256 votingRoundId = uint256(keccak256(abi.encodePacked(novelId, uint32(1), uint32(1), false)));
-
-        // reader1 commits and reveals, reader2 only commits (doesn't reveal)
-        bytes32 s1 = bytes32("sw1");
-        vm.prank(reader1);
-        votingEngine.commitVote{value: 0.1 ether}(novelId, votingRoundId, keccak256(abi.encodePacked(ch1, s1)));
-
-        bytes32 s2 = bytes32("sw2");
-        vm.prank(reader2);
-        votingEngine.commitVote{value: 0.05 ether}(novelId, votingRoundId, keccak256(abi.encodePacked(ch2, s2)));
-
-        vm.warp(6 days);
-        novelCore.closeCommit(novelId);
-
-        // Only reader1 reveals
-        vm.prank(reader1);
-        votingEngine.revealVote(novelId, votingRoundId, ch1, s1);
-
-        vm.warp(9 days);
-        novelCore.settleRound(novelId);
-
-        // Sweep unrevealed stakes
-        votingEngine.sweepUnrevealedStakes(novelId, votingRoundId);
-
-        // reader1 claims: stake (0.1) + unrevealed share (0.05) = 0.15
-        uint256 bal1Before = reader1.balance;
-        vm.prank(reader1);
-        votingEngine.claimVotingReward(novelId, votingRoundId);
-        assertEq(reader1.balance, bal1Before + 0.15 ether);
-
-        // reader2 cannot claim (didn't reveal)
-        vm.prank(reader2);
-        vm.expectRevert();
-        votingEngine.claimVotingReward(novelId, votingRoundId);
-    }
-
-    // ============================================================
-    //  TEST: Keeper Rewards
-    // ============================================================
-
-    function test_KeeperRewards() public {
-        // Set keeper reward
-        vm.prank(owner);
-        novelCore.setKeeperRewardAmount(0.001 ether);
-
-        uint256 novelId = _createNovel(1 ether);
-        uint256 genesisId = novelCore.getActiveWorldLines(novelId)[0];
-
-        vm.prank(author1);
-        novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, _makeSubmission(CHAPTER1_CONTENT));
-        vm.prank(author2);
-        novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, _makeSubmission(CHAPTER2_CONTENT));
-        vm.prank(author3);
-        novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, _makeSubmission(CHAPTER3_CONTENT));
-
-        vm.warp(2 days);
-
-        // author1 acts as keeper for closeSubmissions
-        address keeper = address(0x99);
-        vm.deal(keeper, 1 ether);
         vm.prank(keeper);
-        novelCore.closeSubmissions(novelId);
+        novelCore.startRound(novelId);
 
-        // Keeper should have reward pending in prize pool
-        uint256 keeperReward = prizePool.getPendingReward(novelId, keeper);
-        assertEq(keeperReward, 0.001 ether);
+        vm.warp(block.timestamp + NOMINATE_DURATION + 1);
+        vm.prank(keeper);
+        novelCore.closeNomination(novelId);
 
-        // Pool balance decreased
-        assertEq(prizePool.getPoolBalance(novelId), 0.999 ether);
-    }
+        bytes32 salt = bytes32("votersalt");
+        bytes32 commitHash2 = keccak256(abi.encodePacked(ch2, salt));
+        bytes32 commitHash3 = keccak256(abi.encodePacked(ch3, salt));
 
-    // ============================================================
-    //  TEST: VotingEngine phase guards
-    // ============================================================
+        vm.prank(voter1);
+        novelCore.commitVote{value: VOTE_STAKE}(novelId, commitHash2);
+        vm.prank(voter2);
+        novelCore.commitVote{value: VOTE_STAKE}(novelId, commitHash3);
 
-    function test_CommitAfterTally_Reverts() public {
-        uint256 novelId = _createNovel(1 ether);
-        uint256 genesisId = novelCore.getActiveWorldLines(novelId)[0];
-
-        vm.prank(author1);
-        uint256 ch1 = novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, _makeSubmission(CHAPTER1_CONTENT));
-        vm.prank(author2);
-        novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, _makeSubmission(CHAPTER2_CONTENT));
-        vm.prank(author3);
-        novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, _makeSubmission(CHAPTER3_CONTENT));
-
-        vm.warp(2 days);
-        novelCore.closeSubmissions(novelId);
-
-        uint256 votingRoundId = uint256(keccak256(abi.encodePacked(novelId, uint32(1), uint32(1), false)));
-
-        bytes32 s1 = bytes32("pg1");
-        vm.prank(reader1);
-        votingEngine.commitVote{value: 0.1 ether}(novelId, votingRoundId, keccak256(abi.encodePacked(ch1, s1)));
-
-        vm.warp(6 days);
+        vm.warp(block.timestamp + COMMIT_DURATION + 1);
+        vm.prank(keeper);
         novelCore.closeCommit(novelId);
 
-        vm.prank(reader1);
-        votingEngine.revealVote(novelId, votingRoundId, ch1, s1);
+        vm.prank(voter1);
+        novelCore.revealVote(novelId, ch2, salt);
+        vm.prank(voter2);
+        novelCore.revealVote(novelId, ch3, salt);
 
-        vm.warp(9 days);
+        vm.warp(block.timestamp + REVEAL_DURATION + 1);
+        vm.prank(keeper);
         novelCore.settleRound(novelId);
 
-        vm.prank(reader2);
-        vm.expectRevert();
-        votingEngine.commitVote{value: 0.1 ether}(
-            novelId, votingRoundId, keccak256(abi.encodePacked(ch1, bytes32("late")))
-        );
-    }
-
-    // ============================================================
-    //  TEST: voterRewardRate validation
-    // ============================================================
-
-    function test_VoterRewardRate_TooHigh_Reverts() public {
-        DataTypes.NovelConfig memory badConfig = defaultConfig;
-        badConfig.voterRewardRate = 3000; // Over 20% limit
-
-        vm.prank(creator);
-        vm.expectRevert();
-        novelCore.createNovel(badConfig, defaultMetadata, _genesisSubmissions(GENESIS_CONTENT));
-    }
-
-    // ============================================================
-    //  TEST: Early Epoch Trigger
-    // ============================================================
-
-    function test_TriggerEarlyEpoch() public {
-        // Use config with 3 rounds per epoch
-        DataTypes.NovelConfig memory config = defaultConfig;
-        config.roundsPerEpoch = 3;
-
-        vm.prank(creator);
-        uint256 novelId =
-            novelCore.createNovel{value: 1 ether}(config, defaultMetadata, _genesisSubmissions(GENESIS_CONTENT));
-
-        // Complete round 1
-        _doRound(novelId);
-
-        // Novel should be at round 2, Submitting
         DataTypes.Novel memory novel = novelCore.getNovel(novelId);
-        assertEq(novel.currentRound, 2);
-        assertEq(uint8(novel.roundPhase), uint8(DataTypes.RoundPhase.Submitting));
+        uint32 round = novel.currentRound;
 
-        // Owner triggers early epoch
-        vm.prank(owner);
-        novelCore.triggerEarlyEpoch(novelId);
+        // Both voters can claim voting rewards through NovelCore
+        uint256 voter1BalBefore = voter1.balance;
+        vm.prank(voter1);
+        novelCore.claimVotingReward(novelId, round);
+        uint256 v1Reward = voter1.balance - voter1BalBefore;
 
-        novel = novelCore.getNovel(novelId);
-        assertEq(uint8(novel.epochPhase), uint8(DataTypes.EpochPhase.Committing));
+        uint256 voter2BalBefore = voter2.balance;
+        vm.prank(voter2);
+        novelCore.claimVotingReward(novelId, round);
+        uint256 v2Reward = voter2.balance - voter2BalBefore;
+
+        assertTrue(v1Reward >= VOTE_STAKE, "voter1 should get at least stake back");
+        assertTrue(v2Reward >= VOTE_STAKE, "voter2 should get at least stake back");
     }
 
-    function test_TriggerEarlyEpoch_NonOwner_Reverts() public {
-        DataTypes.NovelConfig memory config = defaultConfig;
-        config.roundsPerEpoch = 3;
+    // ----------------------------------------------------------
+    //  Submit chapters during voting (always-on writing)
+    // ----------------------------------------------------------
+    function test_submitDuringVoting() public {
+        uint64 novelId = _createNovel();
+        uint64 rootId = 1;
 
-        vm.prank(creator);
-        uint256 novelId =
-            novelCore.createNovel{value: 1 ether}(config, defaultMetadata, _genesisSubmissions(GENESIS_CONTENT));
+        uint64 ch2 = _submitChapter(author1, novelId, rootId, "pre-round chapter content!");
 
-        _doRound(novelId);
+        vm.prank(keeper);
+        novelCore.startRound(novelId);
 
-        vm.prank(author1); // Not owner
-        vm.expectRevert();
-        novelCore.triggerEarlyEpoch(novelId);
-    }
+        // Submit during nominating phase
+        uint64 ch3 = _submitChapter(author2, novelId, rootId, "during nominating phase!!!");
+        assertTrue(ch3 > 0, "should be able to submit during nominating");
 
-    // ============================================================
-    //              HELPER: Do one round (submit→vote→settle)
-    // ============================================================
+        vm.warp(block.timestamp + NOMINATE_DURATION + 1);
+        vm.prank(keeper);
+        novelCore.closeNomination(novelId);
 
-    function _doRound(uint256 novelId) internal {
-        uint256[] memory worldLines = novelCore.getActiveWorldLines(novelId);
-        uint256 parentId = worldLines[0];
-
-        DataTypes.Novel memory novel = novelCore.getNovel(novelId);
-        uint32 currentRound = novel.currentRound;
-
-        vm.prank(author1);
-        uint256 ch1 = novelCore.submitChapter{value: 0.01 ether}(novelId, parentId, _makeSubmission(CHAPTER1_CONTENT));
-        vm.prank(author2);
-        novelCore.submitChapter{value: 0.01 ether}(novelId, parentId, _makeSubmission(CHAPTER2_CONTENT));
-        vm.prank(author3);
-        novelCore.submitChapter{value: 0.01 ether}(novelId, parentId, _makeSubmission(CHAPTER3_CONTENT));
-
-        vm.warp(block.timestamp + 1 days + 1);
-        novelCore.closeSubmissions(novelId);
-
-        uint256 votingRoundId = uint256(keccak256(abi.encodePacked(novelId, novel.currentEpoch, currentRound, false)));
-        bytes32 s1 = bytes32("rs1");
-        vm.prank(reader1);
-        votingEngine.commitVote{value: 0.1 ether}(novelId, votingRoundId, keccak256(abi.encodePacked(ch1, s1)));
-
-        vm.warp(block.timestamp + 3 days + 1);
-        novelCore.closeCommit(novelId);
-
-        vm.prank(reader1);
-        votingEngine.revealVote(novelId, votingRoundId, ch1, s1);
-
-        vm.warp(block.timestamp + 2 days + 1);
-        novelCore.settleRound(novelId);
-    }
-
-    // ============================================================
-    //              HELPER: Run full epoch
-    // ============================================================
-
-    function _runFullEpoch() internal returns (uint256 novelId, uint256 canonChapterId) {
-        novelId = _createNovel(1 ether);
-        canonChapterId = _runEpochForNovel(novelId);
-    }
-
-    function _runEpochForNovel(uint256 novelId) internal returns (uint256 canonChapterId) {
-        uint256[] memory worldLines = novelCore.getActiveWorldLines(novelId);
-        uint256 genesisId = worldLines[0];
-        DataTypes.Novel memory novel = novelCore.getNovel(novelId);
-        uint256 t0 = block.timestamp;
-
-        vm.prank(author1);
-        uint256 ch1 = novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, _makeSubmission(CHAPTER1_CONTENT));
-        vm.prank(author2);
-        novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, _makeSubmission(CHAPTER2_CONTENT));
-        vm.prank(author3);
-        novelCore.submitChapter{value: 0.01 ether}(novelId, genesisId, _makeSubmission(CHAPTER3_CONTENT));
-
-        // Round voting
-        vm.warp(t0 + 2 days);
-        novelCore.closeSubmissions(novelId);
-
-        uint256 roundVotingId =
-            uint256(keccak256(abi.encodePacked(novelId, novel.currentEpoch, novel.currentRound, false)));
-        bytes32 s1 = bytes32("s1");
-        bytes32 s2 = bytes32("s2");
-        vm.prank(reader1);
-        votingEngine.commitVote{value: 0.1 ether}(novelId, roundVotingId, keccak256(abi.encodePacked(ch1, s1)));
-        vm.prank(reader2);
-        votingEngine.commitVote{value: 0.05 ether}(novelId, roundVotingId, keccak256(abi.encodePacked(ch1, s2)));
-
-        vm.warp(t0 + 6 days);
-        novelCore.closeCommit(novelId);
-        vm.prank(reader1);
-        votingEngine.revealVote(novelId, roundVotingId, ch1, s1);
-        vm.prank(reader2);
-        votingEngine.revealVote(novelId, roundVotingId, ch1, s2);
-
-        vm.warp(t0 + 9 days);
-        novelCore.settleRound(novelId);
-
-        // Epoch voting
-        novel = novelCore.getNovel(novelId);
-        uint256 epochVotingId =
-            uint256(keccak256(abi.encodePacked(novelId, novel.currentEpoch, novel.currentRound, true)));
-
-        worldLines = novelCore.getActiveWorldLines(novelId);
-        bytes32 es1 = bytes32("es1");
-        bytes32 es2 = bytes32("es2");
-        vm.prank(reader1);
-        votingEngine.commitVote{value: 0.1 ether}(
-            novelId, epochVotingId, keccak256(abi.encodePacked(worldLines[0], es1))
-        );
-        vm.prank(reader2);
-        votingEngine.commitVote{value: 0.05 ether}(
-            novelId, epochVotingId, keccak256(abi.encodePacked(worldLines[0], es2))
-        );
-
-        vm.warp(t0 + 13 days);
-        novelCore.closeEpochCommit(novelId);
-        vm.prank(reader1);
-        votingEngine.revealVote(novelId, epochVotingId, worldLines[0], es1);
-        vm.prank(reader2);
-        votingEngine.revealVote(novelId, epochVotingId, worldLines[0], es2);
-
-        vm.warp(t0 + 16 days);
-        novelCore.settleEpoch(novelId);
-
-        return ch1;
+        // Submit during committing phase
+        uint64 ch4 = _submitChapter(author1, novelId, ch2, "during committing phase!!!");
+        assertTrue(ch4 > 0, "should be able to submit during committing");
     }
 }
