@@ -16,7 +16,6 @@
     "express": "^4.21.2",
     "express-rate-limit": "^8.3.2",
     "pg": "^8.13.3",
-    "onchain-novel-shared": "file:../../shared",
     "viem": "^2.23.2"
   },
   "devDependencies": {

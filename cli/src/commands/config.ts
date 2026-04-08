@@ -1,7 +1,7 @@
 import { Command } from "commander";
 import { loadConfig, saveConfig, getConfigPath } from "../utils/config.js";
 import { header, kv, success, error } from "../utils/format.js";
-import type { OnchainNovelConfig } from "onchain-novel-shared";
+import type { OnchainNovelConfig } from "../shared/index.js";
 
 export function registerConfigCommand(program: Command): void {
   const config = program
@@ -12,7 +12,7 @@ export function registerConfigCommand(program: Command): void {
   config.action(() => {
     const cfg = loadConfig();
     if (!cfg) {
-      console.log("No configuration found. Run 'onchain-novel setup' first.");
+      console.log("No configuration found. Run 'onchain-novel-cli setup' first.");
       return;
     }
     header("Configuration");

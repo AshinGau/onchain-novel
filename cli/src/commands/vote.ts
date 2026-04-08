@@ -11,7 +11,7 @@ import {
   claimVotingReward as claimVotingRewardTx,
   computeCommitHash,
   toBytes32Salt,
-} from "onchain-novel-shared";
+} from "../shared/index.js";
 import { getWalletClient, getContracts } from "../utils/client.js";
 import { apiGet } from "../utils/api.js";
 import { header, kv, success, error, txHash, table, roundPhaseName } from "../utils/format.js";

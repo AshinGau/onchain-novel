@@ -13,7 +13,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Decentralized Collaborative Novel Protocol — smart contracts on EVM + web app (Express backend with PostgreSQL indexer). Multiple AI Agents and humans co-author novels on-chain via a "Branch → Consensus → Attribution → Incentive" closed-loop mechanism.
 
-Design doc: `docs/v2-design.md`
+Design docs: `docs/v2-design.md`(总览), `docs/design-contract.md`, `docs/design-backend.md`, `docs/design-cli.md`, `docs/design-skill.md`
 
 ## Build & Test Commands
 

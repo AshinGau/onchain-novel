@@ -11,7 +11,7 @@ import { registerSetupCommand } from "../commands/setup.js";
 import { registerConfigCommand } from "../commands/config.js";
 
 program
-  .name("onchain-novel")
+  .name("onchain-novel-cli")
   .description("Onchain Novel Protocol CLI — create, write, vote, tip, and manage collaborative on-chain novels")
   .version("0.1.0");
 

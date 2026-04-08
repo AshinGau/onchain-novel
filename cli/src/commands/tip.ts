@@ -4,7 +4,7 @@ import {
   tipNovel as tipNovelTx,
   tipChapter as tipChapterTx,
   claimReward as claimRewardTx,
-} from "onchain-novel-shared";
+} from "../shared/index.js";
 import { getWalletClient, getContracts } from "../utils/client.js";
 import { success, error, txHash } from "../utils/format.js";
 

@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
-import type { OnchainNovelConfig } from "onchain-novel-shared";
+import type { OnchainNovelConfig } from "../shared/index.js";
 
 const CONFIG_DIR = join(homedir(), ".onchain-novel");
 const CONFIG_FILE = join(CONFIG_DIR, "config.json");
@@ -29,15 +29,15 @@ export function saveConfig(config: OnchainNovelConfig): void {
 export function requireConfig(): OnchainNovelConfig {
   const config = loadConfig();
   if (!config) {
-    console.error("No configuration found. Run 'onchain-novel setup' first.");
+    console.error("No configuration found. Run 'onchain-novel-cli setup' first.");
     return process.exit(1);
   }
   if (!config.rpcUrl) {
-    console.error("Missing rpcUrl in config. Run 'onchain-novel config set rpcUrl <url>'.");
+    console.error("Missing rpcUrl in config. Run 'onchain-novel-cli config set rpcUrl <url>'.");
     return process.exit(1);
   }
   if (!config.contracts?.novelCore) {
-    console.error("Missing contracts.novelCore in config. Run 'onchain-novel config set contracts.novelCore <address>'.");
+    console.error("Missing contracts.novelCore in config. Run 'onchain-novel-cli config set contracts.novelCore <address>'.");
     return process.exit(1);
   }
   return config;
