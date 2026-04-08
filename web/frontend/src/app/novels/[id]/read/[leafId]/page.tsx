@@ -14,12 +14,12 @@ export default async function ReadPage({
   ]);
 
   return (
-    <div className="v2-container" style={{ paddingTop: "1.5rem", paddingBottom: "3rem" }}>
+    <div className="on-container" style={{ paddingTop: "1.5rem", paddingBottom: "3rem" }}>
       <div style={{ marginBottom: "1rem" }}>
         <a
           href={`/novels/${id}`}
           className="text-caption"
-          style={{ color: "var(--color-v2-primary)", textDecoration: "none" }}
+          style={{ color: "var(--color-primary)", textDecoration: "none" }}
         >
           &larr; Back to {novel.title || `Novel #${id}`}
         </a>

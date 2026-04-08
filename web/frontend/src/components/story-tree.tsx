@@ -101,7 +101,7 @@ function CustomNode({
         style={{
           fontSize: "12px",
           fontWeight: 600,
-          fill: "var(--color-v2-text)",
+          fill: "var(--color-text)",
         }}
       >
         {nodeDatum.name}
@@ -113,7 +113,7 @@ function CustomNode({
           textAnchor="middle"
           style={{
             fontSize: "10px",
-            fill: "var(--color-v2-text-secondary)",
+            fill: "var(--color-text-secondary)",
           }}
         >
           by {nodeDatum.attributes.author}
@@ -126,7 +126,7 @@ function CustomNode({
           textAnchor="middle"
           style={{
             fontSize: "10px",
-            fill: "var(--color-v2-text-muted)",
+            fill: "var(--color-text-muted)",
           }}
         >
           depth: {nodeDatum.attributes.depth}

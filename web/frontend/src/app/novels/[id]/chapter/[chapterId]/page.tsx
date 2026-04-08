@@ -14,7 +14,7 @@ export default async function ChapterPage({
   ]);
 
   return (
-    <div className="v2-container" style={{ paddingTop: "1.5rem", paddingBottom: "3rem" }}>
+    <div className="on-container" style={{ paddingTop: "1.5rem", paddingBottom: "3rem" }}>
       <ChapterPageClient chapter={chapter} novel={novel} />
     </div>
   );

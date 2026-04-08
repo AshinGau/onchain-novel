@@ -2,12 +2,12 @@
 pragma solidity ^0.8.28;
 
 import {Test, console} from "forge-std/Test.sol";
-import {V2TestBase} from "./Integration.t.sol";
+import {TestBase} from "./Integration.t.sol";
 import {DataTypes} from "../src/libraries/DataTypes.sol";
 
 /// @title RulesTest
 /// @notice Tests for the RulesEngine governance module
-contract RulesTest is V2TestBase {
+contract RulesTest is TestBase {
     // ----------------------------------------------------------
     //  Creator sets rules before first round
     // ----------------------------------------------------------

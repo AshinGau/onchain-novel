@@ -20,11 +20,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <NavBar />
           <main style={{ flex: 1 }}>{children}</main>
           <footer style={{
-            borderTop: "1px solid var(--color-v2-border)",
+            borderTop: "1px solid var(--color-border)",
             padding: "1.5rem",
             textAlign: "center",
             fontSize: "0.875rem",
-            color: "var(--color-v2-text-muted)",
+            color: "var(--color-text-muted)",
           }}>
             Onchain Novel Protocol
           </footer>

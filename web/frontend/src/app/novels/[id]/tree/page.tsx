@@ -14,13 +14,13 @@ export default async function TreePage({
   ]);
 
   return (
-    <div className="v2-container v2-stack" style={{ paddingTop: "1.5rem", paddingBottom: "2rem" }}>
-      <div className="v2-row" style={{ justifyContent: "space-between", flexWrap: "wrap" }}>
-        <div className="v2-row" style={{ gap: "0.75rem" }}>
+    <div className="on-container on-stack" style={{ paddingTop: "1.5rem", paddingBottom: "2rem" }}>
+      <div className="on-row" style={{ justifyContent: "space-between", flexWrap: "wrap" }}>
+        <div className="on-row" style={{ gap: "0.75rem" }}>
           <a
             href={`/novels/${id}`}
             className="text-caption"
-            style={{ color: "var(--color-v2-primary)", textDecoration: "none" }}
+            style={{ color: "var(--color-primary)", textDecoration: "none" }}
           >
             &larr; {novel.title || `Novel #${id}`}
           </a>

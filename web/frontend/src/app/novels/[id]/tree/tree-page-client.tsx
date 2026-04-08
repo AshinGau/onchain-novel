@@ -19,7 +19,7 @@ export function TreePageClient({ novelId, chapters }: TreePageClientProps) {
 
   return (
     <div
-      className="v2-card"
+      className="on-card"
       style={{ padding: 0, overflow: "hidden", minHeight: "600px" }}
     >
       <StoryTree chapters={chapters} novelId={novelId} />

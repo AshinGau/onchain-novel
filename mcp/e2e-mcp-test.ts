@@ -1,8 +1,8 @@
 /**
- * E2E MCP Integration Test — V2 Protocol
+ * E2E MCP Integration Test — Protocol
  *
  * Tests MCP utility functions and ABI interactions against a live Anvil node
- * with deployed V2 contracts. Run via: npx tsx mcp/e2e-mcp-test.ts
+ * with deployed contracts. Run via: npx tsx mcp/e2e-mcp-test.ts
  *
  * Two modes:
  *   - RPC mode (default): tests direct chain reads/writes via ABI
@@ -211,7 +211,7 @@ async function phase2CreateNovel() {
     functionName: "createNovel",
     args: [
       TEST_CONFIG,
-      { title: "MCP E2E Test Novel", description: "A test novel for V2 protocol", coverUri: "" },
+      { title: "MCP E2E Test Novel", description: "A test novel for E2E testing", coverUri: "" },
       rootSubmission,
     ],
     value: parseEther("0.1"), // genesis prize pool
@@ -777,7 +777,7 @@ async function phase7ApiTests() {
 // ============================================================
 
 async function main() {
-  console.log(`\n  Onchain Novel V2 — MCP E2E Test`);
+  console.log(`\n  Onchain Novel — MCP E2E Test`);
   console.log(`  RPC: ${RPC_URL}`);
   console.log(`  NovelCore: ${NOVEL_CORE}`);
   console.log(`  PrizePool: ${PRIZE_POOL}`);

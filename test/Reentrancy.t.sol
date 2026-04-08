@@ -2,7 +2,7 @@
 pragma solidity ^0.8.28;
 
 import {Test} from "forge-std/Test.sol";
-import {V2TestBase} from "./Integration.t.sol";
+import {TestBase} from "./Integration.t.sol";
 import {DataTypes} from "../src/libraries/DataTypes.sol";
 import {PrizePool} from "../src/core/PrizePool.sol";
 import {VotingEngine} from "../src/core/VotingEngine.sol";
@@ -90,7 +90,7 @@ contract MaliciousBountyReceiver {
 
 /// @title ReentrancyTest
 /// @notice Security tests for reentrancy protection
-contract ReentrancyTest is V2TestBase {
+contract ReentrancyTest is TestBase {
     // ----------------------------------------------------------
     //  Reentrancy on PrizePool.claimReward
     // ----------------------------------------------------------

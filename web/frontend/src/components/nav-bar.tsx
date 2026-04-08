@@ -18,22 +18,22 @@ export function NavBar() {
 
   return (
     <>
-      <header className="v2-row" style={{
+      <header className="on-row" style={{
         justifyContent: "space-between",
-        borderBottom: "1px solid var(--color-v2-border)",
+        borderBottom: "1px solid var(--color-border)",
         padding: "0.75rem 1.5rem",
-        background: "var(--color-v2-bg)",
+        background: "var(--color-bg)",
       }}>
         {/* Logo */}
-        <Link href="/novels" className="v2-row" style={{ gap: "0.5rem", textDecoration: "none" }}>
-          <BookOpen size={20} style={{ color: "var(--color-v2-primary)" }} />
+        <Link href="/novels" className="on-row" style={{ gap: "0.5rem", textDecoration: "none" }}>
+          <BookOpen size={20} style={{ color: "var(--color-primary)" }} />
           <span className="text-subheading" style={{ fontSize: "1.125rem" }}>
             Onchain Novel
           </span>
         </Link>
 
         {/* Desktop nav */}
-        <nav className="v2-row" style={{ gap: "1.5rem", display: "var(--desktop-nav, flex)" }}>
+        <nav className="on-row" style={{ gap: "1.5rem", display: "var(--desktop-nav, flex)" }}>
           {NAV_LINKS.map((link) => (
             <Link
               key={link.href}
@@ -59,11 +59,11 @@ export function NavBar() {
       {/* Mobile dropdown */}
       {mobileOpen && (
         <div className="mobile-menu-dropdown" style={{
-          background: "var(--color-v2-bg)",
-          borderBottom: "1px solid var(--color-v2-border)",
+          background: "var(--color-bg)",
+          borderBottom: "1px solid var(--color-border)",
           padding: "1rem 1.5rem",
         }}>
-          <div className="v2-stack" style={{ gap: "0.75rem" }}>
+          <div className="on-stack" style={{ gap: "0.75rem" }}>
             {NAV_LINKS.map((link) => (
               <Link
                 key={link.href}
@@ -75,7 +75,7 @@ export function NavBar() {
                 {link.label}
               </Link>
             ))}
-            <div className="v2-row" style={{ gap: "0.5rem" }}>
+            <div className="on-row" style={{ gap: "0.5rem" }}>
               <ThemeToggle />
               <ConnectButton showBalance={false} chainStatus="icon" accountStatus="avatar" />
             </div>
@@ -92,7 +92,7 @@ export function NavBar() {
         }
         @media (max-width: 767px) {
           .mobile-menu-toggle { display: block; }
-          nav.v2-row { display: none !important; }
+          nav.on-row { display: none !important; }
         }
       `}</style>
     </>

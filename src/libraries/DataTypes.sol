@@ -2,8 +2,8 @@
 pragma solidity ^0.8.28;
 
 /// @title DataTypes
-/// @notice Shared data structures and enums for the Decentralized Collaborative Novel Protocol V2
-/// @dev V2 removes Epoch concept, simplifies to round-only lifecycle with always-on writing
+/// @notice Shared data structures and enums for the Decentralized Collaborative Novel Protocol
+/// @dev Round-only lifecycle with always-on writing
 library DataTypes {
     // ============================================================
     //                          ENUMS

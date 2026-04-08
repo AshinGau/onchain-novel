@@ -11,9 +11,9 @@ import {RulesEngine} from "../src/core/RulesEngine.sol";
 import {BountyBoard} from "../src/core/BountyBoard.sol";
 import {DataTypes} from "../src/libraries/DataTypes.sol";
 
-/// @title V2TestBase
-/// @notice Base contract with deployment helpers for all V2 tests
-abstract contract V2TestBase is Test {
+/// @title TestBase
+/// @notice Base contract with deployment helpers for all tests
+abstract contract TestBase is Test {
     NovelCore public novelCore;
     VotingEngine public votingEngine;
     PrizePool public prizePool;
@@ -186,7 +186,7 @@ abstract contract V2TestBase is Test {
 //                      INTEGRATION TESTS
 // ================================================================
 
-contract IntegrationTest is V2TestBase {
+contract IntegrationTest is TestBase {
     // ----------------------------------------------------------
     //  Novel creation with root chapter
     // ----------------------------------------------------------
@@ -567,15 +567,15 @@ contract IntegrationTest is V2TestBase {
         uint256 voter1BalBefore = voter1.balance;
         vm.prank(voter1);
         novelCore.claimVotingReward(novelId, round);
-        uint256 v1Reward = voter1.balance - voter1BalBefore;
+        uint256 voter1Reward = voter1.balance - voter1BalBefore;
 
         uint256 voter2BalBefore = voter2.balance;
         vm.prank(voter2);
         novelCore.claimVotingReward(novelId, round);
-        uint256 v2Reward = voter2.balance - voter2BalBefore;
+        uint256 voter2Reward = voter2.balance - voter2BalBefore;
 
-        assertTrue(v1Reward >= VOTE_STAKE, "voter1 should get at least stake back");
-        assertTrue(v2Reward >= VOTE_STAKE, "voter2 should get at least stake back");
+        assertTrue(voter1Reward >= VOTE_STAKE, "voter1 should get at least stake back");
+        assertTrue(voter2Reward >= VOTE_STAKE, "voter2 should get at least stake back");
     }
 
     // ----------------------------------------------------------

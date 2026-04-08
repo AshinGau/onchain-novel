@@ -16,7 +16,7 @@ export default async function NovelDetailPage({
   ]);
 
   return (
-    <div className="v2-container v2-stack" style={{ paddingTop: "1.5rem", paddingBottom: "2rem" }}>
+    <div className="on-container on-stack" style={{ paddingTop: "1.5rem", paddingBottom: "2rem" }}>
       <NovelInfo novel={novel} />
 
       <NovelWorldlines

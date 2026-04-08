@@ -81,7 +81,7 @@ export function NovelWorldlines({ novelId, chapters, worldlines }: Props) {
       {/* Desktop: multi-column grid */}
       <div className="worldline-grid-desktop">
         <div
-          className="v2-grid"
+          className="on-grid"
           style={{ "--cols": Math.min(worldlineData.length, 4) } as React.CSSProperties}
         >
           {worldlineData.map((wld, i) => (
@@ -142,22 +142,22 @@ function OtherBranches({ data, novelId }: { data: WorldlineData[]; novelId: stri
   if (totalBranches === 0) return null;
 
   return (
-    <div className="v2-card" style={{ marginTop: "1rem" }}>
+    <div className="on-card" style={{ marginTop: "1rem" }}>
       <button
-        className="v2-btn v2-btn-ghost"
+        className="on-btn on-btn-ghost"
         onClick={() => setExpanded(!expanded)}
         style={{ width: "100%" }}
       >
         Other branches ({totalBranches}) {expanded ? "▲" : "▼"}
       </button>
       {expanded && (
-        <div className="v2-stack" style={{ gap: "0.5rem", marginTop: "0.75rem" }}>
+        <div className="on-stack" style={{ gap: "0.5rem", marginTop: "0.75rem" }}>
           {data.map((wld, wlIdx) =>
             wld.otherBranches.map((branch, brIdx) => {
               const first = branch[0];
               const last = branch[branch.length - 1];
               return (
-                <div key={`${wlIdx}-${brIdx}`} className="v2-row" style={{ justifyContent: "space-between" }}>
+                <div key={`${wlIdx}-${brIdx}`} className="on-row" style={{ justifyContent: "space-between" }}>
                   <span className="text-caption">
                     Ch.{first.id}
                     {branch.length > 2
@@ -169,7 +169,7 @@ function OtherBranches({ data, novelId }: { data: WorldlineData[]; novelId: stri
                   </span>
                   <a
                     href={`/novels/${novelId}/read/${last.id}`}
-                    className="v2-btn v2-btn-secondary"
+                    className="on-btn on-btn-secondary"
                     style={{ textDecoration: "none", padding: "0.25rem 0.75rem", fontSize: "0.75rem" }}
                   >
                     Read

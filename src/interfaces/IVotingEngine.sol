@@ -4,7 +4,7 @@ pragma solidity ^0.8.28;
 import {DataTypes} from "../libraries/DataTypes.sol";
 
 /// @title IVotingEngine
-/// @notice Interface for the Commit-Reveal Stake-to-Vote engine (V2)
+/// @notice Interface for the Commit-Reveal Stake-to-Vote engine
 /// @dev Manages three-phase voting (commit → reveal → tally) and voter reward distribution.
 ///      Called by NovelCore for lifecycle operations; voters interact through NovelCore.
 interface IVotingEngine {

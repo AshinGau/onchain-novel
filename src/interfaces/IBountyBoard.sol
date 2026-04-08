@@ -4,7 +4,7 @@ pragma solidity ^0.8.28;
 import {DataTypes} from "../libraries/DataTypes.sol";
 
 /// @title IBountyBoard
-/// @notice Interface for the chapter continuation bounty system (V2)
+/// @notice Interface for the chapter continuation bounty system
 /// @dev Readers place bounties on chapters to incentivize continuations.
 ///      20% of bounty goes to prize pool immediately; 80% locked for qualifying authors.
 ///      Qualifying authors = those who submit a descendant of the target chapter before the deadline.

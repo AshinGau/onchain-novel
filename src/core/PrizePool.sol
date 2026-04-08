@@ -11,7 +11,7 @@ import {IPrizePool} from "../interfaces/IPrizePool.sol";
 
 /// @title PrizePool
 /// @notice Manages prize pools for all novels: deposits, tipping, per-round reward distribution, pull-based claims
-/// @dev V2: per-round distribution with creator royalty decay, no protocol fee, no epoch logic
+/// @dev Per-round distribution with creator royalty decay, no protocol fee, no epoch logic
 contract PrizePool is
     Initializable,
     OwnableUpgradeable,

@@ -2,7 +2,7 @@
 pragma solidity ^0.8.28;
 
 /// @title IPrizePool
-/// @notice Interface for prize pool management, tipping, and reward distribution (V2)
+/// @notice Interface for prize pool management, tipping, and reward distribution
 /// @dev Handles per-round reward distribution with creator royalty decay.
 ///      Creator royalty formula: releaseAmount * CREATOR_DECAY_DIVISOR / (CREATOR_DECAY_DIVISOR + currentRound)
 interface IPrizePool {

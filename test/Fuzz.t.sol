@@ -2,13 +2,13 @@
 pragma solidity ^0.8.28;
 
 import {Test} from "forge-std/Test.sol";
-import {V2TestBase} from "./Integration.t.sol";
+import {TestBase} from "./Integration.t.sol";
 import {DataTypes} from "../src/libraries/DataTypes.sol";
 import {PrizePool} from "../src/core/PrizePool.sol";
 
 /// @title FuzzTest
-/// @notice Property-based tests for V2 protocol
-contract FuzzTest is V2TestBase {
+/// @notice Property-based tests for protocol
+contract FuzzTest is TestBase {
     // ----------------------------------------------------------
     //  Creator royalty decay formula with random rounds
     // ----------------------------------------------------------

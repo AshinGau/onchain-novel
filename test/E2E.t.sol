@@ -2,12 +2,12 @@
 pragma solidity ^0.8.28;
 
 import {Test} from "forge-std/Test.sol";
-import {V2TestBase} from "./Integration.t.sol";
+import {TestBase} from "./Integration.t.sol";
 import {DataTypes} from "../src/libraries/DataTypes.sol";
 
 /// @title E2ETest
-/// @notice End-to-end scenarios for V2 protocol
-contract E2ETest is V2TestBase {
+/// @notice End-to-end scenarios for protocol
+contract E2ETest is TestBase {
     // ----------------------------------------------------------
     //  Full 3-round lifecycle with multiple authors and voters
     // ----------------------------------------------------------

@@ -11,8 +11,8 @@ import {RulesEngine} from "../src/core/RulesEngine.sol";
 import {BountyBoard} from "../src/core/BountyBoard.sol";
 
 /// @title Deploy
-/// @notice Deploys all V2 protocol contracts behind UUPS proxies and wires them together
-/// @dev Decentralized Collaborative Novel Protocol V2
+/// @notice Deploys all protocol contracts behind UUPS proxies and wires them together
+/// @dev Decentralized Collaborative Novel Protocol
 contract Deploy is Script {
     function run() external {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");

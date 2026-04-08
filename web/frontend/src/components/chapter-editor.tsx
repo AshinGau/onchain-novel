@@ -74,7 +74,7 @@ export function ChapterEditor({
 
   if (!isConnected) {
     return (
-      <div className="v2-card v2-stack" style={{ gap: "0.75rem", alignItems: "center" }}>
+      <div className="on-card on-stack" style={{ gap: "0.75rem", alignItems: "center" }}>
         <p className="text-caption">Connect wallet to write a continuation</p>
         <ConnectButton />
       </div>
@@ -82,7 +82,7 @@ export function ChapterEditor({
   }
 
   return (
-    <div className="v2-card v2-stack" style={{ gap: "0.75rem" }}>
+    <div className="on-card on-stack" style={{ gap: "0.75rem" }}>
       <h3 className="text-subheading" style={{ margin: 0 }}>Write continuation</h3>
       <textarea
         value={content}
@@ -93,26 +93,26 @@ export function ChapterEditor({
           width: "100%",
           padding: "0.75rem",
           borderRadius: "0.5rem",
-          border: "1px solid var(--color-v2-border)",
-          background: "var(--color-v2-bg-secondary)",
-          color: "var(--color-v2-text)",
+          border: "1px solid var(--color-border)",
+          background: "var(--color-bg-secondary)",
+          color: "var(--color-text)",
           fontFamily: "Georgia, 'Noto Serif', serif",
           fontSize: "1rem",
           lineHeight: 1.75,
           resize: "vertical",
         }}
       />
-      <div className="v2-row" style={{ justifyContent: "space-between" }}>
+      <div className="on-row" style={{ justifyContent: "space-between" }}>
         <span
           className="text-caption"
           style={{
-            color: tooShort || tooLong ? "var(--color-v2-danger)" : undefined,
+            color: tooShort || tooLong ? "var(--color-danger)" : undefined,
           }}
         >
           {byteLength} bytes (min: {minLength}, max: {maxLength})
         </span>
         <button
-          className="v2-btn v2-btn-primary"
+          className="on-btn on-btn-primary"
           onClick={handleSubmit}
           disabled={!valid || isPending}
           style={{ opacity: !valid || isPending ? 0.5 : 1 }}
@@ -121,12 +121,12 @@ export function ChapterEditor({
         </button>
       </div>
       {status === "success" && (
-        <p style={{ color: "var(--color-v2-success)", margin: 0, fontSize: "0.875rem" }}>
+        <p style={{ color: "var(--color-success)", margin: 0, fontSize: "0.875rem" }}>
           Chapter submitted successfully!
         </p>
       )}
       {error && (
-        <p style={{ color: "var(--color-v2-danger)", margin: 0, fontSize: "0.875rem" }}>
+        <p style={{ color: "var(--color-danger)", margin: 0, fontSize: "0.875rem" }}>
           {error}
         </p>
       )}

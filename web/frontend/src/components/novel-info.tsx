@@ -9,12 +9,12 @@ export function NovelInfo({ novel }: { novel: Novel }) {
   const phase = phaseLabel(novel.round_phase);
 
   return (
-    <div className="v2-card v2-stack" style={{ gap: "0.75rem" }}>
-      <div className="v2-row" style={{ justifyContent: "space-between", flexWrap: "wrap" }}>
+    <div className="on-card on-stack" style={{ gap: "0.75rem" }}>
+      <div className="on-row" style={{ justifyContent: "space-between", flexWrap: "wrap" }}>
         <h1 className="text-heading" style={{ margin: 0 }}>
           {novel.title || `Novel #${novel.id}`}
         </h1>
-        <span className={`v2-badge ${novel.active ? "badge-active" : "badge-completed"}`}>
+        <span className={`on-badge ${novel.active ? "badge-active" : "badge-completed"}`}>
           {novel.active ? "Active" : "Completed"}
         </span>
       </div>
@@ -25,7 +25,7 @@ export function NovelInfo({ novel }: { novel: Novel }) {
         </p>
       )}
 
-      <div className="v2-row" style={{ gap: "1rem", flexWrap: "wrap" }}>
+      <div className="on-row" style={{ gap: "1rem", flexWrap: "wrap" }}>
         <span className="text-caption">
           Creator: {shortAddress(novel.creator)}
         </span>
@@ -48,9 +48,9 @@ export function NovelInfo({ novel }: { novel: Novel }) {
         )}
       </div>
 
-      <div className="v2-row" style={{ gap: "0.5rem", flexWrap: "wrap" }}>
+      <div className="on-row" style={{ gap: "0.5rem", flexWrap: "wrap" }}>
         <Link href={`/novels/${novel.id}/tree`}>
-          <button className="v2-btn v2-btn-secondary">Story Tree</button>
+          <button className="on-btn on-btn-secondary">Story Tree</button>
         </Link>
       </div>
     </div>

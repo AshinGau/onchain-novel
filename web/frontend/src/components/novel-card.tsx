@@ -11,12 +11,12 @@ export function NovelCard({ novel }: { novel: Novel }) {
       href={`/novels/${novel.id}`}
       style={{ textDecoration: "none", display: "block" }}
     >
-      <div className="v2-card v2-card-hover v2-stack" style={{ gap: "0.75rem" }}>
-        <div className="v2-row" style={{ justifyContent: "space-between" }}>
+      <div className="on-card on-card-hover on-stack" style={{ gap: "0.75rem" }}>
+        <div className="on-row" style={{ justifyContent: "space-between" }}>
           <span className="text-subheading" style={{ fontSize: "1rem" }}>
             {novel.title || `Novel #${novel.id}`}
           </span>
-          <span className={`v2-badge ${novel.active ? "badge-active" : "badge-completed"}`}>
+          <span className={`on-badge ${novel.active ? "badge-active" : "badge-completed"}`}>
             {novel.active ? "Active" : "Completed"}
           </span>
         </div>
@@ -36,7 +36,7 @@ export function NovelCard({ novel }: { novel: Novel }) {
           </p>
         )}
 
-        <div className="v2-row" style={{ gap: "1rem", flexWrap: "wrap" }}>
+        <div className="on-row" style={{ gap: "1rem", flexWrap: "wrap" }}>
           <span className="text-caption">
             Round {novel.current_round} &middot; {phase}
           </span>

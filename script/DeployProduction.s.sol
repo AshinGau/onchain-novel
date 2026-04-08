@@ -12,8 +12,8 @@ import {RulesEngine} from "../src/core/RulesEngine.sol";
 import {BountyBoard} from "../src/core/BountyBoard.sol";
 
 /// @title DeployProduction
-/// @notice Production deployment with TimelockController for owner operations (V2)
-/// @dev Deploys all V2 contracts + Timelock, transfers ownership to Timelock
+/// @notice Production deployment with TimelockController for owner operations
+/// @dev Deploys all contracts + Timelock, transfers ownership to Timelock
 ///      Requires environment variables:
 ///        PRIVATE_KEY — deployer private key
 ///        MULTISIG    — multi-sig address (Gnosis Safe) that controls the Timelock
