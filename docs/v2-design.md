@@ -975,5 +975,5 @@ KEEPER_POLL_INTERVAL_MS=10000      # 默认 10 秒
 6. **Phase 6 - Shared Lib**：ABI、合约交互封装（CLI 和 MCP 共用）
 7. **Phase 7 - CLI**：`onchain-novel` 命令行工具（setup + 子命令 + guide）
 8. **Phase 8 - MCP**：MCP server 重构（基于 shared lib）
-9. **Phase 9 - Skills**：`.claude/commands/*.md` 工作流文件编写
+9. **Phase 9 - Skills**：`.claude/commands/*.md` 工作流文件编
 10. **Phase 10 - 前端**：Web UI 重构
