@@ -8,12 +8,12 @@ import {TimelockController} from "@openzeppelin/contracts/governance/TimelockCon
 import {NovelCore} from "../src/core/NovelCore.sol";
 import {VotingEngine} from "../src/core/VotingEngine.sol";
 import {PrizePool} from "../src/core/PrizePool.sol";
-import {ChapterNFT} from "../src/core/ChapterNFT.sol";
-import {ReportRegistry} from "../src/core/ReportRegistry.sol";
+import {RulesEngine} from "../src/core/RulesEngine.sol";
+import {BountyBoard} from "../src/core/BountyBoard.sol";
 
 /// @title DeployProduction
-/// @notice Production deployment with TimelockController for owner operations
-/// @dev Deploys all contracts + Timelock, transfers ownership to Timelock
+/// @notice Production deployment with TimelockController for owner operations (V2)
+/// @dev Deploys all V2 contracts + Timelock, transfers ownership to Timelock
 ///      Requires environment variables:
 ///        PRIVATE_KEY — deployer private key
 ///        MULTISIG    — multi-sig address (Gnosis Safe) that controls the Timelock
@@ -23,7 +23,7 @@ contract DeployProduction is Script {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         address deployer = vm.addr(deployerPrivateKey);
         address multisig = vm.envAddress("MULTISIG");
-        uint256 timelockDelay = vm.envOr("TIMELOCK_DELAY", uint256(86400)); // Default: 1 day
+        uint256 timelockDelay = vm.envOr("TIMELOCK_DELAY", uint256(86400));
 
         console.log("Deployer:", deployer);
         console.log("Multi-sig:", multisig);
@@ -32,9 +32,6 @@ contract DeployProduction is Script {
         vm.startBroadcast(deployerPrivateKey);
 
         // 1. Deploy TimelockController
-        //    - proposers: [multisig]
-        //    - executors: [multisig]
-        //    - admin: address(0) → no separate admin, multisig controls everything
         address[] memory proposers = new address[](1);
         proposers[0] = multisig;
         address[] memory executors = new address[](1);
@@ -47,42 +44,46 @@ contract DeployProduction is Script {
         NovelCore novelCoreImpl = new NovelCore();
         VotingEngine votingEngineImpl = new VotingEngine();
         PrizePool prizePoolImpl = new PrizePool();
-        ChapterNFT chapterNFTImpl = new ChapterNFT();
-        ReportRegistry reportRegistryImpl = new ReportRegistry();
+        RulesEngine rulesEngineImpl = new RulesEngine();
+        BountyBoard bountyBoardImpl = new BountyBoard();
 
         // 3. Deploy proxies — initially owned by deployer (will transfer to Timelock)
+        ERC1967Proxy votingProxy =
+            new ERC1967Proxy(address(votingEngineImpl), abi.encodeCall(VotingEngine.initialize, (deployer, address(1))));
+
+        ERC1967Proxy prizeProxy =
+            new ERC1967Proxy(address(prizePoolImpl), abi.encodeCall(PrizePool.initialize, (deployer, address(1))));
+
+        ERC1967Proxy rulesProxy = new ERC1967Proxy(
+            address(rulesEngineImpl),
+            abi.encodeCall(RulesEngine.initialize, (deployer, address(1), address(prizeProxy)))
+        );
+
         ERC1967Proxy novelCoreProxy = new ERC1967Proxy(
-            address(novelCoreImpl), abi.encodeCall(NovelCore.initialize, (deployer, address(0), address(0), address(0)))
-        );
-        NovelCore novelCore = NovelCore(payable(address(novelCoreProxy)));
-
-        ERC1967Proxy votingProxy = new ERC1967Proxy(
-            address(votingEngineImpl), abi.encodeCall(VotingEngine.initialize, (deployer, address(novelCoreProxy)))
+            address(novelCoreImpl),
+            abi.encodeCall(
+                NovelCore.initialize, (deployer, address(votingProxy), address(prizeProxy), address(rulesProxy))
+            )
         );
 
-        ERC1967Proxy prizeProxy = new ERC1967Proxy(
-            address(prizePoolImpl), abi.encodeCall(PrizePool.initialize, (deployer, address(novelCoreProxy)))
+        ERC1967Proxy bountyProxy = new ERC1967Proxy(
+            address(bountyBoardImpl),
+            abi.encodeCall(BountyBoard.initialize, (deployer, address(novelCoreProxy), address(prizeProxy)))
         );
 
-        ERC1967Proxy nftProxy = new ERC1967Proxy(
-            address(chapterNFTImpl), abi.encodeCall(ChapterNFT.initialize, (deployer, address(novelCoreProxy)))
-        );
-
-        ERC1967Proxy reportProxy = new ERC1967Proxy(
-            address(reportRegistryImpl), abi.encodeCall(ReportRegistry.initialize, (deployer, 0.01 ether))
-        );
-
-        // 4. Wire NovelCore to modules
-        novelCore.setVotingEngine(address(votingProxy));
-        novelCore.setPrizePool(address(prizeProxy));
-        novelCore.setChapterNFT(address(nftProxy));
+        // 4. Wire NovelCore address to modules
+        VotingEngine(payable(address(votingProxy))).setNovelCore(address(novelCoreProxy));
+        PrizePool(payable(address(prizeProxy))).setNovelCore(address(novelCoreProxy));
+        RulesEngine(address(rulesProxy)).setNovelCore(address(novelCoreProxy));
+        PrizePool(payable(address(prizeProxy))).setRulesEngine(address(rulesProxy));
+        PrizePool(payable(address(prizeProxy))).setBountyBoard(address(bountyProxy));
 
         // 5. Transfer ownership of all contracts to TimelockController
-        novelCore.transferOwnership(address(timelock));
+        NovelCore(payable(address(novelCoreProxy))).transferOwnership(address(timelock));
         VotingEngine(payable(address(votingProxy))).transferOwnership(address(timelock));
-        PrizePool(address(prizeProxy)).transferOwnership(address(timelock));
-        ChapterNFT(address(nftProxy)).transferOwnership(address(timelock));
-        ReportRegistry(address(reportProxy)).transferOwnership(address(timelock));
+        PrizePool(payable(address(prizeProxy))).transferOwnership(address(timelock));
+        RulesEngine(address(rulesProxy)).transferOwnership(address(timelock));
+        BountyBoard(payable(address(bountyProxy))).transferOwnership(address(timelock));
 
         vm.stopBroadcast();
 
@@ -91,8 +92,8 @@ contract DeployProduction is Script {
         console.log("NovelCore:", address(novelCoreProxy));
         console.log("VotingEngine:", address(votingProxy));
         console.log("PrizePool:", address(prizeProxy));
-        console.log("ChapterNFT:", address(nftProxy));
-        console.log("ReportRegistry:", address(reportProxy));
+        console.log("RulesEngine:", address(rulesProxy));
+        console.log("BountyBoard:", address(bountyProxy));
         console.log("=== Governance ===");
         console.log("TimelockController:", address(timelock));
         console.log("Multi-sig (proposer/executor):", multisig);

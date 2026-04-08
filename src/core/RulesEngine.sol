@@ -13,6 +13,7 @@ import {DataTypes} from "../libraries/DataTypes.sol";
 /// @title RulesEngine
 /// @notice World-building rules governance: creator rules + proposal-based rule changes.
 ///         Reads novel state from NovelCore via view calls.
+///         V2: uses world-line authorship for voting eligibility (replaces V1 canon authorship).
 contract RulesEngine is Initializable, OwnableUpgradeable, UUPSUpgradeable, IRulesEngine {
     // ============================================================
     //                         STORAGE
@@ -22,13 +23,13 @@ contract RulesEngine is Initializable, OwnableUpgradeable, UUPSUpgradeable, IRul
     IPrizePool public prizePool;
 
     /// @notice Novel ID => rule name => rule content
-    mapping(uint256 => mapping(string => string)) private _rules;
+    mapping(uint64 => mapping(string => string)) private _rules;
 
     /// @notice Novel ID => list of rule names (for enumeration)
-    mapping(uint256 => string[]) private _ruleNames;
+    mapping(uint64 => string[]) private _ruleNames;
 
     /// @notice Novel ID => rule name => index+1 in _ruleNames (0 = not exists)
-    mapping(uint256 => mapping(string => uint256)) private _ruleNameIndex;
+    mapping(uint64 => mapping(string => uint256)) private _ruleNameIndex;
 
     /// @notice Global rule proposal counter
     uint256 private _ruleProposalCount;
@@ -43,15 +44,15 @@ contract RulesEngine is Initializable, OwnableUpgradeable, UUPSUpgradeable, IRul
     //                         ERRORS
     // ============================================================
 
-    error NovelNotFound(uint256 novelId);
-    error NovelNotActive(uint256 novelId);
-    error NotNovelCreator(uint256 novelId, address caller);
-    error CreatorRulesLocked(uint256 novelId);
+    error NovelNotFound(uint64 novelId);
+    error NovelNotActive(uint64 novelId);
+    error NotNovelCreator(uint64 novelId, address caller);
+    error CreatorRulesLocked(uint64 novelId);
     error InvalidRuleName();
     error InvalidRuleContent();
     error RuleNotFound(string name);
     error RuleAlreadyExists(string name);
-    error NotCanonAuthor(uint256 novelId, address caller);
+    error NotWorldLineAuthor(uint64 novelId, address caller);
     error ProposalNotFound(uint256 proposalId);
     error ProposalExpired(uint256 proposalId);
     error ProposalAlreadyExecuted(uint256 proposalId);
@@ -91,11 +92,11 @@ contract RulesEngine is Initializable, OwnableUpgradeable, UUPSUpgradeable, IRul
     // ============================================================
 
     /// @inheritdoc IRulesEngine
-    function setCreatorRules(uint256 novelId, string[] calldata names, string[] calldata contents) external {
+    function setCreatorRules(uint64 novelId, string[] calldata names, string[] calldata contents) external {
         DataTypes.Novel memory novel = novelCore.getNovel(novelId);
         if (novel.id == 0) revert NovelNotFound(novelId);
         if (novel.creator != msg.sender) revert NotNovelCreator(novelId, msg.sender);
-        if (novel.currentEpoch != 1) revert CreatorRulesLocked(novelId);
+        if (novel.currentRound != 0) revert CreatorRulesLocked(novelId);
         if (names.length != contents.length) revert ArrayLengthMismatch();
 
         for (uint256 i = 0; i < names.length; i++) {
@@ -111,7 +112,7 @@ contract RulesEngine is Initializable, OwnableUpgradeable, UUPSUpgradeable, IRul
 
     /// @inheritdoc IRulesEngine
     function proposeRule(
-        uint256 novelId,
+        uint64 novelId,
         DataTypes.RuleProposalType proposalType,
         string calldata ruleName,
         string calldata ruleContent
@@ -120,7 +121,7 @@ contract RulesEngine is Initializable, OwnableUpgradeable, UUPSUpgradeable, IRul
         if (novel.id == 0) revert NovelNotFound(novelId);
         if (!novel.active) revert NovelNotActive(novelId);
 
-        if (msg.value < novel.config.ruleFee) revert InsufficientRuleFee(msg.value, novel.config.ruleFee);
+        if (msg.value != novel.config.ruleFee) revert InsufficientRuleFee(msg.value, novel.config.ruleFee);
         if (bytes(ruleName).length == 0 || bytes(ruleName).length > 64) revert InvalidRuleName();
 
         if (proposalType == DataTypes.RuleProposalType.Add) {
@@ -157,14 +158,14 @@ contract RulesEngine is Initializable, OwnableUpgradeable, UUPSUpgradeable, IRul
         if (proposal.id == 0) revert ProposalNotFound(proposalId);
         if (proposal.executed) revert ProposalAlreadyExecuted(proposalId);
 
-        uint256 novelId = proposal.novelId;
+        uint64 novelId = proposal.novelId;
         DataTypes.Novel memory novel = novelCore.getNovel(novelId);
         if (!novel.active) revert NovelNotActive(novelId);
 
         if (block.timestamp > proposal.createdAt + novel.config.ruleVoteDuration) {
             revert ProposalExpired(proposalId);
         }
-        if (!novelCore.isCanonAuthor(novelId, msg.sender)) revert NotCanonAuthor(novelId, msg.sender);
+        if (!novelCore.isWorldLineAuthor(novelId, msg.sender)) revert NotWorldLineAuthor(novelId, msg.sender);
         if (_ruleProposalVotes[proposalId][msg.sender]) revert AlreadyVotedOnProposal(proposalId, msg.sender);
 
         _ruleProposalVotes[proposalId][msg.sender] = true;
@@ -177,7 +178,7 @@ contract RulesEngine is Initializable, OwnableUpgradeable, UUPSUpgradeable, IRul
             proposal.executed = true;
             if (proposal.proposalType == DataTypes.RuleProposalType.Add) {
                 _setRule(novelId, proposal.ruleName, proposal.ruleContent);
-            } else {
+            } else if (_ruleNameIndex[novelId][proposal.ruleName] != 0) {
                 _deleteRule(novelId, proposal.ruleName);
             }
             emit RuleProposalExecuted(proposalId, novelId);
@@ -189,12 +190,12 @@ contract RulesEngine is Initializable, OwnableUpgradeable, UUPSUpgradeable, IRul
     // ============================================================
 
     /// @inheritdoc IRulesEngine
-    function getRule(uint256 novelId, string calldata name) external view returns (string memory) {
+    function getRule(uint64 novelId, string calldata name) external view returns (string memory) {
         return _rules[novelId][name];
     }
 
     /// @inheritdoc IRulesEngine
-    function getRuleNames(uint256 novelId) external view returns (string[] memory) {
+    function getRuleNames(uint64 novelId) external view returns (string[] memory) {
         return _ruleNames[novelId];
     }
 
@@ -207,7 +208,7 @@ contract RulesEngine is Initializable, OwnableUpgradeable, UUPSUpgradeable, IRul
     //                    INTERNAL HELPERS
     // ============================================================
 
-    function _setRule(uint256 novelId, string memory name, string memory content) internal {
+    function _setRule(uint64 novelId, string memory name, string memory content) internal {
         _rules[novelId][name] = content;
         if (_ruleNameIndex[novelId][name] == 0) {
             _ruleNames[novelId].push(name);
@@ -216,7 +217,7 @@ contract RulesEngine is Initializable, OwnableUpgradeable, UUPSUpgradeable, IRul
         emit RuleSet(novelId, name);
     }
 
-    function _deleteRule(uint256 novelId, string memory name) internal {
+    function _deleteRule(uint64 novelId, string memory name) internal {
         uint256 indexPlusOne = _ruleNameIndex[novelId][name];
         if (indexPlusOne == 0) revert RuleNotFound(name);
 

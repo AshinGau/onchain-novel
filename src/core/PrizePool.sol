@@ -10,7 +10,8 @@ import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Ini
 import {IPrizePool} from "../interfaces/IPrizePool.sol";
 
 /// @title PrizePool
-/// @notice Manages prize pools for all novels: genesis deposits, tipping, epoch distribution, pull-based claims
+/// @notice Manages prize pools for all novels: deposits, tipping, per-round reward distribution, pull-based claims
+/// @dev V2: per-round distribution with creator royalty decay, no protocol fee, no epoch logic
 contract PrizePool is
     Initializable,
     OwnableUpgradeable,
@@ -19,6 +20,16 @@ contract PrizePool is
     UUPSUpgradeable,
     IPrizePool
 {
+    // ============================================================
+    //                        CONSTANTS
+    // ============================================================
+
+    /// @notice Decay divisor for creator royalty: royalty = release * D / (D + round)
+    uint256 public constant CREATOR_DECAY_DIVISOR = 3;
+
+    /// @notice Minimum tip amount
+    uint256 public constant MIN_TIP_AMOUNT = 0.001 ether;
+
     // ============================================================
     //                         STORAGE
     // ============================================================
@@ -29,23 +40,17 @@ contract PrizePool is
     /// @notice Authorized RulesEngine contract address (can deposit rule fees)
     address public rulesEngine;
 
-    /// @notice Novel ID => current pool balance (available for distribution)
-    mapping(uint256 => uint256) private _poolBalances;
+    /// @notice Authorized BountyBoard contract address (can deposit bounty pool share)
+    address public bountyBoard;
 
-    /// @notice Novel ID => total tipped amount (cumulative, for stats)
-    mapping(uint256 => uint256) private _totalTipped;
+    /// @notice Keeper reward amount per state-transition call
+    uint256 public keeperRewardAmount;
+
+    /// @notice Novel ID => current pool balance (available for distribution)
+    mapping(uint64 => uint256) private _poolBalances;
 
     /// @notice Novel ID => address => pending reward (claimable)
-    mapping(uint256 => mapping(address => uint256)) private _pendingRewards;
-
-    /// @notice Minimum tip amount
-    uint256 public constant MIN_TIP_AMOUNT = 0.001 ether;
-
-    /// @notice Protocol fee rate in basis points (e.g., 500 = 5%), max 1000 (10%)
-    uint16 public protocolFeeRate;
-
-    /// @notice Protocol treasury address
-    address public protocolTreasury;
+    mapping(uint64 => mapping(address => uint256)) private _pendingRewards;
 
     // ============================================================
     //                         ERRORS
@@ -57,7 +62,6 @@ contract PrizePool is
     error TransferFailed();
     error NoAuthors();
     error ZeroAmount();
-    error InvalidRate();
 
     // ============================================================
     //                        MODIFIERS
@@ -80,7 +84,6 @@ contract PrizePool is
     function initialize(address owner_, address novelCore_) external initializer {
         __Ownable_init(owner_);
         __Pausable_init();
-
         novelCore = novelCore_;
     }
 
@@ -88,23 +91,33 @@ contract PrizePool is
     //                     ADMIN FUNCTIONS
     // ============================================================
 
+    event NovelCoreUpdated(address indexed oldAddr, address indexed newAddr);
+    event RulesEngineUpdated(address indexed oldAddr, address indexed newAddr);
+    event BountyBoardUpdated(address indexed oldAddr, address indexed newAddr);
+    event KeeperRewardAmountUpdated(uint256 oldAmount, uint256 newAmount);
+
     function setNovelCore(address newNovelCore) external onlyOwner {
+        address old = novelCore;
         novelCore = newNovelCore;
+        emit NovelCoreUpdated(old, newNovelCore);
     }
 
     function setRulesEngine(address newRulesEngine) external onlyOwner {
+        address old = rulesEngine;
         rulesEngine = newRulesEngine;
+        emit RulesEngineUpdated(old, newRulesEngine);
     }
 
-    /// @notice Set protocol fee rate (basis points, max 1000 = 10%)
-    function setProtocolFeeRate(uint16 rate) external onlyOwner {
-        if (rate > 1000) revert InvalidRate();
-        protocolFeeRate = rate;
+    function setBountyBoard(address newBountyBoard) external onlyOwner {
+        address old = bountyBoard;
+        bountyBoard = newBountyBoard;
+        emit BountyBoardUpdated(old, newBountyBoard);
     }
 
-    /// @notice Set protocol treasury address
-    function setProtocolTreasury(address treasury) external onlyOwner {
-        protocolTreasury = treasury;
+    function setKeeperRewardAmount(uint256 amount) external onlyOwner {
+        uint256 old = keeperRewardAmount;
+        keeperRewardAmount = amount;
+        emit KeeperRewardAmountUpdated(old, amount);
     }
 
     function pause() external onlyOwner {
@@ -120,36 +133,57 @@ contract PrizePool is
     // ============================================================
 
     /// @inheritdoc IPrizePool
-    function tipNovel(uint256 novelId) external payable whenNotPaused nonReentrant {
+    function tipNovel(uint64 novelId) external payable whenNotPaused nonReentrant {
         if (msg.value < MIN_TIP_AMOUNT) revert TipTooSmall(msg.value, MIN_TIP_AMOUNT);
 
         _poolBalances[novelId] += msg.value;
-        _totalTipped[novelId] += msg.value;
 
-        emit TipReceived(novelId, msg.sender, msg.value, block.timestamp);
+        emit TipReceived(novelId, msg.sender, msg.value);
     }
 
     /// @inheritdoc IPrizePool
-    function claimReward(uint256 novelId) external whenNotPaused nonReentrant {
-        uint256 amount = _pendingRewards[novelId][msg.sender];
+    function tipChapter(uint64 chapterId, address author, uint64 novelId) external payable whenNotPaused nonReentrant {
+        if (msg.value < MIN_TIP_AMOUNT) revert TipTooSmall(msg.value, MIN_TIP_AMOUNT);
+
+        uint256 authorShare = msg.value / 2;
+
+        // Push 50% to author; if push fails, 100% goes to pool
+        (bool success,) = author.call{value: authorShare}("");
+        if (!success) {
+            _poolBalances[novelId] += msg.value;
+        } else {
+            _poolBalances[novelId] += msg.value - authorShare;
+        }
+
+        emit ChapterTipped(novelId, chapterId, msg.sender, msg.value);
+    }
+
+    /// @inheritdoc IPrizePool
+    function claimReward(uint64 novelId, address recipient)
+        external
+        whenNotPaused
+        nonReentrant
+        returns (uint256 amount)
+    {
+        amount = _pendingRewards[novelId][recipient];
         if (amount == 0) revert NoPendingReward();
 
         // CEI: clear before transfer
-        _pendingRewards[novelId][msg.sender] = 0;
+        _pendingRewards[novelId][recipient] = 0;
 
-        (bool success,) = msg.sender.call{value: amount}("");
+        (bool success,) = recipient.call{value: amount}("");
         if (!success) revert TransferFailed();
 
-        emit RewardClaimed(novelId, msg.sender, amount);
+        emit RewardClaimed(novelId, recipient, amount);
     }
 
     // ============================================================
-    //                  CALLED BY NOVELCORE
+    //                  CALLED BY NOVELCORE / RULESENGINE
     // ============================================================
 
     /// @inheritdoc IPrizePool
-    function deposit(uint256 novelId, string calldata reason) external payable {
-        if (msg.sender != novelCore && msg.sender != rulesEngine) revert OnlyNovelCore();
+    function deposit(uint64 novelId, string calldata reason) external payable {
+        if (msg.sender != novelCore && msg.sender != rulesEngine && msg.sender != bountyBoard) revert OnlyNovelCore();
         if (msg.value == 0) revert ZeroAmount();
 
         _poolBalances[novelId] += msg.value;
@@ -158,96 +192,72 @@ contract PrizePool is
     }
 
     /// @inheritdoc IPrizePool
-    function distributeEpochRewards(
-        uint256 novelId,
-        uint32 epoch,
+    function distributeRoundRewards(
+        uint64 novelId,
+        uint32 currentRound,
         address creator,
         address[] calldata authors,
         uint16 releaseRate,
-        uint32 bootstrapChapterCount,
-        uint32 cumulativeCanonChapters,
-        uint16 voterRewardRate,
-        address payable votingEngine
-    ) external onlyNovelCore returns (uint256 voterRewardPool) {
+        uint16 voterRewardRate
+    ) external onlyNovelCore returns (uint256 voterRewards) {
         if (authors.length == 0) revert NoAuthors();
 
         uint256 poolBalance = _poolBalances[novelId];
         if (poolBalance == 0) return 0;
 
-        // Calculate epoch release amount
-        uint256 totalRelease = (poolBalance * releaseRate) / 10000;
-        if (totalRelease == 0) return 0;
+        // Calculate round release amount
+        uint256 releaseAmount = (poolBalance * releaseRate) / 10000;
+        if (releaseAmount == 0) return 0;
 
-        // === Layer 0: Protocol Fee ===
-        uint256 protocolFee = 0;
-        if (protocolFeeRate > 0 && protocolTreasury != address(0)) {
-            protocolFee = (totalRelease * protocolFeeRate) / 10000;
-            if (protocolFee > 0) {
-                _pendingRewards[novelId][protocolTreasury] += protocolFee;
-                totalRelease -= protocolFee;
-            }
+        // === Creator Royalty (decaying) ===
+        // creatorRoyalty = releaseAmount * D / (D + currentRound)
+        uint256 creatorRoyalty = (releaseAmount * CREATOR_DECAY_DIVISOR) / (CREATOR_DECAY_DIVISOR + currentRound);
+        if (creatorRoyalty > 0) {
+            _pendingRewards[novelId][creator] += creatorRoyalty;
         }
 
-        // === Layer 1: Creator Royalty ===
-        // creatorRoyalty = totalRelease * 1 / (1 + C)
-        // Fixed G=1 regardless of genesis count to prevent inflation exploit
-        uint256 creatorRoyalty = 0;
-        uint256 c = uint256(cumulativeCanonChapters);
-        {
-            creatorRoyalty = totalRelease / (1 + c);
-            if (creatorRoyalty > 0) {
-                _pendingRewards[novelId][creator] += creatorRoyalty;
-                emit CreatorRoyaltyDistributed(novelId, epoch, creator, creatorRoyalty);
-            }
-        }
+        uint256 remaining = releaseAmount - creatorRoyalty;
 
-        uint256 remaining = totalRelease - creatorRoyalty;
+        // === Author Rewards ===
+        uint256 authorRewards = (remaining * (10000 - voterRewardRate)) / 10000;
 
-        // === Layer 2: Author Rewards ===
-        // authorPool = remaining * (10000 - voterRewardRate) / 10000
-        uint256 authorPool = (remaining * (10000 - voterRewardRate)) / 10000;
-
-        if (authorPool > 0) {
-            uint256 perChapterReward = authorPool / authors.length;
-            if (perChapterReward > 0) {
+        if (authorRewards > 0) {
+            uint256 perAuthorReward = authorRewards / authors.length;
+            if (perAuthorReward > 0) {
                 for (uint256 i = 0; i < authors.length; i++) {
-                    _pendingRewards[novelId][authors[i]] += perChapterReward;
+                    _pendingRewards[novelId][authors[i]] += perAuthorReward;
                 }
-                // Adjust authorPool to actual distributed (handle rounding)
-                authorPool = perChapterReward * authors.length;
             }
+            // Adjust to actual distributed amount (handle rounding dust and perAuthorReward==0 case)
+            authorRewards = perAuthorReward * authors.length;
         }
 
-        // === Layer 3: Voter Rewards ===
-        voterRewardPool = remaining - authorPool;
+        // === Voter Rewards ===
+        voterRewards = remaining - authorRewards;
 
-        // Deduct total release + protocol fee from pool
-        _poolBalances[novelId] -= (totalRelease + protocolFee);
+        // Deduct release from pool
+        _poolBalances[novelId] -= releaseAmount;
 
-        // Send voter reward ETH directly to VotingEngine
-        if (voterRewardPool > 0) {
-            (bool success,) = votingEngine.call{value: voterRewardPool}("");
+        // Transfer voterRewards ETH to caller (NovelCore) for forwarding to VotingEngine
+        if (voterRewards > 0) {
+            (bool success,) = msg.sender.call{value: voterRewards}("");
             if (!success) revert TransferFailed();
         }
 
-        emit RewardDistributed(novelId, epoch, totalRelease + protocolFee, authors.length);
+        emit RoundRewardsDistributed(novelId, currentRound, creatorRoyalty, authorRewards, voterRewards);
 
-        return voterRewardPool;
+        return voterRewards;
     }
 
     /// @inheritdoc IPrizePool
-    function payKeeperReward(uint256 novelId, address keeper, uint256 amount)
-        external
-        onlyNovelCore
-        returns (bool paid)
-    {
-        if (amount == 0 || _poolBalances[novelId] < amount) return false;
+    function payKeeperReward(uint64 novelId, address keeper) external onlyNovelCore returns (uint256 amount) {
+        amount = keeperRewardAmount;
+        if (amount == 0 || _poolBalances[novelId] < amount) return 0;
 
         _poolBalances[novelId] -= amount;
         _pendingRewards[novelId][keeper] += amount;
 
         emit KeeperRewardPaid(novelId, keeper, amount);
-        return true;
     }
 
     // ============================================================
@@ -255,18 +265,13 @@ contract PrizePool is
     // ============================================================
 
     /// @inheritdoc IPrizePool
-    function getPoolBalance(uint256 novelId) external view returns (uint256) {
+    function getPoolBalance(uint64 novelId) external view returns (uint256) {
         return _poolBalances[novelId];
     }
 
     /// @inheritdoc IPrizePool
-    function getPendingReward(uint256 novelId, address author) external view returns (uint256) {
-        return _pendingRewards[novelId][author];
-    }
-
-    /// @inheritdoc IPrizePool
-    function getTotalTipped(uint256 novelId) external view returns (uint256) {
-        return _totalTipped[novelId];
+    function getPendingReward(uint64 novelId, address recipient) external view returns (uint256) {
+        return _pendingRewards[novelId][recipient];
     }
 
     // ============================================================

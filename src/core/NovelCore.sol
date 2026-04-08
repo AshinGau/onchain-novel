@@ -10,13 +10,14 @@ import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Ini
 import {INovelCore} from "../interfaces/INovelCore.sol";
 import {IVotingEngine} from "../interfaces/IVotingEngine.sol";
 import {IPrizePool} from "../interfaces/IPrizePool.sol";
-import {IChapterNFT} from "../interfaces/IChapterNFT.sol";
+import {IRulesEngine} from "../interfaces/IRulesEngine.sol";
 import {DataTypes} from "../libraries/DataTypes.sol";
 
-/// @title NovelCore
-/// @notice Core contract managing novel lifecycle, chapter tree, Round/Epoch state machine,
-///         staking, and spam tracking. Coordinates VotingEngine, PrizePool, and ChapterNFT.
-/// @dev Designed for multi-Agent collaborative novel creation on-chain.
+/// @title NovelCore (V2)
+/// @notice Core coordinator for the Decentralized Collaborative Novel Protocol V2.
+///         Writing is always-on; voting is a periodic cycle decoupled from chapter submission.
+///         Chapter tree with bidirectional traversal. DFS-based candidate generation.
+/// @dev UUPS-upgradeable. Coordinates VotingEngine, PrizePool, and RulesEngine.
 contract NovelCore is
     Initializable,
     OwnableUpgradeable,
@@ -26,76 +27,105 @@ contract NovelCore is
     INovelCore
 {
     // ============================================================
+    //                         CONSTANTS
+    // ============================================================
+
+    /// @notice Inactivity timeout after which anyone can complete a novel
+    uint64 public constant INACTIVITY_TIMEOUT = 30 days;
+
+    /// @notice Fork fee rate in basis points (1% of source pool balance)
+    uint16 public constant FORK_FEE_RATE = 100;
+
+    /// @notice Basis points denominator
+    uint16 private constant BPS_DENOMINATOR = 10000;
+
+    /// @notice Maximum chapters to collect in path-walking functions
+    uint256 private constant MAX_PATH_CHAPTERS = 256;
+
+    /// @notice Maximum steps when walking up the chapter tree
+    uint256 private constant MAX_TREE_WALK_STEPS = 1000;
+
+    /// @notice Maximum steps for eligible new author collection
+    uint256 private constant MAX_AUTHOR_WALK_STEPS = 500;
+
+    // ============================================================
     //                         STORAGE
     // ============================================================
 
     /// @notice External module references
     IVotingEngine public votingEngine;
     IPrizePool public prizePool;
-    IChapterNFT public chapterNFT;
+    IRulesEngine public rulesEngine;
+
+    /// @notice Maximum DFS nodes to traverse in startRound (owner-settable)
+    uint32 public maxDfsNodes;
 
     /// @notice Novel counter (also used as next novel ID)
-    uint256 private _novelCount;
+    uint64 private _novelCount;
 
-    /// @notice Chapter counter (also used as next chapter ID, global across all novels)
-    uint256 private _chapterCount;
+    /// @notice Chapter counter (global across all novels)
+    uint64 private _chapterCount;
 
     /// @notice Novel ID => Novel data
-    mapping(uint256 => DataTypes.Novel) private _novels;
+    mapping(uint64 => DataTypes.Novel) private _novels;
 
     /// @notice Chapter ID => Chapter data
-    mapping(uint256 => DataTypes.Chapter) private _chapters;
+    mapping(uint64 => DataTypes.Chapter) private _chapters;
 
-    /// @notice Novel ID => current active world line chapter IDs
-    mapping(uint256 => uint256[]) private _activeWorldLines;
+    /// @notice Novel ID => mutable metadata
+    mapping(uint64 => DataTypes.NovelMetadata) private _novelMetadata;
 
-    /// @notice Novel ID => epoch => round number => submitted chapter IDs
-    mapping(uint256 => mapping(uint32 => mapping(uint32 => uint256[]))) private _roundSubmissions;
+    /// @notice Novel ID => root chapter ID
+    mapping(uint64 => uint64) private _novelRootId;
 
-    /// @notice Novel ID => author => stake balance (refundable)
-    mapping(uint256 => mapping(address => uint256)) private _stakeBalances;
+    /// @notice Novel ID => current world line ancestor chapter IDs
+    mapping(uint64 => uint64[]) private _worldLineAncestors;
 
-    /// @notice Novel ID => author => spam tracking
-    mapping(uint256 => mapping(address => DataTypes.SpamRecord)) private _spamRecords;
+    /// @notice Novel ID => round number => round data
+    mapping(uint64 => mapping(uint32 => DataTypes.RoundData)) private _rounds;
 
-    /// @notice Novel ID => author => locked stake amount (in-flight, not yet settled)
-    mapping(uint256 => mapping(address => uint256)) private _lockedStakes;
+    /// @notice Novel ID => author => is world line author (for RulesEngine)
+    mapping(uint64 => mapping(address => bool)) private _isWorldLineAuthor;
 
-    /// @notice Novel ID => mutable metadata (title, description, cover)
-    mapping(uint256 => DataTypes.NovelMetadata) private _novelMetadata;
+    /// @notice Novel ID => round => total committed vote stake
+    mapping(uint64 => mapping(uint32 => uint256)) private _roundCommittedStakes;
 
-    /// @notice Global keeper reward amount (owner-settable, per state transition call)
-    uint256 public keeperRewardAmount;
+    /// @notice Novel ID => round => total revealed vote stake
+    mapping(uint64 => mapping(uint32 => uint256)) private _roundRevealedStakes;
 
-    /// @notice Novel ID => author address => has canon chapter
-    mapping(uint256 => mapping(address => bool)) private _isCanonAuthor;
+    /// @dev Deprecated: rules moved to RulesEngine (kept for storage layout compatibility)
+    mapping(uint64 => string[]) private __deprecated_ruleNames;
+
+    /// @dev Deprecated: rules moved to RulesEngine (kept for storage layout compatibility)
+    mapping(uint64 => mapping(string => string)) private __deprecated_rules;
 
     // ============================================================
     //                         ERRORS
     // ============================================================
 
     error InvalidConfig(uint8 code);
-    error NovelNotFound(uint256 novelId);
-    error NovelNotActive(uint256 novelId);
-    error ChapterNotFound(uint256 chapterId);
-    error NotWorldLine(uint256 chapterId);
-    error InvalidStakeAmount(uint256 sent, uint256 required);
+    error NovelNotFound(uint64 novelId);
+    error NovelNotActive(uint64 novelId);
+    error ChapterNotFound(uint64 chapterId);
+    error InvalidFee(uint256 sent, uint256 required);
     error ContentLengthOutOfRange(uint64 length, uint64 min, uint64 max);
     error WrongRoundPhase(DataTypes.RoundPhase expected, DataTypes.RoundPhase actual);
-    error WrongEpochPhase(DataTypes.EpochPhase expected, DataTypes.EpochPhase actual);
-    error RoundConditionsNotMet();
     error PhaseNotExpired();
-    error NoStakeToRefund();
     error TransferFailed();
-    error ChapterNotInNovel(uint256 chapterId, uint256 novelId);
-    error BranchNotRejected(uint256 chapterId);
-    error InvalidBootstrapInput();
-    error InsufficientForkFee(uint256 sent, uint256 required);
-    error NotNovelCreator(uint256 novelId, address caller);
+    error ChapterNotInNovel(uint64 chapterId, uint64 novelId);
+    error NotNovelCreator(uint64 novelId, address caller);
     error InvalidMetadata();
     error ContentHashMismatch(bytes32 expected, bytes32 actual);
     error OnchainContentRequired();
     error OnchainContentForbidden();
+    error NoCandidatesFound();
+    error MinRoundGapNotMet();
+    error DuplicateCandidate(uint64 chapterId);
+    error NotACandidate(uint64 chapterId);
+    error CompletionNotAllowed();
+    error NovelAlreadyCompleted(uint64 novelId);
+    error ZeroAddress();
+    error InsufficientForkFee(uint256 sent, uint256 required);
 
     // ============================================================
     //                      INITIALIZER
@@ -106,16 +136,19 @@ contract NovelCore is
         _disableInitializers();
     }
 
-    function initialize(address owner_, address votingEngine_, address prizePool_, address chapterNFT_)
+    function initialize(address owner_, address votingEngine_, address prizePool_, address rulesEngine_)
         external
         initializer
     {
+        if (votingEngine_ == address(0) || prizePool_ == address(0)) revert ZeroAddress();
+
         __Ownable_init(owner_);
         __Pausable_init();
 
         votingEngine = IVotingEngine(votingEngine_);
         prizePool = IPrizePool(prizePool_);
-        chapterNFT = IChapterNFT(chapterNFT_);
+        rulesEngine = IRulesEngine(rulesEngine_);
+        maxDfsNodes = 500;
     }
 
     // ============================================================
@@ -124,8 +157,8 @@ contract NovelCore is
 
     event VotingEngineUpdated(address indexed oldAddr, address indexed newAddr);
     event PrizePoolUpdated(address indexed oldAddr, address indexed newAddr);
-    event ChapterNFTUpdated(address indexed oldAddr, address indexed newAddr);
-    event KeeperRewardAmountUpdated(uint256 oldAmount, uint256 newAmount);
+    event RulesEngineUpdated(address indexed oldAddr, address indexed newAddr);
+    event MaxDfsNodesUpdated(uint32 oldVal, uint32 newVal);
 
     function setVotingEngine(address addr) external onlyOwner {
         address old = address(votingEngine);
@@ -139,16 +172,16 @@ contract NovelCore is
         emit PrizePoolUpdated(old, addr);
     }
 
-    function setChapterNFT(address addr) external onlyOwner {
-        address old = address(chapterNFT);
-        chapterNFT = IChapterNFT(addr);
-        emit ChapterNFTUpdated(old, addr);
+    function setRulesEngine(address addr) external onlyOwner {
+        address old = address(rulesEngine);
+        rulesEngine = IRulesEngine(addr);
+        emit RulesEngineUpdated(old, addr);
     }
 
-    function setKeeperRewardAmount(uint256 amount) external onlyOwner {
-        uint256 old = keeperRewardAmount;
-        keeperRewardAmount = amount;
-        emit KeeperRewardAmountUpdated(old, amount);
+    function setMaxDfsNodes(uint32 val) external onlyOwner {
+        uint32 old = maxDfsNodes;
+        maxDfsNodes = val;
+        emit MaxDfsNodesUpdated(old, val);
     }
 
     function pause() external onlyOwner {
@@ -159,39 +192,6 @@ contract NovelCore is
         _unpause();
     }
 
-    /// @notice Deactivate a novel (no more submissions or voting)
-    /// @param novelId Novel to deactivate
-    function completeNovel(uint256 novelId) external {
-        DataTypes.Novel storage novel = _novels[novelId];
-        if (novel.id == 0) revert NovelNotFound(novelId);
-        if (!novel.active) revert NovelNotActive(novelId);
-
-        // Owner or creator can complete; creator must wait 10 days of inactivity
-        if (msg.sender != owner()) {
-            if (msg.sender != novel.creator) revert NotNovelCreator(novelId, msg.sender);
-            if (block.timestamp < novel.phaseStartTime + 10 days) revert PhaseNotExpired();
-        }
-
-        // Only allow completion during Submitting phase (not mid-vote)
-        if (novel.roundPhase != DataTypes.RoundPhase.Submitting) {
-            revert WrongRoundPhase(DataTypes.RoundPhase.Submitting, novel.roundPhase);
-        }
-
-        novel.active = false;
-
-        // Unlock stakes for current round submissions (round will never settle)
-        uint256[] storage submissions = _roundSubmissions[novelId][novel.currentEpoch][novel.currentRound];
-        uint256 stakeAmt = novel.config.stakeAmount;
-        for (uint256 i = 0; i < submissions.length; i++) {
-            address author = _chapters[submissions[i]].author;
-            if (_lockedStakes[novelId][author] >= stakeAmt) {
-                _lockedStakes[novelId][author] -= stakeAmt;
-            }
-        }
-
-        emit NovelCompleted(novelId);
-    }
-
     // ============================================================
     //                   NOVEL LIFECYCLE
     // ============================================================
@@ -200,141 +200,137 @@ contract NovelCore is
     function createNovel(
         DataTypes.NovelConfig calldata config,
         DataTypes.NovelMetadata calldata metadata,
-        DataTypes.ContentSubmission[] calldata bootstrapChapters
-    ) external payable whenNotPaused returns (uint256 novelId) {
+        DataTypes.ContentSubmission calldata rootChapter
+    ) external payable whenNotPaused returns (uint64 novelId) {
         _validateConfig(config);
         _validateMetadata(metadata);
-        if (bootstrapChapters.length == 0) revert InvalidBootstrapInput();
+        _validateSubmission(config, rootChapter);
+
+        if (msg.value < config.submissionFee) {
+            revert InvalidFee(msg.value, config.submissionFee);
+        }
 
         novelId = ++_novelCount;
-        _novelMetadata[novelId] = metadata;
 
         _novels[novelId] = DataTypes.Novel({
             id: novelId,
             creator: msg.sender,
             config: config,
-            currentRound: 1,
-            currentEpoch: 1,
-            roundPhase: DataTypes.RoundPhase.Submitting,
-            epochPhase: DataTypes.EpochPhase.Rounds,
-            phaseStartTime: block.timestamp,
-            bootstrapChapterCount: uint32(bootstrapChapters.length),
-            cumulativeCanonChapters: 0,
-            active: true,
-            forkSourceNovelId: 0,
-            forkSourceChapterId: 0
+            currentRound: 0,
+            roundPhase: DataTypes.RoundPhase.Idle,
+            phaseStartTime: uint64(block.timestamp),
+            lastSettleTime: 0,
+            active: true
         });
 
-        // Create bootstrap chapters as a linear chain, mint NFTs
-        uint256 parentId = 0;
-        for (uint256 i = 0; i < bootstrapChapters.length; i++) {
-            _validateSubmission(config, bootstrapChapters[i]);
-            parentId = _createBootstrapChapter(novelId, parentId, uint32(i), bootstrapChapters[i]);
-            chapterNFT.mint(msg.sender, novelId, parentId, 0, bootstrapChapters[i].contentHash);
-        }
+        _novelMetadata[novelId] = metadata;
 
-        // Only the last chapter is the active world line
-        _activeWorldLines[novelId].push(parentId);
+        // Create root chapter: parentId=0, depth=1
+        uint64 rootId = ++_chapterCount;
+        _chapters[rootId] = DataTypes.Chapter({
+            id: rootId,
+            novelId: novelId,
+            parentId: 0,
+            author: msg.sender,
+            contentHash: rootChapter.contentHash,
+            declaredLength: rootChapter.declaredLength,
+            depth: 1,
+            timestamp: uint64(block.timestamp),
+            descendants: new uint64[](0)
+        });
 
-        // Creator is always a canon author
-        _isCanonAuthor[novelId][msg.sender] = true;
+        _novelRootId[novelId] = rootId;
+        _worldLineAncestors[novelId].push(rootId);
+        _isWorldLineAuthor[novelId][msg.sender] = true;
 
-        // Deposit initial prize pool if any ETH sent
+        // Submission fee + excess go to prize pool as genesis fund
         if (msg.value > 0) {
             prizePool.deposit{value: msg.value}(novelId, "genesis");
         }
 
-        emit NovelCreated(novelId, msg.sender, uint32(bootstrapChapters.length));
+        emit NovelCreated(novelId, msg.sender);
+        emit ChapterSubmitted(novelId, rootId, msg.sender, 0, 1);
     }
 
     /// @inheritdoc INovelCore
     function forkNovel(
-        uint256 originalNovelId,
-        uint256 branchChapterId,
+        uint64 sourceChapterId,
         DataTypes.NovelConfig calldata config,
         DataTypes.NovelMetadata calldata metadata,
-        DataTypes.ContentSubmission[] calldata bootstrapChapters
-    ) external payable whenNotPaused returns (uint256 novelId) {
-        DataTypes.Novel storage sourceNovel = _novels[originalNovelId];
-        if (sourceNovel.id == 0) revert NovelNotFound(originalNovelId);
+        DataTypes.ContentSubmission calldata rootChapter
+    ) external payable whenNotPaused returns (uint64 novelId) {
+        // Validate source chapter exists
+        DataTypes.Chapter storage sourceCh = _chapters[sourceChapterId];
+        if (sourceCh.id == 0) revert ChapterNotFound(sourceChapterId);
 
-        DataTypes.Chapter storage branch = _chapters[branchChapterId];
-        if (branch.id == 0) revert ChapterNotFound(branchChapterId);
-        if (branch.novelId != originalNovelId) revert ChapterNotInNovel(branchChapterId, originalNovelId);
-        if (branch.isCanon) revert BranchNotRejected(branchChapterId);
+        uint64 sourceNovelId = sourceCh.novelId;
+        DataTypes.Novel storage sourceNovel = _novels[sourceNovelId];
 
-        // Fork fee: must pay at least the original novel's stakeAmount as tribute
-        uint256 forkFee = sourceNovel.config.stakeAmount;
-        if (msg.value < forkFee) revert InsufficientForkFee(msg.value, forkFee);
+        // Fork fee = max(submissionFee, sourcePoolBalance * forkFeeRate / 10000)
+        uint256 sourcePoolBalance = prizePool.getPoolBalance(sourceNovelId);
+        uint256 forkFee = sourcePoolBalance * FORK_FEE_RATE / BPS_DENOMINATOR;
+        if (forkFee < config.submissionFee) {
+            forkFee = config.submissionFee;
+        }
+        uint256 totalRequired = forkFee + config.submissionFee;
+        if (msg.value < totalRequired) {
+            revert InsufficientForkFee(msg.value, totalRequired);
+        }
 
         _validateConfig(config);
         _validateMetadata(metadata);
 
+        // Inherit contentLocation from source novel
+        DataTypes.NovelConfig memory finalConfig = config;
+        finalConfig.contentLocation = sourceNovel.config.contentLocation;
+        finalConfig.contentBaseUrl = sourceNovel.config.contentBaseUrl;
+
+        _validateSubmission(finalConfig, rootChapter);
+
         novelId = ++_novelCount;
-        _novelMetadata[novelId] = metadata;
 
         _novels[novelId] = DataTypes.Novel({
             id: novelId,
-            creator: sourceNovel.creator, // Creator royalty flows to original creator
-            config: config,
-            currentRound: 1,
-            currentEpoch: 1,
-            roundPhase: DataTypes.RoundPhase.Submitting,
-            epochPhase: DataTypes.EpochPhase.Rounds,
-            phaseStartTime: block.timestamp,
-            bootstrapChapterCount: uint32(bootstrapChapters.length),
-            cumulativeCanonChapters: 0,
-            active: true,
-            forkSourceNovelId: originalNovelId,
-            forkSourceChapterId: branchChapterId
+            creator: msg.sender,
+            config: finalConfig,
+            currentRound: 0,
+            roundPhase: DataTypes.RoundPhase.Idle,
+            phaseStartTime: uint64(block.timestamp),
+            lastSettleTime: 0,
+            active: true
         });
 
-        // Inherit content config from original novel (immutable, fork cannot override)
-        _novels[novelId].config.contentLocation = sourceNovel.config.contentLocation;
-        _novels[novelId].config.contentBaseUrl = sourceNovel.config.contentBaseUrl;
+        _novelMetadata[novelId] = metadata;
 
-        // Create the fork root chapter (not counted as bootstrap)
-        uint256 forkRootId = ++_chapterCount;
-        _chapters[forkRootId] = DataTypes.Chapter({
-            id: forkRootId,
+        // Create fork root: parentId = sourceChapterId (cross-novel!), depth = 1
+        uint64 rootId = ++_chapterCount;
+        _chapters[rootId] = DataTypes.Chapter({
+            id: rootId,
             novelId: novelId,
-            parentId: 0,
+            parentId: sourceChapterId,
             author: msg.sender,
-            contentHash: branch.contentHash,
-            declaredLength: branch.declaredLength,
-            round: 0,
-            epoch: 0,
-            chapterIndex: 0,
-            voteCount: 0,
-            isWorldLine: true,
-            isCanon: false
+            contentHash: rootChapter.contentHash,
+            declaredLength: rootChapter.declaredLength,
+            depth: 1,
+            timestamp: uint64(block.timestamp),
+            descendants: new uint64[](0)
         });
 
-        // Chain bootstrap chapters after fork root, mint NFTs
-        uint256 lastChapterId = forkRootId;
-        for (uint256 i = 0; i < bootstrapChapters.length; i++) {
-            _validateSubmission(_novels[novelId].config, bootstrapChapters[i]);
-            lastChapterId = _createBootstrapChapter(novelId, lastChapterId, uint32(i + 1), bootstrapChapters[i]);
-            chapterNFT.mint(msg.sender, novelId, lastChapterId, 0, bootstrapChapters[i].contentHash);
-        }
+        _novelRootId[novelId] = rootId;
+        _worldLineAncestors[novelId].push(rootId);
+        _isWorldLineAuthor[novelId][msg.sender] = true;
 
-        // Only the last chapter is the active world line
-        _activeWorldLines[novelId].push(lastChapterId);
+        // Fork fee to source novel's prize pool
+        prizePool.deposit{value: forkFee}(sourceNovelId, "forkFee");
 
-        // Fork initiator is a canon author
-        _isCanonAuthor[novelId][msg.sender] = true;
-
-        // Fork fee goes to the original novel's prize pool
-        prizePool.deposit{value: forkFee}(originalNovelId, "fork_fee");
-
-        // Remaining ETH goes to the new novel's prize pool
+        // Remaining to new novel's prize pool (submission fee + any excess)
         uint256 remaining = msg.value - forkFee;
         if (remaining > 0) {
-            prizePool.deposit{value: remaining}(novelId, "fork_genesis");
+            prizePool.deposit{value: remaining}(novelId, "genesis");
         }
 
-        emit NovelForked(novelId, originalNovelId, branchChapterId);
-        emit NovelCreated(novelId, msg.sender, uint32(bootstrapChapters.length));
+        emit NovelForked(novelId, sourceChapterId, msg.sender);
+        emit ChapterSubmitted(novelId, rootId, msg.sender, sourceChapterId, 1);
     }
 
     // ============================================================
@@ -342,59 +338,51 @@ contract NovelCore is
     // ============================================================
 
     /// @inheritdoc INovelCore
-    function submitChapter(uint256 novelId, uint256 parentChapterId, DataTypes.ContentSubmission calldata submission)
+    function submitChapter(uint64 novelId, uint64 parentId, DataTypes.ContentSubmission calldata submission)
         external
         payable
         whenNotPaused
-        returns (uint256 chapterId)
     {
         DataTypes.Novel storage novel = _novels[novelId];
         if (novel.id == 0) revert NovelNotFound(novelId);
         if (!novel.active) revert NovelNotActive(novelId);
 
-        // Check phase first (cheap) before content validation (expensive keccak256)
-        if (novel.roundPhase != DataTypes.RoundPhase.Submitting) {
-            revert WrongRoundPhase(DataTypes.RoundPhase.Submitting, novel.roundPhase);
-        }
-        if (novel.epochPhase != DataTypes.EpochPhase.Rounds) {
-            revert WrongEpochPhase(DataTypes.EpochPhase.Rounds, novel.epochPhase);
+        if (msg.value != novel.config.submissionFee) {
+            revert InvalidFee(msg.value, novel.config.submissionFee);
         }
 
-        DataTypes.Chapter storage parent = _chapters[parentChapterId];
-        if (parent.id == 0) revert ChapterNotFound(parentChapterId);
-        if (parent.novelId != novelId) revert ChapterNotInNovel(parentChapterId, novelId);
-        if (!_isActiveWorldLine(novelId, parentChapterId)) revert NotWorldLine(parentChapterId);
+        // Validate parent belongs to this novel
+        DataTypes.Chapter storage parent = _chapters[parentId];
+        if (parent.id == 0) revert ChapterNotFound(parentId);
+        if (parent.novelId != novelId) revert ChapterNotInNovel(parentId, novelId);
 
-        DataTypes.NovelConfig storage config = novel.config;
-        _validateSubmission(config, submission);
+        _validateSubmission(novel.config, submission);
 
-        if (msg.value != config.stakeAmount) {
-            revert InvalidStakeAmount(msg.value, config.stakeAmount);
-        }
+        // Create chapter
+        uint64 chapterId = ++_chapterCount;
+        uint32 newDepth = parent.depth + 1;
 
-        uint32 newChapterIndex = parent.chapterIndex + 1;
-
-        chapterId = ++_chapterCount;
         _chapters[chapterId] = DataTypes.Chapter({
             id: chapterId,
             novelId: novelId,
-            parentId: parentChapterId,
+            parentId: parentId,
             author: msg.sender,
             contentHash: submission.contentHash,
             declaredLength: submission.declaredLength,
-            round: novel.currentRound,
-            epoch: novel.currentEpoch,
-            chapterIndex: newChapterIndex,
-            voteCount: 0,
-            isWorldLine: false,
-            isCanon: false
+            depth: newDepth,
+            timestamp: uint64(block.timestamp),
+            descendants: new uint64[](0)
         });
 
-        _roundSubmissions[novelId][novel.currentEpoch][novel.currentRound].push(chapterId);
-        _stakeBalances[novelId][msg.sender] += msg.value;
-        _lockedStakes[novelId][msg.sender] += msg.value;
+        // Bidirectional link: push to parent's descendants
+        _chapters[parentId].descendants.push(chapterId);
 
-        emit ChapterSubmitted(novelId, chapterId, msg.sender, parentChapterId, newChapterIndex);
+        // Fee to prize pool
+        if (msg.value > 0) {
+            prizePool.deposit{value: msg.value}(novelId, "submissionFee");
+        }
+
+        emit ChapterSubmitted(novelId, chapterId, msg.sender, parentId, newDepth);
     }
 
     // ============================================================
@@ -402,38 +390,86 @@ contract NovelCore is
     // ============================================================
 
     /// @inheritdoc INovelCore
-    function closeSubmissions(uint256 novelId) external whenNotPaused {
+    function startRound(uint64 novelId) external whenNotPaused {
         DataTypes.Novel storage novel = _novels[novelId];
         if (novel.id == 0) revert NovelNotFound(novelId);
+        if (!novel.active) revert NovelNotActive(novelId);
 
-        if (novel.roundPhase != DataTypes.RoundPhase.Submitting) {
-            revert WrongRoundPhase(DataTypes.RoundPhase.Submitting, novel.roundPhase);
+        if (novel.roundPhase != DataTypes.RoundPhase.Idle) {
+            revert WrongRoundPhase(DataTypes.RoundPhase.Idle, novel.roundPhase);
         }
 
-        DataTypes.NovelConfig storage config = novel.config;
-
-        if (block.timestamp < novel.phaseStartTime + config.roundMinDuration) {
-            revert RoundConditionsNotMet();
+        // Enforce minRoundGap (skip for first round)
+        if (novel.currentRound > 0) {
+            if (block.timestamp < novel.lastSettleTime + novel.config.minRoundGap) {
+                revert MinRoundGapNotMet();
+            }
         }
 
-        uint256[] storage submissions = _roundSubmissions[novelId][novel.currentEpoch][novel.currentRound];
-        if (submissions.length < config.roundMinSubmissions) {
-            revert RoundConditionsNotMet();
+        // DFS from worldLineAncestors (or root for first round) to find candidates
+        uint64[] storage ancestors = _worldLineAncestors[novelId];
+        uint32 maxCandidates = 3 * novel.config.worldLineCount;
+
+        uint64[] memory candidates = _dfsDeepestChains(novelId, ancestors, maxCandidates);
+        if (candidates.length == 0) revert NoCandidatesFound();
+
+        // Increment round
+        novel.currentRound++;
+        uint32 round = novel.currentRound;
+
+        // Store round data
+        DataTypes.RoundData storage rd = _rounds[novelId][round];
+
+        // Store candidates and mark all as eligible (they come from world line DFS)
+        for (uint256 i = 0; i < candidates.length; i++) {
+            rd.candidates.push(candidates[i]);
+            rd.candidateIsEligible.push(true);
         }
 
-        uint256 votingRoundId = _computeVotingRoundId(novelId, novel.currentEpoch, novel.currentRound, false);
-        votingEngine.initializeVoting(novelId, votingRoundId, submissions);
+        // Store previous world lines for settlement path computation
+        for (uint256 i = 0; i < ancestors.length; i++) {
+            rd.prevWorldLines.push(ancestors[i]);
+        }
 
-        novel.roundPhase = DataTypes.RoundPhase.Committing;
-        novel.phaseStartTime = block.timestamp;
+        // Set phase timing
+        uint64 now_ = uint64(block.timestamp);
+        novel.roundPhase = DataTypes.RoundPhase.Nominating;
+        novel.phaseStartTime = now_;
+        rd.nominateEndTime = now_ + novel.config.nominateDuration;
 
+        // Initialize voting in VotingEngine
+        votingEngine.initializeVoting(novelId, round, candidates);
+
+        // Pay keeper
         _payKeeper(novelId);
 
-        emit RoundPhaseChanged(novelId, novel.currentRound, DataTypes.RoundPhase.Committing);
+        emit RoundStarted(novelId, round, candidates);
     }
 
     /// @inheritdoc INovelCore
-    function closeCommit(uint256 novelId) external whenNotPaused {
+    function closeNomination(uint64 novelId) external whenNotPaused {
+        DataTypes.Novel storage novel = _novels[novelId];
+        if (novel.id == 0) revert NovelNotFound(novelId);
+
+        if (novel.roundPhase != DataTypes.RoundPhase.Nominating) {
+            revert WrongRoundPhase(DataTypes.RoundPhase.Nominating, novel.roundPhase);
+        }
+
+        DataTypes.RoundData storage rd = _rounds[novelId][novel.currentRound];
+        if (block.timestamp < rd.nominateEndTime) revert PhaseNotExpired();
+
+        uint64 now_ = uint64(block.timestamp);
+        novel.roundPhase = DataTypes.RoundPhase.Committing;
+        novel.phaseStartTime = now_;
+        rd.commitEndTime = now_ + novel.config.commitDuration;
+
+        _payKeeper(novelId);
+
+        emit NominationClosed(novelId, novel.currentRound);
+    }
+
+    /// @inheritdoc INovelCore
+    function closeCommit(uint64 novelId) external whenNotPaused {
         DataTypes.Novel storage novel = _novels[novelId];
         if (novel.id == 0) revert NovelNotFound(novelId);
 
@@ -441,23 +477,21 @@ contract NovelCore is
             revert WrongRoundPhase(DataTypes.RoundPhase.Committing, novel.roundPhase);
         }
 
-        if (block.timestamp < novel.phaseStartTime + novel.config.commitDuration) {
-            revert PhaseNotExpired();
-        }
+        DataTypes.RoundData storage rd = _rounds[novelId][novel.currentRound];
+        if (block.timestamp < rd.commitEndTime) revert PhaseNotExpired();
 
-        uint256 votingRoundId = _computeVotingRoundId(novelId, novel.currentEpoch, novel.currentRound, false);
-        votingEngine.closeCommitPhase(novelId, votingRoundId);
-
+        uint64 now_ = uint64(block.timestamp);
         novel.roundPhase = DataTypes.RoundPhase.Revealing;
-        novel.phaseStartTime = block.timestamp;
+        novel.phaseStartTime = now_;
+        rd.revealEndTime = now_ + novel.config.revealDuration;
 
         _payKeeper(novelId);
 
-        emit RoundPhaseChanged(novelId, novel.currentRound, DataTypes.RoundPhase.Revealing);
+        emit CommitClosed(novelId, novel.currentRound);
     }
 
     /// @inheritdoc INovelCore
-    function settleRound(uint256 novelId) external whenNotPaused {
+    function settleRound(uint64 novelId) external whenNotPaused nonReentrant {
         DataTypes.Novel storage novel = _novels[novelId];
         if (novel.id == 0) revert NovelNotFound(novelId);
 
@@ -465,270 +499,273 @@ contract NovelCore is
             revert WrongRoundPhase(DataTypes.RoundPhase.Revealing, novel.roundPhase);
         }
 
-        if (block.timestamp < novel.phaseStartTime + novel.config.revealDuration) {
-            revert PhaseNotExpired();
-        }
+        DataTypes.RoundData storage rd = _rounds[novelId][novel.currentRound];
+        if (block.timestamp < rd.revealEndTime) revert PhaseNotExpired();
 
-        // Tally votes
-        uint256 votingRoundId = _computeVotingRoundId(novelId, novel.currentEpoch, novel.currentRound, false);
-        uint256[] memory rankedIds = votingEngine.tallyVotes(novelId, votingRoundId);
-
-        // Select top N as world lines
+        uint32 round = novel.currentRound;
         uint32 N = novel.config.worldLineCount;
+
+        // Tally votes — pass only actual top-N winners for accurate reward computation
+        (uint64[] memory rankedIds,) = votingEngine.tallyVotes(novelId, round, N);
+
+        // Select top N winners (or fewer)
         uint256 selectCount = rankedIds.length < N ? rankedIds.length : N;
 
-        delete _activeWorldLines[novelId];
-
-        uint256[] memory selectedIds = new uint256[](selectCount);
+        // Collect new world line chapters: for each winner, walk up to the corresponding
+        // prevWorldLine ancestor. Deduplicate across all winners.
+        uint64[] memory winners = new uint64[](selectCount);
         for (uint256 i = 0; i < selectCount; i++) {
-            uint256 selectedId = rankedIds[i];
-            _chapters[selectedId].isWorldLine = true;
-            _activeWorldLines[novelId].push(selectedId);
-            selectedIds[i] = selectedId;
+            winners[i] = rankedIds[i];
         }
 
-        _updateSpamRecords(novelId, novel.currentRound, rankedIds);
-        _returnRoundStakes(novelId, novel.currentEpoch, novel.currentRound);
+        // Collect per-chapter authors from eligible winners' new world line paths.
+        // Ineligible winners (nominated but not world-line descendants) are excluded
+        // from author rewards per design spec section 5.4.
+        address[] memory rewardAuthors = _collectEligibleNewAuthors(novelId, winners, rd);
 
-        emit WorldLinesSelected(novelId, novel.currentRound, selectedIds);
-
-        if (novel.currentRound >= novel.config.roundsPerEpoch) {
-            // Transition to Epoch voting
-            novel.epochPhase = DataTypes.EpochPhase.Committing;
-            novel.roundPhase = DataTypes.RoundPhase.Settling;
-            novel.phaseStartTime = block.timestamp;
-
-            uint256 epochVotingId = _computeVotingRoundId(novelId, novel.currentEpoch, novel.currentRound, true);
-            votingEngine.initializeVoting(novelId, epochVotingId, _activeWorldLines[novelId]);
-
-            emit EpochPhaseChanged(novelId, novel.currentEpoch, DataTypes.EpochPhase.Committing);
-        } else {
-            novel.currentRound++;
-            novel.roundPhase = DataTypes.RoundPhase.Submitting;
-            novel.phaseStartTime = block.timestamp;
-
-            emit RoundPhaseChanged(novelId, novel.currentRound, DataTypes.RoundPhase.Submitting);
+        // Distribute round rewards from prize pool (skip if no new authors)
+        uint256 voterRewards = 0;
+        if (rewardAuthors.length > 0) {
+            voterRewards = prizePool.distributeRoundRewards(
+                novelId,
+                round,
+                novel.creator,
+                rewardAuthors,
+                novel.config.prizeReleaseRate,
+                novel.config.voterRewardRate
+            );
         }
 
-        _payKeeper(novelId);
-    }
+        // Compute unrevealed stakes (committed - revealed)
+        uint256 totalCommitted = _roundCommittedStakes[novelId][round];
+        uint256 totalRevealed = _roundRevealedStakes[novelId][round];
+        uint256 unrevealedStakes = totalCommitted > totalRevealed ? totalCommitted - totalRevealed : 0;
 
-    // ============================================================
-    //                  EPOCH STATE TRANSITIONS
-    // ============================================================
-
-    /// @inheritdoc INovelCore
-    function closeEpochCommit(uint256 novelId) external whenNotPaused {
-        DataTypes.Novel storage novel = _novels[novelId];
-        if (novel.id == 0) revert NovelNotFound(novelId);
-
-        if (novel.epochPhase != DataTypes.EpochPhase.Committing) {
-            revert WrongEpochPhase(DataTypes.EpochPhase.Committing, novel.epochPhase);
-        }
-
-        if (block.timestamp < novel.phaseStartTime + novel.config.commitDuration) {
-            revert PhaseNotExpired();
-        }
-
-        uint256 epochVotingId = _computeVotingRoundId(novelId, novel.currentEpoch, novel.currentRound, true);
-        votingEngine.closeCommitPhase(novelId, epochVotingId);
-
-        novel.epochPhase = DataTypes.EpochPhase.Revealing;
-        novel.phaseStartTime = block.timestamp;
-
-        _payKeeper(novelId);
-
-        emit EpochPhaseChanged(novelId, novel.currentEpoch, DataTypes.EpochPhase.Revealing);
-    }
-
-    /// @inheritdoc INovelCore
-    function settleEpoch(uint256 novelId) external whenNotPaused nonReentrant {
-        DataTypes.Novel storage novel = _novels[novelId];
-        if (novel.id == 0) revert NovelNotFound(novelId);
-
-        if (novel.epochPhase != DataTypes.EpochPhase.Revealing) {
-            revert WrongEpochPhase(DataTypes.EpochPhase.Revealing, novel.epochPhase);
-        }
-
-        if (block.timestamp < novel.phaseStartTime + novel.config.revealDuration) {
-            revert PhaseNotExpired();
-        }
-
-        // Tally epoch votes
-        uint256 epochVotingId = _computeVotingRoundId(novelId, novel.currentEpoch, novel.currentRound, true);
-        uint256[] memory rankedWorldLines = votingEngine.tallyVotes(novelId, epochVotingId);
-
-        uint256 canonWorldLineId = rankedWorldLines[0];
-
-        emit CanonEstablished(novelId, novel.currentEpoch, canonWorldLineId);
-
-        // Collect canon chapter authors for this epoch
-        address[] memory canonAuthors = _collectCanonAuthors(novelId, canonWorldLineId);
-
-        // Mark canon authors for rule voting eligibility
-        for (uint256 i = 0; i < canonAuthors.length; i++) {
-            _isCanonAuthor[novelId][canonAuthors[i]] = true;
-        }
-
-        // Mint NFTs for canon chapters
-        _mintCanonNFTs(novelId, novel.currentEpoch, canonWorldLineId);
-
-        // Include current epoch's canon chapters in cumulative count BEFORE distribution
-        // so creator royalty formula 1/(1+C) gives 50% at epoch 1 (matching design)
-        novel.cumulativeCanonChapters += uint32(canonAuthors.length);
-
-        // Distribute prize pool rewards (three-layer: creator royalty → authors → voters)
-        uint256 voterRewardPool = prizePool.distributeEpochRewards(
-            novelId,
-            novel.currentEpoch,
-            novel.creator,
-            canonAuthors,
-            novel.config.prizeReleaseRate,
-            novel.bootstrapChapterCount,
-            novel.cumulativeCanonChapters,
-            novel.config.voterRewardRate,
-            payable(address(votingEngine))
-        );
-
-        // Record voter reward allocation in VotingEngine (ETH already sent by PrizePool)
-        if (voterRewardPool > 0) {
-            uint256 roundCount = uint256(novel.currentRound) + 1; // K round votes + 1 epoch vote
-            uint256[] memory votingRoundIds = new uint256[](roundCount);
-            for (uint32 r = 1; r <= novel.currentRound; r++) {
-                votingRoundIds[r - 1] = _computeVotingRoundId(novelId, novel.currentEpoch, r, false);
+        if (totalRevealed > 0) {
+            // Send vote stakes + voter rewards to VotingEngine for distribution
+            uint256 totalToVotingEngine = voterRewards + totalCommitted;
+            if (totalToVotingEngine > 0) {
+                (bool sent,) = address(votingEngine).call{value: totalToVotingEngine}("");
+                if (!sent) revert TransferFailed();
             }
-            votingRoundIds[roundCount - 1] = epochVotingId;
-            votingEngine.depositVoterRewards(novelId, votingRoundIds, voterRewardPool);
+
+            // Settle voter rewards in VotingEngine
+            votingEngine.settleVoterRewards(novelId, round, voterRewards, unrevealedStakes);
+        } else {
+            // No voters revealed — return voter rewards + unrevealed stakes to prize pool
+            // to prevent funds from being permanently locked in VotingEngine
+            uint256 returnToPool = voterRewards + unrevealedStakes;
+            if (returnToPool > 0) {
+                prizePool.deposit{value: returnToPool}(novelId, "noReveals");
+            }
         }
 
-        // Reset for next epoch
-        delete _activeWorldLines[novelId];
-        _activeWorldLines[novelId].push(canonWorldLineId);
+        // Update worldLineAncestors
+        delete _worldLineAncestors[novelId];
 
-        novel.currentEpoch++;
-        novel.currentRound = 1;
-        novel.roundPhase = DataTypes.RoundPhase.Submitting;
-        novel.epochPhase = DataTypes.EpochPhase.Rounds;
-        novel.phaseStartTime = block.timestamp;
+        // Clear old world line author flags
+        // (We rebuild from scratch based on new world lines)
+        // Note: we cannot iterate all authors, so we track a superset approach.
+        // Instead, we only ADD new authors and never clear — RulesEngine checks
+        // current world line paths. For a clean approach, we clear known authors
+        // from prevWorldLines and set new ones.
+        _clearWorldLineAuthors(novelId, rd.prevWorldLines);
+
+        for (uint256 i = 0; i < selectCount; i++) {
+            _worldLineAncestors[novelId].push(winners[i]);
+        }
+
+        // Set world line authors from root to each winner
+        _setWorldLineAuthors(novelId, winners);
+
+        // Mark round as settled
+        rd.settled = true;
+        novel.roundPhase = DataTypes.RoundPhase.Idle;
+        novel.lastSettleTime = uint64(block.timestamp);
+        novel.phaseStartTime = uint64(block.timestamp);
 
         _payKeeper(novelId);
 
-        emit EpochPhaseChanged(novelId, novel.currentEpoch, DataTypes.EpochPhase.Rounds);
-        emit RoundPhaseChanged(novelId, novel.currentRound, DataTypes.RoundPhase.Submitting);
+        emit RoundSettled(novelId, round, _worldLineAncestors[novelId]);
     }
 
+    // ============================================================
+    //                   NOMINATION & VOTING
+    // ============================================================
+
     /// @inheritdoc INovelCore
-    function triggerEarlyEpoch(uint256 novelId) external onlyOwner whenNotPaused {
+    function nominateCandidate(uint64 novelId, uint64 chapterId) external payable whenNotPaused {
         DataTypes.Novel storage novel = _novels[novelId];
         if (novel.id == 0) revert NovelNotFound(novelId);
 
-        // Must be in Rounds phase and Submitting sub-phase
-        if (novel.epochPhase != DataTypes.EpochPhase.Rounds) {
-            revert WrongEpochPhase(DataTypes.EpochPhase.Rounds, novel.epochPhase);
-        }
-        if (novel.roundPhase != DataTypes.RoundPhase.Submitting) {
-            revert WrongRoundPhase(DataTypes.RoundPhase.Submitting, novel.roundPhase);
+        if (novel.roundPhase != DataTypes.RoundPhase.Nominating) {
+            revert WrongRoundPhase(DataTypes.RoundPhase.Nominating, novel.roundPhase);
         }
 
-        // Must have completed at least 1 round (need world lines for epoch vote)
-        if (novel.currentRound <= 1) revert RoundConditionsNotMet();
+        if (msg.value != novel.config.nominationFee) {
+            revert InvalidFee(msg.value, novel.config.nominationFee);
+        }
 
-        // Revert currentRound to the last completed round so settleEpoch computes
-        // the matching epochVotingId (settleEpoch uses novel.currentRound directly)
-        novel.currentRound--;
+        // Validate chapter belongs to novel
+        DataTypes.Chapter storage ch = _chapters[chapterId];
+        if (ch.id == 0) revert ChapterNotFound(chapterId);
+        if (ch.novelId != novelId) revert ChapterNotInNovel(chapterId, novelId);
 
-        // Skip remaining rounds → enter Epoch Committing
-        novel.epochPhase = DataTypes.EpochPhase.Committing;
-        novel.roundPhase = DataTypes.RoundPhase.Settling;
-        novel.phaseStartTime = block.timestamp;
+        DataTypes.RoundData storage rd = _rounds[novelId][novel.currentRound];
 
-        uint256 epochVotingId = _computeVotingRoundId(novelId, novel.currentEpoch, novel.currentRound, true);
-        votingEngine.initializeVoting(novelId, epochVotingId, _activeWorldLines[novelId]);
+        // Check not already a candidate
+        for (uint256 i = 0; i < rd.candidates.length; i++) {
+            if (rd.candidates[i] == chapterId) revert DuplicateCandidate(chapterId);
+        }
 
-        emit EarlyEpochTriggered(novelId, novel.currentEpoch);
-        emit EpochPhaseChanged(novelId, novel.currentEpoch, DataTypes.EpochPhase.Committing);
+        // Determine eligibility: is it a descendant of any worldLineAncestor?
+        // Walk up parentId from chapterId to see if we hit a world line ancestor.
+        bool eligible = _isDescendantOfWorldLine(novelId, chapterId);
+
+        rd.candidates.push(chapterId);
+        rd.candidateIsEligible.push(eligible);
+
+        // Sync new candidate to VotingEngine so voters can reveal votes for it
+        votingEngine.addCandidate(novelId, novel.currentRound, chapterId);
+
+        // Fee to prize pool
+        if (msg.value > 0) {
+            prizePool.deposit{value: msg.value}(novelId, "nominationFee");
+        }
+
+        emit CandidateNominated(novelId, novel.currentRound, chapterId, msg.sender);
+    }
+
+    /// @inheritdoc INovelCore
+    function commitVote(uint64 novelId, bytes32 commitHash) external payable whenNotPaused {
+        DataTypes.Novel storage novel = _novels[novelId];
+        if (novel.id == 0) revert NovelNotFound(novelId);
+
+        if (novel.roundPhase != DataTypes.RoundPhase.Committing) {
+            revert WrongRoundPhase(DataTypes.RoundPhase.Committing, novel.roundPhase);
+        }
+
+        if (msg.value != novel.config.voteStake) {
+            revert InvalidFee(msg.value, novel.config.voteStake);
+        }
+
+        uint32 round = novel.currentRound;
+        votingEngine.commitVote(novelId, round, msg.sender, commitHash, msg.value);
+        _roundCommittedStakes[novelId][round] += msg.value;
+
+        emit VoteCommitted(novelId, round, msg.sender);
+    }
+
+    /// @inheritdoc INovelCore
+    function revealVote(uint64 novelId, uint64 candidateId, bytes32 salt) external whenNotPaused {
+        DataTypes.Novel storage novel = _novels[novelId];
+        if (novel.id == 0) revert NovelNotFound(novelId);
+
+        if (novel.roundPhase != DataTypes.RoundPhase.Revealing) {
+            revert WrongRoundPhase(DataTypes.RoundPhase.Revealing, novel.roundPhase);
+        }
+
+        uint32 round = novel.currentRound;
+        votingEngine.revealVote(novelId, round, msg.sender, candidateId, salt);
+        _roundRevealedStakes[novelId][round] += novel.config.voteStake;
+
+        emit VoteRevealed(novelId, round, msg.sender, candidateId);
     }
 
     // ============================================================
-    //                      STAKE CLAIMS
+    //                     REWARDS & TIPS
     // ============================================================
 
     /// @inheritdoc INovelCore
-    function claimStakeRefund(uint256 novelId) external nonReentrant whenNotPaused {
-        uint256 total = _stakeBalances[novelId][msg.sender];
-        uint256 locked = _lockedStakes[novelId][msg.sender];
-        uint256 claimable = total > locked ? total - locked : 0;
-        if (claimable == 0) revert NoStakeToRefund();
+    function claimReward(uint64 novelId) external nonReentrant whenNotPaused {
+        uint256 amount = prizePool.claimReward(novelId, msg.sender);
+        if (amount > 0) {
+            emit RewardClaimed(novelId, msg.sender, amount);
+        }
+    }
 
-        _stakeBalances[novelId][msg.sender] -= claimable;
+    /// @notice Claim voting reward (stake refund + accuracy reward) for a specific round
+    /// @param novelId The novel ID
+    /// @param round The round number
+    function claimVotingReward(uint64 novelId, uint32 round) external nonReentrant whenNotPaused {
+        uint256 amount = votingEngine.claimVotingReward(novelId, round, msg.sender);
+        if (amount > 0) {
+            emit RewardClaimed(novelId, msg.sender, amount);
+        }
+    }
 
-        (bool success,) = msg.sender.call{value: claimable}("");
-        if (!success) revert TransferFailed();
+    /// @inheritdoc INovelCore
+    function tipNovel(uint64 novelId) external payable whenNotPaused {
+        DataTypes.Novel storage novel = _novels[novelId];
+        if (novel.id == 0) revert NovelNotFound(novelId);
 
-        emit StakeRefunded(novelId, msg.sender, claimable);
+        prizePool.tipNovel{value: msg.value}(novelId);
+
+        emit Tipped(novelId, 0, msg.sender, msg.value);
+    }
+
+    /// @inheritdoc INovelCore
+    function tipChapter(uint64 chapterId) external payable whenNotPaused nonReentrant {
+        DataTypes.Chapter storage ch = _chapters[chapterId];
+        if (ch.id == 0) revert ChapterNotFound(chapterId);
+
+        prizePool.tipChapter{value: msg.value}(chapterId, ch.author, ch.novelId);
+
+        emit Tipped(ch.novelId, chapterId, msg.sender, msg.value);
     }
 
     // ============================================================
-    //                        QUERIES
+    //                      MANAGEMENT
     // ============================================================
 
     /// @inheritdoc INovelCore
-    function getNovel(uint256 novelId) external view returns (DataTypes.Novel memory) {
-        return _novels[novelId];
+    function completeNovel(uint64 novelId) external whenNotPaused nonReentrant {
+        DataTypes.Novel storage novel = _novels[novelId];
+        if (novel.id == 0) revert NovelNotFound(novelId);
+        if (!novel.active) revert NovelAlreadyCompleted(novelId);
+
+        // Cannot complete during an active voting round — voter stakes would lose rewards
+        if (novel.roundPhase != DataTypes.RoundPhase.Idle) {
+            revert WrongRoundPhase(DataTypes.RoundPhase.Idle, novel.roundPhase);
+        }
+
+        // Creator can call anytime; anyone can call after inactivity timeout
+        if (msg.sender != novel.creator) {
+            // Find the latest chapter timestamp among world line ancestors
+            uint64 lastActivity = novel.phaseStartTime;
+            uint64[] storage ancestors = _worldLineAncestors[novelId];
+            for (uint256 i = 0; i < ancestors.length; i++) {
+                uint64 ts = _chapters[ancestors[i]].timestamp;
+                if (ts > lastActivity) lastActivity = ts;
+            }
+            if (block.timestamp < lastActivity + INACTIVITY_TIMEOUT) {
+                revert CompletionNotAllowed();
+            }
+        }
+
+        // Final distribution: collect all chapters from root to each worldLineAncestor (dedup)
+        uint64[] storage finalAncestors = _worldLineAncestors[novelId];
+        address[] memory finalAuthors = _collectPathAuthors(novelId, finalAncestors);
+
+        // Distribute final rewards (release entire remaining pool)
+        if (finalAuthors.length > 0) {
+            prizePool.distributeRoundRewards(
+                novelId,
+                novel.currentRound > 0 ? novel.currentRound : 1,
+                novel.creator,
+                finalAuthors,
+                10000, // Release entire pool
+                0 // No voter rewards in final distribution
+            );
+        }
+
+        novel.active = false;
+
+        emit NovelCompleted(novelId);
     }
 
     /// @inheritdoc INovelCore
-    function getChapter(uint256 chapterId) external view returns (DataTypes.Chapter memory) {
-        return _chapters[chapterId];
-    }
-
-    /// @inheritdoc INovelCore
-    function getActiveWorldLines(uint256 novelId) external view returns (uint256[] memory) {
-        return _activeWorldLines[novelId];
-    }
-
-    /// @inheritdoc INovelCore
-    function getRoundSubmissions(uint256 novelId, uint32 epoch, uint32 round)
-        external
-        view
-        returns (uint256[] memory)
-    {
-        return _roundSubmissions[novelId][epoch][round];
-    }
-
-    /// @inheritdoc INovelCore
-    function getNovelCount() external view returns (uint256) {
-        return _novelCount;
-    }
-
-    /// @inheritdoc INovelCore
-    function getChapterCount() external view returns (uint256) {
-        return _chapterCount;
-    }
-
-    /// @notice Get an author's claimable stake (total minus locked in-flight stakes)
-    function getClaimableStake(uint256 novelId, address author) external view returns (uint256) {
-        uint256 total = _stakeBalances[novelId][author];
-        uint256 locked = _lockedStakes[novelId][author];
-        return total > locked ? total - locked : 0;
-    }
-
-    /// @inheritdoc INovelCore
-    function getNovelMetadata(uint256 novelId) external view returns (DataTypes.NovelMetadata memory) {
-        return _novelMetadata[novelId];
-    }
-
-    /// @inheritdoc INovelCore
-    function isCanonAuthor(uint256 novelId, address author) external view returns (bool) {
-        return _isCanonAuthor[novelId][author];
-    }
-
-    // ============================================================
-    //                   METADATA MANAGEMENT
-    // ============================================================
-
-    /// @inheritdoc INovelCore
-    function updateNovelMetadata(uint256 novelId, DataTypes.NovelMetadata calldata metadata) external {
+    function updateNovelMetadata(uint64 novelId, DataTypes.NovelMetadata calldata metadata) external {
         DataTypes.Novel storage novel = _novels[novelId];
         if (novel.id == 0) revert NovelNotFound(novelId);
         if (novel.creator != msg.sender) revert NotNovelCreator(novelId, msg.sender);
@@ -739,52 +776,305 @@ contract NovelCore is
     }
 
     // ============================================================
-    //                    INTERNAL HELPERS
+    //                        QUERIES
     // ============================================================
 
-    function _createBootstrapChapter(
-        uint256 novelId,
-        uint256 parentId,
-        uint32 chapterIndex,
-        DataTypes.ContentSubmission calldata sub
-    ) internal returns (uint256 chapterId) {
-        chapterId = ++_chapterCount;
-        _chapters[chapterId] = DataTypes.Chapter({
-            id: chapterId,
-            novelId: novelId,
-            parentId: parentId,
-            author: msg.sender,
-            contentHash: sub.contentHash,
-            declaredLength: sub.declaredLength,
-            round: 0,
-            epoch: 0,
-            chapterIndex: chapterIndex,
-            voteCount: 0,
-            isWorldLine: true,
-            isCanon: true
-        });
+    /// @inheritdoc INovelCore
+    function getNovel(uint64 novelId) external view returns (DataTypes.Novel memory) {
+        return _novels[novelId];
     }
 
+    /// @inheritdoc INovelCore
+    function getChapter(uint64 chapterId) external view returns (DataTypes.Chapter memory) {
+        return _chapters[chapterId];
+    }
+
+    /// @inheritdoc INovelCore
+    function getWorldLineAncestors(uint64 novelId) external view returns (uint64[] memory) {
+        return _worldLineAncestors[novelId];
+    }
+
+    /// @inheritdoc INovelCore
+    function getRoundData(uint64 novelId, uint32 round) external view returns (DataTypes.RoundData memory) {
+        return _rounds[novelId][round];
+    }
+
+    /// @inheritdoc INovelCore
+    function getChapterDescendants(uint64 chapterId) external view returns (uint64[] memory) {
+        return _chapters[chapterId].descendants;
+    }
+
+    /// @inheritdoc INovelCore
+    function isWorldLineAuthor(uint64 novelId, address author) external view returns (bool) {
+        return _isWorldLineAuthor[novelId][author];
+    }
+
+    /// @inheritdoc INovelCore
+    function getNovelCount() external view returns (uint64) {
+        return _novelCount;
+    }
+
+    /// @inheritdoc INovelCore
+    function getChapterCount() external view returns (uint64) {
+        return _chapterCount;
+    }
+
+    /// @inheritdoc INovelCore
+    function getNovelMetadata(uint64 novelId) external view returns (DataTypes.NovelMetadata memory) {
+        return _novelMetadata[novelId];
+    }
+
+    // ============================================================
+    //                    INTERNAL: DFS
+    // ============================================================
+
+    /// @dev Iterative DFS from each ancestor to find the deepest leaf on each distinct path.
+    ///      Returns top `maxCandidates` chapter IDs sorted by depth descending.
+    ///      Bounded by maxDfsNodes to prevent gas exhaustion.
+    ///      Tracks visited nodes to avoid duplicates when ancestors share overlapping paths.
+    function _dfsDeepestChains(uint64 novelId, uint64[] storage ancestors, uint32 maxCandidates)
+        internal
+        view
+        returns (uint64[] memory candidateIds)
+    {
+        uint32 nodeLimit = maxDfsNodes;
+        uint32 nodesVisited = 0;
+
+        // Temporary arrays — we collect leaf chapters (no descendants or at node limit)
+        // Use a generous upper bound; will trim at end.
+        uint64[] memory leaves = new uint64[](maxCandidates * 4 > 256 ? maxCandidates * 4 : 256);
+        uint32[] memory leafDepths = new uint32[](leaves.length);
+        uint256 leafCount = 0;
+
+        // DFS stack: (chapterId)
+        uint64[] memory stack = new uint64[](nodeLimit > 0 ? nodeLimit : 500);
+        uint256 stackTop = 0;
+
+        // Track visited nodes to prevent duplicates when ancestors share overlapping paths
+        uint64[] memory visited = new uint64[](nodeLimit > 0 ? nodeLimit : 500);
+        uint256 visitedCount = 0;
+
+        // Seed stack with all ancestors
+        for (uint256 a = 0; a < ancestors.length && stackTop < stack.length; a++) {
+            stack[stackTop++] = ancestors[a];
+        }
+
+        while (stackTop > 0 && nodesVisited < nodeLimit) {
+            uint64 current = stack[--stackTop];
+
+            // Skip if already visited
+            if (_isInArray64(current, visited, visitedCount)) continue;
+            if (visitedCount < visited.length) {
+                visited[visitedCount++] = current;
+            }
+
+            nodesVisited++;
+
+            DataTypes.Chapter storage ch = _chapters[current];
+            // Only consider chapters belonging to this novel
+            if (ch.novelId != novelId) continue;
+
+            uint64[] storage desc = ch.descendants;
+
+            // Filter descendants to same novel
+            bool hasNovelDescendant = false;
+            for (uint256 d = 0; d < desc.length && stackTop < stack.length && nodesVisited + d < nodeLimit; d++) {
+                if (_chapters[desc[d]].novelId == novelId) {
+                    stack[stackTop++] = desc[d];
+                    hasNovelDescendant = true;
+                }
+            }
+
+            // If no descendants in this novel (or stack/node limit reached), it's a leaf
+            if (!hasNovelDescendant && leafCount < leaves.length) {
+                leaves[leafCount] = current;
+                leafDepths[leafCount] = ch.depth;
+                leafCount++;
+            }
+        }
+
+        if (leafCount == 0) {
+            return new uint64[](0);
+        }
+
+        // Sort by depth descending (simple insertion sort — leafCount is small)
+        for (uint256 i = 1; i < leafCount; i++) {
+            uint64 keyId = leaves[i];
+            uint32 keyDepth = leafDepths[i];
+            uint256 j = i;
+            while (j > 0 && leafDepths[j - 1] < keyDepth) {
+                leaves[j] = leaves[j - 1];
+                leafDepths[j] = leafDepths[j - 1];
+                j--;
+            }
+            leaves[j] = keyId;
+            leafDepths[j] = keyDepth;
+        }
+
+        // Take top maxCandidates
+        uint256 resultCount = leafCount < maxCandidates ? leafCount : maxCandidates;
+        candidateIds = new uint64[](resultCount);
+        for (uint256 i = 0; i < resultCount; i++) {
+            candidateIds[i] = leaves[i];
+        }
+    }
+
+    // ============================================================
+    //                INTERNAL: WORLD LINE HELPERS
+    // ============================================================
+
+    /// @dev Check if a chapter is a descendant of any current worldLineAncestor.
+    ///      Walks up parentId from chapterId until hitting an ancestor or root.
+    function _isDescendantOfWorldLine(uint64 novelId, uint64 chapterId) internal view returns (bool) {
+        uint64[] storage ancestors = _worldLineAncestors[novelId];
+        uint64 current = chapterId;
+        for (uint256 step = 0; step < MAX_TREE_WALK_STEPS && current != 0; step++) {
+            // Check if current is a world line ancestor
+            for (uint256 i = 0; i < ancestors.length; i++) {
+                if (current == ancestors[i]) return true;
+            }
+
+            DataTypes.Chapter storage ch = _chapters[current];
+            // Stop at novel boundary (root has depth=1)
+            if (ch.depth <= 1) break;
+            current = ch.parentId;
+        }
+
+        return false;
+    }
+
+    /// @dev Collect per-chapter authors from new world line paths, only from eligible winners.
+    ///      Walks up from each eligible winner to prevWorldLine ancestors, deduplicating chapters.
+    ///      Returns one author entry per new chapter (same author with N chapters = N entries).
+    function _collectEligibleNewAuthors(uint64 novelId, uint64[] memory winners, DataTypes.RoundData storage rd)
+        internal
+        view
+        returns (address[] memory)
+    {
+        uint64[] memory newChapterIds = new uint64[](MAX_PATH_CHAPTERS);
+        uint256 newCount = 0;
+
+        for (uint256 w = 0; w < winners.length; w++) {
+            // Skip ineligible winners (nominated but not world-line descendants)
+            uint256 candIdx = _findCandidateIndex(rd, winners[w]);
+            if (!rd.candidateIsEligible[candIdx]) continue;
+
+            uint64 current = winners[w];
+
+            // Walk up from winner to any prevWorldLine ancestor
+            for (uint256 step = 0; step < MAX_AUTHOR_WALK_STEPS && current != 0; step++) {
+                DataTypes.Chapter storage ch = _chapters[current];
+
+                // Stop if we hit a prevWorldLine
+                if (_isInArray(current, rd.prevWorldLines)) break;
+
+                // Stop at novel boundary
+                if (ch.novelId != novelId) break;
+
+                // Add if not already collected (dedup across winners)
+                if (!_isInArray64(current, newChapterIds, newCount)) {
+                    if (newCount < newChapterIds.length) {
+                        newChapterIds[newCount++] = current;
+                    }
+                }
+
+                if (ch.depth <= 1) break;
+                current = ch.parentId;
+            }
+        }
+
+        // Return per-chapter author array (not deduplicated by author)
+        address[] memory authors = new address[](newCount);
+        for (uint256 i = 0; i < newCount; i++) {
+            authors[i] = _chapters[newChapterIds[i]].author;
+        }
+        return authors;
+    }
+
+    /// @dev Collect all chapter authors from root to each ancestor (for final distribution).
+    ///      Returns per-chapter author array (deduped chapters, not authors).
+    function _collectPathAuthors(uint64 novelId, uint64[] storage ancestors) internal view returns (address[] memory) {
+        uint64[] memory chapIds = new uint64[](MAX_PATH_CHAPTERS);
+        uint256 count = 0;
+
+        for (uint256 a = 0; a < ancestors.length; a++) {
+            uint64 current = ancestors[a];
+            for (uint256 step = 0; step < MAX_TREE_WALK_STEPS && current != 0; step++) {
+                DataTypes.Chapter storage ch = _chapters[current];
+                if (ch.novelId != novelId) break;
+
+                if (!_isInArray64(current, chapIds, count)) {
+                    if (count < chapIds.length) {
+                        chapIds[count++] = current;
+                    }
+                }
+
+                if (ch.depth <= 1) break;
+                current = ch.parentId;
+            }
+        }
+
+        address[] memory authors = new address[](count);
+        for (uint256 i = 0; i < count; i++) {
+            authors[i] = _chapters[chapIds[i]].author;
+        }
+        return authors;
+    }
+
+    /// @dev Clear world line author flags by walking paths from root to prevWorldLines
+    function _clearWorldLineAuthors(uint64 novelId, uint64[] storage prevWorldLines) internal {
+        for (uint256 a = 0; a < prevWorldLines.length; a++) {
+            uint64 current = prevWorldLines[a];
+            for (uint256 step = 0; step < MAX_TREE_WALK_STEPS && current != 0; step++) {
+                DataTypes.Chapter storage ch = _chapters[current];
+                if (ch.novelId != novelId) break;
+
+                _isWorldLineAuthor[novelId][ch.author] = false;
+
+                if (ch.depth <= 1) break;
+                current = ch.parentId;
+            }
+        }
+    }
+
+    /// @dev Set world line author flags by walking paths from root to each winner
+    function _setWorldLineAuthors(uint64 novelId, uint64[] memory winners) internal {
+        for (uint256 w = 0; w < winners.length; w++) {
+            uint64 current = winners[w];
+            for (uint256 step = 0; step < MAX_TREE_WALK_STEPS && current != 0; step++) {
+                DataTypes.Chapter storage ch = _chapters[current];
+                if (ch.novelId != novelId) break;
+
+                _isWorldLineAuthor[novelId][ch.author] = true;
+
+                if (ch.depth <= 1) break;
+                current = ch.parentId;
+            }
+        }
+    }
+
+    // ============================================================
+    //                  INTERNAL: VALIDATION
+    // ============================================================
+
     /// @dev Config error codes:
-    ///  1=minChapterLength  2=maxChapterLength  3=roundMinDuration  4=worldLineCount
-    ///  5=roundMinSubmissions  6=roundsPerEpoch  7=prizeReleaseRate  8=voterRewardRate
-    ///  9=stakeAmount  10=commitDuration  11=revealDuration  12=contentBaseUrl  13=ruleVoteDuration
+    ///  1=minChapterLength  2=maxChapterLength  3=worldLineCount  4=voteStake
+    ///  5=commitDuration  6=revealDuration  7=prizeReleaseRate  8=voterRewardRate
+    ///  9=nominateDuration  10=contentBaseUrl  11=ruleVoteDuration  12=minRoundGap
     function _validateConfig(DataTypes.NovelConfig calldata config) internal pure {
         if (config.minChapterLength == 0) revert InvalidConfig(1);
         if (config.maxChapterLength <= config.minChapterLength) revert InvalidConfig(2);
-        if (config.roundMinDuration == 0) revert InvalidConfig(3);
-        if (config.worldLineCount == 0) revert InvalidConfig(4);
-        if (config.roundMinSubmissions < config.worldLineCount) revert InvalidConfig(5);
-        if (config.roundsPerEpoch == 0) revert InvalidConfig(6);
+        if (config.worldLineCount == 0) revert InvalidConfig(3);
+        if (config.voteStake == 0) revert InvalidConfig(4);
+        if (config.commitDuration == 0) revert InvalidConfig(5);
+        if (config.revealDuration == 0) revert InvalidConfig(6);
         if (config.prizeReleaseRate > 5000) revert InvalidConfig(7);
-        if (config.voterRewardRate > 2000) revert InvalidConfig(8);
-        if (config.stakeAmount == 0) revert InvalidConfig(9);
-        if (config.commitDuration == 0) revert InvalidConfig(10);
-        if (config.revealDuration == 0) revert InvalidConfig(11);
+        if (config.voterRewardRate > 5000) revert InvalidConfig(8);
+        if (config.nominateDuration == 0) revert InvalidConfig(9);
         if (config.contentLocation != DataTypes.ContentLocation.Onchain && bytes(config.contentBaseUrl).length == 0) {
-            revert InvalidConfig(12);
+            revert InvalidConfig(10);
         }
-        if (config.ruleQuorum > 0 && config.ruleVoteDuration == 0) revert InvalidConfig(13);
+        if (config.ruleQuorum > 0 && config.ruleVoteDuration == 0) revert InvalidConfig(11);
     }
 
     function _validateMetadata(DataTypes.NovelMetadata calldata metadata) internal pure {
@@ -795,6 +1085,8 @@ contract NovelCore is
         internal
         pure
     {
+        if (sub.contentHash == bytes32(0)) revert ContentHashMismatch(bytes32(0), bytes32(0));
+
         if (sub.declaredLength < config.minChapterLength || sub.declaredLength > config.maxChapterLength) {
             revert ContentLengthOutOfRange(sub.declaredLength, config.minChapterLength, config.maxChapterLength);
         }
@@ -813,147 +1105,44 @@ contract NovelCore is
         }
     }
 
-    function _isActiveWorldLine(uint256 novelId, uint256 chapterId) internal view returns (bool) {
-        uint256[] storage worldLines = _activeWorldLines[novelId];
-        for (uint256 i = 0; i < worldLines.length; i++) {
-            if (worldLines[i] == chapterId) return true;
+    // ============================================================
+    //                   INTERNAL: UTILITIES
+    // ============================================================
+
+    /// @dev Pay keeper reward from novel's prize pool
+    function _payKeeper(uint64 novelId) internal {
+        uint256 amount = prizePool.payKeeperReward(novelId, msg.sender);
+        if (amount > 0) {
+            emit KeeperRewarded(novelId, msg.sender, amount);
+        }
+    }
+
+    /// @dev Find the index of a candidate in round data
+    function _findCandidateIndex(DataTypes.RoundData storage rd, uint64 chapterId) internal view returns (uint256) {
+        for (uint256 i = 0; i < rd.candidates.length; i++) {
+            if (rd.candidates[i] == chapterId) return i;
+        }
+        revert NotACandidate(chapterId);
+    }
+
+    /// @dev Check if value is in a storage uint64 array
+    function _isInArray(uint64 val, uint64[] storage arr) internal view returns (bool) {
+        for (uint256 i = 0; i < arr.length; i++) {
+            if (arr[i] == val) return true;
         }
         return false;
     }
 
-    function _computeVotingRoundId(uint256 novelId, uint32 epoch, uint32 round, bool isEpoch)
-        internal
-        pure
-        returns (uint256)
-    {
-        return uint256(keccak256(abi.encodePacked(novelId, epoch, round, isEpoch)));
+    /// @dev Check if value is in a memory uint64 array (up to `len` elements)
+    function _isInArray64(uint64 val, uint64[] memory arr, uint256 len) internal pure returns (bool) {
+        for (uint256 i = 0; i < len; i++) {
+            if (arr[i] == val) return true;
+        }
+        return false;
     }
 
-    function _returnRoundStakes(uint256 novelId, uint32 epoch, uint32 round) internal {
-        uint256[] storage submissions = _roundSubmissions[novelId][epoch][round];
-        DataTypes.NovelConfig storage config = _novels[novelId].config;
-
-        for (uint256 i = 0; i < submissions.length; i++) {
-            DataTypes.Chapter storage chapter = _chapters[submissions[i]];
-            address author = chapter.author;
-
-            // Unlock this submission's stake
-            if (_lockedStakes[novelId][author] >= config.stakeAmount) {
-                _lockedStakes[novelId][author] -= config.stakeAmount;
-            }
-
-            // Check for spam-based slashing
-            DataTypes.SpamRecord storage record = _spamRecords[novelId][author];
-            if (record.consecutiveStrikes >= config.spamRounds && config.spamRounds > 0) {
-                uint256 slashAmount = config.stakeAmount / 2;
-
-                if (slashAmount > 0 && _stakeBalances[novelId][author] >= slashAmount) {
-                    _stakeBalances[novelId][author] -= slashAmount;
-                    prizePool.deposit{value: slashAmount}(novelId, "spam_slash");
-                    emit StakeSlashed(novelId, author, slashAmount);
-                }
-
-                record.consecutiveStrikes = 0;
-            }
-        }
-    }
-
-    /// @dev Skips spam tracking when fewer than 10 submissions.
-    ///      Processes each author only once using their best-ranked chapter
-    ///      to prevent gaming via submitting both high and low ranked chapters.
-    function _updateSpamRecords(uint256 novelId, uint32 round, uint256[] memory rankedIds) internal {
-        DataTypes.NovelConfig storage config = _novels[novelId].config;
-        if (config.spamThreshold == 0 || rankedIds.length < 10) return;
-
-        uint256 bottomCount = (rankedIds.length * config.spamThreshold) / 100;
-        if (bottomCount == 0) bottomCount = 1;
-
-        uint256 bottomStartIdx = rankedIds.length - bottomCount;
-
-        // Single pass from best to worst rank. First occurrence of each author
-        // is their best chapter — skip duplicates to prevent spam gaming.
-        for (uint256 i = 0; i < rankedIds.length; i++) {
-            address author = _chapters[rankedIds[i]].author;
-            DataTypes.SpamRecord storage record = _spamRecords[novelId][author];
-
-            // Skip if already processed this round (first seen = best rank)
-            if (record.lastRecordedRound == round) continue;
-
-            if (i >= bottomStartIdx) {
-                // Bottom portion: add strike
-                if (record.lastRecordedRound == round - 1 || record.lastRecordedRound == 0) {
-                    record.consecutiveStrikes++;
-                } else {
-                    record.consecutiveStrikes = 1;
-                }
-            } else {
-                // Top portion: reset strikes
-                if (record.consecutiveStrikes > 0) {
-                    record.consecutiveStrikes = 0;
-                }
-            }
-            record.lastRecordedRound = round;
-        }
-    }
-
-    function _collectCanonAuthors(uint256 novelId, uint256 canonWorldLineId) internal view returns (address[] memory) {
-        DataTypes.Novel storage novel = _novels[novelId];
-        uint32 currentEpoch = novel.currentEpoch;
-        uint32 maxChapters = novel.config.roundsPerEpoch;
-
-        uint256[] memory authorChapterIds = new uint256[](maxChapters);
-        uint256 count = 0;
-        uint256 currentId = canonWorldLineId;
-
-        while (currentId != 0 && count < maxChapters) {
-            DataTypes.Chapter storage ch = _chapters[currentId];
-            if (ch.novelId != novelId) break;
-
-            if (ch.epoch == currentEpoch && ch.round > 0) {
-                authorChapterIds[count] = currentId;
-                count++;
-            } else if (ch.epoch < currentEpoch) {
-                break;
-            }
-
-            currentId = ch.parentId;
-        }
-
-        address[] memory authors = new address[](count);
-        for (uint256 i = 0; i < count; i++) {
-            authors[i] = _chapters[authorChapterIds[i]].author;
-        }
-
-        return authors;
-    }
-
-    function _mintCanonNFTs(uint256 novelId, uint32 epoch, uint256 canonWorldLineId) internal {
-        uint256 currentId = canonWorldLineId;
-
-        while (currentId != 0) {
-            DataTypes.Chapter storage ch = _chapters[currentId];
-            if (ch.novelId != novelId) break;
-
-            if (ch.epoch == epoch && ch.round > 0 && !chapterNFT.isChapterMinted(novelId, currentId)) {
-                ch.isCanon = true;
-                chapterNFT.mint(ch.author, novelId, currentId, epoch, ch.contentHash);
-            } else if (ch.epoch < epoch) {
-                break;
-            }
-
-            currentId = ch.parentId;
-        }
-    }
-
-    /// @dev Pay keeper reward from novel's prize pool (if configured)
-    function _payKeeper(uint256 novelId) internal {
-        if (keeperRewardAmount > 0) {
-            bool paid = prizePool.payKeeperReward(novelId, msg.sender, keeperRewardAmount);
-            if (paid) {
-                emit KeeperRewarded(novelId, msg.sender, keeperRewardAmount);
-            }
-        }
-    }
+    /// @notice Accept ETH transfers (voter rewards from PrizePool during settlement)
+    receive() external payable {}
 
     // ============================================================
     //                     UUPS UPGRADE
@@ -966,5 +1155,5 @@ contract NovelCore is
     // ============================================================
 
     /// @dev Reserved storage gap for future upgrades
-    uint256[43] private __gap;
+    uint256[40] private __gap;
 }

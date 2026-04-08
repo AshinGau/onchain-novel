@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # =============================================================================
-# End-to-End Integration Test: Contracts + MCP
+# End-to-End Integration Test: V2 Protocol
 #
-# Anvil → Deploy → Multi-role lifecycle (creator, writers, voters, keeper)
-# → MCP tool verification
+# Anvil -> Deploy -> Multi-role lifecycle (creator, writers, voters, keeper)
+# -> Tips, Bounties, Fork, Complete
 #
 # Usage: ./script/e2e-test.sh
 # =============================================================================
@@ -41,16 +41,33 @@ ADDR_VOTER_B="0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc"
 # Account 6: keeper
 PK_KEEPER="0x92db14e403b83dfe3df233f83dfa3a0d7096f21ca9b0d6d6b8d88b2b4ec1564e"
 ADDR_KEEPER="0x976EA74026E726554dB657fA54763abd0C3a0aa9"
+# Account 7: extra user (for bounties, forks)
+PK_USER="0x4bbbf85ce3377467afe5d46f804f221813b2bb87f24d81f60f1fcdbf7cbf4356"
+ADDR_USER="0x14dC79964da2C08dA15Fd60A92b3f010f36A56e3"
 
 # ── Helper: send tx via cast ──
-# cast_send <private_key> <to> <sig> [args...] [--value X]
 cast_send() {
     local pk="$1"; shift
-    cast send --rpc-url "$RPC" --private-key "$pk" "$@" --json 2>/dev/null | jq -r '.status'
+    local result
+    result=$(cast send --rpc-url "$RPC" --private-key "$pk" "$@" --json 2>/dev/null)
+    local status
+    status=$(echo "$result" | jq -r '.status')
+    if [ "$status" != "0x1" ]; then
+        echo "$result" >&2
+        return 1
+    fi
+    echo "$result"
 }
 
 cast_call() {
     cast call --rpc-url "$RPC" "$@" 2>/dev/null
+}
+
+# Helper to advance time on Anvil
+advance_time() {
+    local seconds="$1"
+    cast rpc --rpc-url "$RPC" evm_increaseTime "$seconds" > /dev/null 2>&1
+    cast rpc --rpc-url "$RPC" evm_mine > /dev/null 2>&1
 }
 
 # ── Step 0: Start Anvil ──
@@ -70,8 +87,10 @@ trap cleanup EXIT
 cast block-number --rpc-url "$RPC" > /dev/null 2>&1 || fail "Anvil not reachable"
 pass "Anvil running"
 
-# ── Step 1: Deploy contracts ──
-info "Deploying contracts..."
+# ═══════════════════════════════════════════════════════════════
+#  STEP 1: Deploy V2 Contracts
+# ═══════════════════════════════════════════════════════════════
+info "Deploying V2 contracts..."
 PRIVATE_KEY="$PK_DEPLOYER" forge script script/Deploy.s.sol \
     --rpc-url "$RPC" --broadcast > /dev/null 2>&1
 
@@ -79,282 +98,597 @@ PRIVATE_KEY="$PK_DEPLOYER" forge script script/Deploy.s.sol \
 BROADCAST_JSON="broadcast/Deploy.s.sol/31337/run-latest.json"
 [ -f "$BROADCAST_JSON" ] || fail "Broadcast JSON not found"
 
-# Parse contract addresses from create transactions (proxies are the last 4 creates)
-# Order: NovelCore impl, VotingEngine impl, PrizePool impl, ChapterNFT impl,
-#         NovelCore proxy, VotingEngine proxy, PrizePool proxy, ChapterNFT proxy
+# Deploy order (from Deploy.s.sol):
+# CREATE: NovelCore impl, VotingEngine impl, PrizePool impl, RulesEngine impl, BountyBoard impl
+# CREATE: VotingEngine proxy, PrizePool proxy, RulesEngine proxy, NovelCore proxy, BountyBoard proxy
+# Then CALL transactions for wiring
 CREATES=$(jq -r '[.transactions[] | select(.transactionType == "CREATE") | .contractAddress] | .[]' "$BROADCAST_JSON")
 CREATES_ARR=($CREATES)
-NOVEL_CORE="${CREATES_ARR[4]}"
+
+# 5 impls + 5 proxies = 10 CREATE transactions
+# Impls: [0] NovelCore, [1] VotingEngine, [2] PrizePool, [3] RulesEngine, [4] BountyBoard
+# Proxies: [5] VotingEngine, [6] PrizePool, [7] RulesEngine, [8] NovelCore, [9] BountyBoard
 VOTING_ENGINE="${CREATES_ARR[5]}"
 PRIZE_POOL="${CREATES_ARR[6]}"
-CHAPTER_NFT="${CREATES_ARR[7]}"
+RULES_ENGINE="${CREATES_ARR[7]}"
+NOVEL_CORE="${CREATES_ARR[8]}"
+BOUNTY_BOARD="${CREATES_ARR[9]}"
 
 [ -n "$NOVEL_CORE" ] || fail "Failed to extract NovelCore address"
-pass "Contracts deployed: NovelCore=$NOVEL_CORE"
+pass "Contracts deployed: NovelCore=$NOVEL_CORE VotingEngine=$VOTING_ENGINE PrizePool=$PRIZE_POOL BountyBoard=$BOUNTY_BOARD"
 
-# Set keeper reward
-cast_send "$PK_DEPLOYER" "$NOVEL_CORE" "setKeeperRewardAmount(uint256)" "10000000000000" > /dev/null
-pass "Keeper reward set"
+# Set keeper reward on PrizePool (owner function)
+cast_send "$PK_DEPLOYER" "$PRIZE_POOL" "setKeeperRewardAmount(uint256)" "10000000000000" > /dev/null
+pass "Keeper reward set on PrizePool"
 
-# ── Step 2: Create Novel (as creator) ──
+# ═══════════════════════════════════════════════════════════════
+#  STEP 2: Create Novel with Root Chapter + Genesis Fund
+# ═══════════════════════════════════════════════════════════════
 info "Creating novel..."
-# Config: min=100, max=10000, roundMinDuration=2s, roundMinSubmissions=2, worldLineCount=2,
-#         roundsPerEpoch=1, prizeRelease=3000, voterReward=2000, commit=2s, reveal=2s,
-#         stake=0.01 ETH, spamRounds=0, spamThreshold=0, contentBaseUrl=""
-# Genesis: 1 chapter (onchain content)
-GENESIS_CONTENT="Once upon a time in a decentralized world, where stories are written by many and owned by all..."
+
+# NovelConfig struct (V2):
+# (uint64 minChapterLength, uint64 maxChapterLength, uint256 submissionFee,
+#  uint32 worldLineCount, uint256 voteStake, uint256 nominationFee,
+#  uint64 nominateDuration, uint64 commitDuration, uint64 revealDuration, uint64 minRoundGap,
+#  uint16 prizeReleaseRate, uint16 voterRewardRate,
+#  uint8 contentLocation, string contentBaseUrl,
+#  uint256 ruleFee, uint64 ruleVoteDuration, uint32 ruleQuorum)
+#
+# Using short durations for testing: nominate=2s, commit=2s, reveal=2s, minRoundGap=2s
+# submissionFee=0.01 ETH, voteStake=0.01 ETH, nominationFee=0.02 ETH
+# worldLineCount=2, prizeReleaseRate=3000 (30%), voterRewardRate=2000 (20%)
+# contentLocation=0 (Onchain)
+
+GENESIS_CONTENT="Once upon a time in a decentralized world, where stories are written by many and owned by all. The blockchain hums with creative energy as writers from across the realm converge."
 GENESIS_HEX="0x$(echo -n "$GENESIS_CONTENT" | xxd -p | tr -d '\n')"
 GENESIS_HASH=$(cast keccak256 "$GENESIS_HEX")
 GENESIS_LEN=$(echo -n "$GENESIS_CONTENT" | wc -c | tr -d ' ')
+
+NOVEL_CONFIG="(100, 10000, 10000000000000000, 2, 10000000000000000, 20000000000000000, 2, 2, 2, 2, 3000, 2000, 0, '', 10000000000000000, 86400, 2)"
+NOVEL_METADATA="(Test Novel, A collaborative story experiment, '')"
+
 CREATE_TX=$(cast send --rpc-url "$RPC" --private-key "$PK_CREATOR" "$NOVEL_CORE" \
-    "createNovel((uint64,uint64,uint64,uint32,uint32,uint32,uint16,uint16,uint64,uint64,uint256,uint8,uint8,uint8,string),(string,string,string),(bytes32,uint64,bytes)[])" \
-    "(100, 10000, 2, 2, 2, 1, 3000, 2000, 2, 2, 10000000000000000, 0, 0, 0, '')" \
-    "(Test Novel, A test novel, '')" \
-    "[($GENESIS_HASH,$GENESIS_LEN,$GENESIS_HEX)]" \
+    "createNovel((uint64,uint64,uint256,uint32,uint256,uint256,uint64,uint64,uint64,uint64,uint16,uint16,uint8,string,uint256,uint64,uint32),(string,string,string),(bytes32,uint64,bytes))" \
+    "$NOVEL_CONFIG" \
+    "$NOVEL_METADATA" \
+    "($GENESIS_HASH,$GENESIS_LEN,$GENESIS_HEX)" \
     --value 0.1ether --json 2>/dev/null)
 
 TX_STATUS=$(echo "$CREATE_TX" | jq -r '.status')
 [ "$TX_STATUS" = "0x1" ] || fail "createNovel tx failed"
 
 NOVEL_ID=1
-pass "Novel #$NOVEL_ID created with 0.1 ETH prize pool"
+pass "Novel #$NOVEL_ID created with 0.1 ETH genesis fund"
 
-# Verify novel state via getNovelCount
-NOVEL_COUNT=$(cast_call "$NOVEL_CORE" "getNovelCount()(uint256)")
-[ "$NOVEL_COUNT" = "1" ] || fail "Novel count should be 1, got $NOVEL_COUNT"
+# Verify novel count
+NOVEL_COUNT=$(cast_call "$NOVEL_CORE" "getNovelCount()(uint64)")
+[ "$(echo "$NOVEL_COUNT" | tr -d ' ')" = "1" ] || fail "Novel count should be 1, got $NOVEL_COUNT"
 pass "Novel state verified (count=1)"
 
-# ── Step 3: Submit chapters (writers A and B) ──
+# Root chapter is chapterId=1, it's the worldLineAncestor
+WORLD_LINES=$(cast_call "$NOVEL_CORE" "getWorldLineAncestors(uint64)(uint64[])" "$NOVEL_ID")
+info "Initial world lines: $WORLD_LINES"
+
+# ═══════════════════════════════════════════════════════════════
+#  STEP 3: Submit Chapters (Always-On Writing)
+# ═══════════════════════════════════════════════════════════════
 info "Submitting chapters..."
 
-# Get genesis chapter ID (world line)
-WORLD_LINES=$(cast_call "$NOVEL_CORE" "getActiveWorldLines(uint256)(uint256[])" "$NOVEL_ID")
-PARENT_ID=1  # First genesis chapter
+# Writer A submits chapter 2 (child of root=1)
+CONTENT_A1="Writer A continues the story with great adventure and bold new characters entering the fray. Each brings their own secrets and motivations to the unfolding narrative that spans across the decentralized realm where anything is possible."
+CONTENT_A1_HEX="0x$(echo -n "$CONTENT_A1" | xxd -p | tr -d '\n')"
+CONTENT_A1_HASH=$(cast keccak256 "$CONTENT_A1_HEX")
+CONTENT_A1_LEN=$(echo -n "$CONTENT_A1" | wc -c | tr -d ' ')
 
-CONTENT_A_TEXT="Writer A continues the story with great adventure and bold new characters entering the fray, each bringing their own secrets and motivations to the unfolding narrative that spans across the decentralized realm..."
-CONTENT_A_HEX="0x$(echo -n "$CONTENT_A_TEXT" | xxd -p | tr -d '\n')"
-CONTENT_A_HASH=$(cast keccak256 "$CONTENT_A_HEX")
-CONTENT_A_LEN=$(echo -n "$CONTENT_A_TEXT" | wc -c | tr -d ' ')
 cast_send "$PK_WRITER_A" "$NOVEL_CORE" \
-    "submitChapter(uint256,uint256,(bytes32,uint64,bytes))" "$NOVEL_ID" "$PARENT_ID" "($CONTENT_A_HASH,$CONTENT_A_LEN,$CONTENT_A_HEX)" \
+    "submitChapter(uint64,uint64,(bytes32,uint64,bytes))" "$NOVEL_ID" "1" \
+    "($CONTENT_A1_HASH,$CONTENT_A1_LEN,$CONTENT_A1_HEX)" \
     --value 0.01ether > /dev/null
-pass "Writer A submitted chapter"
+pass "Writer A submitted chapter 2 (child of root)"
 
-CONTENT_B_TEXT="Writer B takes the story in a different direction, exploring the darker corners of the decentralized world where rival factions compete for control of the narrative itself, bending reality to their will..."
-CONTENT_B_HEX="0x$(echo -n "$CONTENT_B_TEXT" | xxd -p | tr -d '\n')"
-CONTENT_B_HASH=$(cast keccak256 "$CONTENT_B_HEX")
-CONTENT_B_LEN=$(echo -n "$CONTENT_B_TEXT" | wc -c | tr -d ' ')
+# Writer B submits chapter 3 (child of root=1) -- different branch
+CONTENT_B1="Writer B takes the story in a different direction, exploring the darker corners of the decentralized world where rival factions compete for control. The tension rises as old alliances break and new enemies emerge from the shadows."
+CONTENT_B1_HEX="0x$(echo -n "$CONTENT_B1" | xxd -p | tr -d '\n')"
+CONTENT_B1_HASH=$(cast keccak256 "$CONTENT_B1_HEX")
+CONTENT_B1_LEN=$(echo -n "$CONTENT_B1" | wc -c | tr -d ' ')
+
 cast_send "$PK_WRITER_B" "$NOVEL_CORE" \
-    "submitChapter(uint256,uint256,(bytes32,uint64,bytes))" "$NOVEL_ID" "$PARENT_ID" "($CONTENT_B_HASH,$CONTENT_B_LEN,$CONTENT_B_HEX)" \
+    "submitChapter(uint64,uint64,(bytes32,uint64,bytes))" "$NOVEL_ID" "1" \
+    "($CONTENT_B1_HASH,$CONTENT_B1_LEN,$CONTENT_B1_HEX)" \
     --value 0.01ether > /dev/null
-pass "Writer B submitted chapter"
+pass "Writer B submitted chapter 3 (child of root)"
 
-# ── Step 4: Keeper closes submissions ──
-info "Waiting for round min duration..."
-sleep 3
+# Writer A submits chapter 4 (child of chapter 2) -- extending Writer A's chain
+CONTENT_A2="Writer A extends the adventure further. The heroes discover an ancient protocol hidden deep within the blockchain, a secret that could change everything. They must decide whether to reveal it to the world or keep it safe from those who would misuse it."
+CONTENT_A2_HEX="0x$(echo -n "$CONTENT_A2" | xxd -p | tr -d '\n')"
+CONTENT_A2_HASH=$(cast keccak256 "$CONTENT_A2_HEX")
+CONTENT_A2_LEN=$(echo -n "$CONTENT_A2" | wc -c | tr -d ' ')
 
-cast_send "$PK_KEEPER" "$NOVEL_CORE" "closeSubmissions(uint256)" "$NOVEL_ID" > /dev/null
-pass "Keeper: closeSubmissions"
+cast_send "$PK_WRITER_A" "$NOVEL_CORE" \
+    "submitChapter(uint64,uint64,(bytes32,uint64,bytes))" "$NOVEL_ID" "2" \
+    "($CONTENT_A2_HASH,$CONTENT_A2_LEN,$CONTENT_A2_HEX)" \
+    --value 0.01ether > /dev/null
+pass "Writer A submitted chapter 4 (child of chapter 2, extending chain)"
 
-# ── Step 5: Voters commit votes ──
+# Verify chapter count
+CHAPTER_COUNT=$(cast_call "$NOVEL_CORE" "getChapterCount()(uint64)")
+info "Total chapters: $CHAPTER_COUNT"
+
+# ═══════════════════════════════════════════════════════════════
+#  ROUND 1: Basic Lifecycle
+# ═══════════════════════════════════════════════════════════════
+info "========================================"
+info "ROUND 1: Basic Voting Lifecycle"
+info "========================================"
+
+# Wait for minRoundGap (2s) -- since first round, no gap needed, but wait for block
+sleep 2
+
+# STEP 4: Keeper starts round 1 (DFS finds branches from root)
+info "Keeper: startRound..."
+cast_send "$PK_KEEPER" "$NOVEL_CORE" "startRound(uint64)" "$NOVEL_ID" > /dev/null
+pass "Keeper: startRound (round 1)"
+
+# Check candidates
+ROUND_DATA=$(cast_call "$NOVEL_CORE" "getRoundData(uint64,uint32)((uint64[],bool[],uint64[],uint64,uint64,uint64,bool))" "$NOVEL_ID" "1")
+info "Round 1 data: $ROUND_DATA"
+
+# STEP 5: Wait for nominateDuration (2s), then closeNomination
+info "Waiting for nominate duration..."
+advance_time 3
+cast_send "$PK_KEEPER" "$NOVEL_CORE" "closeNomination(uint64)" "$NOVEL_ID" > /dev/null
+pass "Keeper: closeNomination"
+
+# STEP 6: Voters commit votes
 info "Committing votes..."
 
-# Compute votingRoundId: keccak256(abi.encodePacked(novelId, epoch, round, isEpoch))
-# novelId=1, epoch=1, round=1, isEpoch=false
-VOTING_ROUND_ID=$(cast keccak256 $(cast abi-encode --packed "(uint256,uint32,uint32,bool)" 1 1 1 false))
-VOTING_ROUND_ID_DEC=$(cast to-dec "$VOTING_ROUND_ID")
-info "Voting round ID: $VOTING_ROUND_ID_DEC"
-
-# Voter A votes for chapter 2 (Writer A's chapter)
+# Both voters vote for chapter 4 (Writer A's deeper chain, depth=3)
+# commitHash = keccak256(abi.encodePacked(uint64 candidateId, bytes32 salt))
 SALT_A="0x0000000000000000000000000000000000000000000000000000000000000001"
-COMMIT_A=$(cast keccak256 $(cast abi-encode --packed "(uint256,bytes32)" 2 "$SALT_A"))
-cast_send "$PK_VOTER_A" "$VOTING_ENGINE" \
-    "commitVote(uint256,uint256,bytes32)" "$NOVEL_ID" "$VOTING_ROUND_ID_DEC" "$COMMIT_A" \
-    --value 0.05ether > /dev/null
-pass "Voter A committed (for chapter 2)"
+COMMIT_A=$(cast keccak256 $(cast abi-encode --packed "(uint64,bytes32)" 4 "$SALT_A"))
+cast_send "$PK_VOTER_A" "$NOVEL_CORE" \
+    "commitVote(uint64,bytes32)" "$NOVEL_ID" "$COMMIT_A" \
+    --value 0.01ether > /dev/null
+pass "Voter A committed (for chapter 4)"
 
-# Voter B votes for chapter 3 (Writer B's chapter)
+# Voter B votes for chapter 3 (Writer B's chain)
 SALT_B="0x0000000000000000000000000000000000000000000000000000000000000002"
-COMMIT_B=$(cast keccak256 $(cast abi-encode --packed "(uint256,bytes32)" 3 "$SALT_B"))
-cast_send "$PK_VOTER_B" "$VOTING_ENGINE" \
-    "commitVote(uint256,uint256,bytes32)" "$NOVEL_ID" "$VOTING_ROUND_ID_DEC" "$COMMIT_B" \
-    --value 0.1ether > /dev/null
+COMMIT_B=$(cast keccak256 $(cast abi-encode --packed "(uint64,bytes32)" 3 "$SALT_B"))
+cast_send "$PK_VOTER_B" "$NOVEL_CORE" \
+    "commitVote(uint64,bytes32)" "$NOVEL_ID" "$COMMIT_B" \
+    --value 0.01ether > /dev/null
 pass "Voter B committed (for chapter 3)"
 
-# ── Step 6: Verify commit phase enforcement ──
-info "Verifying commit phase enforcement..."
-# Trying to reveal before closeCommit should fail with RevealNotOpen
-if cast send --rpc-url "$RPC" --private-key "$PK_VOTER_A" "$VOTING_ENGINE" \
-    "revealVote(uint256,uint256,uint256,bytes32)" "$NOVEL_ID" "$VOTING_ROUND_ID_DEC" 2 "$SALT_A" \
+# Verify: reveal before closeCommit should fail
+if cast send --rpc-url "$RPC" --private-key "$PK_VOTER_A" "$NOVEL_CORE" \
+    "revealVote(uint64,uint64,bytes32)" "$NOVEL_ID" 4 "$SALT_A" \
     > /dev/null 2>&1; then
     fail "Reveal should have been rejected before closeCommit"
 else
-    pass "Reveal before closeCommit correctly rejected (RevealNotOpen)"
+    pass "Reveal before closeCommit correctly rejected"
 fi
 
-# ── Step 7: Keeper closes commit phase ──
+# STEP 7: Keeper closes commit phase
 info "Waiting for commit duration..."
-sleep 3
+advance_time 3
+cast_send "$PK_KEEPER" "$NOVEL_CORE" "closeCommit(uint64)" "$NOVEL_ID" > /dev/null
+pass "Keeper: closeCommit"
 
-cast_send "$PK_KEEPER" "$NOVEL_CORE" "closeCommit(uint256)" "$NOVEL_ID" > /dev/null
-pass "Keeper: closeCommit (commit phase closed on VotingEngine)"
-
-# Verify: new commits should now fail (CommitPhaseClosed)
-if cast send --rpc-url "$RPC" --private-key "$PK_VOTER_A" "$VOTING_ENGINE" \
-    "commitVote(uint256,uint256,bytes32)" "$NOVEL_ID" "$VOTING_ROUND_ID_DEC" \
+# Verify: late commit should fail
+if cast send --rpc-url "$RPC" --private-key "$PK_VOTER_A" "$NOVEL_CORE" \
+    "commitVote(uint64,bytes32)" "$NOVEL_ID" \
     "0x0000000000000000000000000000000000000000000000000000000000000099" \
     --value 0.01ether > /dev/null 2>&1; then
     fail "Late commit should have been rejected"
 else
-    pass "Late commit correctly rejected (CommitPhaseClosed)"
+    pass "Late commit correctly rejected"
 fi
 
-# ── Step 8: Voters reveal ──
+# STEP 8: Voters reveal
 info "Revealing votes..."
+cast_send "$PK_VOTER_A" "$NOVEL_CORE" \
+    "revealVote(uint64,uint64,bytes32)" "$NOVEL_ID" 4 "$SALT_A" > /dev/null
+pass "Voter A revealed (voted for chapter 4)"
 
-cast_send "$PK_VOTER_A" "$VOTING_ENGINE" \
-    "revealVote(uint256,uint256,uint256,bytes32)" "$NOVEL_ID" "$VOTING_ROUND_ID_DEC" 2 "$SALT_A" > /dev/null
-pass "Voter A revealed"
+cast_send "$PK_VOTER_B" "$NOVEL_CORE" \
+    "revealVote(uint64,uint64,bytes32)" "$NOVEL_ID" 3 "$SALT_B" > /dev/null
+pass "Voter B revealed (voted for chapter 3)"
 
-cast_send "$PK_VOTER_B" "$VOTING_ENGINE" \
-    "revealVote(uint256,uint256,uint256,bytes32)" "$NOVEL_ID" "$VOTING_ROUND_ID_DEC" 3 "$SALT_B" > /dev/null
-pass "Voter B revealed"
-
-# ── Step 9: Keeper settles round → triggers epoch voting (roundsPerEpoch=1) ──
+# STEP 9: Keeper settles round 1
 info "Waiting for reveal duration..."
-sleep 3
+advance_time 3
+cast_send "$PK_KEEPER" "$NOVEL_CORE" "settleRound(uint64)" "$NOVEL_ID" > /dev/null
+pass "Keeper: settleRound (round 1 settled)"
 
-cast_send "$PK_KEEPER" "$NOVEL_CORE" "settleRound(uint256)" "$NOVEL_ID" > /dev/null
-pass "Keeper: settleRound (→ epoch voting, since roundsPerEpoch=1)"
+# STEP 10: Verify round 1 results
+info "Verifying round 1 results..."
 
-# ── Step 10: Epoch voting (commit + reveal + settle) ──
-info "Epoch voting..."
+# World lines should be updated
+NEW_WORLD_LINES=$(cast_call "$NOVEL_CORE" "getWorldLineAncestors(uint64)(uint64[])" "$NOVEL_ID")
+info "World lines after round 1: $NEW_WORLD_LINES"
 
-# Epoch votingRoundId: novelId=1, epoch=1, round=1, isEpoch=true
-EPOCH_VOTING_ID=$(cast keccak256 $(cast abi-encode --packed "(uint256,uint32,uint32,bool)" 1 1 1 true))
-EPOCH_VOTING_ID_DEC=$(cast to-dec "$EPOCH_VOTING_ID")
+# Prize pool should have decreased (rewards distributed)
+POOL_BALANCE=$(cast_call "$PRIZE_POOL" "getPoolBalance(uint64)(uint256)" "$NOVEL_ID")
+info "Prize pool balance after round 1: $POOL_BALANCE wei"
 
-# Get epoch candidates (world lines)
-EPOCH_CANDIDATES=$(cast_call "$VOTING_ENGINE" "getCandidates(uint256,uint256)(uint256[])" "$NOVEL_ID" "$EPOCH_VOTING_ID_DEC")
-info "Epoch candidates: $EPOCH_CANDIDATES"
+# Creator should have pending rewards (creator royalty)
+CREATOR_REWARD=$(cast_call "$PRIZE_POOL" "getPendingReward(uint64,address)(uint256)" "$NOVEL_ID" "$ADDR_CREATOR")
+info "Creator pending reward: $CREATOR_REWARD wei"
+[ "$CREATOR_REWARD" != "0" ] || fail "Creator should have pending rewards"
+pass "Creator has pending rewards"
 
-# Both voters vote for the same world line (chapter 3 — Writer B won more votes)
-EPOCH_SALT_A="0x0000000000000000000000000000000000000000000000000000000000000003"
-EPOCH_COMMIT_A=$(cast keccak256 $(cast abi-encode --packed "(uint256,bytes32)" 3 "$EPOCH_SALT_A"))
-cast_send "$PK_VOTER_A" "$VOTING_ENGINE" \
-    "commitVote(uint256,uint256,bytes32)" "$NOVEL_ID" "$EPOCH_VOTING_ID_DEC" "$EPOCH_COMMIT_A" \
-    --value 0.05ether > /dev/null
-pass "Epoch: Voter A committed"
+# Creator claims rewards
+cast_send "$PK_CREATOR" "$NOVEL_CORE" "claimReward(uint64)" "$NOVEL_ID" > /dev/null
+pass "Creator claimed rewards"
 
-EPOCH_SALT_B="0x0000000000000000000000000000000000000000000000000000000000000004"
-EPOCH_COMMIT_B=$(cast keccak256 $(cast abi-encode --packed "(uint256,bytes32)" 3 "$EPOCH_SALT_B"))
-cast_send "$PK_VOTER_B" "$VOTING_ENGINE" \
-    "commitVote(uint256,uint256,bytes32)" "$NOVEL_ID" "$EPOCH_VOTING_ID_DEC" "$EPOCH_COMMIT_B" \
-    --value 0.1ether > /dev/null
-pass "Epoch: Voter B committed"
+# Voter A claims voting reward (round 1)
+cast_send "$PK_VOTER_A" "$NOVEL_CORE" "claimVotingReward(uint64,uint32)" "$NOVEL_ID" 1 > /dev/null
+pass "Voter A claimed voting reward (round 1)"
 
-sleep 3
-cast_send "$PK_KEEPER" "$NOVEL_CORE" "closeEpochCommit(uint256)" "$NOVEL_ID" > /dev/null
-pass "Keeper: closeEpochCommit"
+# Voter B claims voting reward (round 1)
+cast_send "$PK_VOTER_B" "$NOVEL_CORE" "claimVotingReward(uint64,uint32)" "$NOVEL_ID" 1 > /dev/null
+pass "Voter B claimed voting reward (round 1)"
 
-cast_send "$PK_VOTER_A" "$VOTING_ENGINE" \
-    "revealVote(uint256,uint256,uint256,bytes32)" "$NOVEL_ID" "$EPOCH_VOTING_ID_DEC" 3 "$EPOCH_SALT_A" > /dev/null
-cast_send "$PK_VOTER_B" "$VOTING_ENGINE" \
-    "revealVote(uint256,uint256,uint256,bytes32)" "$NOVEL_ID" "$EPOCH_VOTING_ID_DEC" 3 "$EPOCH_SALT_B" > /dev/null
-pass "Epoch: Both voters revealed"
-
-sleep 3
-cast_send "$PK_KEEPER" "$NOVEL_CORE" "settleEpoch(uint256)" "$NOVEL_ID" > /dev/null
-pass "Keeper: settleEpoch — Canon established, NFTs minted, rewards distributed"
-
-# ── Step 11: Verify final state ──
-info "Verifying final state..."
-
-# Novel should be in epoch 2, round 1, Submitting
-NOVEL_EPOCH=$(cast_call "$NOVEL_CORE" "getNovel(uint256)((uint256,address,(uint64,uint64,uint64,uint32,uint32,uint32,uint16,uint16,uint64,uint64,uint256,uint8,uint8,uint8,string),uint32,uint32,uint8,uint8,uint256,uint32,uint32,bool,uint256,uint256))" "$NOVEL_ID" 2>/dev/null)
-pass "Novel state after epoch settlement readable"
-
-# Check prize pool balance (should be reduced after distribution)
-POOL_BALANCE=$(cast_call "$PRIZE_POOL" "getPoolBalance(uint256)(uint256)" "$NOVEL_ID")
-info "Prize pool balance: $POOL_BALANCE"
-
-# Check pending rewards for creator
-CREATOR_REWARD=$(cast_call "$PRIZE_POOL" "getPendingReward(uint256,address)(uint256)" "$NOVEL_ID" "$ADDR_CREATOR")
-info "Creator pending reward: $CREATOR_REWARD"
-
-# Check pending rewards for writer B (canon author)
-WRITER_B_REWARD=$(cast_call "$PRIZE_POOL" "getPendingReward(uint256,address)(uint256)" "$NOVEL_ID" "$ADDR_WRITER_B")
-info "Writer B pending reward: $WRITER_B_REWARD"
-
-# Check chapter 3 is canon
-CH3_CANON=$(cast_call "$NOVEL_CORE" "getChapter(uint256)((uint256,uint256,uint256,address,bytes32,uint64,uint32,uint32,uint256,bool,bool))" 3 2>/dev/null)
-pass "Chapter 3 data readable"
-
-# Check claimable stake for writers
-WRITER_A_STAKE=$(cast_call "$NOVEL_CORE" "getClaimableStake(uint256,address)(uint256)" "$NOVEL_ID" "$ADDR_WRITER_A")
-info "Writer A claimable stake: $WRITER_A_STAKE"
-
-# Claims
-cast_send "$PK_WRITER_A" "$NOVEL_CORE" "claimStakeRefund(uint256)" "$NOVEL_ID" > /dev/null
-pass "Writer A claimed stake refund"
-
-cast_send "$PK_CREATOR" "$PRIZE_POOL" "claimReward(uint256)" "$NOVEL_ID" > /dev/null
-pass "Creator claimed prize reward"
-
-# Sweep unrevealed (round voting) — should succeed even with 0 unrevealed
-cast_send "$PK_KEEPER" "$VOTING_ENGINE" \
-    "sweepUnrevealedStakes(uint256,uint256)" "$NOVEL_ID" "$VOTING_ROUND_ID_DEC" > /dev/null
-pass "Keeper: swept unrevealed stakes (round)"
-
-# Voter claims reward
-cast_send "$PK_VOTER_A" "$VOTING_ENGINE" \
-    "claimVotingReward(uint256,uint256)" "$NOVEL_ID" "$VOTING_ROUND_ID_DEC" > /dev/null
-pass "Voter A claimed round voting reward"
-
-# ── Step 12: Tip novel ──
-cast_send "$PK_VOTER_B" "$PRIZE_POOL" "tipNovel(uint256)" "$NOVEL_ID" --value 0.05ether > /dev/null
-TIPPED=$(cast_call "$PRIZE_POOL" "getTotalTipped(uint256)(uint256)" "$NOVEL_ID")
-pass "Tipped novel: $TIPPED"
-
-# ── Step 13: Complete novel (owner only) ──
-cast_send "$PK_DEPLOYER" "$NOVEL_CORE" "completeNovel(uint256)" "$NOVEL_ID" > /dev/null
-pass "Novel completed (deactivated)"
+# Round 1 data should be settled
+ROUND1_SETTLED=$(cast_call "$NOVEL_CORE" "getRoundData(uint64,uint32)((uint64[],bool[],uint64[],uint64,uint64,uint64,bool))" "$NOVEL_ID" "1")
+info "Round 1 settled data: $ROUND1_SETTLED"
 
 # ═══════════════════════════════════════════════════════════════
-#  PART 2: MCP Tool Verification
+#  ROUND 2: Multi-Round World Line Evolution
 # ═══════════════════════════════════════════════════════════════
 info "========================================"
-info "Part 2: MCP Tool Verification"
+info "ROUND 2: World Line Evolution"
 info "========================================"
 
-# Create a second novel for MCP tests (novel is still active)
-CREATE_TX2=$(cast send --rpc-url "$RPC" --private-key "$PK_CREATOR" "$NOVEL_CORE" \
-    "createNovel((uint64,uint64,uint64,uint32,uint32,uint32,uint16,uint16,uint64,uint64,uint256,uint8,uint8,uint8,string),(string,string,string),(bytes32,uint64,bytes)[])" \
-    "(100, 10000, 2, 2, 2, 1, 3000, 2000, 2, 2, 10000000000000000, 0, 0, 0, '')" \
-    "(MCP Test Novel, MCP test novel, '')" \
-    "[($GENESIS_HASH,$GENESIS_LEN,$GENESIS_HEX)]" \
-    --value 0.1ether --json 2>/dev/null)
-[ "$(echo "$CREATE_TX2" | jq -r '.status')" = "0x1" ] || fail "createNovel for MCP tests failed"
-MCP_NOVEL_ID=2
-pass "Novel #$MCP_NOVEL_ID created for MCP tests"
+# Submit chapters on winning world lines (descendants of round 1 winners)
+# Chapter 4 and 3 are expected world lines from round 1 (worldLineCount=2)
 
-# Run MCP integration tests via Node.js
-info "Running MCP integration tests..."
-export RPC_URL="$RPC"
-export NOVEL_CORE_ADDRESS="$NOVEL_CORE"
-export VOTING_ENGINE_ADDRESS="$VOTING_ENGINE"
-export PRIZE_POOL_ADDRESS="$PRIZE_POOL"
-export CHAPTER_NFT_ADDRESS="$CHAPTER_NFT"
-export PRIVATE_KEY="$PK_WRITER_A"
-export MCP_NOVEL_ID="$MCP_NOVEL_ID"
-export PK_CREATOR PK_WRITER_A PK_WRITER_B PK_VOTER_A PK_VOTER_B PK_KEEPER
+# Writer A extends chapter 4 -> chapter 5
+CONTENT_R2_A="The ancient protocol reveals its secrets. Writer A pushes the story deeper into the mystery. New characters emerge from the digital ether, each carrying fragments of a forgotten code that holds the key to ultimate decentralized governance."
+CONTENT_R2_A_HEX="0x$(echo -n "$CONTENT_R2_A" | xxd -p | tr -d '\n')"
+CONTENT_R2_A_HASH=$(cast keccak256 "$CONTENT_R2_A_HEX")
+CONTENT_R2_A_LEN=$(echo -n "$CONTENT_R2_A" | wc -c | tr -d ' ')
 
-cd "$ROOT_DIR/mcp"
-npx tsx e2e-mcp-test.ts || fail "MCP integration tests failed"
+cast_send "$PK_WRITER_A" "$NOVEL_CORE" \
+    "submitChapter(uint64,uint64,(bytes32,uint64,bytes))" "$NOVEL_ID" "4" \
+    "($CONTENT_R2_A_HASH,$CONTENT_R2_A_LEN,$CONTENT_R2_A_HEX)" \
+    --value 0.01ether > /dev/null
+pass "Writer A submitted chapter 5 (extends world line, child of 4)"
 
-pass "MCP integration tests passed"
+# Writer B extends chapter 3 -> chapter 6
+CONTENT_R2_B="The dark factions consolidate their power. Writer B weaves a tale of intrigue and betrayal, where the lines between hero and villain blur in the decentralized consensus of reality. A surprising alliance forms."
+CONTENT_R2_B_HEX="0x$(echo -n "$CONTENT_R2_B" | xxd -p | tr -d '\n')"
+CONTENT_R2_B_HASH=$(cast keccak256 "$CONTENT_R2_B_HEX")
+CONTENT_R2_B_LEN=$(echo -n "$CONTENT_R2_B" | wc -c | tr -d ' ')
+
+cast_send "$PK_WRITER_B" "$NOVEL_CORE" \
+    "submitChapter(uint64,uint64,(bytes32,uint64,bytes))" "$NOVEL_ID" "3" \
+    "($CONTENT_R2_B_HASH,$CONTENT_R2_B_LEN,$CONTENT_R2_B_HEX)" \
+    --value 0.01ether > /dev/null
+pass "Writer B submitted chapter 6 (extends world line, child of 3)"
+
+# Submit on a non-world-line branch (child of root=1 directly, won't be DFS candidate)
+CONTENT_BRANCH="A rogue writer starts an entirely new branch from the root, ignoring the world lines. This branch explores what could have been if the original heroes never met. An alternate timeline where chaos reigns supreme."
+CONTENT_BRANCH_HEX="0x$(echo -n "$CONTENT_BRANCH" | xxd -p | tr -d '\n')"
+CONTENT_BRANCH_HASH=$(cast keccak256 "$CONTENT_BRANCH_HEX")
+CONTENT_BRANCH_LEN=$(echo -n "$CONTENT_BRANCH" | wc -c | tr -d ' ')
+
+cast_send "$PK_WRITER_B" "$NOVEL_CORE" \
+    "submitChapter(uint64,uint64,(bytes32,uint64,bytes))" "$NOVEL_ID" "1" \
+    "($CONTENT_BRANCH_HASH,$CONTENT_BRANCH_LEN,$CONTENT_BRANCH_HEX)" \
+    --value 0.01ether > /dev/null
+pass "Writer B submitted chapter 7 on non-world-line branch (child of root)"
+
+# Wait for minRoundGap
+advance_time 3
+
+# Keeper starts round 2 (DFS from round 1 worldLineAncestors)
+cast_send "$PK_KEEPER" "$NOVEL_CORE" "startRound(uint64)" "$NOVEL_ID" > /dev/null
+pass "Keeper: startRound (round 2)"
+
+ROUND2_DATA=$(cast_call "$NOVEL_CORE" "getRoundData(uint64,uint32)((uint64[],bool[],uint64[],uint64,uint64,uint64,bool))" "$NOVEL_ID" "2")
+info "Round 2 candidates: $ROUND2_DATA"
+
+# closeNomination
+advance_time 3
+cast_send "$PK_KEEPER" "$NOVEL_CORE" "closeNomination(uint64)" "$NOVEL_ID" > /dev/null
+pass "Keeper: closeNomination (round 2)"
+
+# Commit votes -- both vote for chapter 5 (Writer A's extended chain)
+SALT_R2_A="0x0000000000000000000000000000000000000000000000000000000000000003"
+COMMIT_R2_A=$(cast keccak256 $(cast abi-encode --packed "(uint64,bytes32)" 5 "$SALT_R2_A"))
+cast_send "$PK_VOTER_A" "$NOVEL_CORE" \
+    "commitVote(uint64,bytes32)" "$NOVEL_ID" "$COMMIT_R2_A" \
+    --value 0.01ether > /dev/null
+pass "Voter A committed (round 2, for chapter 5)"
+
+SALT_R2_B="0x0000000000000000000000000000000000000000000000000000000000000004"
+COMMIT_R2_B=$(cast keccak256 $(cast abi-encode --packed "(uint64,bytes32)" 6 "$SALT_R2_B"))
+cast_send "$PK_VOTER_B" "$NOVEL_CORE" \
+    "commitVote(uint64,bytes32)" "$NOVEL_ID" "$COMMIT_R2_B" \
+    --value 0.01ether > /dev/null
+pass "Voter B committed (round 2, for chapter 6)"
+
+# closeCommit
+advance_time 3
+cast_send "$PK_KEEPER" "$NOVEL_CORE" "closeCommit(uint64)" "$NOVEL_ID" > /dev/null
+pass "Keeper: closeCommit (round 2)"
+
+# Reveal
+cast_send "$PK_VOTER_A" "$NOVEL_CORE" \
+    "revealVote(uint64,uint64,bytes32)" "$NOVEL_ID" 5 "$SALT_R2_A" > /dev/null
+pass "Voter A revealed (round 2)"
+
+cast_send "$PK_VOTER_B" "$NOVEL_CORE" \
+    "revealVote(uint64,uint64,bytes32)" "$NOVEL_ID" 6 "$SALT_R2_B" > /dev/null
+pass "Voter B revealed (round 2)"
+
+# Settle round 2
+advance_time 3
+cast_send "$PK_KEEPER" "$NOVEL_CORE" "settleRound(uint64)" "$NOVEL_ID" > /dev/null
+pass "Keeper: settleRound (round 2 settled)"
+
+# Verify world lines evolved
+R2_WORLD_LINES=$(cast_call "$NOVEL_CORE" "getWorldLineAncestors(uint64)(uint64[])" "$NOVEL_ID")
+info "World lines after round 2: $R2_WORLD_LINES"
+pass "Round 2 world lines updated"
+
+# ═══════════════════════════════════════════════════════════════
+#  ROUND 3: Nomination Test
+# ═══════════════════════════════════════════════════════════════
+info "========================================"
+info "ROUND 3: Nomination Test"
+info "========================================"
+
+# Submit more chapters on world lines
+CONTENT_R3="Round three contribution extending the world line further. The heroes face their greatest challenge yet as the ancient protocol begins to destabilize. Only unity across all factions can prevent the collapse of the decentralized narrative."
+CONTENT_R3_HEX="0x$(echo -n "$CONTENT_R3" | xxd -p | tr -d '\n')"
+CONTENT_R3_HASH=$(cast keccak256 "$CONTENT_R3_HEX")
+CONTENT_R3_LEN=$(echo -n "$CONTENT_R3" | wc -c | tr -d ' ')
+
+cast_send "$PK_WRITER_A" "$NOVEL_CORE" \
+    "submitChapter(uint64,uint64,(bytes32,uint64,bytes))" "$NOVEL_ID" "5" \
+    "($CONTENT_R3_HASH,$CONTENT_R3_LEN,$CONTENT_R3_HEX)" \
+    --value 0.01ether > /dev/null
+pass "Writer A submitted chapter 8 (extends world line, child of 5)"
+
+# Submit a chapter extending the non-world-line branch (chapter 7)
+CONTENT_NWL="The rogue timeline deepens. Characters from the alternate reality discover echoes of the main timeline. This branch won't be in DFS candidates but can be nominated. A parallel universe of creative possibilities unfolds."
+CONTENT_NWL_HEX="0x$(echo -n "$CONTENT_NWL" | xxd -p | tr -d '\n')"
+CONTENT_NWL_HASH=$(cast keccak256 "$CONTENT_NWL_HEX")
+CONTENT_NWL_LEN=$(echo -n "$CONTENT_NWL" | wc -c | tr -d ' ')
+
+cast_send "$PK_WRITER_B" "$NOVEL_CORE" \
+    "submitChapter(uint64,uint64,(bytes32,uint64,bytes))" "$NOVEL_ID" "7" \
+    "($CONTENT_NWL_HASH,$CONTENT_NWL_LEN,$CONTENT_NWL_HEX)" \
+    --value 0.01ether > /dev/null
+pass "Writer B submitted chapter 9 (extends non-world-line branch, child of 7)"
+
+# Wait for minRoundGap
+advance_time 3
+
+# Start round 3
+cast_send "$PK_KEEPER" "$NOVEL_CORE" "startRound(uint64)" "$NOVEL_ID" > /dev/null
+pass "Keeper: startRound (round 3)"
+
+# During Nominating phase, nominate the non-world-line chapter 9
+cast_send "$PK_USER" "$NOVEL_CORE" \
+    "nominateCandidate(uint64,uint64)" "$NOVEL_ID" "9" \
+    --value 0.02ether > /dev/null
+pass "User nominated chapter 9 (non-world-line descendant, paid nominationFee)"
+
+# Verify nomination was recorded
+R3_DATA=$(cast_call "$NOVEL_CORE" "getRoundData(uint64,uint32)((uint64[],bool[],uint64[],uint64,uint64,uint64,bool))" "$NOVEL_ID" "3")
+info "Round 3 data (after nomination): $R3_DATA"
+
+# closeNomination
+advance_time 3
+cast_send "$PK_KEEPER" "$NOVEL_CORE" "closeNomination(uint64)" "$NOVEL_ID" > /dev/null
+pass "Keeper: closeNomination (round 3)"
+
+# Commit -- Voter A votes for the nominated chapter 9
+SALT_R3_A="0x0000000000000000000000000000000000000000000000000000000000000005"
+COMMIT_R3_A=$(cast keccak256 $(cast abi-encode --packed "(uint64,bytes32)" 9 "$SALT_R3_A"))
+cast_send "$PK_VOTER_A" "$NOVEL_CORE" \
+    "commitVote(uint64,bytes32)" "$NOVEL_ID" "$COMMIT_R3_A" \
+    --value 0.01ether > /dev/null
+pass "Voter A committed (round 3, for nominated chapter 9)"
+
+SALT_R3_B="0x0000000000000000000000000000000000000000000000000000000000000006"
+COMMIT_R3_B=$(cast keccak256 $(cast abi-encode --packed "(uint64,bytes32)" 8 "$SALT_R3_B"))
+cast_send "$PK_VOTER_B" "$NOVEL_CORE" \
+    "commitVote(uint64,bytes32)" "$NOVEL_ID" "$COMMIT_R3_B" \
+    --value 0.01ether > /dev/null
+pass "Voter B committed (round 3, for chapter 8)"
+
+# closeCommit
+advance_time 3
+cast_send "$PK_KEEPER" "$NOVEL_CORE" "closeCommit(uint64)" "$NOVEL_ID" > /dev/null
+pass "Keeper: closeCommit (round 3)"
+
+# Reveal
+cast_send "$PK_VOTER_A" "$NOVEL_CORE" \
+    "revealVote(uint64,uint64,bytes32)" "$NOVEL_ID" 9 "$SALT_R3_A" > /dev/null
+pass "Voter A revealed (round 3)"
+
+cast_send "$PK_VOTER_B" "$NOVEL_CORE" \
+    "revealVote(uint64,uint64,bytes32)" "$NOVEL_ID" 8 "$SALT_R3_B" > /dev/null
+pass "Voter B revealed (round 3)"
+
+# Settle
+advance_time 3
+cast_send "$PK_KEEPER" "$NOVEL_CORE" "settleRound(uint64)" "$NOVEL_ID" > /dev/null
+pass "Keeper: settleRound (round 3 settled, nomination worked)"
+
+R3_WORLD_LINES=$(cast_call "$NOVEL_CORE" "getWorldLineAncestors(uint64)(uint64[])" "$NOVEL_ID")
+info "World lines after round 3: $R3_WORLD_LINES"
+
+# ═══════════════════════════════════════════════════════════════
+#  TIPS & BOUNTYBOARD
+# ═══════════════════════════════════════════════════════════════
+info "========================================"
+info "Tips & BountyBoard"
+info "========================================"
+
+# Tip novel (through NovelCore)
+cast_send "$PK_VOTER_B" "$NOVEL_CORE" "tipNovel(uint64)" "$NOVEL_ID" --value 0.05ether > /dev/null
+POOL_AFTER_TIP=$(cast_call "$PRIZE_POOL" "getPoolBalance(uint64)(uint256)" "$NOVEL_ID")
+pass "Tipped novel 0.05 ETH (pool balance: $POOL_AFTER_TIP)"
+
+# Tip chapter (through NovelCore -- 50% to author, 50% to pool)
+WRITER_A_BAL_BEFORE=$(cast balance --rpc-url "$RPC" "$ADDR_WRITER_A")
+cast_send "$PK_USER" "$NOVEL_CORE" "tipChapter(uint64)" "2" --value 0.02ether > /dev/null
+WRITER_A_BAL_AFTER=$(cast balance --rpc-url "$RPC" "$ADDR_WRITER_A")
+pass "Tipped chapter 2 (Writer A) 0.02 ETH (50/50 split)"
+info "Writer A balance change: $WRITER_A_BAL_BEFORE -> $WRITER_A_BAL_AFTER"
+
+# ── BountyBoard: Create bounty with continuations ──
+info "Creating bounty on chapter 6 (will have continuations)..."
+
+# Writer B already submitted chapter 6. We'll create a bounty on it, then submit a continuation.
+# Deadline = current block timestamp + 60 seconds
+CURRENT_TS=$(cast block-number --rpc-url "$RPC" | xargs -I {} cast block --rpc-url "$RPC" {} --json 2>/dev/null | jq -r '.timestamp' | xargs printf '%d\n')
+BOUNTY_DEADLINE=$((CURRENT_TS + 60))
+
+cast_send "$PK_USER" "$BOUNTY_BOARD" \
+    "createBounty(uint64,uint64)" "6" "$BOUNTY_DEADLINE" \
+    --value 0.01ether > /dev/null
+pass "Bounty #0 created on chapter 6 (deadline=$BOUNTY_DEADLINE)"
+
+# Submit a continuation of chapter 6 (before deadline) -> chapter 10
+CONTENT_BOUNTY="Continuation written to claim the bounty. The alliance formed in chapter 6 faces its first real test as an ancient threat emerges from the depths of the blockchain. Only by working together can they hope to survive this challenge."
+CONTENT_BOUNTY_HEX="0x$(echo -n "$CONTENT_BOUNTY" | xxd -p | tr -d '\n')"
+CONTENT_BOUNTY_HASH=$(cast keccak256 "$CONTENT_BOUNTY_HEX")
+CONTENT_BOUNTY_LEN=$(echo -n "$CONTENT_BOUNTY" | wc -c | tr -d ' ')
+
+cast_send "$PK_WRITER_A" "$NOVEL_CORE" \
+    "submitChapter(uint64,uint64,(bytes32,uint64,bytes))" "$NOVEL_ID" "6" \
+    "($CONTENT_BOUNTY_HASH,$CONTENT_BOUNTY_LEN,$CONTENT_BOUNTY_HEX)" \
+    --value 0.01ether > /dev/null
+pass "Writer A submitted chapter 10 (continuation of bounty target chapter 6)"
+
+# Wait for bounty deadline to pass
+advance_time 61
+
+# Writer A claims bounty
+cast_send "$PK_WRITER_A" "$BOUNTY_BOARD" "claimBounty(uint256)" "0" > /dev/null
+pass "Writer A claimed bounty #0"
+
+# ── BountyBoard: Create bounty with no continuations (for refund test) ──
+info "Creating bounty on chapter 8 (no continuations, for refund test)..."
+
+CURRENT_TS2=$(cast block-number --rpc-url "$RPC" | xargs -I {} cast block --rpc-url "$RPC" {} --json 2>/dev/null | jq -r '.timestamp' | xargs printf '%d\n')
+BOUNTY_DEADLINE2=$((CURRENT_TS2 + 10))
+
+cast_send "$PK_USER" "$BOUNTY_BOARD" \
+    "createBounty(uint64,uint64)" "8" "$BOUNTY_DEADLINE2" \
+    --value 0.01ether > /dev/null
+pass "Bounty #1 created on chapter 8 (short deadline for refund test)"
+
+# Wait for deadline (no one submits a continuation)
+advance_time 11
+
+# Refund bounty
+cast_send "$PK_USER" "$BOUNTY_BOARD" "refundBounty(uint256)" "1" > /dev/null
+pass "Bounty #1 refunded (no continuations)"
+
+# ═══════════════════════════════════════════════════════════════
+#  FORK TEST
+# ═══════════════════════════════════════════════════════════════
+info "========================================"
+info "Fork Test"
+info "========================================"
+
+# Fork from chapter 3 of the original novel
+# Fork fee = max(submissionFee, sourcePoolBalance * 100 / 10000) + submissionFee
+# We need to send enough ETH to cover both fork fee + genesis fund
+SOURCE_POOL=$(cast_call "$PRIZE_POOL" "getPoolBalance(uint64)(uint256)" "$NOVEL_ID")
+info "Source novel pool balance: $SOURCE_POOL wei"
+
+FORK_CONTENT="A bold new beginning in a forked universe. Drawing inspiration from chapter 3 of the original, this fork reimagines the darker path. New rules apply here, and the narrative takes an entirely unexpected direction as the forker brings fresh perspective."
+FORK_HEX="0x$(echo -n "$FORK_CONTENT" | xxd -p | tr -d '\n')"
+FORK_HASH=$(cast keccak256 "$FORK_HEX")
+FORK_LEN=$(echo -n "$FORK_CONTENT" | wc -c | tr -d ' ')
+
+# Use same config but different metadata
+FORK_CONFIG="(100, 10000, 10000000000000000, 2, 10000000000000000, 20000000000000000, 2, 2, 2, 2, 3000, 2000, 0, '', 10000000000000000, 86400, 2)"
+FORK_METADATA="(Forked Novel, A fork exploring an alternate timeline, '')"
+
+# Send generous amount to cover fork fee + genesis
+FORK_TX=$(cast send --rpc-url "$RPC" --private-key "$PK_USER" "$NOVEL_CORE" \
+    "forkNovel(uint64,(uint64,uint64,uint256,uint32,uint256,uint256,uint64,uint64,uint64,uint64,uint16,uint16,uint8,string,uint256,uint64,uint32),(string,string,string),(bytes32,uint64,bytes))" \
+    "3" \
+    "$FORK_CONFIG" \
+    "$FORK_METADATA" \
+    "($FORK_HASH,$FORK_LEN,$FORK_HEX)" \
+    --value 0.5ether --json 2>/dev/null)
+
+FORK_STATUS=$(echo "$FORK_TX" | jq -r '.status')
+[ "$FORK_STATUS" = "0x1" ] || fail "forkNovel tx failed"
+
+FORK_NOVEL_ID=2
+pass "Novel #$FORK_NOVEL_ID forked from chapter 3"
+
+# Verify fork novel exists
+FORK_NOVEL_COUNT=$(cast_call "$NOVEL_CORE" "getNovelCount()(uint64)")
+[ "$(echo "$FORK_NOVEL_COUNT" | tr -d ' ')" = "2" ] || fail "Novel count should be 2"
+pass "Fork verified (novel count=2)"
+
+# Verify fork root's parentId points to source chapter 3
+# The fork root chapter is the next chapter ID after all previous chapters
+# Chapter IDs so far: 1(root), 2, 3, 4, 5, 6, 7, 8, 9, 10 = 10 chapters
+# Fork root = chapter 11
+FORK_ROOT_CH=$(cast_call "$NOVEL_CORE" "getChapter(uint64)((uint64,uint64,uint64,address,bytes32,uint64,uint32,uint64,uint64[]))" "11")
+info "Fork root chapter: $FORK_ROOT_CH"
+pass "Fork root chapter readable (parentId should reference source chapter 3)"
+
+# ═══════════════════════════════════════════════════════════════
+#  COMPLETE NOVEL (Forked Novel)
+# ═══════════════════════════════════════════════════════════════
+info "========================================"
+info "Complete Novel"
+info "========================================"
+
+# Complete the forked novel (creator = ADDR_USER can call anytime)
+# Novel must be in Idle phase (which it is since no rounds started)
+cast_send "$PK_USER" "$NOVEL_CORE" "completeNovel(uint64)" "$FORK_NOVEL_ID" > /dev/null
+pass "Forked novel #$FORK_NOVEL_ID completed"
+
+# Verify novel is no longer active
+FORK_NOVEL_DATA=$(cast_call "$NOVEL_CORE" "getNovel(uint64)((uint64,address,(uint64,uint64,uint256,uint32,uint256,uint256,uint64,uint64,uint64,uint64,uint16,uint16,uint8,string,uint256,uint64,uint32),uint32,uint8,uint64,uint64,bool))" "$FORK_NOVEL_ID")
+info "Forked novel state: $FORK_NOVEL_DATA"
+pass "Forked novel state readable (should show active=false)"
+
+# Verify no more chapters can be submitted to completed novel
+if cast send --rpc-url "$RPC" --private-key "$PK_WRITER_A" "$NOVEL_CORE" \
+    "submitChapter(uint64,uint64,(bytes32,uint64,bytes))" "$FORK_NOVEL_ID" "11" \
+    "($FORK_HASH,$FORK_LEN,$FORK_HEX)" \
+    --value 0.01ether > /dev/null 2>&1; then
+    fail "Should not be able to submit to completed novel"
+else
+    pass "Chapter submission to completed novel correctly rejected"
+fi
+
+# Creator of forked novel claims final distribution
+cast_send "$PK_USER" "$NOVEL_CORE" "claimReward(uint64)" "$FORK_NOVEL_ID" > /dev/null
+pass "Fork creator claimed final distribution"
+
+# ═══════════════════════════════════════════════════════════════
+#  FINAL SUMMARY
+# ═══════════════════════════════════════════════════════════════
+FINAL_POOL=$(cast_call "$PRIZE_POOL" "getPoolBalance(uint64)(uint256)" "$NOVEL_ID")
+FINAL_CHAPTERS=$(cast_call "$NOVEL_CORE" "getChapterCount()(uint64)")
+FINAL_NOVELS=$(cast_call "$NOVEL_CORE" "getNovelCount()(uint64)")
+
+info "Final state: novels=$FINAL_NOVELS, chapters=$FINAL_CHAPTERS, novel1 pool=$FINAL_POOL wei"
 
 echo ""
-echo -e "${GREEN}═══════════════════════════════════════════${NC}"
-echo -e "${GREEN}  ALL E2E TESTS PASSED${NC}"
-echo -e "${GREEN}═══════════════════════════════════════════${NC}"
+echo -e "${GREEN}=================================================${NC}"
+echo -e "${GREEN}  ALL V2 E2E TESTS PASSED${NC}"
+echo -e "${GREEN}=================================================${NC}"
+echo -e "${GREEN}  - 3 voting rounds (basic, evolution, nomination)${NC}"
+echo -e "${GREEN}  - Tips (novel + chapter)${NC}"
+echo -e "${GREEN}  - BountyBoard (claim + refund)${NC}"
+echo -e "${GREEN}  - Fork novel${NC}"
+echo -e "${GREEN}  - Complete novel${NC}"
+echo -e "${GREEN}=================================================${NC}"

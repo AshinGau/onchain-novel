@@ -10,9 +10,9 @@ import {IVotingEngine} from "../interfaces/IVotingEngine.sol";
 import {DataTypes} from "../libraries/DataTypes.sol";
 
 /// @title VotingEngine
-/// @notice Commit-Reveal voting engine using Stake-to-Vote (staked ETH = voting weight)
-/// @dev Manages voting rounds identified by (novelId, votingRoundId) pairs.
-///      Both AI Agents and humans can participate as voters.
+/// @notice Commit-Reveal voting engine using Stake-to-Vote (V2)
+/// @dev Manages voting rounds identified by (novelId, round) pairs.
+///      NovelCore handles phase enforcement; this contract manages vote data and rewards.
 contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuard, UUPSUpgradeable, IVotingEngine {
     // ============================================================
     //                         STORAGE
@@ -21,19 +21,16 @@ contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuard, UUP
     /// @notice Authorized NovelCore contract address
     address public novelCore;
 
-    /// @dev Composite key for voting round data: keccak256(novelId, votingRoundId)
+    /// @dev Per-round voting state, keyed by keccak256(novelId, round)
     struct VotingRoundData {
-        uint256[] candidateIds;
+        uint64[] candidateIds;
         bool initialized;
         bool tallied;
-        bool swept; // Whether unrevealed stakes have been swept
-        bool commitsClosed; // Whether commit phase has ended (reveals allowed after this)
-        uint256 totalVoters; // Number of voters who revealed
-        uint256 winnerCandidateId; // Top voted candidate (set after tally)
-        uint256 totalRevealedStake; // Sum of stakes from revealed voters
-        uint256 totalUnrevealedStake; // Sum of stakes from unrevealed voters (set at sweep)
-        uint256 totalAccurateStake; // Sum of stakes from voters who voted for winner
-        uint256 voterRewardPool; // Accuracy reward pool for this round (from PrizePool)
+        bool rewardsSettled;
+        uint256 totalRevealedStake;
+        uint256 totalAccurateStake; // Stake of voters who voted for ANY winning candidate
+        uint256 voterRewardPool;
+        uint256 unrevealedStakes;
     }
 
     /// @notice Voting round data: roundKey => VotingRoundData
@@ -42,11 +39,20 @@ contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuard, UUP
     /// @notice Vote commits: roundKey => voter => VoteCommit
     mapping(bytes32 => mapping(address => DataTypes.VoteCommit)) private _voteCommits;
 
-    /// @notice Vote counts: roundKey => candidateId => vote count
-    mapping(bytes32 => mapping(uint256 => uint256)) private _voteCounts;
+    /// @notice Vote weights: roundKey => candidateId => total stake weight
+    mapping(bytes32 => mapping(uint64 => uint256)) private _voteWeights;
 
     /// @notice Voter list per round: roundKey => voters array
     mapping(bytes32 => address[]) private _voters;
+
+    /// @notice Winning candidate set: roundKey => candidateId => isWinner
+    mapping(bytes32 => mapping(uint64 => bool)) private _winningCandidates;
+
+    /// @notice Whether a voter has claimed: roundKey => voter => claimed
+    mapping(bytes32 => mapping(address => bool)) private _claimed;
+
+    /// @notice Whether a candidateId is valid in a round: roundKey => candidateId => isCandidate
+    mapping(bytes32 => mapping(uint64 => bool)) private _isCandidate;
 
     // ============================================================
     //                         ERRORS
@@ -59,17 +65,17 @@ contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuard, UUP
     error NotCommitted();
     error AlreadyRevealed();
     error InvalidReveal();
-    error InvalidCandidate(uint256 candidateId);
+    error InvalidCandidate(uint64 candidateId);
     error AlreadyTallied();
     error NotTallied();
     error AlreadyClaimed();
     error NoCandidates();
-    error AlreadySwept();
     error NotRevealed();
-    error ZeroStake();
-    error CommitPhaseClosed();
-    error RevealNotOpen();
+    error RewardsNotSettled();
+    error RewardsAlreadySettled();
     error TransferFailed();
+    error NoRewardToClaim();
+    error InvalidCommitHash();
 
     // ============================================================
     //                        MODIFIERS
@@ -91,7 +97,6 @@ contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuard, UUP
 
     function initialize(address owner_, address novelCore_) external initializer {
         __Ownable_init(owner_);
-
         novelCore = novelCore_;
     }
 
@@ -99,49 +104,80 @@ contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuard, UUP
     //                     ADMIN FUNCTIONS
     // ============================================================
 
+    event NovelCoreUpdated(address indexed oldAddr, address indexed newAddr);
+
     function setNovelCore(address newNovelCore) external onlyOwner {
+        address old = novelCore;
         novelCore = newNovelCore;
+        emit NovelCoreUpdated(old, newNovelCore);
     }
 
     // ============================================================
-    //                     VOTER ACTIONS
+    //                  CALLED BY NOVELCORE
     // ============================================================
 
     /// @inheritdoc IVotingEngine
-    function commitVote(uint256 novelId, uint256 votingRoundId, bytes32 commitHash) external payable {
-        if (msg.value == 0) revert ZeroStake();
+    function initializeVoting(uint64 novelId, uint32 round, uint64[] calldata candidates) external onlyNovelCore {
+        if (candidates.length == 0) revert NoCandidates();
 
-        bytes32 roundKey = _roundKey(novelId, votingRoundId);
-        VotingRoundData storage round = _votingRounds[roundKey];
+        bytes32 roundKey = _roundKey(novelId, round);
+        if (_votingRounds[roundKey].initialized) revert VotingAlreadyInitialized();
 
-        if (!round.initialized) revert VotingNotInitialized();
-        if (round.commitsClosed) revert CommitPhaseClosed();
-        if (round.tallied) revert AlreadyTallied();
-        if (_voteCommits[roundKey][msg.sender].commitHash != bytes32(0)) revert AlreadyCommitted();
+        VotingRoundData storage rd = _votingRounds[roundKey];
+        rd.initialized = true;
+        for (uint256 i = 0; i < candidates.length; i++) {
+            rd.candidateIds.push(candidates[i]);
+            _isCandidate[roundKey][candidates[i]] = true;
+        }
 
-        _voteCommits[roundKey][msg.sender] = DataTypes.VoteCommit({
+        emit VotingInitialized(novelId, round, candidates.length);
+    }
+
+    /// @inheritdoc IVotingEngine
+    function addCandidate(uint64 novelId, uint32 round, uint64 candidateId) external onlyNovelCore {
+        bytes32 roundKey = _roundKey(novelId, round);
+        VotingRoundData storage rd = _votingRounds[roundKey];
+        if (!rd.initialized) revert VotingNotInitialized();
+
+        rd.candidateIds.push(candidateId);
+        _isCandidate[roundKey][candidateId] = true;
+    }
+
+    /// @inheritdoc IVotingEngine
+    function commitVote(uint64 novelId, uint32 round, address voter, bytes32 commitHash, uint256 stakeAmount)
+        external
+        onlyNovelCore
+    {
+        bytes32 roundKey = _roundKey(novelId, round);
+        VotingRoundData storage rd = _votingRounds[roundKey];
+
+        if (!rd.initialized) revert VotingNotInitialized();
+        if (commitHash == bytes32(0)) revert InvalidCommitHash();
+        if (_voteCommits[roundKey][voter].commitHash != bytes32(0)) revert AlreadyCommitted();
+
+        _voteCommits[roundKey][voter] = DataTypes.VoteCommit({
             commitHash: commitHash,
-            stakeAmount: msg.value,
+            stakeAmount: stakeAmount,
             revealed: false,
-            claimed: false,
             revealedCandidateId: 0
         });
 
-        _voters[roundKey].push(msg.sender);
+        _voters[roundKey].push(voter);
 
-        emit VoteCommitted(novelId, votingRoundId, msg.sender);
+        emit VoteCommitted(novelId, round, voter);
     }
 
     /// @inheritdoc IVotingEngine
-    function revealVote(uint256 novelId, uint256 votingRoundId, uint256 candidateId, bytes32 salt) external {
-        bytes32 roundKey = _roundKey(novelId, votingRoundId);
-        VotingRoundData storage round = _votingRounds[roundKey];
+    function revealVote(uint64 novelId, uint32 round, address voter, uint64 candidateId, bytes32 salt)
+        external
+        onlyNovelCore
+    {
+        bytes32 roundKey = _roundKey(novelId, round);
+        VotingRoundData storage rd = _votingRounds[roundKey];
 
-        if (!round.commitsClosed) revert RevealNotOpen();
-        if (round.tallied) revert AlreadyTallied();
+        if (!rd.initialized) revert VotingNotInitialized();
 
-        DataTypes.VoteCommit storage commit = _voteCommits[roundKey][msg.sender];
-
+        DataTypes.VoteCommit storage commit = _voteCommits[roundKey][voter];
         if (commit.commitHash == bytes32(0)) revert NotCommitted();
         if (commit.revealed) revert AlreadyRevealed();
 
@@ -155,216 +191,139 @@ contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuard, UUP
         commit.revealed = true;
         commit.revealedCandidateId = candidateId;
 
-        // Stake-to-Vote: weight = staked amount normalized (0.001 ETH = 1 vote)
-        uint256 voteWeight = commit.stakeAmount / 1e15;
-        if (voteWeight == 0) voteWeight = 1; // Minimum 1 vote
+        // Vote weight = stake amount
+        _voteWeights[roundKey][candidateId] += commit.stakeAmount;
+        rd.totalRevealedStake += commit.stakeAmount;
 
-        _voteCounts[roundKey][candidateId] += voteWeight;
-        round.totalVoters++;
-        round.totalRevealedStake += commit.stakeAmount;
-
-        emit VoteRevealed(novelId, votingRoundId, msg.sender, candidateId);
+        emit VoteRevealed(novelId, round, voter, candidateId);
     }
 
     /// @inheritdoc IVotingEngine
-    function claimVotingReward(uint256 novelId, uint256 votingRoundId) external nonReentrant {
-        bytes32 roundKey = _roundKey(novelId, votingRoundId);
-        VotingRoundData storage round = _votingRounds[roundKey];
-
-        if (!round.tallied) revert NotTallied();
-
-        DataTypes.VoteCommit storage commit = _voteCommits[roundKey][msg.sender];
-        if (!commit.revealed) revert NotRevealed();
-        if (commit.claimed) revert AlreadyClaimed();
-
-        commit.claimed = true;
-
-        uint256 totalPayout = 0;
-
-        // 1. Stake refund (all revealed voters)
-        totalPayout += commit.stakeAmount;
-
-        // 2. Unrevealed stake share (if sweep has been done)
-        if (round.swept && round.totalUnrevealedStake > 0 && round.totalRevealedStake > 0) {
-            uint256 unrevealedShare = (round.totalUnrevealedStake * commit.stakeAmount) / round.totalRevealedStake;
-            totalPayout += unrevealedShare;
-        }
-
-        // 3. Accuracy reward (if voter reward pool exists)
-        if (round.voterRewardPool > 0 && round.totalRevealedStake > 0) {
-            // Accurate voters (voted for winner) get 3x weight, others get 1x
-            bool isAccurate = (commit.revealedCandidateId == round.winnerCandidateId);
-            uint256 myWeight = isAccurate ? commit.stakeAmount * 3 : commit.stakeAmount;
-
-            // totalWeight = totalAccurateStake * 3 + (totalRevealedStake - totalAccurateStake) * 1
-            //             = totalRevealedStake + totalAccurateStake * 2
-            uint256 totalWeight = round.totalRevealedStake + round.totalAccurateStake * 2;
-
-            if (totalWeight > 0) {
-                uint256 accuracyReward = (round.voterRewardPool * myWeight) / totalWeight;
-                totalPayout += accuracyReward;
-            }
-        }
-
-        // Clear stakeAmount to prevent re-inclusion in calculations
-        commit.stakeAmount = 0;
-
-        if (totalPayout > 0) {
-            (bool success,) = msg.sender.call{value: totalPayout}("");
-            if (!success) revert TransferFailed();
-        }
-
-        emit VotingRewardClaimed(novelId, votingRoundId, msg.sender, totalPayout);
-    }
-
-    /// @inheritdoc IVotingEngine
-    function sweepUnrevealedStakes(uint256 novelId, uint256 votingRoundId) external {
-        bytes32 roundKey = _roundKey(novelId, votingRoundId);
-        VotingRoundData storage round = _votingRounds[roundKey];
-
-        if (!round.tallied) revert NotTallied();
-        if (round.swept) revert AlreadySwept();
-
-        round.swept = true;
-
-        // Iterate all voters, sum unrevealed stakes
-        address[] storage voters = _voters[roundKey];
-        uint256 totalUnrevealed = 0;
-
-        for (uint256 i = 0; i < voters.length; i++) {
-            DataTypes.VoteCommit storage commit = _voteCommits[roundKey][voters[i]];
-            if (!commit.revealed) {
-                totalUnrevealed += commit.stakeAmount;
-                commit.stakeAmount = 0; // Confiscate
-            }
-        }
-
-        round.totalUnrevealedStake = totalUnrevealed;
-
-        emit UnrevealedStakesSwept(novelId, votingRoundId, totalUnrevealed);
-    }
-
-    // ============================================================
-    //                  CALLED BY NOVELCORE
-    // ============================================================
-
-    /// @inheritdoc IVotingEngine
-    function initializeVoting(uint256 novelId, uint256 votingRoundId, uint256[] calldata candidateIds)
+    function tallyVotes(uint64 novelId, uint32 round, uint32 winnerCount)
         external
         onlyNovelCore
+        returns (uint64[] memory rankedIds, uint256[] memory voteWeights)
     {
-        if (candidateIds.length == 0) revert NoCandidates();
+        bytes32 roundKey = _roundKey(novelId, round);
+        VotingRoundData storage rd = _votingRounds[roundKey];
 
-        bytes32 roundKey = _roundKey(novelId, votingRoundId);
+        if (!rd.initialized) revert VotingNotInitialized();
+        if (rd.tallied) revert AlreadyTallied();
 
-        if (_votingRounds[roundKey].initialized) revert VotingAlreadyInitialized();
+        rd.tallied = true;
 
-        _votingRounds[roundKey] = VotingRoundData({
-            candidateIds: candidateIds,
-            initialized: true,
-            tallied: false,
-            swept: false,
-            commitsClosed: false,
-            totalVoters: 0,
-            winnerCandidateId: 0,
-            totalRevealedStake: 0,
-            totalUnrevealedStake: 0,
-            totalAccurateStake: 0,
-            voterRewardPool: 0
-        });
+        uint256 len = rd.candidateIds.length;
 
-        emit VotingInitialized(novelId, votingRoundId, candidateIds.length);
-    }
-
-    /// @inheritdoc IVotingEngine
-    function tallyVotes(uint256 novelId, uint256 votingRoundId)
-        external
-        onlyNovelCore
-        returns (uint256[] memory rankedIds)
-    {
-        bytes32 roundKey = _roundKey(novelId, votingRoundId);
-        VotingRoundData storage round = _votingRounds[roundKey];
-
-        if (!round.initialized) revert VotingNotInitialized();
-        if (round.tallied) revert AlreadyTallied();
-
-        uint256 len = round.candidateIds.length;
-
-        // Copy candidates and their vote counts
-        rankedIds = new uint256[](len);
-        uint256[] memory counts = new uint256[](len);
+        // Build ranked list sorted by vote weight (descending)
+        rankedIds = new uint64[](len);
+        voteWeights = new uint256[](len);
 
         for (uint256 i = 0; i < len; i++) {
-            rankedIds[i] = round.candidateIds[i];
-            counts[i] = _voteCounts[roundKey][rankedIds[i]];
+            rankedIds[i] = rd.candidateIds[i];
+            voteWeights[i] = _voteWeights[roundKey][rankedIds[i]];
         }
 
-        // Simple insertion sort by vote count (descending)
+        // Insertion sort by vote weight descending
         for (uint256 i = 1; i < len; i++) {
-            uint256 keyId = rankedIds[i];
-            uint256 keyCount = counts[i];
+            uint64 keyId = rankedIds[i];
+            uint256 keyWeight = voteWeights[i];
             int256 j = int256(i) - 1;
 
-            while (j >= 0 && counts[uint256(j)] < keyCount) {
+            while (j >= 0 && voteWeights[uint256(j)] < keyWeight) {
                 rankedIds[uint256(j + 1)] = rankedIds[uint256(j)];
-                counts[uint256(j + 1)] = counts[uint256(j)];
+                voteWeights[uint256(j + 1)] = voteWeights[uint256(j)];
                 j--;
             }
             rankedIds[uint256(j + 1)] = keyId;
-            counts[uint256(j + 1)] = keyCount;
+            voteWeights[uint256(j + 1)] = keyWeight;
         }
 
-        round.tallied = true;
-        round.winnerCandidateId = rankedIds[0];
+        // Mark only the top winnerCount candidates as winners
+        uint256 actualWinnerCount = len < winnerCount ? len : winnerCount;
+        for (uint256 i = 0; i < actualWinnerCount; i++) {
+            _winningCandidates[roundKey][rankedIds[i]] = true;
+        }
 
-        // Compute totalAccurateStake: sum of stakes from voters who voted for the winner
+        // Compute totalAccurateStake: sum of stakes from voters who voted for ANY winner
         address[] storage voters = _voters[roundKey];
         uint256 accurateStake = 0;
         for (uint256 i = 0; i < voters.length; i++) {
             DataTypes.VoteCommit storage commit = _voteCommits[roundKey][voters[i]];
-            if (commit.revealed && commit.revealedCandidateId == rankedIds[0]) {
+            if (commit.revealed && _winningCandidates[roundKey][commit.revealedCandidateId]) {
                 accurateStake += commit.stakeAmount;
             }
         }
-        round.totalAccurateStake = accurateStake;
+        rd.totalAccurateStake = accurateStake;
 
-        emit VotesTallied(novelId, votingRoundId, rankedIds);
+        emit VotesTallied(novelId, round, rankedIds);
 
-        return rankedIds;
+        return (rankedIds, voteWeights);
     }
 
     /// @inheritdoc IVotingEngine
-    function depositVoterRewards(uint256 novelId, uint256[] calldata votingRoundIds, uint256 totalAmount)
+    function settleVoterRewards(uint64 novelId, uint32 round, uint256 voterRewardPool, uint256 unrevealedStakes)
         external
         onlyNovelCore
     {
-        if (totalAmount == 0 || votingRoundIds.length == 0) return;
+        bytes32 roundKey = _roundKey(novelId, round);
+        VotingRoundData storage rd = _votingRounds[roundKey];
 
-        uint256 perRound = totalAmount / votingRoundIds.length;
-        if (perRound == 0) return;
+        if (!rd.tallied) revert NotTallied();
+        if (rd.rewardsSettled) revert RewardsAlreadySettled();
 
-        for (uint256 i = 0; i < votingRoundIds.length; i++) {
-            bytes32 roundKey = _roundKey(novelId, votingRoundIds[i]);
-            _votingRounds[roundKey].voterRewardPool += perRound;
-        }
+        rd.rewardsSettled = true;
+        rd.voterRewardPool = voterRewardPool;
+        rd.unrevealedStakes = unrevealedStakes;
 
-        emit VoterRewardsDeposited(novelId, totalAmount, votingRoundIds.length);
+        emit VoterRewardsSettled(novelId, round, voterRewardPool + unrevealedStakes);
     }
 
     /// @inheritdoc IVotingEngine
-    function closeCommitPhase(uint256 novelId, uint256 votingRoundId) external onlyNovelCore {
-        bytes32 roundKey = _roundKey(novelId, votingRoundId);
-        VotingRoundData storage round = _votingRounds[roundKey];
+    function claimVotingReward(uint64 novelId, uint32 round, address voter)
+        external
+        onlyNovelCore
+        nonReentrant
+        returns (uint256 amount)
+    {
+        bytes32 roundKey = _roundKey(novelId, round);
+        VotingRoundData storage rd = _votingRounds[roundKey];
 
-        if (!round.initialized) revert VotingNotInitialized();
-        if (round.commitsClosed) revert CommitPhaseClosed();
+        if (!rd.rewardsSettled) revert RewardsNotSettled();
 
-        round.commitsClosed = true;
+        DataTypes.VoteCommit storage commit = _voteCommits[roundKey][voter];
+        if (!commit.revealed) revert NotRevealed();
+        if (_claimed[roundKey][voter]) revert AlreadyClaimed();
 
-        emit CommitPhaseEnded(novelId, votingRoundId);
+        _claimed[roundKey][voter] = true;
+
+        // 1. Stake refund
+        uint256 totalPayout = commit.stakeAmount;
+
+        // 2. Accuracy reward from voterRewardPool + unrevealedStakes
+        uint256 rewardPool = rd.voterRewardPool + rd.unrevealedStakes;
+        if (rewardPool > 0 && rd.totalRevealedStake > 0) {
+            bool isAccurate = _winningCandidates[roundKey][commit.revealedCandidateId];
+            uint256 myWeight = isAccurate ? commit.stakeAmount * 3 : commit.stakeAmount;
+
+            // totalWeight = totalRevealedStake + totalAccurateStake * 2
+            uint256 totalWeight = rd.totalRevealedStake + rd.totalAccurateStake * 2;
+
+            if (totalWeight > 0) {
+                totalPayout += (rewardPool * myWeight) / totalWeight;
+            }
+        }
+
+        if (totalPayout == 0) revert NoRewardToClaim();
+
+        (bool success,) = voter.call{value: totalPayout}("");
+        if (!success) revert TransferFailed();
+
+        emit VotingRewardClaimed(novelId, round, voter, totalPayout);
+
+        return totalPayout;
     }
 
-    /// @notice Accept ETH transfers (from PrizePool for voter rewards)
+    /// @notice Accept ETH transfers (stake deposits forwarded from NovelCore)
     receive() external payable {}
 
     // ============================================================
@@ -372,26 +331,22 @@ contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuard, UUP
     // ============================================================
 
     /// @inheritdoc IVotingEngine
-    function getVoteCommit(uint256 novelId, uint256 votingRoundId, address voter)
+    function getVoteCommit(uint64 novelId, uint32 round, address voter)
         external
         view
         returns (DataTypes.VoteCommit memory)
     {
-        return _voteCommits[_roundKey(novelId, votingRoundId)][voter];
+        return _voteCommits[_roundKey(novelId, round)][voter];
     }
 
     /// @inheritdoc IVotingEngine
-    function getVoteCount(uint256 novelId, uint256 votingRoundId, uint256 candidateId)
-        external
-        view
-        returns (uint256)
-    {
-        return _voteCounts[_roundKey(novelId, votingRoundId)][candidateId];
+    function getVoteCount(uint64 novelId, uint32 round, uint64 candidateId) external view returns (uint256) {
+        return _voteWeights[_roundKey(novelId, round)][candidateId];
     }
 
     /// @inheritdoc IVotingEngine
-    function getCandidates(uint256 novelId, uint256 votingRoundId) external view returns (uint256[] memory) {
-        return _votingRounds[_roundKey(novelId, votingRoundId)].candidateIds;
+    function getCandidates(uint64 novelId, uint32 round) external view returns (uint64[] memory) {
+        return _votingRounds[_roundKey(novelId, round)].candidateIds;
     }
 
     // ============================================================
@@ -399,17 +354,13 @@ contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuard, UUP
     // ============================================================
 
     /// @dev Compute a unique key for a voting round
-    function _roundKey(uint256 novelId, uint256 votingRoundId) internal pure returns (bytes32) {
-        return keccak256(abi.encodePacked(novelId, votingRoundId));
+    function _roundKey(uint64 novelId, uint32 round) internal pure returns (bytes32) {
+        return keccak256(abi.encodePacked(novelId, round));
     }
 
-    /// @dev Check if a candidateId is valid in this voting round
-    function _isValidCandidate(bytes32 roundKey, uint256 candidateId) internal view returns (bool) {
-        uint256[] storage candidates = _votingRounds[roundKey].candidateIds;
-        for (uint256 i = 0; i < candidates.length; i++) {
-            if (candidates[i] == candidateId) return true;
-        }
-        return false;
+    /// @dev Check if a candidateId is valid in this voting round (O(1) via mapping)
+    function _isValidCandidate(bytes32 roundKey, uint64 candidateId) internal view returns (bool) {
+        return _isCandidate[roundKey][candidateId];
     }
 
     // ============================================================
@@ -423,5 +374,5 @@ contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuard, UUP
     // ============================================================
 
     /// @dev Reserved storage gap for future upgrades
-    uint256[50] private __gap;
+    uint256[49] private __gap;
 }
