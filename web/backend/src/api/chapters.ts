@@ -39,9 +39,9 @@ router.get("/:id/siblings", async (req, res) => {
 
     const { parent_id, novel_id } = chapterRes.rows[0];
     const siblingsRes = await query(
-      `SELECT id, author, chapter_index, vote_count, is_world_line, is_canon, declared_length
+      `SELECT id, author, depth, "timestamp", is_world_line, declared_length
        FROM chapters WHERE novel_id = $1 AND parent_id = $2 AND id != $3
-       ORDER BY vote_count DESC`,
+       ORDER BY "timestamp" DESC`,
       [novel_id, parent_id, id]
     );
 
@@ -57,9 +57,9 @@ router.get("/:id/children", async (req, res) => {
   try {
     const { id } = req.params;
     const childrenRes = await query(
-      `SELECT id, author, chapter_index, round, epoch, vote_count, is_world_line, is_canon, declared_length
+      `SELECT id, author, depth, "timestamp", is_world_line, declared_length
        FROM chapters WHERE parent_id = $1
-       ORDER BY vote_count DESC`,
+       ORDER BY "timestamp" DESC`,
       [id]
     );
     res.json({ children: childrenRes.rows });
@@ -76,16 +76,16 @@ router.get("/:id/context", async (req, res) => {
 
     const ancestorsRes = await query(
       `WITH RECURSIVE chain AS (
-         SELECT id, parent_id, author, chapter_index, content_text, content_fetched, is_canon, 0 AS depth
+         SELECT id, parent_id, author, depth, content_text, content_fetched, is_world_line, 0 AS chain_depth
          FROM chapters WHERE id = $1
          UNION ALL
-         SELECT c.id, c.parent_id, c.author, c.chapter_index, c.content_text, c.content_fetched, c.is_canon, chain.depth + 1
+         SELECT c.id, c.parent_id, c.author, c.depth, c.content_text, c.content_fetched, c.is_world_line, chain.chain_depth + 1
          FROM chapters c
          INNER JOIN chain ON c.id = chain.parent_id
-         WHERE chain.parent_id != '0' AND chain.parent_id::bigint > 0 AND chain.depth < 100
+         WHERE chain.parent_id != '0' AND chain.parent_id::bigint > 0 AND chain.chain_depth < 100
        )
-       SELECT id, parent_id, author, chapter_index, content_text, content_fetched, is_canon
-       FROM chain ORDER BY depth DESC`,
+       SELECT id, parent_id, author, depth, content_text, content_fetched, is_world_line
+       FROM chain ORDER BY chain_depth DESC`,
       [id]
     );
 
@@ -164,6 +164,36 @@ router.delete("/:id/comments/:commentId", verifyWallet, async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     console.error("DELETE /api/chapters/:id/comments/:commentId error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /api/chapters/:id/bounties — Bounties targeting this chapter
+router.get("/:id/bounties", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const bountiesRes = await query(
+      "SELECT * FROM bounties WHERE chapter_id = $1 ORDER BY block_number DESC",
+      [id]
+    );
+    res.json({ bounties: bountiesRes.rows });
+  } catch (err) {
+    console.error("GET /api/chapters/:id/bounties error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /api/chapters/:id/tips — Tips for this chapter
+router.get("/:id/tips", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const tipsRes = await query(
+      "SELECT * FROM chapter_tips WHERE chapter_id = $1 ORDER BY block_number DESC",
+      [id]
+    );
+    res.json({ tips: tipsRes.rows });
+  } catch (err) {
+    console.error("GET /api/chapters/:id/tips error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });

@@ -1,2 +1,0 @@
-ALTER TABLE novels ADD COLUMN IF NOT EXISTS content_location SMALLINT NOT NULL DEFAULT 0;
--- 0=Onchain, 1=External, 2=HTTP

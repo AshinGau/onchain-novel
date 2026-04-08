@@ -54,13 +54,18 @@ router.get("/", async (req, res) => {
     const total = parseInt(countRes.rows[0].count);
 
     const novelsRes = await query(
-      `SELECT id, creator, title, description, cover_uri, config, current_round, current_epoch,
-              round_phase, epoch_phase, phase_start_time, bootstrap_chapter_count,
-              cumulative_canon_chapters, active, fork_source_novel_id, fork_source_chapter_id,
-              pool_balance, total_tipped, total_funded, view_count, last_chapter_at, created_at,
-              (SELECT COUNT(*) FROM chapters WHERE novel_id = novels.id) AS chapter_count,
-              (SELECT COUNT(DISTINCT author) FROM chapters WHERE novel_id = novels.id) AS author_count
-       FROM novels WHERE ${where}
+      `SELECT novels.id, novels.creator, novels.title, novels.description, novels.cover_uri, novels.config,
+              novels.current_round, novels.round_phase, novels.phase_start_time, novels.last_settle_time,
+              novels.active, novels.pool_balance, novels.total_tipped, novels.total_funded, novels.view_count,
+              novels.last_chapter_at, novels.created_at,
+              COALESCE(cs.chapter_count, 0) AS chapter_count,
+              COALESCE(cs.author_count, 0) AS author_count
+       FROM novels
+       LEFT JOIN LATERAL (
+         SELECT COUNT(*) AS chapter_count, COUNT(DISTINCT author) AS author_count
+         FROM chapters WHERE novel_id = novels.id
+       ) cs ON true
+       WHERE ${where}
        ORDER BY ${orderBy}
        LIMIT $${paramIdx++} OFFSET $${paramIdx++}`,
       [...params, limit, offset]
@@ -76,44 +81,20 @@ router.get("/", async (req, res) => {
   }
 });
 
-// GET /api/novels/ranking — Top novels by sort criteria
-router.get("/ranking", async (req, res) => {
-  try {
-    const sort = (req.query.sort as string) || "hot";
-    if (!SORT_OPTIONS[sort]) {
-      return res.status(400).json({ error: `Invalid sort. Options: ${Object.keys(SORT_OPTIONS).join(", ")}` });
-    }
-    const limit = safeInt(req.query.limit, 10, 1, 50);
-
-    const orderBy = SORT_OPTIONS[sort] || SORT_OPTIONS.hot;
-
-    const novelsRes = await query(
-      `SELECT id, creator, title, description, cover_uri, active,
-              pool_balance, total_tipped, total_funded, view_count,
-              current_round, current_epoch, round_phase, epoch_phase,
-              (SELECT COUNT(*) FROM chapters WHERE novel_id = novels.id) AS chapter_count
-       FROM novels
-       ORDER BY ${orderBy}
-       LIMIT $1`,
-      [limit]
-    );
-
-    res.json({ novels: novelsRes.rows });
-  } catch (err) {
-    console.error("GET /api/novels/ranking error:", err);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
 // GET /api/novels/:id — Novel detail
 router.get("/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const novelRes = await query(
       `SELECT n.*,
-              (SELECT COUNT(*) FROM chapters WHERE novel_id = n.id) AS chapter_count,
-              (SELECT COUNT(DISTINCT author) FROM chapters WHERE novel_id = n.id) AS author_count
-       FROM novels n WHERE n.id = $1`,
+              COALESCE(cs.chapter_count, 0) AS chapter_count,
+              COALESCE(cs.author_count, 0) AS author_count
+       FROM novels n
+       LEFT JOIN LATERAL (
+         SELECT COUNT(*) AS chapter_count, COUNT(DISTINCT author) AS author_count
+         FROM chapters WHERE novel_id = n.id
+       ) cs ON true
+       WHERE n.id = $1`,
       [id]
     );
 
@@ -121,125 +102,47 @@ router.get("/:id", async (req, res) => {
       return res.status(404).json({ error: "Novel not found" });
     }
 
-    // Increment view count
-    await query("UPDATE novels SET view_count = view_count + 1 WHERE id = $1", [id]);
+    // Increment view count (fire-and-forget, non-blocking)
+    query("UPDATE novels SET view_count = view_count + 1 WHERE id = $1", [id]).catch(() => {});
 
-    res.json(novelRes.rows[0]);
+    const row = novelRes.rows[0];
+    row.view_count = (parseInt(row.view_count) + 1).toString();
+    res.json(row);
   } catch (err) {
     console.error("GET /api/novels/:id error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });
 
-// GET /api/novels/:id/tree — Story tree chapters, optionally filtered by epoch
+// GET /api/novels/:id/tree — Full story tree
 router.get("/:id/tree", async (req, res) => {
   try {
     const { id } = req.params;
-    const epochParam = req.query.epoch;
 
-    if (epochParam !== undefined) {
-      const epoch = safeInt(epochParam, 0, 0, 1000000);
-
-      // Epoch 0 (genesis) merges into epoch 1 in the UI
-      const epochCondition = epoch <= 1 ? "(epoch = 0 OR epoch = 1)" : "epoch = $2";
-      const params = epoch <= 1 ? [id] : [id, epoch];
-
-      const chaptersRes = await query(
-        `SELECT id, parent_id, author, chapter_index, round, epoch, vote_count,
-                is_world_line, is_canon, declared_length, content_hash, created_at
-         FROM chapters WHERE novel_id = $1 AND ${epochCondition}
-         ORDER BY id ASC`,
-        params
-      );
-
-      // For epoch >= 2, fetch anchor chapters from previous epochs.
-      // Anchors are the active worldlines (canon winners from last epoch) —
-      // they always appear as the "root" of the current epoch's tree.
-      let anchors: typeof chaptersRes.rows = [];
-      if (epoch >= 2) {
-        // Collect parent IDs that point outside the current epoch
-        const chapterIds = new Set(chaptersRes.rows.map((c) => c.id as string));
-        const externalParentIds = chaptersRes.rows
-          .map((c) => c.parent_id as string)
-          .filter((pid) => pid && pid !== "0" && !chapterIds.has(pid));
-
-        // Active worldlines (leaf world-line chapters) are always anchors
-        const wlRes = await query(
-          `SELECT id FROM chapters c WHERE c.novel_id = $1 AND c.is_world_line = TRUE
-             AND NOT EXISTS (
-               SELECT 1 FROM chapters child
-               WHERE child.parent_id = c.id AND child.novel_id = $1 AND child.is_world_line = TRUE
-             )`,
-          [id]
-        );
-        const anchorIds = new Set([
-          ...externalParentIds,
-          ...wlRes.rows.map((r) => r.id as string),
-        ]);
-        // Remove IDs already in current epoch chapters
-        for (const cid of chapterIds) anchorIds.delete(cid);
-
-        if (anchorIds.size > 0) {
-          const unique = [...anchorIds];
-          const placeholders = unique.map((_: string, i: number) => `$${i + 2}`).join(",");
-          const anchorRes = await query(
-            `SELECT id, parent_id, author, chapter_index, round, epoch, vote_count,
-                    is_world_line, is_canon, declared_length, content_hash, created_at
-             FROM chapters WHERE novel_id = $1 AND id IN (${placeholders})`,
-            [id, ...unique]
-          );
-          anchors = anchorRes.rows;
-        }
-      }
-
-      res.json({ chapters: chaptersRes.rows, anchors });
-    } else {
-      // No epoch filter — return all chapters
-      const chaptersRes = await query(
-        `SELECT id, parent_id, author, chapter_index, round, epoch, vote_count,
-                is_world_line, is_canon, declared_length, content_hash, created_at
-         FROM chapters WHERE novel_id = $1
-         ORDER BY id ASC`,
-        [id]
-      );
-      res.json({ chapters: chaptersRes.rows });
-    }
+    const chaptersRes = await query(
+      `SELECT id, parent_id, author, depth, "timestamp",
+              is_world_line, declared_length, content_hash, created_at
+       FROM chapters WHERE novel_id = $1
+       ORDER BY id ASC`,
+      [id]
+    );
+    res.json({ chapters: chaptersRes.rows });
   } catch (err) {
     console.error("GET /api/novels/:id/tree error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });
 
-// GET /api/novels/:id/canon — Canon chapter chain ordered by chapterIndex
-router.get("/:id/canon", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const canonRes = await query(
-      `SELECT id, parent_id, author, content_hash, declared_length, chapter_index,
-              round, epoch, vote_count, content_text, content_fetched
-       FROM chapters WHERE novel_id = $1 AND is_canon = TRUE
-       ORDER BY chapter_index ASC`,
-      [id]
-    );
-    res.json({ chapters: canonRes.rows });
-  } catch (err) {
-    console.error("GET /api/novels/:id/canon error:", err);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-// GET /api/novels/:id/worldlines — Current active world lines
+// GET /api/novels/:id/worldlines — Current active world line ancestors
+// Returns chapters that are current world line ancestors (branching points for the next round).
 router.get("/:id/worldlines", async (req, res) => {
   try {
     const { id } = req.params;
     const wlRes = await query(
-      `SELECT c.id, c.parent_id, c.author, c.content_hash, c.chapter_index, c.round, c.epoch, c.vote_count
+      `SELECT c.id, c.parent_id, c.author, c.content_hash, c.depth, c."timestamp",
+              c.is_world_line, c.declared_length
        FROM chapters c WHERE c.novel_id = $1 AND c.is_world_line = TRUE
-         AND NOT EXISTS (
-           SELECT 1 FROM chapters child
-           WHERE child.parent_id = c.id AND child.novel_id = $1 AND child.is_world_line = TRUE
-         )
-       ORDER BY c.id ASC`,
+       ORDER BY c.depth DESC, c.id ASC`,
       [id]
     );
     res.json({ worldlines: wlRes.rows });
@@ -249,20 +152,20 @@ router.get("/:id/worldlines", async (req, res) => {
   }
 });
 
-// GET /api/novels/:id/rounds/:round — Round submissions
+// GET /api/novels/:id/rounds/:round — Round data (candidates, votes, etc.)
 router.get("/:id/rounds/:round", async (req, res) => {
   try {
     const { id, round } = req.params;
-    const { epoch } = req.query;
-    const chaptersRes = await query(
-      `SELECT c.id, c.parent_id, c.author, c.content_hash, c.declared_length, c.chapter_index,
-              c.vote_count, c.is_world_line, c.content_text, c.content_fetched,
-              (SELECT COUNT(*) FROM comments WHERE chapter_id = c.id AND deleted = FALSE) AS comment_count
-       FROM chapters c WHERE c.novel_id = $1 AND c.round = $2 AND c.epoch = $3
-       ORDER BY c.vote_count DESC`,
-      [id, round, epoch]
+
+    // Get votes for this round
+    const votesRes = await query(
+      `SELECT voter, revealed, candidate_id, claimed, commit_block, reveal_block
+       FROM votes WHERE novel_id = $1 AND round = $2
+       ORDER BY commit_block ASC`,
+      [id, round]
     );
-    res.json({ chapters: chaptersRes.rows });
+
+    res.json({ votes: votesRes.rows });
   } catch (err) {
     console.error("GET /api/novels/:id/rounds/:round error:", err);
     res.status(500).json({ error: "Internal server error" });
@@ -270,14 +173,19 @@ router.get("/:id/rounds/:round", async (req, res) => {
 });
 
 // GET /api/novels/:id/forks — Fork children
+// Fork info is derived from root chapter's parentId pointing to a different novel
 router.get("/:id/forks", async (req, res) => {
   try {
     const { id } = req.params;
+    // Find novels whose root chapter has a parentId that is a chapter in this novel
     const forksRes = await query(
-      `SELECT id, creator, title, description, active, fork_source_chapter_id,
-              pool_balance, created_at
-       FROM novels WHERE fork_source_novel_id = $1
-       ORDER BY created_at DESC`,
+      `SELECT n.id, n.creator, n.title, n.description, n.active,
+              c.parent_id AS fork_source_chapter_id, n.pool_balance, n.created_at
+       FROM novels n
+       JOIN chapters c ON c.novel_id = n.id AND c.depth = 1
+       JOIN chapters src ON src.id = c.parent_id AND src.novel_id = $1
+       WHERE c.parent_id != 0
+       ORDER BY n.created_at DESC`,
       [id]
     );
     res.json({ forks: forksRes.rows });
@@ -297,8 +205,7 @@ router.get("/:id/stats", async (req, res) => {
         (SELECT COUNT(DISTINCT author) FROM chapters WHERE novel_id = $1) AS author_count,
         (SELECT COUNT(*) FROM votes WHERE novel_id = $1) AS vote_count,
         (SELECT COALESCE(SUM(amount), 0) FROM tips WHERE novel_id = $1) AS total_tipped,
-        (SELECT COUNT(*) FROM chapters WHERE novel_id = $1 AND is_canon = TRUE) AS canon_count,
-        (SELECT COUNT(*) FROM chapter_nfts WHERE novel_id = $1) AS nft_count`,
+        (SELECT COUNT(*) FROM bounties WHERE novel_id = $1) AS bounty_count`,
       [id]
     );
     res.json(statsRes.rows[0]);
@@ -323,6 +230,25 @@ router.get("/:id/tips", async (req, res) => {
     res.json({ tips: tipsRes.rows });
   } catch (err) {
     console.error("GET /api/novels/:id/tips error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /api/novels/:id/bounties — Bounties for a novel
+router.get("/:id/bounties", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const page = safeInt(req.query.page, 1, 1, 1000);
+    const limit = safeInt(req.query.limit, 20, 1, 50);
+    const offset = (page - 1) * limit;
+
+    const bountiesRes = await query(
+      "SELECT * FROM bounties WHERE novel_id = $1 ORDER BY block_number DESC LIMIT $2 OFFSET $3",
+      [id, limit, offset]
+    );
+    res.json({ bounties: bountiesRes.rows });
+  } catch (err) {
+    console.error("GET /api/novels/:id/bounties error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });

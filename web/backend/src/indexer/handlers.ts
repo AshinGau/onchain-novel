@@ -1,18 +1,16 @@
 import type pg from "pg";
-import { type Log, type PublicClient, decodeEventLog, decodeFunctionData, formatEther } from "viem";
-import { novelCoreAbi, votingEngineAbi, prizePoolAbi, chapterNFTAbi, rulesEngineAbi } from "../utils/abi.js";
+import { type Log, type PublicClient, decodeEventLog, decodeFunctionData } from "viem";
+import { novelCoreAbi, votingEngineAbi, prizePoolAbi, bountyBoardAbi, rulesEngineAbi } from "../utils/abi.js";
 import { env } from "../utils/env.js";
 import { ContentLocation } from "../utils/validate.js";
 import { fetchChapterContent } from "./content-fetcher.js";
-import { createNotification, createRevealReminders } from "../utils/notifications.js";
+
 
 type Client = pg.PoolClient;
 
-async function getBlockTimestamp(rpc: PublicClient, blockNumber: bigint | null): Promise<string> {
-  if (!blockNumber) return Math.floor(Date.now() / 1000).toString();
-  const block = await rpc.getBlock({ blockNumber });
-  return block.timestamp.toString();
-}
+// ============================================================
+// NovelCore Event Handler
+// ============================================================
 
 export async function handleNovelCoreEvent(log: Log, db: Client, rpc: PublicClient) {
   let decoded;
@@ -26,95 +24,174 @@ export async function handleNovelCoreEvent(log: Log, db: Client, rpc: PublicClie
   const handlerStart = Date.now();
 
   switch (decoded.eventName) {
-    case "NovelCreated": {
-      const { novelId, creator, bootstrapChapterCount } = decoded.args;
-      console.log(`[event] NovelCreated novelId=${novelId} creator=${creator} bootstrap=${bootstrapChapterCount} block=${blockNumber}`);
-      // Fetch full novel data + metadata from chain
-      const [novel, metadata] = await Promise.all([
-        rpc.readContract({ address: env.NOVEL_CORE_ADDRESS, abi: novelCoreAbi, functionName: "getNovel", args: [novelId] }),
-        rpc.readContract({ address: env.NOVEL_CORE_ADDRESS, abi: novelCoreAbi, functionName: "getNovelMetadata", args: [novelId] }),
-      ]) as [any, any];
+    case "NovelCreated":
+    case "NovelForked": {
+      const { novelId } = decoded.args;
+      console.log(`[event] ${decoded.eventName} novelId=${novelId} block=${blockNumber}`);
 
-      const config = {
-        minChapterLength: novel.config.minChapterLength.toString(),
-        maxChapterLength: novel.config.maxChapterLength.toString(),
-        roundMinDuration: novel.config.roundMinDuration.toString(),
-        roundMinSubmissions: novel.config.roundMinSubmissions,
-        worldLineCount: novel.config.worldLineCount,
-        roundsPerEpoch: novel.config.roundsPerEpoch,
-        prizeReleaseRate: novel.config.prizeReleaseRate,
-        voterRewardRate: novel.config.voterRewardRate,
-        commitDuration: novel.config.commitDuration.toString(),
-        revealDuration: novel.config.revealDuration.toString(),
-        stakeAmount: novel.config.stakeAmount.toString(),
-        spamRounds: novel.config.spamRounds,
-        spamThreshold: novel.config.spamThreshold,
-        contentLocation: novel.config.contentLocation,
-        contentBaseUrl: novel.config.contentBaseUrl,
-        ruleFee: novel.config.ruleFee.toString(),
-        ruleVoteDuration: novel.config.ruleVoteDuration.toString(),
-        ruleQuorum: novel.config.ruleQuorum,
-      };
+      await insertNovelFromChain(db, rpc, novelId, blockNumber);
 
-      await db.query(
-        `INSERT INTO novels (id, creator, title, description, cover_uri, config, current_round, current_epoch, round_phase, epoch_phase, phase_start_time, bootstrap_chapter_count, active, block_number, content_location)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, TRUE, $13, $14)
-         ON CONFLICT (id) DO NOTHING`,
-        [
-          novelId.toString(), creator, metadata.title, metadata.description, metadata.coverUri,
-          JSON.stringify(config), novel.currentRound, novel.currentEpoch,
-          novel.roundPhase, novel.epochPhase, novel.phaseStartTime.toString(),
-          bootstrapChapterCount, blockNumber, novel.config.contentLocation,
-        ]
-      );
-
-      // Index bootstrap chapters (linear chain)
-      await indexBootstrapChapters(novelId, bootstrapChapterCount, blockNumber, db, rpc, log);
-      console.log(`[event] NovelCreated novelId=${novelId} done in ${Date.now() - handlerStart}ms`);
+      console.log(`[event] ${decoded.eventName} novelId=${novelId} done in ${Date.now() - handlerStart}ms`);
       break;
     }
 
-    case "NovelForked": {
-      const { novelId, sourceNovelId, sourceChapterId } = decoded.args;
-      console.log(`[event] NovelForked novelId=${novelId} source=${sourceNovelId}#${sourceChapterId} block=${blockNumber}`);
-      const [novel, metadata] = await Promise.all([
-        rpc.readContract({ address: env.NOVEL_CORE_ADDRESS, abi: novelCoreAbi, functionName: "getNovel", args: [novelId] }),
-        rpc.readContract({ address: env.NOVEL_CORE_ADDRESS, abi: novelCoreAbi, functionName: "getNovelMetadata", args: [novelId] }),
-      ]) as [any, any];
+    case "ChapterSubmitted": {
+      const { novelId, chapterId, author, parentId, depth } = decoded.args;
+      console.log(`[event] ChapterSubmitted chapterId=${chapterId} novelId=${novelId} author=${author} block=${blockNumber}`);
 
-      const config = {
-        minChapterLength: novel.config.minChapterLength.toString(),
-        maxChapterLength: novel.config.maxChapterLength.toString(),
-        roundMinDuration: novel.config.roundMinDuration.toString(),
-        roundMinSubmissions: novel.config.roundMinSubmissions,
-        worldLineCount: novel.config.worldLineCount,
-        roundsPerEpoch: novel.config.roundsPerEpoch,
-        prizeReleaseRate: novel.config.prizeReleaseRate,
-        voterRewardRate: novel.config.voterRewardRate,
-        commitDuration: novel.config.commitDuration.toString(),
-        revealDuration: novel.config.revealDuration.toString(),
-        stakeAmount: novel.config.stakeAmount.toString(),
-        spamRounds: novel.config.spamRounds,
-        spamThreshold: novel.config.spamThreshold,
-        contentLocation: novel.config.contentLocation,
-        contentBaseUrl: novel.config.contentBaseUrl,
-        ruleFee: novel.config.ruleFee.toString(),
-        ruleVoteDuration: novel.config.ruleVoteDuration.toString(),
-        ruleQuorum: novel.config.ruleQuorum,
-      };
+      const chapter = await rpc.readContract({
+        address: env.NOVEL_CORE_ADDRESS, abi: novelCoreAbi,
+        functionName: "getChapter", args: [chapterId],
+      }) as any;
 
       await db.query(
-        `INSERT INTO novels (id, creator, title, description, cover_uri, config, current_round, current_epoch, round_phase, epoch_phase, phase_start_time, bootstrap_chapter_count, active, fork_source_novel_id, fork_source_chapter_id, block_number, content_location)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, TRUE, $13, $14, $15, $16)
+        `INSERT INTO chapters (id, novel_id, parent_id, author, content_hash, declared_length,
+                depth, "timestamp", is_world_line, block_number)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
          ON CONFLICT (id) DO NOTHING`,
         [
-          novelId.toString(), novel.creator, metadata.title, metadata.description, metadata.coverUri,
-          JSON.stringify(config), novel.currentRound, novel.currentEpoch,
-          novel.roundPhase, novel.epochPhase, novel.phaseStartTime.toString(),
-          novel.bootstrapChapterCount, sourceNovelId.toString(), sourceChapterId.toString(), blockNumber,
-          novel.config.contentLocation,
+          chapterId.toString(), novelId.toString(), parentId.toString(),
+          author, chapter.contentHash, chapter.declaredLength.toString(),
+          depth, chapter.timestamp.toString(),
+          // Root chapter (depth=1) starts as world line
+          depth === 1, blockNumber,
         ]
       );
+
+      await db.query("UPDATE novels SET last_chapter_at = NOW() WHERE id = $1", [novelId.toString()]);
+
+      // Content decoding
+      const novelRes = await db.query("SELECT content_location FROM novels WHERE id = $1", [novelId.toString()]);
+      if (novelRes.rows.length > 0 && novelRes.rows[0].content_location === ContentLocation.Onchain) {
+        try {
+          const tx = await rpc.getTransaction({ hash: log.transactionHash! });
+          const { args: txArgs, functionName: txFnName } = decodeFunctionData({ abi: novelCoreAbi, data: tx.input });
+
+          // Determine the ContentSubmission arg index based on which function was called:
+          // submitChapter(novelId, parentId, submission) -> args[2]
+          // createNovel(config, metadata, rootChapter) -> args[2]
+          // forkNovel(sourceChapterId, config, metadata, rootChapter) -> args[3]
+          let submissionArgIndex = 2;
+          if (txFnName === "forkNovel") submissionArgIndex = 3;
+
+          const submission = (txArgs as any)[submissionArgIndex];
+          if (submission && submission.content) {
+            const contentBytes = submission.content as `0x${string}`;
+            if (contentBytes.length > 2) {
+              const textContent = Buffer.from(contentBytes.slice(2), "hex").toString("utf-8");
+              await db.query(
+                "UPDATE chapters SET content_text = $1, content_fetched = TRUE WHERE id = $2",
+                [textContent, chapterId.toString()]
+              );
+            }
+          }
+        } catch (err) {
+          console.error(`Failed to decode calldata for chapter ${chapterId}:`, err);
+        }
+      } else {
+        // External/HTTP mode: fetch content from contentBaseUrl + contentHash
+        fetchChapterContent(chapterId, novelId).catch(err =>
+          console.error(`Content fetch failed for chapter ${chapterId}:`, err)
+        );
+      }
+      console.log(`[event] ChapterSubmitted chapterId=${chapterId} done in ${Date.now() - handlerStart}ms`);
+      break;
+    }
+
+    case "RoundStarted": {
+      const { novelId, round, candidates } = decoded.args;
+      console.log(`[event] RoundStarted novelId=${novelId} round=${round} candidates=${candidates.length} block=${blockNumber}`);
+
+      await db.query(
+        "UPDATE novels SET current_round = $1, round_phase = 1, phase_start_time = $2 WHERE id = $3",
+        [round, await getBlockTimestamp(rpc, log.blockNumber ?? null), novelId.toString()]
+      );
+
+      break;
+    }
+
+    case "NominationClosed": {
+      const { novelId, round } = decoded.args;
+      console.log(`[event] NominationClosed novelId=${novelId} round=${round} block=${blockNumber}`);
+
+      await db.query(
+        "UPDATE novels SET round_phase = 2, phase_start_time = $1 WHERE id = $2",
+        [await getBlockTimestamp(rpc, log.blockNumber ?? null), novelId.toString()]
+      );
+
+      break;
+    }
+
+    case "CommitClosed": {
+      const { novelId, round } = decoded.args;
+      console.log(`[event] CommitClosed novelId=${novelId} round=${round} block=${blockNumber}`);
+
+      await db.query(
+        "UPDATE novels SET round_phase = 3, phase_start_time = $1 WHERE id = $2",
+        [await getBlockTimestamp(rpc, log.blockNumber ?? null), novelId.toString()]
+      );
+      break;
+    }
+
+    case "RoundSettled": {
+      const { novelId, round, worldLines } = decoded.args;
+      console.log(`[event] RoundSettled novelId=${novelId} round=${round} worldLines=[${worldLines}] block=${blockNumber}`);
+
+      const timestamp = await getBlockTimestamp(rpc, log.blockNumber ?? null);
+      await db.query(
+        "UPDATE novels SET round_phase = 0, phase_start_time = $1, last_settle_time = $1 WHERE id = $2",
+        [timestamp, novelId.toString()]
+      );
+
+      // Reset ALL world line flags for this novel, then mark new ones
+      await db.query(
+        "UPDATE chapters SET is_world_line = FALSE WHERE novel_id = $1 AND is_world_line = TRUE",
+        [novelId.toString()]
+      );
+      for (const id of worldLines) {
+        await db.query("UPDATE chapters SET is_world_line = TRUE WHERE id = $1", [id.toString()]);
+      }
+
+      break;
+    }
+
+    case "CandidateNominated": {
+      const { novelId, round, chapterId, nominator } = decoded.args;
+      console.log(`[event] CandidateNominated novelId=${novelId} round=${round} chapterId=${chapterId} block=${blockNumber}`);
+      // No DB writes needed — candidate info is fetched from chain via getRoundData
+      break;
+    }
+
+    case "VoteCommitted":
+    case "VoteRevealed": {
+      // These events are also emitted by VotingEngine with identical data.
+      // Handle them only in handleVotingEvent to avoid duplicate processing.
+      // If VotingEngine is not configured, fall through to process here.
+      if (env.VOTING_ENGINE_ADDRESS) break;
+
+      if (decoded.eventName === "VoteCommitted") {
+        const { novelId, round, voter } = decoded.args;
+        await db.query(
+          `INSERT INTO votes (novel_id, round, voter, commit_block)
+           VALUES ($1, $2, $3, $4)
+           ON CONFLICT DO NOTHING`,
+          [novelId.toString(), round, voter.toLowerCase(), blockNumber]
+        );
+      } else {
+        const { novelId, round, voter, candidateId } = decoded.args;
+        await db.query(
+          `UPDATE votes SET revealed = TRUE, candidate_id = $1, reveal_block = $2
+           WHERE novel_id = $3 AND round = $4 AND LOWER(voter) = LOWER($5)`,
+          [candidateId.toString(), blockNumber, novelId.toString(), round, voter]
+        );
+      }
+      break;
+    }
+
+    case "RewardClaimed": {
+      // NovelCore.RewardClaimed is emitted alongside PrizePool.RewardClaimed or
+      // VotingEngine.VotingRewardClaimed. Those specific handlers already insert
+      // into reward_claims with proper source tags. Skip here to avoid duplicates.
       break;
     }
 
@@ -124,191 +201,16 @@ export async function handleNovelCoreEvent(log: Log, db: Client, rpc: PublicClie
       break;
     }
 
-    case "ChapterSubmitted": {
-      const { novelId, chapterId, author, parentId, chapterIndex } = decoded.args;
-      console.log(`[event] ChapterSubmitted chapterId=${chapterId} novelId=${novelId} author=${author} block=${blockNumber}`);
-      // Fetch full chapter data
-      const chapter = await rpc.readContract({
-        address: env.NOVEL_CORE_ADDRESS, abi: novelCoreAbi,
-        functionName: "getChapter", args: [chapterId],
-      }) as any;
-
-      await db.query(
-        `INSERT INTO chapters (id, novel_id, parent_id, author, content_hash, declared_length, round, epoch, chapter_index, vote_count, is_world_line, is_canon, block_number)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-         ON CONFLICT (id) DO NOTHING`,
-        [
-          chapterId.toString(), novelId.toString(), parentId.toString(),
-          author, chapter.contentHash, chapter.declaredLength.toString(),
-          chapter.round, chapter.epoch, chapterIndex,
-          "0", chapter.isWorldLine, chapter.isCanon, blockNumber,
-        ]
-      );
-
-      await db.query("UPDATE novels SET last_chapter_at = NOW() WHERE id = $1", [novelId.toString()]);
-
-      // For onchain content, decode from tx calldata; for external, fetch from URL
-      const novelRes = await db.query("SELECT content_location FROM novels WHERE id = $1", [novelId.toString()]);
-      if (novelRes.rows.length > 0 && novelRes.rows[0].content_location === ContentLocation.Onchain) {
-        // Onchain: extract content from transaction calldata
-        try {
-          const tx = await rpc.getTransaction({ hash: log.transactionHash! });
-          const { args } = decodeFunctionData({ abi: novelCoreAbi, data: tx.input });
-          const submission = (args as any)[2]; // 3rd arg: ContentSubmission
-          const contentBytes = submission.content as `0x${string}`;
-          const textContent = Buffer.from(contentBytes.slice(2), "hex").toString("utf-8");
-          await db.query(
-            "UPDATE chapters SET content_text = $1, content_fetched = TRUE WHERE id = $2",
-            [textContent, chapterId.toString()]
-          );
-        } catch (err) {
-          console.error(`Failed to decode calldata for chapter ${chapterId}:`, err);
-        }
-      } else {
-        // External/HTTP: async content fetch
-        fetchChapterContent(chapterId, novelId).catch(err =>
-          console.error(`Content fetch failed for chapter ${chapterId}:`, err)
-        );
-      }
-      console.log(`[event] ChapterSubmitted chapterId=${chapterId} done in ${Date.now() - handlerStart}ms`);
+    case "Tipped": {
+      // Tipped(novelId, chapterId, tipper, amount)
+      // chapterId = 0 means novel tip, > 0 means chapter tip
+      // Novel tips are tracked in PrizePool.TipReceived, chapter tips in PrizePool.ChapterTipped
+      // This event is primarily for logging; actual DB writes happen in PrizePool handlers
       break;
     }
 
-    case "RoundPhaseChanged": {
-      const { novelId, round, phase } = decoded.args;
-      const roundPhaseTimestamp = await getBlockTimestamp(rpc, log.blockNumber ?? null);
-      await db.query(
-        "UPDATE novels SET current_round = $1, round_phase = $2, phase_start_time = $3 WHERE id = $4",
-        [round, phase, roundPhaseTimestamp, novelId.toString()]
-      );
-
-      // Fetch novel title for notification
-      const novelRow = await db.query("SELECT title FROM novels WHERE id = $1", [novelId.toString()]);
-      const novelTitle = novelRow.rows[0]?.title || `Novel #${novelId}`;
-      const phaseNames = ["Submitting", "Committing", "Revealing", "Settling"];
-      const phaseName = phaseNames[phase] || `Phase ${phase}`;
-
-      // Broadcast phase change notification
-      await createNotification(db, {
-        recipient: null,
-        novelId: novelId.toString(),
-        type: "phase_change",
-        title: `${novelTitle} — Round ${round}`,
-        message: `Phase changed to ${phaseName}.`,
-        link: `/novels/${novelId}`,
-      });
-
-      // If entering Revealing phase, create reveal reminders for committed voters
-      if (phase === 2) {
-        // Need to find the votingRoundId — we query votes for this novel that are unrevealed
-        const unrevealed = await db.query(
-          "SELECT DISTINCT voter, voting_round_id FROM votes WHERE novel_id = $1 AND revealed = FALSE AND claimed = FALSE",
-          [novelId.toString()]
-        );
-        for (const row of unrevealed.rows) {
-          await createNotification(db, {
-            recipient: row.voter,
-            novelId: novelId.toString(),
-            type: "reveal_reminder",
-            title: "Reveal your vote!",
-            message: `Round ${round} of "${novelTitle}" has entered the reveal phase. Reveal your vote to avoid losing your stake.`,
-            link: `/novels/${novelId}`,
-          });
-        }
-      }
-      break;
-    }
-
-    case "EpochPhaseChanged": {
-      const { novelId, epoch, phase } = decoded.args;
-      const epochPhaseTimestamp = await getBlockTimestamp(rpc, log.blockNumber ?? null);
-      await db.query(
-        "UPDATE novels SET current_epoch = $1, epoch_phase = $2, phase_start_time = $3 WHERE id = $4",
-        [epoch, phase, epochPhaseTimestamp, novelId.toString()]
-      );
-
-      const novelRow2 = await db.query("SELECT title FROM novels WHERE id = $1", [novelId.toString()]);
-      const novelTitle2 = novelRow2.rows[0]?.title || `Novel #${novelId}`;
-      const epochPhaseNames = ["Rounds", "Committing", "Revealing", "Settling"];
-      const epochPhaseName = epochPhaseNames[phase] || `Phase ${phase}`;
-
-      await createNotification(db, {
-        recipient: null,
-        novelId: novelId.toString(),
-        type: "phase_change",
-        title: `${novelTitle2} — Epoch ${epoch}`,
-        message: `Epoch phase changed to ${epochPhaseName}.`,
-        link: `/novels/${novelId}`,
-      });
-
-      // Epoch Revealing phase → remind epoch voters to reveal
-      if (phase === 2) {
-        const unrevealed2 = await db.query(
-          "SELECT DISTINCT voter, voting_round_id FROM votes WHERE novel_id = $1 AND revealed = FALSE AND claimed = FALSE",
-          [novelId.toString()]
-        );
-        for (const row of unrevealed2.rows) {
-          await createNotification(db, {
-            recipient: row.voter,
-            novelId: novelId.toString(),
-            type: "reveal_reminder",
-            title: "Reveal your epoch vote!",
-            message: `Epoch ${epoch} of "${novelTitle2}" has entered the reveal phase. Reveal now or lose your stake.`,
-            link: `/novels/${novelId}`,
-          });
-        }
-      }
-      break;
-    }
-
-    case "WorldLinesSelected": {
-      const { novelId, round, selectedChapterIds } = decoded.args;
-      console.log(`[event] WorldLinesSelected novelId=${novelId} round=${round} selected=[${selectedChapterIds}] block=${blockNumber}`);
-      // Reset ALL world line flags for this novel (previous rounds + current), then mark new ones
-      await db.query(
-        "UPDATE chapters SET is_world_line = FALSE WHERE novel_id = $1 AND is_world_line = TRUE",
-        [novelId.toString()]
-      );
-      for (const id of selectedChapterIds) {
-        await db.query("UPDATE chapters SET is_world_line = TRUE WHERE id = $1", [id.toString()]);
-      }
-      break;
-    }
-
-    case "CanonEstablished": {
-      const { novelId, epoch, canonWorldLineId } = decoded.args;
-      console.log(`[event] CanonEstablished novelId=${novelId} epoch=${epoch} canonId=${canonWorldLineId} block=${blockNumber}`);
-      await traceAndMarkCanon(canonWorldLineId, db, rpc);
-
-      // Epoch settle resets active world lines to canon only — clear all, set canon
-      await db.query(
-        "UPDATE chapters SET is_world_line = FALSE WHERE novel_id = $1 AND is_world_line = TRUE",
-        [novelId.toString()]
-      );
-      await db.query(
-        "UPDATE chapters SET is_world_line = TRUE WHERE id = $1",
-        [canonWorldLineId.toString()]
-      );
-
-      const novel = await rpc.readContract({
-        address: env.NOVEL_CORE_ADDRESS, abi: novelCoreAbi,
-        functionName: "getNovel", args: [novelId],
-      }) as any;
-      await db.query(
-        "UPDATE novels SET cumulative_canon_chapters = $1 WHERE id = $2",
-        [novel.cumulativeCanonChapters, novelId.toString()]
-      );
-
-      const novelRow3 = await db.query("SELECT title FROM novels WHERE id = $1", [novelId.toString()]);
-      const novelTitle3 = novelRow3.rows[0]?.title || `Novel #${novelId}`;
-      await createNotification(db, {
-        recipient: null,
-        novelId: novelId.toString(),
-        type: "canon_established",
-        title: `Canon established — ${novelTitle3}`,
-        message: `Epoch ${epoch} canon has been established. New chapter NFTs minted and rewards distributed.`,
-        link: `/novels/${novelId}/canon`,
-      });
+    case "KeeperRewarded": {
+      // Keeper reward tracking — no special DB table needed
       break;
     }
 
@@ -320,30 +222,196 @@ export async function handleNovelCoreEvent(log: Log, db: Client, rpc: PublicClie
       );
       break;
     }
+  }
+}
 
-    case "StakeRefunded": {
-      const { novelId, author, amount } = decoded.args;
+// ============================================================
+// VotingEngine Event Handler
+// ============================================================
+
+export async function handleVotingEvent(log: Log, db: Client) {
+  let decoded;
+  try {
+    decoded = decodeEventLog({ abi: votingEngineAbi, data: log.data, topics: log.topics });
+  } catch {
+    return;
+  }
+
+  const blockNumber = log.blockNumber?.toString() ?? "0";
+
+  switch (decoded.eventName) {
+    case "VoteCommitted": {
+      const { novelId, round, voter } = decoded.args;
+      const voterLower = voter.toLowerCase();
       await db.query(
-        "INSERT INTO stake_events (novel_id, author, event_type, amount, block_number) VALUES ($1, $2, 'refunded', $3, $4)",
-        [novelId.toString(), author, amount.toString(), blockNumber]
+        `INSERT INTO votes (novel_id, round, voter, commit_block)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT DO NOTHING`,
+        [novelId.toString(), round, voterLower, blockNumber]
       );
       break;
     }
 
-    case "StakeSlashed": {
-      const { novelId, author, amount } = decoded.args;
+    case "VoteRevealed": {
+      const { novelId, round, voter, candidateId } = decoded.args;
       await db.query(
-        "INSERT INTO stake_events (novel_id, author, event_type, amount, block_number) VALUES ($1, $2, 'slashed', $3, $4)",
-        [novelId.toString(), author, amount.toString(), blockNumber]
+        `UPDATE votes SET revealed = TRUE, candidate_id = $1, reveal_block = $2
+         WHERE novel_id = $3 AND round = $4 AND LOWER(voter) = LOWER($5)`,
+        [candidateId.toString(), blockNumber, novelId.toString(), round, voter]
       );
       break;
     }
 
-    case "EarlyEpochTriggered":
-    case "KeeperRewarded":
+    case "VotesTallied": {
+      // rankedCandidateIds are ordered by vote weight; the top N are world lines
+      // Vote tallies are informational; per-chapter vote counts are not stored in DB
+      break;
+    }
+
+    case "VotingRewardClaimed": {
+      const { novelId, round, voter, amount } = decoded.args;
+      await db.query(
+        "UPDATE votes SET claimed = TRUE WHERE novel_id = $1 AND round = $2 AND LOWER(voter) = LOWER($3)",
+        [novelId.toString(), round, voter]
+      );
+      await db.query(
+        "INSERT INTO reward_claims (novel_id, claimant, amount, source, round, block_number) VALUES ($1, $2, $3, 'voting', $4, $5)",
+        [novelId.toString(), voter, amount.toString(), round, blockNumber]
+      );
+      break;
+    }
+
+    default:
       break;
   }
 }
+
+// ============================================================
+// PrizePool Event Handler
+// ============================================================
+
+export async function handlePrizePoolEvent(log: Log, db: Client) {
+  let decoded;
+  try {
+    decoded = decodeEventLog({ abi: prizePoolAbi, data: log.data, topics: log.topics });
+  } catch {
+    return;
+  }
+
+  const blockNumber = log.blockNumber?.toString() ?? "0";
+
+  switch (decoded.eventName) {
+    case "PoolDeposited": {
+      const { novelId, amount, reason } = decoded.args;
+      // Track total funded
+      await db.query(
+        "UPDATE novels SET total_funded = total_funded + $1 WHERE id = $2",
+        [amount.toString(), novelId.toString()]
+      );
+      break;
+    }
+
+    case "TipReceived": {
+      const { novelId, tipper, amount } = decoded.args;
+      await db.query(
+        "INSERT INTO tips (novel_id, tipper, amount, block_number) VALUES ($1, $2, $3, $4)",
+        [novelId.toString(), tipper, amount.toString(), blockNumber]
+      );
+      await db.query(
+        "UPDATE novels SET total_tipped = total_tipped + $1, total_funded = total_funded + $1 WHERE id = $2",
+        [amount.toString(), novelId.toString()]
+      );
+      break;
+    }
+
+    case "ChapterTipped": {
+      const { novelId, chapterId, tipper, amount } = decoded.args;
+      // Get chapter author
+      const chapterRes = await db.query("SELECT author FROM chapters WHERE id = $1", [chapterId.toString()]);
+      const author = chapterRes.rows[0]?.author ?? "";
+
+      await db.query(
+        "INSERT INTO chapter_tips (chapter_id, novel_id, tipper, author, amount, block_number) VALUES ($1, $2, $3, $4, $5, $6)",
+        [chapterId.toString(), novelId.toString(), tipper, author, amount.toString(), blockNumber]
+      );
+      break;
+    }
+
+    case "RewardClaimed": {
+      const { novelId, recipient, amount } = decoded.args;
+      await db.query(
+        "INSERT INTO reward_claims (novel_id, claimant, amount, source, block_number) VALUES ($1, $2, $3, 'prize_pool', $4)",
+        [novelId.toString(), recipient, amount.toString(), blockNumber]
+      );
+      break;
+    }
+
+    case "RoundRewardsDistributed": {
+      // Informational — no special DB table needed
+      break;
+    }
+
+    case "KeeperRewardPaid": {
+      // Informational — no special DB table needed
+      break;
+    }
+
+    default:
+      break;
+  }
+}
+
+// ============================================================
+// BountyBoard Event Handler
+// ============================================================
+
+export async function handleBountyBoardEvent(log: Log, db: Client) {
+  let decoded;
+  try {
+    decoded = decodeEventLog({ abi: bountyBoardAbi, data: log.data, topics: log.topics });
+  } catch {
+    return;
+  }
+
+  const blockNumber = log.blockNumber?.toString() ?? "0";
+
+  switch (decoded.eventName) {
+    case "BountyCreated": {
+      const { bountyId, chapterId, tipper, lockedAmount, deadline } = decoded.args;
+      // Get novel_id from chapter
+      const chapterRes = await db.query("SELECT novel_id FROM chapters WHERE id = $1", [chapterId.toString()]);
+      const novelId = chapterRes.rows[0]?.novel_id ?? "0";
+
+      await db.query(
+        `INSERT INTO bounties (id, chapter_id, novel_id, tipper, locked_amount, deadline, block_number)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT (id) DO NOTHING`,
+        [bountyId.toString(), chapterId.toString(), novelId, tipper, lockedAmount.toString(), deadline.toString(), blockNumber]
+      );
+      break;
+    }
+
+    case "BountyClaimed": {
+      // BountyClaimed is emitted per-author. The contract only sets bounty.claimed = true
+      // when ALL qualifying authors have claimed. We don't mark claimed here;
+      // only BountyRefunded or the final all-claimed state sets it.
+      // The on-chain bounty.claimed state is the source of truth.
+      const { bountyId: claimedBountyId, author: claimAuthor, amount: claimAmount } = decoded.args;
+      console.log(`[event] BountyClaimed bountyId=${claimedBountyId} author=${claimAuthor} amount=${claimAmount}`);
+      break;
+    }
+
+    case "BountyRefunded": {
+      const { bountyId } = decoded.args;
+      await db.query("UPDATE bounties SET claimed = TRUE WHERE id = $1", [bountyId.toString()]);
+      break;
+    }
+  }
+}
+
+// ============================================================
+// RulesEngine Event Handler
+// ============================================================
 
 export async function handleRulesEvent(log: Log, db: Client, rpc: PublicClient) {
   let decoded;
@@ -378,7 +446,7 @@ export async function handleRulesEvent(log: Log, db: Client, rpc: PublicClient) 
     }
 
     case "RuleProposed": {
-      const { proposalId, novelId, proposalType, proposer, ruleName } = decoded.args;
+      const { proposalId, novelId, proposer, proposalType, ruleName } = decoded.args;
       const proposal = await rpc.readContract({
         address: env.RULES_ENGINE_ADDRESS, abi: rulesEngineAbi,
         functionName: "getRuleProposal", args: [proposalId],
@@ -419,209 +487,65 @@ export async function handleRulesEvent(log: Log, db: Client, rpc: PublicClient) 
   }
 }
 
-async function indexBootstrapChapters(novelId: bigint, count: number, blockNumber: string, db: Client, rpc: PublicClient, log: Log) {
-  const t0 = Date.now();
-  // Bootstrap chapters form a linear chain. Only the last is in activeWorldLines.
-  // Traverse backward from the last chapter to find all bootstrap chapters.
-  const worldLines = await rpc.readContract({
-    address: env.NOVEL_CORE_ADDRESS, abi: novelCoreAbi,
-    functionName: "getActiveWorldLines", args: [novelId],
-  }) as bigint[];
+// ============================================================
+// Helper: Insert novel from chain state
+// ============================================================
 
-  // Collect all bootstrap chapter IDs by traversing parent chain
-  const chapterIds: bigint[] = [];
-  let currentId = worldLines[0];
-  while (currentId > 0n) {
-    chapterIds.unshift(currentId); // prepend to maintain order (first chapter first)
-    const ch = await rpc.readContract({
-      address: env.NOVEL_CORE_ADDRESS, abi: novelCoreAbi,
-      functionName: "getChapter", args: [currentId],
-    }) as any;
-    currentId = ch.parentId;
-  }
+async function insertNovelFromChain(db: Client, rpc: PublicClient, novelId: bigint, blockNumber: string) {
+  const [novel, metadata] = await Promise.all([
+    rpc.readContract({ address: env.NOVEL_CORE_ADDRESS, abi: novelCoreAbi, functionName: "getNovel", args: [novelId] }),
+    rpc.readContract({ address: env.NOVEL_CORE_ADDRESS, abi: novelCoreAbi, functionName: "getNovelMetadata", args: [novelId] }),
+  ]) as [any, any];
 
-  // Try to decode bootstrap content from createNovel calldata
-  let bootstrapContents: string[] | null = null;
-  const novelRes = await db.query("SELECT content_location FROM novels WHERE id = $1", [novelId.toString()]);
-  const isOnchain = novelRes.rows.length > 0 && novelRes.rows[0].content_location === ContentLocation.Onchain;
+  const config = buildConfigJson(novel.config);
 
-  if (isOnchain && log.transactionHash) {
-    try {
-      const tx = await rpc.getTransaction({ hash: log.transactionHash });
-      const { functionName, args } = decodeFunctionData({ abi: novelCoreAbi, data: tx.input });
-      // bootstrapChapters is arg[2] for createNovel, arg[4] for forkNovel
-      const chaptersArgIndex = functionName === "forkNovel" ? 4 : 2;
-      const submissions = (args as any)[chaptersArgIndex] as any[];
-      if (submissions && submissions.length > 0) {
-        bootstrapContents = submissions.map((sub: any) => {
-          const contentBytes = sub.content as `0x${string}`;
-          return Buffer.from(contentBytes.slice(2), "hex").toString("utf-8");
-        });
-      }
-    } catch (err) {
-      console.error(`Failed to decode calldata for novel ${novelId}:`, err);
-    }
-  }
-
-  let bootstrapIdx = 0;
-  for (let i = 0; i < chapterIds.length; i++) {
-    const chapterId = chapterIds[i];
-    const chapter = await rpc.readContract({
-      address: env.NOVEL_CORE_ADDRESS, abi: novelCoreAbi,
-      functionName: "getChapter", args: [chapterId],
-    }) as any;
-
-    await db.query(
-      `INSERT INTO chapters (id, novel_id, parent_id, author, content_hash, declared_length, round, epoch, chapter_index, vote_count, is_world_line, is_canon, block_number)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-       ON CONFLICT (id) DO NOTHING`,
-      [
-        chapterId.toString(), novelId.toString(), chapter.parentId.toString(),
-        chapter.author, chapter.contentHash, chapter.declaredLength.toString(),
-        chapter.round, chapter.epoch, chapter.chapterIndex,
-        "0", chapter.isWorldLine, chapter.isCanon, blockNumber,
-      ]
-    );
-
-    // Only bootstrap chapters (isCanon=true) have calldata content; fork root (isCanon=false) does not
-    if (chapter.isCanon && isOnchain && bootstrapContents && bootstrapIdx < bootstrapContents.length) {
-      await db.query(
-        "UPDATE chapters SET content_text = $1, content_fetched = TRUE WHERE id = $2",
-        [bootstrapContents[bootstrapIdx], chapterId.toString()]
-      );
-      console.log(`[bootstrap] Chapter ${chapterId} content stored (${bootstrapContents[bootstrapIdx].length} chars)`);
-      bootstrapIdx++;
-    } else if (!chapter.isCanon) {
-      // Fork root — no content from calldata (content is copied from source branch)
-    } else if (!isOnchain) {
-      fetchChapterContent(chapterId, novelId).catch(err =>
-        console.error(`Content fetch failed for bootstrap chapter ${chapterId}:`, err)
-      );
-    }
-  }
-  console.log(`[bootstrap] Indexed ${chapterIds.length} bootstrap chapters for novel ${novelId} in ${Date.now() - t0}ms`);
+  await db.query(
+    `INSERT INTO novels (id, creator, title, description, cover_uri, config, current_round,
+            round_phase, phase_start_time, last_settle_time, active, block_number, content_location)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, TRUE, $11, $12)
+     ON CONFLICT (id) DO NOTHING`,
+    [
+      novelId.toString(), novel.creator, metadata.title, metadata.description, metadata.coverUri,
+      JSON.stringify(config), novel.currentRound, novel.roundPhase,
+      novel.phaseStartTime.toString(), novel.lastSettleTime.toString(),
+      blockNumber, novel.config.contentLocation,
+    ]
+  );
 }
 
-async function traceAndMarkCanon(chapterId: bigint, db: Client, rpc: PublicClient) {
-  let currentId = chapterId;
-  while (currentId > 0n) {
-    await db.query("UPDATE chapters SET is_canon = TRUE WHERE id = $1", [currentId.toString()]);
-    const chapter = await rpc.readContract({
-      address: env.NOVEL_CORE_ADDRESS, abi: novelCoreAbi,
-      functionName: "getChapter", args: [currentId],
-    }) as any;
-    currentId = chapter.parentId;
-  }
+// ============================================================
+// Helper: Build config JSON from NovelConfig struct
+// ============================================================
+
+function buildConfigJson(config: any): Record<string, unknown> {
+  return {
+    minChapterLength: config.minChapterLength.toString(),
+    maxChapterLength: config.maxChapterLength.toString(),
+    submissionFee: config.submissionFee.toString(),
+    worldLineCount: config.worldLineCount,
+    voteStake: config.voteStake.toString(),
+    nominationFee: config.nominationFee.toString(),
+    nominateDuration: config.nominateDuration.toString(),
+    commitDuration: config.commitDuration.toString(),
+    revealDuration: config.revealDuration.toString(),
+    minRoundGap: config.minRoundGap.toString(),
+    prizeReleaseRate: config.prizeReleaseRate,
+    voterRewardRate: config.voterRewardRate,
+    contentLocation: config.contentLocation,
+    contentBaseUrl: config.contentBaseUrl,
+    ruleFee: config.ruleFee.toString(),
+    ruleVoteDuration: config.ruleVoteDuration.toString(),
+    ruleQuorum: config.ruleQuorum,
+  };
 }
 
-export async function handleVotingEvent(log: Log, db: Client) {
-  let decoded;
-  try {
-    decoded = decodeEventLog({ abi: votingEngineAbi, data: log.data, topics: log.topics });
-  } catch {
-    return;
-  }
+// ============================================================
+// Helper: Get block timestamp
+// ============================================================
 
-  const blockNumber = log.blockNumber?.toString() ?? "0";
-
-  switch (decoded.eventName) {
-    case "VoteCommitted": {
-      const { novelId, votingRoundId, voter } = decoded.args;
-      const voterLower = voter.toLowerCase();
-      await db.query(
-        `INSERT INTO votes (novel_id, voting_round_id, voter, commit_block)
-         VALUES ($1, $2, $3, $4)
-         ON CONFLICT DO NOTHING`,
-        [novelId.toString(), votingRoundId.toString(), voterLower, blockNumber]
-      );
-      break;
-    }
-    case "VoteRevealed": {
-      const { novelId, votingRoundId, voter, candidateId } = decoded.args;
-      await db.query(
-        `UPDATE votes SET revealed = TRUE, candidate_id = $1, reveal_block = $2
-         WHERE novel_id = $3 AND voting_round_id = $4 AND LOWER(voter) = LOWER($5)`,
-        [candidateId.toString(), blockNumber, novelId.toString(), votingRoundId.toString(), voter]
-      );
-      break;
-    }
-    case "VotesTallied": {
-      const { novelId, votingRoundId, rankedCandidateIds } = decoded.args;
-      for (const candidateId of rankedCandidateIds) {
-        const res = await db.query(
-          "SELECT COUNT(*) as cnt FROM votes WHERE novel_id = $1 AND voting_round_id = $2 AND candidate_id = $3 AND revealed = TRUE",
-          [novelId.toString(), votingRoundId.toString(), candidateId.toString()]
-        );
-        await db.query("UPDATE chapters SET vote_count = $1 WHERE id = $2", [res.rows[0].cnt, candidateId.toString()]);
-      }
-      break;
-    }
-    case "VotingRewardClaimed": {
-      const { novelId, votingRoundId, voter, totalAmount } = decoded.args;
-      await db.query(
-        "UPDATE votes SET claimed = TRUE WHERE novel_id = $1 AND voting_round_id = $2 AND LOWER(voter) = LOWER($3)",
-        [novelId.toString(), votingRoundId.toString(), voter]
-      );
-      await db.query(
-        "INSERT INTO reward_claims (novel_id, claimant, amount, source, voting_round_id, block_number) VALUES ($1, $2, $3, 'voting', $4, $5)",
-        [novelId.toString(), voter, totalAmount.toString(), votingRoundId.toString(), blockNumber]
-      );
-      break;
-    }
-    default:
-      break;
-  }
+async function getBlockTimestamp(rpc: PublicClient, blockNumber: bigint | null): Promise<string> {
+  if (!blockNumber) return Math.floor(Date.now() / 1000).toString();
+  const block = await rpc.getBlock({ blockNumber });
+  return block.timestamp.toString();
 }
 
-export async function handlePrizePoolEvent(log: Log, db: Client) {
-  let decoded;
-  try {
-    decoded = decodeEventLog({ abi: prizePoolAbi, data: log.data, topics: log.topics });
-  } catch {
-    return;
-  }
-
-  const blockNumber = log.blockNumber?.toString() ?? "0";
-
-  switch (decoded.eventName) {
-    case "TipReceived": {
-      const { novelId, tipper, amount, timestamp } = decoded.args;
-      await db.query(
-        "INSERT INTO tips (novel_id, tipper, amount, block_timestamp, block_number) VALUES ($1, $2, $3, $4, $5)",
-        [novelId.toString(), tipper, amount.toString(), timestamp.toString(), blockNumber]
-      );
-      await db.query(
-        "UPDATE novels SET total_tipped = total_tipped + $1, total_funded = total_funded + $1 WHERE id = $2",
-        [amount.toString(), novelId.toString()]
-      );
-      break;
-    }
-    case "RewardClaimed": {
-      const { novelId, claimant, amount } = decoded.args;
-      await db.query(
-        "INSERT INTO reward_claims (novel_id, claimant, amount, source, block_number) VALUES ($1, $2, $3, 'prize_pool', $4)",
-        [novelId.toString(), claimant, amount.toString(), blockNumber]
-      );
-      break;
-    }
-    default:
-      break;
-  }
-}
-
-export async function handleNFTEvent(log: Log, db: Client) {
-  let decoded;
-  try {
-    decoded = decodeEventLog({ abi: chapterNFTAbi, data: log.data, topics: log.topics });
-  } catch {
-    return;
-  }
-
-  if (decoded.eventName === "ChapterNFTMinted") {
-    const { tokenId, novelId, chapterId, author, epoch } = decoded.args;
-    await db.query(
-      "INSERT INTO chapter_nfts (token_id, novel_id, chapter_id, author, epoch, block_number) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (token_id) DO NOTHING",
-      [tokenId.toString(), novelId.toString(), chapterId.toString(), author, epoch, log.blockNumber?.toString() ?? "0"]
-    );
-  }
-}

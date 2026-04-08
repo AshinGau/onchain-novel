@@ -13,7 +13,7 @@ import {DataTypes} from "../libraries/DataTypes.sol";
 /// @title RulesEngine
 /// @notice World-building rules governance: creator rules + proposal-based rule changes.
 ///         Reads novel state from NovelCore via view calls.
-///         V2: uses world-line authorship for voting eligibility (replaces V1 canon authorship).
+///         Uses world-line authorship for voting eligibility.
 contract RulesEngine is Initializable, OwnableUpgradeable, UUPSUpgradeable, IRulesEngine {
     // ============================================================
     //                         STORAGE

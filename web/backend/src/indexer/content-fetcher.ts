@@ -58,7 +58,7 @@ export async function retryUnfetchedContent() {
   const res = await query(
     `SELECT c.id, c.novel_id FROM chapters c
      JOIN novels n ON n.id = c.novel_id
-     WHERE c.content_fetched = FALSE AND n.content_location != $1 AND n.config->>'contentBaseUrl' != ''
+     WHERE c.content_fetched = FALSE AND n.content_location != $1 AND COALESCE(n.config->>'contentBaseUrl', '') != ''
      LIMIT 20`,
     [ContentLocation.Onchain]
   );

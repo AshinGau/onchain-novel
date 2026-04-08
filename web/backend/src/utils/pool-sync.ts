@@ -2,10 +2,7 @@ import { createPublicClient, http } from "viem";
 import { foundry } from "viem/chains";
 import { query } from "../db/index.js";
 import { env } from "./env.js";
-
-const prizePoolAbi = [
-  { type: "function", name: "getPoolBalance", inputs: [{ type: "uint256", name: "novelId" }], outputs: [{ type: "uint256" }], stateMutability: "view" }
-] as const;
+import { prizePoolAbi } from "./abi.js";
 
 export async function syncPoolBalances() {
   if (!env.PRIZE_POOL_ADDRESS) return;
