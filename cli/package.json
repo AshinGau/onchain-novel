@@ -1,0 +1,22 @@
+{
+  "name": "onchain-novel",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "onchain-novel": "./dist/bin/onchain-novel.js"
+  },
+  "scripts": {
+    "build": "tsc && rm -rf dist/guides && cp -r src/guides dist/guides",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "chalk": "^5.3.0",
+    "commander": "^12.0.0",
+    "onchain-novel-shared": "file:../shared",
+    "viem": "^2.23.2"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.2",
+    "typescript": "^5.7.3"
+  }
+}
