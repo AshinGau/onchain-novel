@@ -9,17 +9,23 @@ const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"]
 
 export const metadata: Metadata = {
   title: "Onchain Novel",
-  description: "Read and participate in collaborative on-chain novels",
+  description: "Decentralized collaborative novel protocol",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} dark h-full antialiased`}>
-      <body className="min-h-full flex flex-col bg-neutral-950 text-neutral-100">
+    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} dark`}>
+      <body style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
         <Providers>
           <NavBar />
-          <main className="flex-1">{children}</main>
-          <footer className="border-t border-neutral-800 py-6 text-center text-sm text-neutral-500">
+          <main style={{ flex: 1 }}>{children}</main>
+          <footer style={{
+            borderTop: "1px solid var(--color-v2-border)",
+            padding: "1.5rem",
+            textAlign: "center",
+            fontSize: "0.875rem",
+            color: "var(--color-v2-text-muted)",
+          }}>
             Onchain Novel Protocol
           </footer>
         </Providers>

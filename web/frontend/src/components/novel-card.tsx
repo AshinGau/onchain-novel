@@ -1,44 +1,59 @@
 import Link from "next/link";
-import { Badge } from "@/components/ui/badge";
 import type { Novel } from "@/lib/api";
-import { shortenAddress, formatEth, timeAgo, getPhaseLabel } from "@/lib/format";
-import { TOKEN_SYMBOL } from "@/lib/config";
+import { shortAddress, formatBalance, timeAgo } from "@/lib/format";
+import { phaseLabel } from "@/lib/config";
 
 export function NovelCard({ novel }: { novel: Novel }) {
-  const phase = getPhaseLabel(novel.round_phase, novel.epoch_phase);
+  const phase = phaseLabel(novel.round_phase);
 
   return (
-    <Link href={`/novels/${novel.id}`} className="block">
-      <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-4 hover:border-neutral-600 transition-colors">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <h3 className="font-semibold truncate">{novel.title || `Novel #${novel.id}`}</h3>
-            <p className="text-sm text-neutral-400 mt-0.5">{shortenAddress(novel.creator)}</p>
-          </div>
-          <div className="flex flex-col items-end gap-1 shrink-0">
-            <Badge variant={novel.active ? "default" : "secondary"} className="text-xs">
-              {novel.active ? phase : "Completed"}
-            </Badge>
-            {Number(novel.pool_balance) > 0 && (
-              <span className="text-xs font-medium text-amber-400">
-                Pool: {formatEth(novel.pool_balance)} {TOKEN_SYMBOL}
-              </span>
-            )}
-          </div>
+    <Link
+      href={`/novels/${novel.id}`}
+      style={{ textDecoration: "none", display: "block" }}
+    >
+      <div className="v2-card v2-card-hover v2-stack" style={{ gap: "0.75rem" }}>
+        <div className="v2-row" style={{ justifyContent: "space-between" }}>
+          <span className="text-subheading" style={{ fontSize: "1rem" }}>
+            {novel.title || `Novel #${novel.id}`}
+          </span>
+          <span className={`v2-badge ${novel.active ? "badge-active" : "badge-completed"}`}>
+            {novel.active ? "Active" : "Completed"}
+          </span>
         </div>
+
+        <p className="text-caption" style={{ margin: 0 }}>
+          by {shortAddress(novel.creator)}
+        </p>
 
         {novel.description && (
-          <p className="text-sm text-neutral-400 mt-2 line-clamp-2">{novel.description}</p>
+          <p className="text-caption" style={{
+            margin: 0,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}>
+            {novel.description}
+          </p>
         )}
 
-        <div className="flex items-center gap-4 mt-3 text-xs text-neutral-500">
-          <span>{novel.chapter_count ?? 0} chapters</span>
-          <span>{novel.author_count ?? 0} authors</span>
-          {novel.fork_source_novel_id && (
-            <span>Forked from #{novel.fork_source_novel_id}</span>
-          )}
-          {novel.last_chapter_at && <span>{timeAgo(novel.last_chapter_at)}</span>}
+        <div className="v2-row" style={{ gap: "1rem", flexWrap: "wrap" }}>
+          <span className="text-caption">
+            Round {novel.current_round} &middot; {phase}
+          </span>
+          <span className="text-caption">
+            {novel.chapter_count} chapters
+          </span>
+          <span className="text-caption">
+            {novel.author_count} authors
+          </span>
+          <span className="text-caption">
+            Pool: {formatBalance(novel.pool_balance)}
+          </span>
         </div>
+
+        <span className="text-muted" style={{ fontSize: "0.75rem" }}>
+          {timeAgo(novel.created_at)}
+        </span>
       </div>
     </Link>
   );

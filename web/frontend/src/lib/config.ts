@@ -1,5 +1,20 @@
-/** Native token symbol, configurable per deployment (e.g. "ETH", "MATIC", "AVAX") */
+/** API base URL for the backend */
+export const API_URL =
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
+
+/** Native token symbol shown in UI */
 export const TOKEN_SYMBOL = process.env.NEXT_PUBLIC_TOKEN_SYMBOL || "ETH";
 
-/** Default stake amount for voting/tipping inputs */
-export const DEFAULT_STAKE = process.env.NEXT_PUBLIC_DEFAULT_STAKE || "0.01";
+/** Round phase labels (matches contract enum) */
+export const ROUND_PHASES = [
+  "Idle",
+  "Nominating",
+  "Committing",
+  "Revealing",
+] as const;
+
+export type RoundPhase = (typeof ROUND_PHASES)[number];
+
+export function phaseLabel(phase: number): RoundPhase {
+  return ROUND_PHASES[phase] ?? "Idle";
+}

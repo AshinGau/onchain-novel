@@ -1,96 +1,105 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useAccount, usePublicClient, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
-import { parseTxError } from "@/lib/parse-tx-error";
+import { useState, useCallback } from "react";
+import {
+  useWriteContract,
+  useWaitForTransactionReceipt,
+} from "wagmi";
 
-export type TxStatus = "idle" | "signing" | "confirming" | "success" | "error";
+type TxStatus = "idle" | "confirming" | "waiting" | "success" | "error";
 
 /**
- * Wraps writeContract + useWaitForTransactionReceipt into a clean lifecycle.
- * Pre-simulates the contract call to surface proper revert errors,
- * then sends the real transaction only if simulation passes.
- * Guarantees: onSuccess only fires after tx is confirmed on-chain.
+ * Wraps wagmi writeContract + waitForTransactionReceipt.
+ * Returns a simple `send` function + status/error.
  */
-export function useTxAction(opts?: { onSuccess?: () => void }) {
-  const { address } = useAccount();
-  const publicClient = usePublicClient();
-  const { writeContract, data: hash, isPending, error: writeError, reset } = useWriteContract();
-  const { isLoading: isConfirming, isSuccess, error: receiptError } = useWaitForTransactionReceipt({
-    hash,
-    query: { enabled: !!hash },
+export function useTxAction() {
+  const [status, setStatus] = useState<TxStatus>("idle");
+  const [error, setError] = useState<string | null>(null);
+  const [txHash, setTxHash] = useState<`0x${string}` | undefined>();
+
+  const { writeContractAsync } = useWriteContract();
+
+  const { isLoading: isWaiting, isSuccess } = useWaitForTransactionReceipt({
+    hash: txHash,
   });
 
-  const [status, setStatus] = useState<TxStatus>("idle");
-  const [simError, setSimError] = useState<Error | null>(null);
-  const error = simError || writeError || receiptError;
+  const send = useCallback(
+    async (
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      params: any,
+      onSuccess?: () => void
+    ) => {
+      setStatus("confirming");
+      setError(null);
+      setTxHash(undefined);
+      try {
+        const hash = await writeContractAsync(params);
+        setTxHash(hash);
+        setStatus("waiting");
 
-  useEffect(() => {
-    if (isPending) setStatus("signing");
-    else if (isConfirming) setStatus("confirming");
-    else if (isSuccess) setStatus("success");
-    else if (error) setStatus("error");
-  }, [isPending, isConfirming, isSuccess, error]);
+        // Poll for receipt via a simple loop (wagmi hook will also update)
+        // We rely on the hook above for UI but also want to call onSuccess
+        const waitForReceipt = async () => {
+          const maxAttempts = 60;
+          for (let i = 0; i < maxAttempts; i++) {
+            await new Promise((r) => setTimeout(r, 2000));
+            try {
+              const { createPublicClient, http } = await import("viem");
+              const { foundry, base } = await import("wagmi/chains");
+              const chain =
+                process.env.NEXT_PUBLIC_CHAIN === "base" ? base : foundry;
+              const client = createPublicClient({
+                chain,
+                transport: http(
+                  process.env.NEXT_PUBLIC_RPC_URL || "http://localhost:8545"
+                ),
+              });
+              const receipt = await client.getTransactionReceipt({ hash });
+              if (receipt) {
+                if (receipt.status === "success") {
+                  setStatus("success");
+                  onSuccess?.();
+                } else {
+                  setStatus("error");
+                  setError("Transaction reverted");
+                }
+                return;
+              }
+            } catch {
+              // Not mined yet
+            }
+          }
+          setStatus("error");
+          setError("Transaction confirmation timeout");
+        };
+        waitForReceipt();
+      } catch (err: unknown) {
+        setStatus("error");
+        const msg =
+          err instanceof Error ? err.message : "Transaction rejected";
+        // Extract user-readable part
+        if (msg.includes("User rejected")) {
+          setError("Transaction cancelled");
+        } else {
+          setError(msg.slice(0, 200));
+        }
+      }
+    },
+    [writeContractAsync]
+  );
 
-  useEffect(() => {
-    if (isSuccess) opts?.onSuccess?.();
-  }, [isSuccess]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const resetTx = useCallback(() => {
-    reset();
-    setSimError(null);
+  const reset = useCallback(() => {
     setStatus("idle");
-  }, [reset]);
-
-  /**
-   * Simulate first, then send. If simulation reverts, we get a clean
-   * ContractFunctionRevertedError with the decoded error name — no more
-   * misleading nonce errors.
-   */
-  const simulateAndWrite = useCallback((params: any) => {
-    setSimError(null);
-    setStatus("signing");
-
-    if (!publicClient || !address) {
-      // Fallback: skip simulation
-      writeContract(params);
-      return;
-    }
-
-    publicClient.simulateContract({
-      ...params,
-      account: address,
-    }).then(() => {
-      writeContract(params);
-    }).catch((err: any) => {
-      setSimError(err);
-      setStatus("error");
-    });
-  }, [writeContract, publicClient, address]);
-
-  const errorMessage = error ? parseTxError(error).message : null;
+    setError(null);
+    setTxHash(undefined);
+  }, []);
 
   return {
-    writeContract: simulateAndWrite,
+    send,
+    reset,
     status,
-    isPending: status === "signing",
-    isConfirming: status === "confirming",
-    isSuccess: status === "success",
-    isError: status === "error",
-    isBusy: status === "signing" || status === "confirming",
-    error: errorMessage,
-    reset: resetTx,
-    hash,
+    error,
+    txHash,
+    isPending: status === "confirming" || status === "waiting",
   };
-}
-
-/** Human-readable label for current tx status */
-export function txStatusLabel(status: TxStatus, defaultLabel: string): string {
-  switch (status) {
-    case "signing": return "Signing...";
-    case "confirming": return "Confirming...";
-    case "success": return "Done!";
-    case "error": return "Failed";
-    default: return defaultLabel;
-  }
 }
