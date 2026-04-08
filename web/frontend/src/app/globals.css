@@ -48,7 +48,12 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* ============================================================
+   V2 Color System
+   ============================================================ */
+
 :root {
+  /* shadcn base tokens (light) */
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -81,6 +86,37 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+
+  /* V2 semantic colors */
+  --color-v2-primary: #6366f1;
+  --color-v2-primary-hover: #4f46e5;
+  --color-v2-success: #10b981;
+  --color-v2-warning: #f59e0b;
+  --color-v2-danger: #ef4444;
+  --color-v2-bg: #ffffff;
+  --color-v2-bg-secondary: #f9fafb;
+  --color-v2-bg-tertiary: #f3f4f6;
+  --color-v2-text: #111827;
+  --color-v2-text-secondary: #6b7280;
+  --color-v2-text-muted: #9ca3af;
+  --color-v2-border: #e5e7eb;
+
+  /* World line colors */
+  --color-worldline-1: #6366f1;
+  --color-worldline-2: #8b5cf6;
+  --color-worldline-3: #ec4899;
+  --color-worldline-4: #f59e0b;
+  --color-worldline-5: #10b981;
+}
+
+[data-theme="dark"] {
+  --color-v2-bg: #0f172a;
+  --color-v2-bg-secondary: #1e293b;
+  --color-v2-bg-tertiary: #334155;
+  --color-v2-text: #f1f5f9;
+  --color-v2-text-secondary: #94a3b8;
+  --color-v2-text-muted: #64748b;
+  --color-v2-border: #334155;
 }
 
 .dark {
@@ -117,6 +153,10 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+/* ============================================================
+   Base
+   ============================================================ */
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -126,5 +166,271 @@
   }
   html {
     @apply font-sans;
+  }
+}
+
+/* ============================================================
+   Semantic Layout Classes
+   ============================================================ */
+
+.v2-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+.v2-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.v2-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.v2-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--cols, 3), 1fr);
+  gap: 1.5rem;
+}
+
+/* ============================================================
+   Semantic Typography
+   ============================================================ */
+
+.text-heading {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--color-v2-text);
+}
+
+.text-subheading {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--color-v2-text);
+}
+
+.text-body {
+  font-size: 1rem;
+  line-height: 1.75;
+  color: var(--color-v2-text);
+}
+
+.text-caption {
+  font-size: 0.875rem;
+  color: var(--color-v2-text-secondary);
+}
+
+.text-muted {
+  color: var(--color-v2-text-muted);
+}
+
+/* ============================================================
+   Semantic Card Classes
+   ============================================================ */
+
+.v2-card {
+  background: var(--color-v2-bg);
+  border: 1px solid var(--color-v2-border);
+  border-radius: 0.75rem;
+  padding: 1.25rem;
+}
+
+.v2-card-hover {
+  transition: box-shadow 0.2s;
+}
+
+.v2-card-hover:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+/* ============================================================
+   Semantic Button Classes
+   ============================================================ */
+
+.v2-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  font-weight: 500;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: background 0.15s;
+  border: none;
+}
+
+.v2-btn-primary {
+  background: var(--color-v2-primary);
+  color: white;
+}
+
+.v2-btn-primary:hover {
+  background: var(--color-v2-primary-hover);
+}
+
+.v2-btn-secondary {
+  background: var(--color-v2-bg-tertiary);
+  color: var(--color-v2-text);
+}
+
+.v2-btn-ghost {
+  background: transparent;
+  color: var(--color-v2-text-secondary);
+}
+
+.v2-btn-ghost:hover {
+  background: var(--color-v2-bg-tertiary);
+}
+
+.v2-btn-danger {
+  background: var(--color-v2-danger);
+  color: white;
+}
+
+/* ============================================================
+   Prose (reading page)
+   ============================================================ */
+
+.prose {
+  max-width: 680px;
+  margin: 0 auto;
+  font-family: Georgia, "Noto Serif", serif;
+  line-height: 1.9;
+  color: var(--color-v2-text);
+}
+
+.prose p {
+  margin-bottom: 1.25em;
+}
+
+/* ============================================================
+   Badge Classes
+   ============================================================ */
+
+.v2-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.badge-worldline {
+  background: var(--color-v2-primary);
+  color: white;
+}
+
+.badge-depth {
+  background: var(--color-v2-bg-tertiary);
+  color: var(--color-v2-text-secondary);
+}
+
+.badge-phase {
+  background: var(--color-v2-warning);
+  color: #111827;
+}
+
+.badge-active {
+  background: var(--color-v2-success);
+  color: white;
+}
+
+.badge-completed {
+  background: var(--color-v2-text-muted);
+  color: white;
+}
+
+/* ============================================================
+   World Line Column
+   ============================================================ */
+
+.worldline-column {
+  border: 2px solid var(--color-v2-border);
+  border-radius: 0.75rem;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.worldline-column[data-wl="1"] { border-top-color: var(--color-worldline-1); }
+.worldline-column[data-wl="2"] { border-top-color: var(--color-worldline-2); }
+.worldline-column[data-wl="3"] { border-top-color: var(--color-worldline-3); }
+.worldline-column[data-wl="4"] { border-top-color: var(--color-worldline-4); }
+.worldline-column[data-wl="5"] { border-top-color: var(--color-worldline-5); }
+
+.collapsed-chapters {
+  text-align: center;
+  padding: 0.5rem;
+  color: var(--color-v2-text-muted);
+  cursor: pointer;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  transition: background 0.15s;
+}
+
+.collapsed-chapters:hover {
+  background: var(--color-v2-bg-tertiary);
+  color: var(--color-v2-text-secondary);
+}
+
+/* ============================================================
+   Story Tree
+   ============================================================ */
+
+.tree-node {
+  fill: var(--color-v2-bg);
+  stroke: var(--color-v2-border);
+  stroke-width: 1.5;
+  cursor: pointer;
+  transition: stroke 0.15s;
+}
+
+.tree-node:hover {
+  stroke: var(--color-v2-primary);
+}
+
+.tree-node-worldline {
+  stroke: var(--color-v2-primary);
+  stroke-width: 2.5;
+}
+
+/* ============================================================
+   Progress Bar
+   ============================================================ */
+
+.progress-bar {
+  height: 3px;
+  background: var(--color-v2-bg-tertiary);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: var(--color-v2-primary);
+  transition: width 0.3s ease;
+}
+
+/* ============================================================
+   Responsive Grid Helpers
+   ============================================================ */
+
+@media (max-width: 1023px) {
+  .v2-grid {
+    --cols: 2;
+  }
+}
+
+@media (max-width: 639px) {
+  .v2-grid {
+    --cols: 1;
   }
 }

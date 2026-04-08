@@ -1,52 +1,48 @@
-export function shortenAddress(addr: string): string {
-  if (!addr) return "";
+import { formatEther } from "viem";
+import { TOKEN_SYMBOL } from "./config";
+
+/** Shorten an address: 0x1234...abcd */
+export function shortAddress(addr: string): string {
+  if (!addr || addr.length < 10) return addr ?? "";
   return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 }
 
-export function formatEth(wei: string): string {
-  if (!wei || wei === "0") return "0";
-  const eth = Number(BigInt(wei)) / 1e18;
-  if (eth >= 1) return eth.toFixed(2);
-  // Show enough decimals to reveal non-zero digits, then trim trailing zeros
-  const match = eth.toFixed(18).match(/^0\.(0*)([1-9])/);
-  const decimals = match ? match[1].length + 2 : 4;
-  return eth.toFixed(Math.max(4, decimals)).replace(/0+$/, "").replace(/\.$/, "");
+/** Format wei string to readable token amount */
+export function formatBalance(wei: string | bigint): string {
+  const value = typeof wei === "string" ? BigInt(wei || "0") : wei;
+  const num = parseFloat(formatEther(value));
+  if (num === 0) return `0 ${TOKEN_SYMBOL}`;
+  if (num < 0.0001) return `<0.0001 ${TOKEN_SYMBOL}`;
+  return `${num.toFixed(4)} ${TOKEN_SYMBOL}`;
 }
 
-const ROUND_PHASE_NAMES = ["Submitting", "Committing", "Revealing", "Settling"] as const;
-const EPOCH_PHASE_NAMES = ["Rounds", "Committing", "Revealing", "Settling"] as const;
-
-export function getPhaseLabel(roundPhase: number, epochPhase: number): string {
-  return epochPhase === 0
-    ? ROUND_PHASE_NAMES[roundPhase] ?? "Unknown"
-    : `Epoch ${EPOCH_PHASE_NAMES[epochPhase] ?? "Unknown"}`;
+/** Format a compact number (1.2K, 3.4M) */
+export function formatCompact(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return String(n);
 }
 
-export function formatDuration(seconds: number | string): string {
-  const s = Number(seconds);
-  if (isNaN(s) || s <= 0) return "0s";
-  const d = Math.floor(s / 86400);
-  const h = Math.floor((s % 86400) / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  const sec = s % 60;
-  const parts: string[] = [];
-  if (d > 0) parts.push(`${d}d`);
-  if (h > 0) parts.push(`${h}h`);
-  if (m > 0) parts.push(`${m}m`);
-  if (sec > 0 || parts.length === 0) parts.push(`${sec}s`);
-  return parts.join(" ");
-}
-
-export function timeAgo(dateStr: string): string {
-  const now = Date.now();
-  const then = new Date(dateStr).getTime();
-  if (isNaN(then)) return "";
-  const diff = now - then;
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "just now";
+/** Relative time string */
+export function timeAgo(isoOrTimestamp: string | number): string {
+  const ms =
+    typeof isoOrTimestamp === "number"
+      ? isoOrTimestamp * 1000
+      : new Date(isoOrTimestamp).getTime();
+  const diff = Date.now() - ms;
+  const secs = Math.floor(diff / 1000);
+  if (secs < 60) return "just now";
+  const mins = Math.floor(secs / 60);
   if (mins < 60) return `${mins}m ago`;
   const hours = Math.floor(mins / 60);
   if (hours < 24) return `${hours}h ago`;
   const days = Math.floor(hours / 24);
-  return `${days}d ago`;
+  if (days < 30) return `${days}d ago`;
+  return new Date(ms).toLocaleDateString();
+}
+
+/** Truncate text with ellipsis */
+export function truncate(text: string, max: number): string {
+  if (text.length <= max) return text;
+  return text.slice(0, max) + "...";
 }

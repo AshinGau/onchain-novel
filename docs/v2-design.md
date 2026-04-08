@@ -25,6 +25,7 @@
 | [design-backend.md](design-backend.md) | Backend：Indexer、REST API、Keeper 服务 |
 | [design-cli.md](design-cli.md) | CLI：命令行工具、配置管理、shared lib |
 | [design-skill.md](design-skill.md) | Skill：教 agent 写好小说的工作流（最重要） |
+| [design-frontend.md](design-frontend.md) | Frontend：页面结构、交互、组件 |
 
 ## 合约架构
 

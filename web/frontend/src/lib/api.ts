@@ -1,32 +1,25 @@
-export const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+import { API_URL } from "./config";
 
-export async function signedFetch(
-  url: string,
-  method: string,
-  body: Record<string, unknown>,
-  address: string,
-  signMessageAsync: (args: { message: string }) => Promise<string>,
-) {
-  const bodyStr = JSON.stringify(body);
-  const signature = await signMessageAsync({ message: bodyStr });
-  return fetch(url, {
-    method,
-    headers: {
-      "Content-Type": "application/json",
-      "x-address": address,
-      "x-signature": signature,
-    },
-    body: bodyStr,
+/* ============================================================
+   Generic fetch wrapper
+   ============================================================ */
+
+async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${API_URL}${path}`, {
+    ...init,
+    headers: { "Content-Type": "application/json", ...init?.headers },
   });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`API ${res.status}: ${body}`);
+  }
+  return res.json() as Promise<T>;
 }
 
-export async function fetchApi<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, { cache: "no-store" });
-  if (!res.ok) throw new Error(`API error: ${res.status}`);
-  return res.json();
-}
+/* ============================================================
+   Type definitions (matching backend response shapes)
+   ============================================================ */
 
-// Type definitions for API responses
 export interface Novel {
   id: string;
   creator: string;
@@ -35,80 +28,161 @@ export interface Novel {
   cover_uri: string;
   config: NovelConfig;
   current_round: number;
-  current_epoch: number;
   round_phase: number;
-  epoch_phase: number;
   phase_start_time: string;
-  bootstrap_chapter_count: number;
-  cumulative_canon_chapters: number;
+  last_settle_time: string;
   active: boolean;
-  content_location: number;
-  fork_source_novel_id: string | null;
-  fork_source_chapter_id: string | null;
   pool_balance: string;
   total_tipped: string;
   total_funded: string;
   view_count: string;
-  last_chapter_at: string | null;
+  last_chapter_at: string;
   created_at: string;
-  chapter_count?: string;
-  author_count?: string;
+  chapter_count: number;
+  author_count: number;
 }
 
 export interface NovelConfig {
-  minChapterLength: string;
-  maxChapterLength: string;
-  roundMinDuration: string;
-  roundMinSubmissions: number;
+  minChapterLength: number;
+  maxChapterLength: number;
+  submissionFee: string;
   worldLineCount: number;
-  roundsPerEpoch: number;
+  voteStake: string;
+  nominationFee: string;
+  nominateDuration: number;
+  commitDuration: number;
+  revealDuration: number;
+  minRoundGap: number;
   prizeReleaseRate: number;
   voterRewardRate: number;
-  commitDuration: string;
-  revealDuration: string;
-  stakeAmount: string;
-  spamRounds: number;
-  spamThreshold: number;
   contentLocation: number;
   contentBaseUrl: string;
-  ruleFee: string;
-  ruleVoteDuration: string;
-  ruleQuorum: number;
 }
 
-export interface Chapter {
+export interface ChapterSummary {
   id: string;
-  novel_id: string;
   parent_id: string;
   author: string;
-  content_hash: string;
-  declared_length: string;
-  round: number;
-  epoch: number;
-  chapter_index: number;
-  vote_count: string;
+  depth: number;
+  timestamp: string;
   is_world_line: boolean;
-  is_canon: boolean;
+  declared_length: number;
+  content_hash: string;
+  created_at: string;
+}
+
+export interface ChapterDetail extends ChapterSummary {
+  novel_id: string;
+  novel_title: string;
+  config: NovelConfig;
   content_text: string | null;
   content_fetched: boolean;
-  created_at: string;
-  novel_title?: string;
-  config?: NovelConfig;
 }
 
-export interface TreeChapter {
+export interface ChapterContext {
   id: string;
   parent_id: string;
   author: string;
-  chapter_index: number;
-  round: number;
-  epoch: number;
-  vote_count: string;
+  depth: number;
+  content_text: string | null;
+  content_fetched: boolean;
   is_world_line: boolean;
-  is_canon: boolean;
-  created_at: string;
 }
 
-export const ROUND_PHASES = ["Submitting", "Committing", "Revealing", "Settling"] as const;
-export const EPOCH_PHASES = ["Rounds", "Committing", "Revealing", "Settling"] as const;
+export interface Pagination {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
 
+/* ============================================================
+   API functions
+   ============================================================ */
+
+export function fetchNovels(params: {
+  page?: number;
+  limit?: number;
+  sort?: string;
+  filter?: string;
+  search?: string;
+}) {
+  const sp = new URLSearchParams();
+  if (params.page) sp.set("page", String(params.page));
+  if (params.limit) sp.set("limit", String(params.limit));
+  if (params.sort) sp.set("sort", params.sort);
+  if (params.filter) sp.set("filter", params.filter);
+  if (params.search) sp.set("search", params.search);
+  return apiFetch<{ novels: Novel[]; pagination: Pagination }>(
+    `/novels?${sp.toString()}`
+  );
+}
+
+export function fetchNovel(id: string) {
+  return apiFetch<Novel>(`/novels/${id}`);
+}
+
+export function fetchNovelTree(id: string) {
+  return apiFetch<{ chapters: ChapterSummary[] }>(`/novels/${id}/tree`);
+}
+
+export function fetchWorldlines(id: string) {
+  return apiFetch<{ worldlines: ChapterSummary[] }>(
+    `/novels/${id}/worldlines`
+  );
+}
+
+export function fetchRound(novelId: string, round: number) {
+  return apiFetch<{ votes: RoundVote[] }>(
+    `/novels/${novelId}/rounds/${round}`
+  );
+}
+
+export interface RoundVote {
+  voter: string;
+  revealed: boolean;
+  candidate_id: string | null;
+  claimed: boolean;
+  commit_block: string;
+  reveal_block: string | null;
+}
+
+export function fetchChapter(id: string) {
+  return apiFetch<ChapterDetail>(`/chapters/${id}`);
+}
+
+export function fetchChapterContext(id: string) {
+  return apiFetch<{ ancestors: ChapterContext[] }>(`/chapters/${id}/context`);
+}
+
+export function fetchChapterChildren(id: string) {
+  return apiFetch<{ children: ChapterSummary[] }>(`/chapters/${id}/children`);
+}
+
+export function fetchChapterBounties(id: string) {
+  return apiFetch<{ bounties: Bounty[] }>(`/chapters/${id}/bounties`);
+}
+
+export function fetchChapterTips(id: string) {
+  return apiFetch<{ tips: Tip[] }>(`/chapters/${id}/tips`);
+}
+
+export interface Bounty {
+  id: string;
+  chapter_id: string;
+  novel_id: string;
+  tipper: string;
+  locked_amount: string;
+  deadline: string;
+  claimed: boolean;
+  refunded: boolean;
+  block_number: string;
+}
+
+export interface Tip {
+  id: string;
+  chapter_id: string;
+  tipper: string;
+  amount: string;
+  block_number: string;
+}

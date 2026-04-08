@@ -1,54 +1,72 @@
-/** Shared localStorage helpers for commit-reveal vote data.
- *  Supports multiple votes per round (one per candidate).
- *  Stores the user-facing salt (original input), not bytes32. */
+/**
+ * localStorage-based vote salt storage.
+ *
+ * Key format: `vote:${novelId}:${round}`
+ * Value: JSON `{ candidateId: string, salt: string }`
+ */
 
-import { keccak256, encodePacked } from "viem";
+import { keccak256, encodePacked, toHex } from "viem";
 
-function roundKey(novelId: string, votingRoundId: string): string {
-  return `votes:${novelId}:${votingRoundId}`;
+const PREFIX = "vote";
+
+function storageKey(novelId: string, round: number): string {
+  return `${PREFIX}:${novelId}:${round}`;
 }
 
-/** Convert any user salt to bytes32 for the contract.
- *  If already a valid 0x-prefixed 32-byte hex, use as-is.
- *  Otherwise hash the string to produce bytes32. */
-export function toBytes32Salt(input: string): `0x${string}` {
-  if (/^0x[0-9a-fA-F]{64}$/.test(input)) return input as `0x${string}`;
-  return keccak256(encodePacked(["string"], [input])) as `0x${string}`;
+export interface StoredVote {
+  candidateId: string;
+  salt: string;
 }
 
-/** Save vote. salt is the user-facing value (e.g. "6666" or a random hex). */
-export function saveVote(novelId: string, votingRoundId: string, candidateId: string, salt: string) {
-  const all = loadAllVotes(novelId, votingRoundId);
-  all[candidateId] = salt;
-  localStorage.setItem(roundKey(novelId, votingRoundId), JSON.stringify(all));
+/** Save vote data after successful commit */
+export function saveVote(
+  novelId: string,
+  round: number,
+  candidateId: string,
+  salt: string
+): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(
+    storageKey(novelId, round),
+    JSON.stringify({ candidateId, salt })
+  );
 }
 
-/** Load all votes for a round. Returns { candidateId → userSalt } map. */
-export function loadAllVotes(novelId: string, votingRoundId: string): Record<string, string> {
-  if (typeof window === "undefined") return {};
-  const raw = localStorage.getItem(roundKey(novelId, votingRoundId));
-  if (!raw) return {};
+/** Load saved vote data for reveal */
+export function loadVote(
+  novelId: string,
+  round: number
+): StoredVote | null {
+  if (typeof window === "undefined") return null;
+  const raw = localStorage.getItem(storageKey(novelId, round));
+  if (!raw) return null;
   try {
-    const parsed = JSON.parse(raw);
-    // Migrate old single-vote format { candidateId, salt }
-    if (parsed.candidateId && parsed.salt && typeof parsed.salt === "string") {
-      return { [parsed.candidateId]: parsed.salt };
-    }
-    return parsed;
+    return JSON.parse(raw) as StoredVote;
   } catch {
-    return {};
+    return null;
   }
 }
 
-/** Load user salt for a specific candidate. */
-export function loadVote(novelId: string, votingRoundId: string, candidateId: string): string | null {
-  return loadAllVotes(novelId, votingRoundId)[candidateId] ?? null;
+/** Remove vote data after successful reveal */
+export function clearVote(novelId: string, round: number): void {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem(storageKey(novelId, round));
 }
 
-export function hasVotedFor(novelId: string, votingRoundId: string, candidateId: string): boolean {
-  return loadVote(novelId, votingRoundId, candidateId) !== null;
+/**
+ * Convert user-provided salt string to bytes32.
+ * Used identically at commit and reveal time so the hash matches.
+ */
+export function toBytes32Salt(userInput: string): `0x${string}` {
+  return keccak256(toHex(userInput));
 }
 
-export function getVotedCandidateIds(novelId: string, votingRoundId: string): string[] {
-  return Object.keys(loadAllVotes(novelId, votingRoundId));
+/**
+ * Compute commitHash = keccak256(abi.encodePacked(uint64(candidateId), bytes32(salt)))
+ */
+export function computeCommitHash(
+  candidateId: bigint,
+  salt: `0x${string}`
+): `0x${string}` {
+  return keccak256(encodePacked(["uint64", "bytes32"], [candidateId, salt]));
 }
