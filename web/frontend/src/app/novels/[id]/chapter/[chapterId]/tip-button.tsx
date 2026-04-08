@@ -34,7 +34,7 @@ export function TipButton({ chapterId }: { chapterId: string }) {
   if (!showInput) {
     return (
       <button
-        className="v2-btn v2-btn-secondary"
+        className="on-btn on-btn-secondary"
         onClick={() => setShowInput(true)}
       >
         Tip
@@ -43,7 +43,7 @@ export function TipButton({ chapterId }: { chapterId: string }) {
   }
 
   return (
-    <div className="v2-row" style={{ gap: "0.375rem" }}>
+    <div className="on-row" style={{ gap: "0.375rem" }}>
       <input
         type="text"
         value={amount}
@@ -52,14 +52,14 @@ export function TipButton({ chapterId }: { chapterId: string }) {
           width: "80px",
           padding: "0.375rem 0.5rem",
           borderRadius: "0.375rem",
-          border: "1px solid var(--color-v2-border)",
-          background: "var(--color-v2-bg-secondary)",
-          color: "var(--color-v2-text)",
+          border: "1px solid var(--color-border)",
+          background: "var(--color-bg-secondary)",
+          color: "var(--color-text)",
           fontSize: "0.875rem",
         }}
       />
       <button
-        className="v2-btn v2-btn-primary"
+        className="on-btn on-btn-primary"
         onClick={handleTip}
         disabled={isPending}
         style={{ opacity: isPending ? 0.5 : 1 }}
@@ -67,16 +67,16 @@ export function TipButton({ chapterId }: { chapterId: string }) {
         {isPending ? "..." : "Send Tip"}
       </button>
       <button
-        className="v2-btn v2-btn-ghost"
+        className="on-btn on-btn-ghost"
         onClick={() => setShowInput(false)}
       >
         Cancel
       </button>
       {status === "success" && (
-        <span style={{ color: "var(--color-v2-success)", fontSize: "0.875rem" }}>Sent!</span>
+        <span style={{ color: "var(--color-success)", fontSize: "0.875rem" }}>Sent!</span>
       )}
       {error && (
-        <span style={{ color: "var(--color-v2-danger)", fontSize: "0.75rem" }}>{error}</span>
+        <span style={{ color: "var(--color-danger)", fontSize: "0.75rem" }}>{error}</span>
       )}
     </div>
   );

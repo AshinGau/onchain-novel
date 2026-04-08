@@ -49,7 +49,7 @@
 }
 
 /* ============================================================
-   V2 Color System
+   Color System
    ============================================================ */
 
 :root {
@@ -87,19 +87,19 @@
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
 
-  /* V2 semantic colors */
-  --color-v2-primary: #6366f1;
-  --color-v2-primary-hover: #4f46e5;
-  --color-v2-success: #10b981;
-  --color-v2-warning: #f59e0b;
-  --color-v2-danger: #ef4444;
-  --color-v2-bg: #ffffff;
-  --color-v2-bg-secondary: #f9fafb;
-  --color-v2-bg-tertiary: #f3f4f6;
-  --color-v2-text: #111827;
-  --color-v2-text-secondary: #6b7280;
-  --color-v2-text-muted: #9ca3af;
-  --color-v2-border: #e5e7eb;
+  /* Semantic colors */
+  --color-primary: #6366f1;
+  --color-primary-hover: #4f46e5;
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
+  --color-bg: #ffffff;
+  --color-bg-secondary: #f9fafb;
+  --color-bg-tertiary: #f3f4f6;
+  --color-text: #111827;
+  --color-text-secondary: #6b7280;
+  --color-text-muted: #9ca3af;
+  --color-border: #e5e7eb;
 
   /* World line colors */
   --color-worldline-1: #6366f1;
@@ -110,13 +110,13 @@
 }
 
 [data-theme="dark"] {
-  --color-v2-bg: #0f172a;
-  --color-v2-bg-secondary: #1e293b;
-  --color-v2-bg-tertiary: #334155;
-  --color-v2-text: #f1f5f9;
-  --color-v2-text-secondary: #94a3b8;
-  --color-v2-text-muted: #64748b;
-  --color-v2-border: #334155;
+  --color-bg: #0f172a;
+  --color-bg-secondary: #1e293b;
+  --color-bg-tertiary: #334155;
+  --color-text: #f1f5f9;
+  --color-text-secondary: #94a3b8;
+  --color-text-muted: #64748b;
+  --color-border: #334155;
 }
 
 .dark {
@@ -173,25 +173,25 @@
    Semantic Layout Classes
    ============================================================ */
 
-.v2-container {
+.container {
   max-width: 1200px;
   margin: 0 auto;
   padding: 0 1rem;
 }
 
-.v2-stack {
+.stack {
   display: flex;
   flex-direction: column;
   gap: 1rem;
 }
 
-.v2-row {
+.row {
   display: flex;
   align-items: center;
   gap: 0.5rem;
 }
 
-.v2-grid {
+.grid {
   display: grid;
   grid-template-columns: repeat(var(--cols, 3), 1fr);
   gap: 1.5rem;
@@ -204,46 +204,46 @@
 .text-heading {
   font-size: 1.5rem;
   font-weight: 700;
-  color: var(--color-v2-text);
+  color: var(--color-text);
 }
 
 .text-subheading {
   font-size: 1.125rem;
   font-weight: 600;
-  color: var(--color-v2-text);
+  color: var(--color-text);
 }
 
 .text-body {
   font-size: 1rem;
   line-height: 1.75;
-  color: var(--color-v2-text);
+  color: var(--color-text);
 }
 
 .text-caption {
   font-size: 0.875rem;
-  color: var(--color-v2-text-secondary);
+  color: var(--color-text-secondary);
 }
 
 .text-muted {
-  color: var(--color-v2-text-muted);
+  color: var(--color-text-muted);
 }
 
 /* ============================================================
    Semantic Card Classes
    ============================================================ */
 
-.v2-card {
-  background: var(--color-v2-bg);
-  border: 1px solid var(--color-v2-border);
+.card {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
   border-radius: 0.75rem;
   padding: 1.25rem;
 }
 
-.v2-card-hover {
+.card-hover {
   transition: box-shadow 0.2s;
 }
 
-.v2-card-hover:hover {
+.card-hover:hover {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
@@ -251,7 +251,7 @@
    Semantic Button Classes
    ============================================================ */
 
-.v2-btn {
+.btn {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
@@ -264,31 +264,31 @@
   border: none;
 }
 
-.v2-btn-primary {
-  background: var(--color-v2-primary);
+.btn-primary {
+  background: var(--color-primary);
   color: white;
 }
 
-.v2-btn-primary:hover {
-  background: var(--color-v2-primary-hover);
+.btn-primary:hover {
+  background: var(--color-primary-hover);
 }
 
-.v2-btn-secondary {
-  background: var(--color-v2-bg-tertiary);
-  color: var(--color-v2-text);
+.btn-secondary {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text);
 }
 
-.v2-btn-ghost {
+.btn-ghost {
   background: transparent;
-  color: var(--color-v2-text-secondary);
+  color: var(--color-text-secondary);
 }
 
-.v2-btn-ghost:hover {
-  background: var(--color-v2-bg-tertiary);
+.btn-ghost:hover {
+  background: var(--color-bg-tertiary);
 }
 
-.v2-btn-danger {
-  background: var(--color-v2-danger);
+.btn-danger {
+  background: var(--color-danger);
   color: white;
 }
 
@@ -301,7 +301,7 @@
   margin: 0 auto;
   font-family: Georgia, "Noto Serif", serif;
   line-height: 1.9;
-  color: var(--color-v2-text);
+  color: var(--color-text);
 }
 
 .prose p {
@@ -312,7 +312,7 @@
    Badge Classes
    ============================================================ */
 
-.v2-badge {
+.badge {
   display: inline-flex;
   align-items: center;
   padding: 0.125rem 0.5rem;
@@ -322,27 +322,27 @@
 }
 
 .badge-worldline {
-  background: var(--color-v2-primary);
+  background: var(--color-primary);
   color: white;
 }
 
 .badge-depth {
-  background: var(--color-v2-bg-tertiary);
-  color: var(--color-v2-text-secondary);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-secondary);
 }
 
 .badge-phase {
-  background: var(--color-v2-warning);
+  background: var(--color-warning);
   color: #111827;
 }
 
 .badge-active {
-  background: var(--color-v2-success);
+  background: var(--color-success);
   color: white;
 }
 
 .badge-completed {
-  background: var(--color-v2-text-muted);
+  background: var(--color-text-muted);
   color: white;
 }
 
@@ -351,7 +351,7 @@
    ============================================================ */
 
 .worldline-column {
-  border: 2px solid var(--color-v2-border);
+  border: 2px solid var(--color-border);
   border-radius: 0.75rem;
   padding: 1rem;
   display: flex;
@@ -369,7 +369,7 @@
 .collapsed-chapters {
   text-align: center;
   padding: 0.5rem;
-  color: var(--color-v2-text-muted);
+  color: var(--color-text-muted);
   cursor: pointer;
   border-radius: 0.375rem;
   font-size: 0.875rem;
@@ -377,8 +377,8 @@
 }
 
 .collapsed-chapters:hover {
-  background: var(--color-v2-bg-tertiary);
-  color: var(--color-v2-text-secondary);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-secondary);
 }
 
 /* ============================================================
@@ -386,19 +386,19 @@
    ============================================================ */
 
 .tree-node {
-  fill: var(--color-v2-bg);
-  stroke: var(--color-v2-border);
+  fill: var(--color-bg);
+  stroke: var(--color-border);
   stroke-width: 1.5;
   cursor: pointer;
   transition: stroke 0.15s;
 }
 
 .tree-node:hover {
-  stroke: var(--color-v2-primary);
+  stroke: var(--color-primary);
 }
 
 .tree-node-worldline {
-  stroke: var(--color-v2-primary);
+  stroke: var(--color-primary);
   stroke-width: 2.5;
 }
 
@@ -408,14 +408,14 @@
 
 .progress-bar {
   height: 3px;
-  background: var(--color-v2-bg-tertiary);
+  background: var(--color-bg-tertiary);
   border-radius: 2px;
   overflow: hidden;
 }
 
 .progress-bar-fill {
   height: 100%;
-  background: var(--color-v2-primary);
+  background: var(--color-primary);
   transition: width 0.3s ease;
 }
 
@@ -424,13 +424,13 @@
    ============================================================ */
 
 @media (max-width: 1023px) {
-  .v2-grid {
+  .grid {
     --cols: 2;
   }
 }
 
 @media (max-width: 639px) {
-  .v2-grid {
+  .grid {
     --cols: 1;
   }
 }

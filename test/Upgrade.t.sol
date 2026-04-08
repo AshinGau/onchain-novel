@@ -3,21 +3,21 @@ pragma solidity ^0.8.28;
 
 import {Test} from "forge-std/Test.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import {V2TestBase} from "./Integration.t.sol";
+import {TestBase} from "./Integration.t.sol";
 import {NovelCore} from "../src/core/NovelCore.sol";
 import {DataTypes} from "../src/libraries/DataTypes.sol";
 
-/// @title NovelCoreV2Mock
-/// @notice Mock V2 implementation for upgrade testing (adds a new function)
-contract NovelCoreV2Mock is NovelCore {
+/// @title NovelCoreUpgradeMock
+/// @notice Mock upgraded implementation for upgrade testing (adds a new function)
+contract NovelCoreUpgradeMock is NovelCore {
     function version() external pure returns (string memory) {
-        return "v2-mock";
+        return "upgrade-mock";
     }
 }
 
 /// @title UpgradeTest
-/// @notice UUPS upgrade tests for V2 protocol
-contract UpgradeTest is V2TestBase {
+/// @notice UUPS upgrade tests for protocol
+contract UpgradeTest is TestBase {
     // ----------------------------------------------------------
     //  Deploy, create novel, submit chapters, upgrade, verify state
     // ----------------------------------------------------------
@@ -35,7 +35,7 @@ contract UpgradeTest is V2TestBase {
 
         // Deploy new implementation and upgrade
         vm.startPrank(deployer);
-        NovelCoreV2Mock newImpl = new NovelCoreV2Mock();
+        NovelCoreUpgradeMock newImpl = new NovelCoreUpgradeMock();
         novelCore.upgradeToAndCall(address(newImpl), "");
         vm.stopPrank();
 
@@ -55,7 +55,7 @@ contract UpgradeTest is V2TestBase {
         assertEq(wlAfter.length, wlBefore.length);
 
         // Verify new function works
-        assertEq(NovelCoreV2Mock(payable(address(novelCore))).version(), "v2-mock");
+        assertEq(NovelCoreUpgradeMock(payable(address(novelCore))).version(), "upgrade-mock");
     }
 
     // ----------------------------------------------------------
@@ -65,11 +65,11 @@ contract UpgradeTest is V2TestBase {
         // Create novel
         uint64 novelId = _createNovel();
         uint64 rootId = 1;
-        uint64 ch2 = _submitChapter(author1, novelId, rootId, "chapter before upgrade v2!");
+        uint64 ch2 = _submitChapter(author1, novelId, rootId, "chapter before upgrade test!");
 
         // Upgrade
         vm.startPrank(deployer);
-        NovelCoreV2Mock newImpl = new NovelCoreV2Mock();
+        NovelCoreUpgradeMock newImpl = new NovelCoreUpgradeMock();
         novelCore.upgradeToAndCall(address(newImpl), "");
         vm.stopPrank();
 
@@ -90,7 +90,7 @@ contract UpgradeTest is V2TestBase {
     //  Only owner can upgrade
     // ----------------------------------------------------------
     function test_onlyOwnerCanUpgrade() public {
-        NovelCoreV2Mock newImpl = new NovelCoreV2Mock();
+        NovelCoreUpgradeMock newImpl = new NovelCoreUpgradeMock();
 
         vm.prank(author1);
         vm.expectRevert();

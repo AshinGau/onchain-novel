@@ -2,12 +2,12 @@
 pragma solidity ^0.8.28;
 
 import {Test} from "forge-std/Test.sol";
-import {V2TestBase} from "./Integration.t.sol";
+import {TestBase} from "./Integration.t.sol";
 import {DataTypes} from "../src/libraries/DataTypes.sol";
 
 /// @title GasProfileTest
-/// @notice Gas benchmarks for V2 protocol operations
-contract GasProfileTest is V2TestBase {
+/// @notice Gas benchmarks for protocol operations
+contract GasProfileTest is TestBase {
     // ----------------------------------------------------------
     //  Novel creation gas
     // ----------------------------------------------------------

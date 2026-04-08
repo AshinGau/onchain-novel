@@ -10,7 +10,7 @@ import {IVotingEngine} from "../interfaces/IVotingEngine.sol";
 import {DataTypes} from "../libraries/DataTypes.sol";
 
 /// @title VotingEngine
-/// @notice Commit-Reveal voting engine using Stake-to-Vote (V2)
+/// @notice Commit-Reveal voting engine using Stake-to-Vote
 /// @dev Manages voting rounds identified by (novelId, round) pairs.
 ///      NovelCore handles phase enforcement; this contract manages vote data and rewards.
 contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuard, UUPSUpgradeable, IVotingEngine {

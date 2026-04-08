@@ -30,7 +30,7 @@ export function CollapsedChapters({ chapters, novelId, label }: CollapsedChapter
   }
 
   return (
-    <div className="v2-stack" style={{ gap: "0.375rem" }}>
+    <div className="on-stack" style={{ gap: "0.375rem" }}>
       <div
         className="collapsed-chapters"
         onClick={() => setExpanded(false)}

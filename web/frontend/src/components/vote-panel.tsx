@@ -40,7 +40,7 @@ export function VotePanel({
 
   if (!isConnected) {
     return (
-      <div className="v2-card v2-stack" style={{ gap: "0.5rem", alignItems: "center" }}>
+      <div className="on-card on-stack" style={{ gap: "0.5rem", alignItems: "center" }}>
         <p className="text-caption">Connect wallet to vote</p>
         <ConnectButton />
       </div>
@@ -70,8 +70,8 @@ export function VotePanel({
 
     if (storedVote) {
       return (
-        <div className="v2-card v2-stack" style={{ gap: "0.5rem" }}>
-          <p style={{ color: "var(--color-v2-success)", margin: 0, fontSize: "0.875rem" }}>
+        <div className="on-card on-stack" style={{ gap: "0.5rem" }}>
+          <p style={{ color: "var(--color-success)", margin: 0, fontSize: "0.875rem" }}>
             Vote committed for Ch.{storedVote.candidateId}. Wait for reveal phase.
           </p>
         </div>
@@ -79,11 +79,11 @@ export function VotePanel({
     }
 
     return (
-      <div className="v2-card v2-stack" style={{ gap: "0.75rem" }}>
+      <div className="on-card on-stack" style={{ gap: "0.75rem" }}>
         <h4 className="text-subheading" style={{ margin: 0 }}>
           Vote for Ch.{candidateId}
         </h4>
-        <div className="v2-stack" style={{ gap: "0.5rem" }}>
+        <div className="on-stack" style={{ gap: "0.5rem" }}>
           <label className="text-caption">Salt (remember this for reveal):</label>
           <input
             type="text"
@@ -93,9 +93,9 @@ export function VotePanel({
             style={{
               padding: "0.5rem 0.75rem",
               borderRadius: "0.5rem",
-              border: "1px solid var(--color-v2-border)",
-              background: "var(--color-v2-bg-secondary)",
-              color: "var(--color-v2-text)",
+              border: "1px solid var(--color-border)",
+              background: "var(--color-bg-secondary)",
+              color: "var(--color-text)",
               fontSize: "0.875rem",
             }}
           />
@@ -104,7 +104,7 @@ export function VotePanel({
           </span>
         </div>
         <button
-          className="v2-btn v2-btn-primary"
+          className="on-btn on-btn-primary"
           onClick={handleCommit}
           disabled={!saltInput.trim() || isPending}
           style={{ opacity: !saltInput.trim() || isPending ? 0.5 : 1 }}
@@ -112,7 +112,7 @@ export function VotePanel({
           {isPending ? "Committing..." : "Commit Vote"}
         </button>
         {error && (
-          <p style={{ color: "var(--color-v2-danger)", margin: 0, fontSize: "0.875rem" }}>
+          <p style={{ color: "var(--color-danger)", margin: 0, fontSize: "0.875rem" }}>
             {error}
           </p>
         )}
@@ -142,7 +142,7 @@ export function VotePanel({
 
     if (!storedVote) {
       return (
-        <div className="v2-card v2-stack" style={{ gap: "0.5rem" }}>
+        <div className="on-card on-stack" style={{ gap: "0.5rem" }}>
           <p className="text-caption text-muted">
             No saved vote found for this round. You may have already revealed or not committed.
           </p>
@@ -151,7 +151,7 @@ export function VotePanel({
     }
 
     return (
-      <div className="v2-card v2-stack" style={{ gap: "0.75rem" }}>
+      <div className="on-card on-stack" style={{ gap: "0.75rem" }}>
         <h4 className="text-subheading" style={{ margin: 0 }}>
           Reveal Vote
         </h4>
@@ -159,7 +159,7 @@ export function VotePanel({
           Candidate: Ch.{storedVote.candidateId} | Salt: {storedVote.salt}
         </p>
         <button
-          className="v2-btn v2-btn-primary"
+          className="on-btn on-btn-primary"
           onClick={handleReveal}
           disabled={isPending}
           style={{ opacity: isPending ? 0.5 : 1 }}
@@ -167,12 +167,12 @@ export function VotePanel({
           {isPending ? "Revealing..." : "Reveal Vote"}
         </button>
         {status === "success" && (
-          <p style={{ color: "var(--color-v2-success)", margin: 0, fontSize: "0.875rem" }}>
+          <p style={{ color: "var(--color-success)", margin: 0, fontSize: "0.875rem" }}>
             Vote revealed! Wait for settlement.
           </p>
         )}
         {error && (
-          <p style={{ color: "var(--color-v2-danger)", margin: 0, fontSize: "0.875rem" }}>
+          <p style={{ color: "var(--color-danger)", margin: 0, fontSize: "0.875rem" }}>
             {error}
           </p>
         )}

@@ -42,10 +42,10 @@ export function ChapterReader({ chapters, novelId }: ChapterReaderProps) {
   const progress = total > 1 ? ((index + 1) / total) * 100 : 100;
 
   return (
-    <div className="v2-stack" style={{ gap: "1.5rem" }}>
+    <div className="on-stack" style={{ gap: "1.5rem" }}>
       {/* Progress bar */}
-      <div className="v2-stack" style={{ gap: "0.25rem" }}>
-        <div className="v2-row" style={{ justifyContent: "space-between" }}>
+      <div className="on-stack" style={{ gap: "0.25rem" }}>
+        <div className="on-row" style={{ justifyContent: "space-between" }}>
           <span className="text-caption">
             Chapter {index + 1} of {total}
           </span>
@@ -59,17 +59,17 @@ export function ChapterReader({ chapters, novelId }: ChapterReaderProps) {
       </div>
 
       {/* Chapter meta */}
-      <div className="v2-row" style={{ gap: "0.75rem" }}>
+      <div className="on-row" style={{ gap: "0.75rem" }}>
         <span className="text-caption">
           by {shortAddress(current.author)}
         </span>
         {current.is_world_line && (
-          <span className="v2-badge badge-worldline">World Line</span>
+          <span className="on-badge badge-worldline">World Line</span>
         )}
         <Link
           href={`/novels/${novelId}/chapter/${current.id}`}
           className="text-caption"
-          style={{ color: "var(--color-v2-primary)", textDecoration: "none" }}
+          style={{ color: "var(--color-primary)", textDecoration: "none" }}
         >
           Ch.{current.id}
         </Link>
@@ -89,9 +89,9 @@ export function ChapterReader({ chapters, novelId }: ChapterReaderProps) {
       </div>
 
       {/* Navigation */}
-      <div className="v2-row" style={{ justifyContent: "space-between" }}>
+      <div className="on-row" style={{ justifyContent: "space-between" }}>
         <button
-          className="v2-btn v2-btn-secondary"
+          className="on-btn on-btn-secondary"
           onClick={goPrev}
           disabled={isFirst}
           style={{ opacity: isFirst ? 0.4 : 1 }}
@@ -103,12 +103,12 @@ export function ChapterReader({ chapters, novelId }: ChapterReaderProps) {
             href={`/novels/${novelId}/chapter/${current.id}`}
             style={{ textDecoration: "none" }}
           >
-            <button className="v2-btn v2-btn-primary">
+            <button className="on-btn on-btn-primary">
               Continue this storyline
             </button>
           </Link>
         ) : (
-          <button className="v2-btn v2-btn-primary" onClick={goNext}>
+          <button className="on-btn on-btn-primary" onClick={goNext}>
             Next
           </button>
         )}

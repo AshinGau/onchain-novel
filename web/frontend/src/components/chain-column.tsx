@@ -80,7 +80,7 @@ export function ChainColumn({
 
       {/* Read storyline button */}
       <Link href={`/novels/${novelId}/read/${leafId}`} style={{ textDecoration: "none" }}>
-        <button className="v2-btn v2-btn-primary" style={{ width: "100%", justifyContent: "center" }}>
+        <button className="on-btn on-btn-primary" style={{ width: "100%", justifyContent: "center" }}>
           Read storyline
         </button>
       </Link>

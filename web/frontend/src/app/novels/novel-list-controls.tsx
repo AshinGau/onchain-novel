@@ -49,14 +49,14 @@ export function NovelListControls({
   const selectStyle: React.CSSProperties = {
     padding: "0.375rem 0.75rem",
     borderRadius: "0.5rem",
-    border: "1px solid var(--color-v2-border)",
-    background: "var(--color-v2-bg-secondary)",
-    color: "var(--color-v2-text)",
+    border: "1px solid var(--color-border)",
+    background: "var(--color-bg-secondary)",
+    color: "var(--color-text)",
     fontSize: "0.875rem",
   };
 
   return (
-    <div className="v2-row" style={{ gap: "0.75rem", flexWrap: "wrap" }}>
+    <div className="on-row" style={{ gap: "0.75rem", flexWrap: "wrap" }}>
       <select
         value={currentSort}
         onChange={(e) => navigate({ sort: e.target.value })}
@@ -81,7 +81,7 @@ export function NovelListControls({
         ))}
       </select>
 
-      <form onSubmit={handleSearchSubmit} className="v2-row" style={{ gap: "0.375rem" }}>
+      <form onSubmit={handleSearchSubmit} className="on-row" style={{ gap: "0.375rem" }}>
         <input
           type="text"
           value={search}
@@ -92,7 +92,7 @@ export function NovelListControls({
             width: "220px",
           }}
         />
-        <button type="submit" className="v2-btn v2-btn-secondary">
+        <button type="submit" className="on-btn on-btn-secondary">
           Search
         </button>
       </form>

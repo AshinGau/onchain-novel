@@ -4,7 +4,7 @@ pragma solidity ^0.8.28;
 import {DataTypes} from "../libraries/DataTypes.sol";
 
 /// @title INovelCore
-/// @notice Core interface for the Decentralized Novel Protocol V2
+/// @notice Core interface for the Decentralized Novel Protocol
 /// @dev Writing is always-on; voting is periodic and decoupled from chapter submission
 interface INovelCore {
     // ============================================================

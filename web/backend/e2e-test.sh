@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Backend E2E Test (V2 Protocol): Anvil -> Deploy -> Contract Interactions -> Indexer -> API
+# Backend E2E Test (Protocol): Anvil -> Deploy -> Contract Interactions -> Indexer -> API
 #
 # Tests the full backend pipeline:
 #   Chain events -> Indexer -> PostgreSQL -> REST API responses
@@ -154,7 +154,7 @@ trap cleanup EXIT
 # =============================================================================
 
 info "========================================="
-info "Backend E2E Test (V2 Protocol)"
+info "Backend E2E Test (Protocol)"
 info "========================================="
 
 # -- Check dependencies --
@@ -195,7 +195,7 @@ info "Phase 1: Deploy + Novel Creation + Indexing"
 info "========================================="
 
 # -- Deploy contracts --
-info "Deploying V2 contracts..."
+info "Deploying contracts..."
 PRIVATE_KEY="$PK_DEPLOYER" forge script script/Deploy.s.sol \
     --rpc-url "$RPC" --broadcast > /dev/null 2>&1
 
@@ -247,7 +247,7 @@ curl -sf "$API/health" > /dev/null 2>&1 || { fail "Backend not ready after 30s";
 pass "Backend running on port $API_PORT"
 
 # -- Create novel with root chapter + genesis fund --
-# V2 NovelConfig tuple (17 fields):
+# NovelConfig tuple (17 fields):
 #   minChapterLength=100, maxChapterLength=10000, submissionFee=0.01eth,
 #   worldLineCount=2, voteStake=0.05eth, nominationFee=0.01eth,
 #   nominateDuration=5, commitDuration=5, revealDuration=5, minRoundGap=5,
@@ -270,7 +270,7 @@ GENESIS_LEN=$(echo -n "$GENESIS_CONTENT" | wc -c | tr -d ' ')
 CREATE_RESULT=$(cast send --rpc-url "$RPC" --private-key "$PK_CREATOR" "$NOVEL_CORE" \
     "createNovel((uint64,uint64,uint256,uint32,uint256,uint256,uint64,uint64,uint64,uint64,uint16,uint16,uint8,string,uint256,uint64,uint32),(string,string,string),(bytes32,uint64,bytes))" \
     "$NOVEL_CONFIG" \
-    "('Test Novel V2', 'A decentralized collaborative novel for E2E testing', '')" \
+    "('Test Novel', 'A decentralized collaborative novel for E2E testing', '')" \
     "($GENESIS_HASH,$GENESIS_LEN,$GENESIS_HEX)" \
     --value 0.1ether --json 2>/dev/null) || true
 STATUS=$(echo "$CREATE_RESULT" | jq -r '.status' 2>/dev/null) || STATUS="0x0"
@@ -284,7 +284,7 @@ wait_indexer 30
 api_check_gte "/api/novels?limit=10" ".novels | length" 1 "GET /api/novels returns novels"
 
 # -- Verify: Novel detail --
-api_check "/api/novels/1" ".title" "Test Novel V2" "Novel title indexed correctly"
+api_check "/api/novels/1" ".title" "Test Novel" "Novel title indexed correctly"
 api_check "/api/novels/1" ".active" "true" "Novel is active"
 api_check "/api/novels/1" ".current_round" "0" "Novel current_round=0 (no round started yet)"
 api_check "/api/novels/1" ".round_phase" "0" "Novel in Idle phase"

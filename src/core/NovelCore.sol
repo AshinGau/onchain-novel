@@ -13,8 +13,8 @@ import {IPrizePool} from "../interfaces/IPrizePool.sol";
 import {IRulesEngine} from "../interfaces/IRulesEngine.sol";
 import {DataTypes} from "../libraries/DataTypes.sol";
 
-/// @title NovelCore (V2)
-/// @notice Core coordinator for the Decentralized Collaborative Novel Protocol V2.
+/// @title NovelCore
+/// @notice Core coordinator for the Decentralized Collaborative Novel Protocol.
 ///         Writing is always-on; voting is a periodic cycle decoupled from chapter submission.
 ///         Chapter tree with bidirectional traversal. DFS-based candidate generation.
 /// @dev UUPS-upgradeable. Coordinates VotingEngine, PrizePool, and RulesEngine.

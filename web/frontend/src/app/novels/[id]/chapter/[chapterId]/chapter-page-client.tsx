@@ -28,13 +28,13 @@ export function ChapterPageClient({ chapter, novel }: Props) {
   const isRevealing = novel.round_phase === 3;
 
   return (
-    <div className="v2-stack" style={{ gap: "1.5rem" }}>
+    <div className="on-stack" style={{ gap: "1.5rem" }}>
       {/* Breadcrumb */}
-      <div className="v2-row" style={{ gap: "0.5rem" }}>
+      <div className="on-row" style={{ gap: "0.5rem" }}>
         <Link
           href={`/novels/${novelId}`}
           className="text-caption"
-          style={{ color: "var(--color-v2-primary)", textDecoration: "none" }}
+          style={{ color: "var(--color-primary)", textDecoration: "none" }}
         >
           {novel.title || `Novel #${novelId}`}
         </Link>
@@ -43,26 +43,26 @@ export function ChapterPageClient({ chapter, novel }: Props) {
       </div>
 
       {/* Navigation buttons */}
-      <div className="v2-row" style={{ gap: "0.5rem", flexWrap: "wrap" }}>
+      <div className="on-row" style={{ gap: "0.5rem", flexWrap: "wrap" }}>
         {chapter.parent_id && chapter.parent_id !== "0" && (
           <Link href={`/novels/${novelId}/chapter/${chapter.parent_id}`}>
-            <button className="v2-btn v2-btn-secondary">Previous</button>
+            <button className="on-btn on-btn-secondary">Previous</button>
           </Link>
         )}
         <button
-          className="v2-btn v2-btn-secondary"
+          className="on-btn on-btn-secondary"
           onClick={() => setShowChildren(!showChildren)}
         >
           Continue ({children?.length ?? 0})
         </button>
         <Link href={`/novels/${novelId}/tree`}>
-          <button className="v2-btn v2-btn-secondary">Story Tree</button>
+          <button className="on-btn on-btn-secondary">Story Tree</button>
         </Link>
       </div>
 
       {/* Children list */}
       {showChildren && children && children.length > 0 && (
-        <div className="v2-card v2-stack" style={{ gap: "0.5rem" }}>
+        <div className="on-card on-stack" style={{ gap: "0.5rem" }}>
           <h4 className="text-caption" style={{ fontWeight: 600 }}>
             Continuations
           </h4>
@@ -73,14 +73,14 @@ export function ChapterPageClient({ chapter, novel }: Props) {
       )}
 
       {/* Chapter meta */}
-      <div className="v2-card v2-stack" style={{ gap: "0.5rem" }}>
-        <div className="v2-row" style={{ gap: "1rem", flexWrap: "wrap" }}>
+      <div className="on-card on-stack" style={{ gap: "0.5rem" }}>
+        <div className="on-row" style={{ gap: "1rem", flexWrap: "wrap" }}>
           <span className="text-caption">
             Author: {shortAddress(chapter.author)}
           </span>
-          <span className="v2-badge badge-depth">Depth: {chapter.depth}</span>
+          <span className="on-badge badge-depth">Depth: {chapter.depth}</span>
           {chapter.is_world_line && (
-            <span className="v2-badge badge-worldline">World Line</span>
+            <span className="on-badge badge-worldline">World Line</span>
           )}
           <span className="text-muted" style={{ fontSize: "0.75rem" }}>
             {timeAgo(chapter.timestamp)}
@@ -113,10 +113,10 @@ export function ChapterPageClient({ chapter, novel }: Props) {
       </div>
 
       {/* Action buttons */}
-      <div className="v2-row" style={{ gap: "0.5rem", flexWrap: "wrap" }}>
+      <div className="on-row" style={{ gap: "0.5rem", flexWrap: "wrap" }}>
         <TipButton chapterId={chapter.id} />
         <button
-          className="v2-btn v2-btn-primary"
+          className="on-btn on-btn-primary"
           onClick={() => setShowEditor(!showEditor)}
         >
           {showEditor ? "Cancel" : "Write continuation"}

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# End-to-End Integration Test: V2 Protocol
+# End-to-End Integration Test: Protocol
 #
 # Anvil -> Deploy -> Multi-role lifecycle (creator, writers, voters, keeper)
 # -> Tips, Bounties, Fork, Complete
@@ -88,9 +88,9 @@ cast block-number --rpc-url "$RPC" > /dev/null 2>&1 || fail "Anvil not reachable
 pass "Anvil running"
 
 # ═══════════════════════════════════════════════════════════════
-#  STEP 1: Deploy V2 Contracts
+#  STEP 1: Deploy Contracts
 # ═══════════════════════════════════════════════════════════════
-info "Deploying V2 contracts..."
+info "Deploying contracts..."
 PRIVATE_KEY="$PK_DEPLOYER" forge script script/Deploy.s.sol \
     --rpc-url "$RPC" --broadcast > /dev/null 2>&1
 
@@ -126,7 +126,7 @@ pass "Keeper reward set on PrizePool"
 # ═══════════════════════════════════════════════════════════════
 info "Creating novel..."
 
-# NovelConfig struct (V2):
+# NovelConfig struct:
 # (uint64 minChapterLength, uint64 maxChapterLength, uint256 submissionFee,
 #  uint32 worldLineCount, uint256 voteStake, uint256 nominationFee,
 #  uint64 nominateDuration, uint64 commitDuration, uint64 revealDuration, uint64 minRoundGap,
@@ -684,7 +684,7 @@ info "Final state: novels=$FINAL_NOVELS, chapters=$FINAL_CHAPTERS, novel1 pool=$
 
 echo ""
 echo -e "${GREEN}=================================================${NC}"
-echo -e "${GREEN}  ALL V2 E2E TESTS PASSED${NC}"
+echo -e "${GREEN}  ALL E2E TESTS PASSED${NC}"
 echo -e "${GREEN}=================================================${NC}"
 echo -e "${GREEN}  - 3 voting rounds (basic, evolution, nomination)${NC}"
 echo -e "${GREEN}  - Tips (novel + chapter)${NC}"

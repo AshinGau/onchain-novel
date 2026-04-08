@@ -1,4 +1,4 @@
--- Onchain Novel V2: Clean schema from scratch
+-- Onchain Novel: Database schema
 
 -- ============================================================
 -- NOVELS
