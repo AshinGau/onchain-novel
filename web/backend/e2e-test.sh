@@ -22,11 +22,13 @@ fail() { echo -e "${RED}[FAIL]${NC} $1"; FAIL_COUNT=$((FAIL_COUNT + 1)); }
 info() { echo -e "${YELLOW}[INFO]${NC} $1"; }
 
 # -- Config --
-RPC="http://localhost:8545"
-API="http://localhost:3901"
+# Use a non-default port so the e2e test never collides with a dev anvil on 8545.
+RPC_PORT="${E2E_RPC_PORT:-8646}"
+RPC="http://localhost:${RPC_PORT}"
+API_PORT="${E2E_API_PORT:-3901}"
+API="http://localhost:${API_PORT}"
 DB_NAME="onchain_novel_e2e_test"
 DB_URL="postgresql://localhost:5432/$DB_NAME"
-API_PORT=3901
 
 # Anvil accounts (deterministic mnemonic)
 PK_DEPLOYER="0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
@@ -42,9 +44,9 @@ ADDR_VOTER_A="0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65"
 PK_VOTER_B="0x8b3a350cf5c34c9194ca85829a2df0ec3153be0318b5e2d3348e872092edffba"
 ADDR_VOTER_B="0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc"
 PK_TIPPER="0x92db14e403b83dfe3df233f83dfa3a0d7096f21ca9b0d6d6b8d88b2b4ec1564e"
-ADDR_TIPPER="0x23618e81E3f5cdF7f54C3d65f7FBc0aBf5B21E8f"
+ADDR_TIPPER="0x976EA74026E726554dB657fA54763abd0C3a0aa9"
 PK_FORKER="0x4bbbf85ce3377467afe5d46f804f221813b2bb87f24d81f60f1fcdbf7cbf4356"
-ADDR_FORKER="0x14dC79964da2C08daa4968307cc926338e46DB64"
+ADDR_FORKER="0x14dC79964da2C08b23698B3D3cc7Ca32193d9955"
 
 cast_send() {
     local pk="$1"; shift
@@ -170,8 +172,9 @@ done
 pass "All dependencies found"
 
 # -- Start Anvil --
-info "Starting Anvil..."
-anvil --block-time 1 --silent &
+info "Starting Anvil on port ${RPC_PORT}..."
+# code-size-limit raises the EVM contract size cap; NovelCore exceeds the default 24576.
+anvil --port "$RPC_PORT" --block-time 1 --code-size-limit 50000 --silent &
 ANVIL_PID=$!
 sleep 2
 cast block-number --rpc-url "$RPC" > /dev/null 2>&1 || { fail "Anvil not reachable"; exit 1; }
@@ -195,12 +198,20 @@ info "Phase 1: Deploy + Novel Creation + Indexing"
 info "========================================="
 
 # -- Deploy contracts --
+# NovelCore exceeds the EIP-170 24576 byte limit; use --disable-code-size-limit
+# (matching the anvil --code-size-limit flag above).
 info "Deploying contracts..."
+DEPLOY_LOG="/tmp/e2e-deploy-$(date +%s).log"
 PRIVATE_KEY="$PK_DEPLOYER" forge script script/Deploy.s.sol \
-    --rpc-url "$RPC" --broadcast > /dev/null 2>&1
+    --rpc-url "$RPC" --broadcast --disable-code-size-limit > "$DEPLOY_LOG" 2>&1
 
 BROADCAST_JSON="broadcast/Deploy.s.sol/31337/run-latest.json"
-[ -f "$BROADCAST_JSON" ] || { fail "Broadcast JSON not found"; exit 1; }
+if [ ! -f "$BROADCAST_JSON" ]; then
+    fail "Broadcast JSON not found"
+    info "=== Deploy log ==="
+    tail -40 "$DEPLOY_LOG" || true
+    exit 1
+fi
 
 # Parse proxy addresses from CREATE order:
 #  [0] NovelCore impl, [1] VotingEngine impl, [2] PrizePool impl,
@@ -233,6 +244,7 @@ RULES_ENGINE_ADDRESS="$RULES_ENGINE" \
 INDEXER_START_BLOCK=0 \
 INDEXER_BATCH_SIZE=100 \
 INDEXER_POLL_INTERVAL_MS=1000 \
+INDEXER_CONFIRMATION_BLOCKS=0 \
 PORT=$API_PORT \
 npx tsx src/index.ts > "$BACKEND_LOG" 2>&1 &
 BACKEND_PID=$!
@@ -247,19 +259,24 @@ curl -sf "$API/health" > /dev/null 2>&1 || { fail "Backend not ready after 30s";
 pass "Backend running on port $API_PORT"
 
 # -- Create novel with root chapter + genesis fund --
-# NovelConfig tuple (17 fields):
+# NovelConfig tuple (19 fields):
 #   minChapterLength=100, maxChapterLength=10000, submissionFee=0.01eth,
 #   worldLineCount=2, voteStake=0.05eth, nominationFee=0.01eth,
 #   nominateDuration=5, commitDuration=5, revealDuration=5, minRoundGap=5,
 #   prizeReleaseRate=3000 (30%), voterRewardRate=2000 (20%),
+#   maxVoterReward=0 (uncapped), unrevealPenaltyFloor=0.001eth,
 #   contentLocation=0 (Onchain), contentBaseUrl='',
 #   ruleFee=0.01eth, ruleVoteDuration=60, ruleQuorum=1
-SUBMISSION_FEE="10000000000000000"   # 0.01 ether
-VOTE_STAKE="50000000000000000"       # 0.05 ether
-NOMINATION_FEE="10000000000000000"   # 0.01 ether
-RULE_FEE="10000000000000000"         # 0.01 ether
+SUBMISSION_FEE="10000000000000000"     # 0.01 ether
+VOTE_STAKE="50000000000000000"         # 0.05 ether
+NOMINATION_FEE="10000000000000000"     # 0.01 ether
+RULE_FEE="10000000000000000"           # 0.01 ether
+MAX_VOTER_REWARD="0"                   # uncapped
+UNREVEAL_PENALTY_FLOOR="1000000000000000"  # 0.001 ether
 
-NOVEL_CONFIG="(100, 10000, $SUBMISSION_FEE, 2, $VOTE_STAKE, $NOMINATION_FEE, 5, 5, 5, 5, 3000, 2000, 0, '', $RULE_FEE, 60, 1)"
+NOVEL_CONFIG="(100, 10000, $SUBMISSION_FEE, 2, $VOTE_STAKE, $NOMINATION_FEE, 5, 5, 5, 5, 3000, 2000, $MAX_VOTER_REWARD, $UNREVEAL_PENALTY_FLOOR, 0, '', $RULE_FEE, 60, 1)"
+
+NOVEL_CONFIG_TYPE="(uint64,uint64,uint256,uint32,uint256,uint256,uint64,uint64,uint64,uint64,uint16,uint16,uint256,uint256,uint8,string,uint256,uint64,uint32)"
 
 GENESIS_CONTENT="Once upon a time in a decentralized world, where stories are written by many and owned by all. The protocol hums with creative energy as writers from across the globe converge to craft tales never before imagined."
 GENESIS_HEX="0x$(echo -n "$GENESIS_CONTENT" | xxd -p | tr -d '\n')"
@@ -268,7 +285,7 @@ GENESIS_LEN=$(echo -n "$GENESIS_CONTENT" | wc -c | tr -d ' ')
 
 # createNovel(NovelConfig, NovelMetadata, ContentSubmission) — single tuple, NOT array!
 CREATE_RESULT=$(cast send --rpc-url "$RPC" --private-key "$PK_CREATOR" "$NOVEL_CORE" \
-    "createNovel((uint64,uint64,uint256,uint32,uint256,uint256,uint64,uint64,uint64,uint64,uint16,uint16,uint8,string,uint256,uint64,uint32),(string,string,string),(bytes32,uint64,bytes))" \
+    "createNovel($NOVEL_CONFIG_TYPE,(string,string,string),(bytes32,uint64,bytes))" \
     "$NOVEL_CONFIG" \
     "('Test Novel', 'A decentralized collaborative novel for E2E testing', '')" \
     "($GENESIS_HASH,$GENESIS_LEN,$GENESIS_HEX)" \
@@ -428,7 +445,7 @@ STATUS=$(cast_send "$PK_VOTER_B" "$NOVEL_CORE" \
 advance_time 10
 
 # Record pool balance before settle
-POOL_BEFORE=$(cast call --rpc-url "$RPC" "$PRIZE_POOL" "getPoolBalance(uint64)(uint256)" 1 2>/dev/null) || POOL_BEFORE=0
+POOL_BEFORE=$(cast call --rpc-url "$RPC" "$PRIZE_POOL" "getPoolBalance(uint64)(uint256)" 1 2>/dev/null | awk '{print $1}') || POOL_BEFORE=0
 info "Pool balance before settleRound: $POOL_BEFORE"
 
 # settleRound
@@ -444,7 +461,7 @@ api_check "/api/novels/1" ".round_phase" "0" "Round phase back to Idle after set
 api_check_gte "/api/novels/1/worldlines" ".worldlines | length" 1 "World lines updated after round settle"
 
 # Verify: pool balance decreased (rewards distributed)
-POOL_AFTER=$(cast call --rpc-url "$RPC" "$PRIZE_POOL" "getPoolBalance(uint64)(uint256)" 1 2>/dev/null) || POOL_AFTER=0
+POOL_AFTER=$(cast call --rpc-url "$RPC" "$PRIZE_POOL" "getPoolBalance(uint64)(uint256)" 1 2>/dev/null | awk '{print $1}') || POOL_AFTER=0
 info "Pool balance after settleRound: $POOL_AFTER"
 if [ "$POOL_AFTER" -lt "$POOL_BEFORE" ] 2>/dev/null; then
     pass "Pool balance decreased after round settle ($POOL_BEFORE -> $POOL_AFTER)"
@@ -560,7 +577,7 @@ STATUS=$(cast_send "$PK_TIPPER" "$NOVEL_CORE" "tipChapter(uint64)" 2 --value 0.0
 [ "$STATUS" = "0x1" ] && pass "tipChapter(2) -- 0.01 ETH" || fail "tipChapter failed"
 
 # Verify pool balance increased
-POOL_AFTER_TIP=$(cast call --rpc-url "$RPC" "$PRIZE_POOL" "getPoolBalance(uint64)(uint256)" 1 2>/dev/null) || POOL_AFTER_TIP=0
+POOL_AFTER_TIP=$(cast call --rpc-url "$RPC" "$PRIZE_POOL" "getPoolBalance(uint64)(uint256)" 1 2>/dev/null | awk '{print $1}') || POOL_AFTER_TIP=0
 info "Pool balance after tips: $POOL_AFTER_TIP"
 if [ "$POOL_AFTER_TIP" -gt "$POOL_AFTER" ] 2>/dev/null; then
     pass "Pool balance increased after tips"
@@ -584,7 +601,7 @@ info "Phase 6: Bounty Board"
 info "========================================="
 
 # Create bounty on chapter 2 (set deadline 30s in the future)
-CURRENT_TIMESTAMP=$(cast block --rpc-url "$RPC" latest -j 2>/dev/null | jq -r '.timestamp' | xargs printf '%d\n')
+CURRENT_TIMESTAMP=$(cast block --rpc-url "$RPC" latest -f timestamp 2>/dev/null)
 BOUNTY_DEADLINE=$((CURRENT_TIMESTAMP + 30))
 info "Creating bounty with deadline=$BOUNTY_DEADLINE (now=$CURRENT_TIMESTAMP)"
 
@@ -608,7 +625,7 @@ STATUS=$(cast_send "$PK_WRITER_A" "$BOUNTY_BOARD" "claimBounty(uint256)" 0)
 [ "$STATUS" = "0x1" ] && pass "Writer A claimed bounty 0" || fail "claimBounty failed"
 
 # Create another bounty on chapter 3 with a short deadline, no continuations -> refund
-CURRENT_TIMESTAMP2=$(cast block --rpc-url "$RPC" latest -j 2>/dev/null | jq -r '.timestamp' | xargs printf '%d\n')
+CURRENT_TIMESTAMP2=$(cast block --rpc-url "$RPC" latest -f timestamp 2>/dev/null)
 BOUNTY_DEADLINE2=$((CURRENT_TIMESTAMP2 + 10))
 
 STATUS=$(cast_send "$PK_TIPPER" "$BOUNTY_BOARD" \
@@ -643,11 +660,11 @@ FORK_LEN=$(echo -n "$FORK_CONTENT" | wc -c | tr -d ' ')
 
 # forkNovel(sourceChapterId, NovelConfig, NovelMetadata, ContentSubmission) payable
 # Fork from chapter 2. Must send enough: forkFee + submissionFee
-# forkFee = max(submissionFee, poolBalance * 500 / 10000)
-FORK_CONFIG="(100, 10000, $SUBMISSION_FEE, 2, $VOTE_STAKE, $NOMINATION_FEE, 5, 5, 5, 5, 3000, 2000, 0, '', $RULE_FEE, 60, 1)"
+# forkFee = max(submissionFee, poolBalance * FORK_FEE_RATE / 10000)
+FORK_CONFIG="$NOVEL_CONFIG"
 
 STATUS=$(cast_send "$PK_FORKER" "$NOVEL_CORE" \
-    "forkNovel(uint64,(uint64,uint64,uint256,uint32,uint256,uint256,uint64,uint64,uint64,uint64,uint16,uint16,uint8,string,uint256,uint64,uint32),(string,string,string),(bytes32,uint64,bytes))" \
+    "forkNovel(uint64,$NOVEL_CONFIG_TYPE,(string,string,string),(bytes32,uint64,bytes))" \
     2 \
     "$FORK_CONFIG" \
     "('Forked Tale', 'A fork from chapter 2 of the original novel', '')" \
@@ -739,6 +756,97 @@ api_check "/api/novels/2" ".active" "false" "Forked novel active=false after com
 
 # Verify original novel still active
 api_check "/api/novels/1" ".active" "true" "Original novel still active"
+
+# =============================================================================
+# PHASE 11: Off-chain comments (EIP-191 signed)
+# =============================================================================
+
+info "========================================="
+info "Phase 11: Comments (off-chain, signed)"
+info "========================================="
+
+# Sign the canonical message: "Comment on chapter {id} at {ts}: {content}"
+COMMENT_TS=$(date +%s)
+COMMENT_CHAPTER_ID=2
+COMMENT_TEXT="Great chapter, looking forward to the next one"
+COMMENT_MSG="Comment on chapter ${COMMENT_CHAPTER_ID} at ${COMMENT_TS}: ${COMMENT_TEXT}"
+COMMENT_SIG=$(cast wallet sign --private-key "$PK_TIPPER" "$COMMENT_MSG")
+COMMENT_BODY=$(jq -nc \
+    --arg addr "$ADDR_TIPPER" \
+    --arg content "$COMMENT_TEXT" \
+    --argjson ts "$COMMENT_TS" \
+    --arg sig "$COMMENT_SIG" \
+    '{address: $addr, content: $content, timestamp: $ts, signature: $sig}')
+
+POST_RESP=$(curl -sf -X POST -H "Content-Type: application/json" \
+    -d "$COMMENT_BODY" "$API/api/chapters/${COMMENT_CHAPTER_ID}/comments" 2>/dev/null) || true
+if [ -n "$POST_RESP" ] && [ "$(echo "$POST_RESP" | jq -r '.id')" != "null" ]; then
+    pass "POST /api/chapters/${COMMENT_CHAPTER_ID}/comments accepted signed comment"
+else
+    fail "POST comment failed (response: $POST_RESP)"
+fi
+
+# GET should now return the comment we just posted
+api_check_gte "/api/chapters/${COMMENT_CHAPTER_ID}/comments" ".comments | length" 1 "Posted comment is retrievable"
+
+# Reject: bad signature
+BAD_BODY=$(jq -nc \
+    --arg addr "$ADDR_TIPPER" \
+    --arg content "$COMMENT_TEXT" \
+    --argjson ts "$COMMENT_TS" \
+    --arg sig "0x00" \
+    '{address: $addr, content: $content, timestamp: $ts, signature: $sig}')
+HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST -H "Content-Type: application/json" \
+    -d "$BAD_BODY" "$API/api/chapters/${COMMENT_CHAPTER_ID}/comments")
+[ "$HTTP_CODE" = "401" ] && pass "POST comment rejects bad signature (401)" || fail "Bad-sig got HTTP $HTTP_CODE, expected 401"
+
+# Reject: stale timestamp (10 minutes ago)
+STALE_TS=$((COMMENT_TS - 600))
+STALE_MSG="Comment on chapter ${COMMENT_CHAPTER_ID} at ${STALE_TS}: stale"
+STALE_SIG=$(cast wallet sign --private-key "$PK_TIPPER" "$STALE_MSG")
+STALE_BODY=$(jq -nc \
+    --arg addr "$ADDR_TIPPER" \
+    --arg content "stale" \
+    --argjson ts "$STALE_TS" \
+    --arg sig "$STALE_SIG" \
+    '{address: $addr, content: $content, timestamp: $ts, signature: $sig}')
+HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST -H "Content-Type: application/json" \
+    -d "$STALE_BODY" "$API/api/chapters/${COMMENT_CHAPTER_ID}/comments")
+[ "$HTTP_CODE" = "400" ] && pass "POST comment rejects stale timestamp (400)" || fail "Stale-ts got HTTP $HTTP_CODE, expected 400"
+
+# =============================================================================
+# PHASE 12: NovelConfig new fields are indexed
+# =============================================================================
+
+info "========================================="
+info "Phase 12: maxVoterReward / unrevealPenaltyFloor in indexed config"
+info "========================================="
+
+api_check "/api/novels/1" ".config.maxVoterReward" "$MAX_VOTER_REWARD" "Indexed config carries maxVoterReward"
+api_check "/api/novels/1" ".config.unrevealPenaltyFloor" "$UNREVEAL_PENALTY_FLOOR" "Indexed config carries unrevealPenaltyFloor"
+
+# =============================================================================
+# PHASE 13: votes/submit (keeper-assisted reveal endpoint, no encryption key configured)
+# =============================================================================
+
+info "========================================="
+info "Phase 13: POST /api/votes/submit (disabled when VOTE_ENCRYPTION_KEY unset)"
+info "========================================="
+
+# With no VOTE_ENCRYPTION_KEY in this test, the endpoint should respond 503
+SUBMIT_TS=$(date +%s)
+SUBMIT_BODY=$(jq -nc \
+    --arg addr "$ADDR_VOTER_A" \
+    --argjson novelId 1 \
+    --argjson round 1 \
+    --argjson candidateId 4 \
+    --arg salt "0x0000000000000000000000000000000000000000000000000000000000000001" \
+    --argjson ts "$SUBMIT_TS" \
+    --arg sig "0x00" \
+    '{address: $addr, novelId: $novelId, round: $round, candidateId: $candidateId, salt: $salt, timestamp: $ts, signature: $sig}')
+HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST -H "Content-Type: application/json" \
+    -d "$SUBMIT_BODY" "$API/api/votes/submit")
+[ "$HTTP_CODE" = "503" ] && pass "POST /api/votes/submit returns 503 when keeper-assisted reveal disabled" || fail "votes/submit got HTTP $HTTP_CODE, expected 503"
 
 # -- Health check --
 api_check "/health" ".status" "ok" "Health endpoint returns ok"

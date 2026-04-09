@@ -145,19 +145,37 @@ CREATE INDEX idx_reward_claims_claimant ON reward_claims(LOWER(claimant));
 CREATE INDEX idx_reward_claims_novel ON reward_claims(novel_id);
 
 -- ============================================================
--- COMMENTS
+-- COMMENTS (off-chain, EIP-191 signed, append-only)
 -- ============================================================
 
 CREATE TABLE comments (
   id              SERIAL PRIMARY KEY,
   chapter_id      BIGINT NOT NULL,
-  author_address  TEXT,
+  author          TEXT NOT NULL,
   content         TEXT NOT NULL,
-  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  deleted         BOOLEAN NOT NULL DEFAULT FALSE
+  signature       TEXT NOT NULL,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_comments_chapter ON comments(chapter_id) WHERE deleted = FALSE;
+CREATE INDEX idx_comments_chapter ON comments(chapter_id, created_at DESC);
+CREATE INDEX idx_comments_author ON comments(LOWER(author));
+
+-- ============================================================
+-- PENDING VOTES (keeper-assisted reveal: encrypted plaintext votes)
+-- ============================================================
+
+CREATE TABLE pending_votes (
+  novel_id        BIGINT NOT NULL,
+  round           INT NOT NULL,
+  voter           TEXT NOT NULL,    -- always stored lowercase
+  candidate_id    BIGINT NOT NULL,
+  salt_encrypted  TEXT NOT NULL,    -- AES-GCM(VOTE_ENCRYPTION_KEY) of the salt hex
+  status          TEXT NOT NULL DEFAULT 'committed', -- committed | revealed | failed
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (novel_id, round, voter)
+);
+
+CREATE INDEX idx_pending_votes_status ON pending_votes(novel_id, round, status);
 
 -- ============================================================
 -- RULES

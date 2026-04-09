@@ -1,9 +1,15 @@
 import { Router } from "express";
 import { query } from "../db/index.js";
-import { verifyWallet } from "../utils/auth.js";
+import { verifyEip191 } from "../utils/auth.js";
 import { safeInt } from "../utils/validate.js";
 
 const router = Router();
+
+// Per-address rate limit for comments: 10 per chapter per hour, enforced inline
+const COMMENT_WINDOW_MS = 60 * 60 * 1000;
+const COMMENT_MAX_PER_WINDOW = 10;
+// Reject signed messages older than this (replay protection)
+const COMMENT_TIMESTAMP_TOLERANCE_MS = 5 * 60 * 1000;
 
 // GET /api/chapters/:id — Chapter detail with content
 router.get("/:id", async (req, res) => {
@@ -105,7 +111,7 @@ router.get("/:id/comments", async (req, res) => {
     const offset = (page - 1) * limit;
 
     const commentsRes = await query(
-      "SELECT * FROM comments WHERE chapter_id = $1 AND deleted = FALSE ORDER BY created_at DESC LIMIT $2 OFFSET $3",
+      "SELECT id, chapter_id, author, content, created_at FROM comments WHERE chapter_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3",
       [id, limit, offset]
     );
     res.json({ comments: commentsRes.rows });
@@ -115,55 +121,66 @@ router.get("/:id/comments", async (req, res) => {
   }
 });
 
-// POST /api/chapters/:id/comments — Create a comment (requires wallet signature)
-router.post("/:id/comments", verifyWallet, async (req, res) => {
+// POST /api/chapters/:id/comments — Append a new comment (EIP-191 signed)
+//
+// Request body: { address, content, timestamp, signature }
+// Canonical message format:  Comment on chapter {id} at {timestamp}: {content}
+// Reject if: signature mismatch, timestamp too old, rate limit exceeded.
+router.post("/:id/comments", async (req, res) => {
   try {
     const { id } = req.params;
-    const { content } = req.body;
-    const authorAddress = req.verifiedAddress;
+    const { address, content, timestamp, signature } = req.body ?? {};
 
-    if (!content || typeof content !== "string" || content.trim().length === 0) {
-      return res.status(400).json({ error: "Content is required" });
+    if (typeof address !== "string" || typeof signature !== "string") {
+      return res.status(400).json({ error: "address and signature are required" });
+    }
+    if (typeof content !== "string" || content.trim().length === 0) {
+      return res.status(400).json({ error: "content is required" });
     }
     if (content.length > 5000) {
-      return res.status(400).json({ error: "Content must be 5000 characters or less" });
+      return res.status(400).json({ error: "content must be 5000 characters or less" });
+    }
+    const ts = Number(timestamp);
+    if (!Number.isFinite(ts) || ts <= 0) {
+      return res.status(400).json({ error: "timestamp is required (unix seconds)" });
+    }
+
+    // Replay protection: timestamp must be within tolerance window
+    const nowMs = Date.now();
+    if (Math.abs(nowMs - ts * 1000) > COMMENT_TIMESTAMP_TOLERANCE_MS) {
+      return res.status(400).json({ error: "timestamp out of tolerance window" });
     }
 
     // Verify chapter exists
     const chapterRes = await query("SELECT id FROM chapters WHERE id = $1", [id]);
     if (chapterRes.rows.length === 0) {
-      return res.status(404).json({ error: "Chapter not found" });
+      return res.status(404).json({ error: "chapter not found" });
+    }
+
+    // Verify EIP-191 signature against canonical message
+    const message = `Comment on chapter ${id} at ${ts}: ${content}`;
+    const verified = await verifyEip191(address, message, signature);
+    if (!verified) {
+      return res.status(401).json({ error: "invalid signature" });
+    }
+
+    // Per-address rate limit on this chapter
+    const rateRes = await query(
+      "SELECT COUNT(*)::int AS n FROM comments WHERE chapter_id = $1 AND LOWER(author) = $2 AND created_at > NOW() - ($3 || ' milliseconds')::interval",
+      [id, verified, COMMENT_WINDOW_MS]
+    );
+    if (rateRes.rows[0].n >= COMMENT_MAX_PER_WINDOW) {
+      return res.status(429).json({ error: "rate limit exceeded for this chapter" });
     }
 
     const result = await query(
-      "INSERT INTO comments (chapter_id, author_address, content) VALUES ($1, $2, $3) RETURNING *",
-      [id, authorAddress || null, content.trim()]
+      "INSERT INTO comments (chapter_id, author, content, signature) VALUES ($1, $2, $3, $4) RETURNING id, chapter_id, author, content, created_at",
+      [id, verified, content.trim(), signature]
     );
 
     res.status(201).json(result.rows[0]);
   } catch (err) {
     console.error("POST /api/chapters/:id/comments error:", err);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-// DELETE /api/chapters/:id/comments/:commentId — Soft-delete (requires wallet signature)
-router.delete("/:id/comments/:commentId", verifyWallet, async (req, res) => {
-  try {
-    const { id, commentId } = req.params;
-    const authorAddress = req.verifiedAddress;
-
-    // Atomic: delete only if owned by this address
-    const result = await query(
-      "UPDATE comments SET deleted = TRUE WHERE id = $1 AND chapter_id = $2 AND deleted = FALSE AND LOWER(author_address) = LOWER($3) RETURNING id",
-      [commentId, id, authorAddress]
-    );
-    if (result.rows.length === 0) {
-      return res.status(403).json({ error: "Comment not found or not owned by you" });
-    }
-    res.json({ success: true });
-  } catch (err) {
-    console.error("DELETE /api/chapters/:id/comments/:commentId error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });
