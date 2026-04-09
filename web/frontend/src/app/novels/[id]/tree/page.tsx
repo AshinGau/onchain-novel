@@ -14,28 +14,20 @@ export default async function TreePage({
   ]);
 
   return (
-    <div className="on-container on-stack" style={{ paddingTop: "1.5rem", paddingBottom: "2rem" }}>
-      <div className="on-row" style={{ justifyContent: "space-between", flexWrap: "wrap" }}>
-        <div className="on-row" style={{ gap: "0.75rem" }}>
-          <a
-            href={`/novels/${id}`}
-            className="text-caption"
-            style={{ color: "var(--color-primary)", textDecoration: "none" }}
-          >
-            &larr; {novel.title || `Novel #${id}`}
+    <div className="on-container on-stack">
+      <div className="on-row-between">
+        <div className="on-row">
+          <a href={`/novels/${id}`} className="text-link text-caption">
+            ← {novel.title || `Novel #${id}`}
           </a>
-          <h1 className="text-heading" style={{ margin: 0 }}>
-            Story Tree
-          </h1>
+          <h1 className="text-heading">Story Tree</h1>
         </div>
-        <span className="text-caption">
-          {treeData.chapters.length} chapters
-        </span>
+        <span className="text-caption">{treeData.chapters.length} chapters</span>
       </div>
 
       <TreePageClient novelId={id} chapters={treeData.chapters} />
 
-      <p className="text-caption text-muted" style={{ textAlign: "center" }}>
+      <p className="text-caption on-text-center">
         Click a node to view chapter details. Scroll to zoom, drag to pan.
       </p>
     </div>

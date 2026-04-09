@@ -55,6 +55,10 @@ export interface NovelConfig {
   minRoundGap: number;
   prizeReleaseRate: number;
   voterRewardRate: number;
+  /** Per-address voter reward cap per round, in wei. "0" = uncapped. */
+  maxVoterReward: string;
+  /** Minimum penalty for unrevealed votes, in wei. */
+  unrevealPenaltyFloor: string;
   contentLocation: number;
   contentBaseUrl: string;
 }
@@ -185,4 +189,64 @@ export interface Tip {
   tipper: string;
   amount: string;
   block_number: string;
+}
+
+/* ============================================================
+   Comments (off-chain, EIP-191 signed)
+   ============================================================ */
+
+export interface Comment {
+  id: number;
+  chapter_id: string;
+  author: string;
+  content: string;
+  created_at: string;
+}
+
+export function fetchComments(chapterId: string, page = 1, limit = 20) {
+  return apiFetch<{ comments: Comment[] }>(
+    `/chapters/${chapterId}/comments?page=${page}&limit=${limit}`
+  );
+}
+
+/**
+ * POST a signed comment. Returns the created comment row on success,
+ * or { status, error } on failure (does NOT throw on 4xx).
+ */
+export async function postComment(
+  chapterId: string,
+  body: { address: string; content: string; timestamp: number; signature: string },
+): Promise<{ ok: true; comment: Comment } | { ok: false; status: number; error: string }> {
+  const res = await fetch(`${API_URL}/chapters/${chapterId}/comments`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (res.status === 201) {
+    const comment = (await res.json()) as Comment;
+    return { ok: true, comment };
+  }
+  const text = await res.text().catch(() => "");
+  return { ok: false, status: res.status, error: text };
+}
+
+/* ============================================================
+   Keeper-assisted reveal: submit plaintext vote
+   ============================================================ */
+
+export async function submitVotePlaintext(body: {
+  address: string;
+  novelId: number;
+  round: number;
+  candidateId: number;
+  salt: `0x${string}`;
+  timestamp: number;
+  signature: string;
+}): Promise<{ status: number; ok: boolean }> {
+  const res = await fetch(`${API_URL}/votes/submit`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return { status: res.status, ok: res.status === 201 };
 }

@@ -1,7 +1,21 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useAccount } from "wagmi";
+/**
+ * Vote panel for the chapter page.
+ *
+ * Per docs/frontend.md §8:
+ *   - Auto-generates a 32-byte salt (the user never sees it).
+ *   - Computes commitHash = keccak256(abi.encodePacked(uint64(candidateId), bytes32(salt))).
+ *   - Sends commitVote on-chain with voteStake.
+ *   - On success: signs canonical message and POSTs plaintext (candidateId, salt) to
+ *     /api/votes/submit so the backend keeper can auto-reveal during the reveal phase.
+ *   - Salt is also persisted to localStorage as a fallback for manual reveal.
+ *
+ * Per docs/frontend.md §10: Nominating UI is not exposed here (CLI/MCP only).
+ */
+
+import { useEffect, useState } from "react";
+import { useAccount, useSignMessage } from "wagmi";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useTxAction } from "@/hooks/use-tx-action";
 import { NOVEL_CORE_ADDRESS, novelCoreAbi } from "@/lib/contracts";
@@ -9,9 +23,11 @@ import {
   saveVote,
   loadVote,
   clearVote,
-  toBytes32Salt,
+  generateSalt,
   computeCommitHash,
+  type StoredVote,
 } from "@/lib/vote-storage";
+import { submitVotePlaintext } from "@/lib/api";
 
 interface VotePanelProps {
   novelId: string;
@@ -29,28 +45,44 @@ export function VotePanel({
   candidateId,
   voteStake,
 }: VotePanelProps) {
-  const { isConnected } = useAccount();
-  const [saltInput, setSaltInput] = useState("");
-  const { send, status, error, isPending, reset } = useTxAction();
-  const [storedVote, setStoredVote] = useState(loadVote(novelId, round));
+  const { address, isConnected } = useAccount();
+  const { signMessageAsync } = useSignMessage();
+  const { send, error, isPending } = useTxAction();
+  const [storedVote, setStoredVote] = useState<StoredVote | null>(null);
+  const [submitNote, setSubmitNote] = useState<string | null>(null);
 
+  // Hydrate stored vote on the client only (avoid SSR/CSR mismatch)
   useEffect(() => {
     setStoredVote(loadVote(novelId, round));
   }, [novelId, round]);
 
-  if (!isConnected) {
+  if (!isConnected || !address) {
     return (
-      <div className="on-card on-stack" style={{ gap: "0.5rem", alignItems: "center" }}>
+      <div className="on-card">
         <p className="text-caption">Connect wallet to vote</p>
         <ConnectButton />
       </div>
     );
   }
 
-  // Committing phase
+  // ── Committing phase ──
   if (phase === 2) {
+    if (storedVote) {
+      return (
+        <div className="on-card">
+          <p className="text-success">
+            Vote committed for Ch.{storedVote.candidateId}.{" "}
+            {storedVote.keeperSubmitted
+              ? "Keeper will auto-reveal."
+              : "You will need to reveal manually during the reveal phase."}
+          </p>
+        </div>
+      );
+    }
+
     async function handleCommit() {
-      const salt = toBytes32Salt(saltInput);
+      setSubmitNote(null);
+      const salt = generateSalt();
       const commitHash = computeCommitHash(BigInt(candidateId), salt);
 
       await send(
@@ -61,124 +93,145 @@ export function VotePanel({
           args: [BigInt(novelId), commitHash],
           value: BigInt(voteStake),
         },
-        () => {
-          saveVote(novelId, round, candidateId, saltInput);
-          setStoredVote({ candidateId, salt: saltInput });
-        }
-      );
-    }
+        async () => {
+          // After on-chain commit succeeds, attempt keeper-assisted reveal submission.
+          // Failure here is non-fatal: the salt is still saved locally for manual reveal.
+          let keeperSubmitted = false;
+          try {
+            const ts = Math.floor(Date.now() / 1000);
+            const message =
+              `Submit vote on novel ${novelId} round ${round} for candidate ${candidateId} at ${ts}`;
+            const signature = await signMessageAsync({ message });
+            const result = await submitVotePlaintext({
+              address: address!,
+              novelId: Number(novelId),
+              round,
+              candidateId: Number(candidateId),
+              salt,
+              timestamp: ts,
+              signature,
+            });
+            keeperSubmitted = result.ok;
+            if (!result.ok) {
+              setSubmitNote(
+                result.status === 503
+                  ? "Keeper-assisted reveal disabled. You will need to reveal manually."
+                  : `Keeper submission failed (${result.status}). You will need to reveal manually.`,
+              );
+            }
+          } catch {
+            setSubmitNote("Could not submit to keeper. You will need to reveal manually.");
+          }
 
-    if (storedVote) {
-      return (
-        <div className="on-card on-stack" style={{ gap: "0.5rem" }}>
-          <p style={{ color: "var(--color-success)", margin: 0, fontSize: "0.875rem" }}>
-            Vote committed for Ch.{storedVote.candidateId}. Wait for reveal phase.
-          </p>
-        </div>
+          saveVote(novelId, round, candidateId, salt, keeperSubmitted);
+          setStoredVote({ candidateId, salt, keeperSubmitted });
+        },
       );
     }
 
     return (
-      <div className="on-card on-stack" style={{ gap: "0.75rem" }}>
-        <h4 className="text-subheading" style={{ margin: 0 }}>
-          Vote for Ch.{candidateId}
-        </h4>
-        <div className="on-stack" style={{ gap: "0.5rem" }}>
-          <label className="text-caption">Salt (remember this for reveal):</label>
-          <input
-            type="text"
-            value={saltInput}
-            onChange={(e) => setSaltInput(e.target.value)}
-            placeholder="Enter a secret salt..."
-            style={{
-              padding: "0.5rem 0.75rem",
-              borderRadius: "0.5rem",
-              border: "1px solid var(--color-border)",
-              background: "var(--color-bg-secondary)",
-              color: "var(--color-text)",
-              fontSize: "0.875rem",
-            }}
-          />
-          <span className="text-caption text-muted">
-            Stake: {voteStake} wei
-          </span>
-        </div>
+      <div className="on-card">
+        <h4 className="text-subheading">Vote for Ch.{candidateId}</h4>
+        <p className="text-caption">Stake: {voteStake} wei</p>
         <button
+          type="button"
           className="on-btn on-btn-primary"
           onClick={handleCommit}
-          disabled={!saltInput.trim() || isPending}
-          style={{ opacity: !saltInput.trim() || isPending ? 0.5 : 1 }}
+          disabled={isPending}
         >
-          {isPending ? "Committing..." : "Commit Vote"}
+          {isPending ? "Committing…" : "Commit vote"}
         </button>
-        {error && (
-          <p style={{ color: "var(--color-danger)", margin: 0, fontSize: "0.875rem" }}>
-            {error}
-          </p>
-        )}
+        {submitNote && <p className="text-caption text-muted">{submitNote}</p>}
+        {error && <p className="text-danger">{error}</p>}
       </div>
     );
   }
 
-  // Revealing phase
+  // ── Revealing phase ──
   if (phase === 3) {
-    async function handleReveal() {
-      if (!storedVote) return;
-      const salt = toBytes32Salt(storedVote.salt);
-
-      await send(
-        {
-          address: NOVEL_CORE_ADDRESS,
-          abi: novelCoreAbi,
-          functionName: "revealVote",
-          args: [BigInt(novelId), BigInt(storedVote.candidateId), salt],
-        },
-        () => {
-          clearVote(novelId, round);
-          setStoredVote(null);
-        }
-      );
-    }
-
     if (!storedVote) {
       return (
-        <div className="on-card on-stack" style={{ gap: "0.5rem" }}>
-          <p className="text-caption text-muted">
-            No saved vote found for this round. You may have already revealed or not committed.
+        <div className="on-card">
+          <p className="text-muted">
+            No saved vote found for this round. You may have already revealed or did not commit.
           </p>
         </div>
       );
     }
 
+    if (storedVote.keeperSubmitted) {
+      return (
+        <div className="on-card">
+          <p className="text-success">
+            Vote committed for Ch.{storedVote.candidateId}. The keeper will reveal it
+            automatically; manual reveal is only needed if the keeper fails.
+          </p>
+          <ManualRevealButton
+            novelId={novelId}
+            stored={storedVote}
+            onRevealed={() => {
+              clearVote(novelId, round);
+              setStoredVote(null);
+            }}
+          />
+        </div>
+      );
+    }
+
     return (
-      <div className="on-card on-stack" style={{ gap: "0.75rem" }}>
-        <h4 className="text-subheading" style={{ margin: 0 }}>
-          Reveal Vote
-        </h4>
-        <p className="text-caption">
-          Candidate: Ch.{storedVote.candidateId} | Salt: {storedVote.salt}
-        </p>
-        <button
-          className="on-btn on-btn-primary"
-          onClick={handleReveal}
-          disabled={isPending}
-          style={{ opacity: isPending ? 0.5 : 1 }}
-        >
-          {isPending ? "Revealing..." : "Reveal Vote"}
-        </button>
-        {status === "success" && (
-          <p style={{ color: "var(--color-success)", margin: 0, fontSize: "0.875rem" }}>
-            Vote revealed! Wait for settlement.
-          </p>
-        )}
-        {error && (
-          <p style={{ color: "var(--color-danger)", margin: 0, fontSize: "0.875rem" }}>
-            {error}
-          </p>
-        )}
+      <div className="on-card">
+        <h4 className="text-subheading">Reveal vote</h4>
+        <p className="text-caption">Candidate: Ch.{storedVote.candidateId}</p>
+        <ManualRevealButton
+          novelId={novelId}
+          stored={storedVote}
+          onRevealed={() => {
+            clearVote(novelId, round);
+            setStoredVote(null);
+          }}
+        />
       </div>
     );
   }
 
   return null;
+}
+
+function ManualRevealButton({
+  novelId,
+  stored,
+  onRevealed,
+}: {
+  novelId: string;
+  stored: StoredVote;
+  onRevealed: () => void;
+}) {
+  const { send, error, isPending, status } = useTxAction();
+
+  async function handleReveal() {
+    await send(
+      {
+        address: NOVEL_CORE_ADDRESS,
+        abi: novelCoreAbi,
+        functionName: "revealVote",
+        args: [BigInt(novelId), BigInt(stored.candidateId), stored.salt],
+      },
+      onRevealed,
+    );
+  }
+
+  return (
+    <div className="on-stack on-stack-sm">
+      <button
+        type="button"
+        className="on-btn on-btn-secondary"
+        onClick={handleReveal}
+        disabled={isPending}
+      >
+        {isPending ? "Revealing…" : "Reveal manually"}
+      </button>
+      {status === "success" && <p className="text-success">Vote revealed.</p>}
+      {error && <p className="text-danger">{error}</p>}
+    </div>
+  );
 }

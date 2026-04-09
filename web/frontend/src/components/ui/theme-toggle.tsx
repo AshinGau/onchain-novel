@@ -8,8 +8,11 @@ export function ThemeToggle() {
   const [theme, setTheme] = useState<"light" | "dark">("dark");
 
   useEffect(() => {
+    // Sync with external state (localStorage / OS theme). This is the legitimate
+    // "external state → React" sync use case; setState in effect is intentional here.
     const stored = localStorage.getItem("theme");
     if (stored === "light" || stored === "dark") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTheme(stored);
     } else if (window.matchMedia("(prefers-color-scheme: light)").matches) {
       setTheme("light");

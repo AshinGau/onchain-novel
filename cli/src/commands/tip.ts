@@ -5,7 +5,7 @@ import {
   tipChapter as tipChapterTx,
   claimReward as claimRewardTx,
 } from "../shared/index.js";
-import { getWalletClient, getContracts } from "../utils/client.js";
+import { getWalletClient, getContracts, waitForTx } from "../utils/client.js";
 import { success, error, txHash } from "../utils/format.js";
 
 export function registerTipCommands(program: Command): void {
@@ -25,6 +25,7 @@ export function registerTipCommands(program: Command): void {
           novelCore: contracts.novelCore,
         });
         txHash(hash);
+        await waitForTx(hash);
         success(`Tipped novel #${novelId} with ${opts.value} ETH`);
       } catch (err) {
         error(String(err));
@@ -46,6 +47,7 @@ export function registerTipCommands(program: Command): void {
           novelCore: contracts.novelCore,
         });
         txHash(hash);
+        await waitForTx(hash);
         success(`Tipped chapter #${chapterId} with ${opts.value} ETH`);
       } catch (err) {
         error(String(err));
@@ -62,6 +64,7 @@ export function registerTipCommands(program: Command): void {
         const contracts = getContracts();
         const hash = await claimRewardTx(client, BigInt(novelId), contracts.novelCore);
         txHash(hash);
+        await waitForTx(hash);
         success("Rewards claimed");
       } catch (err) {
         error(String(err));

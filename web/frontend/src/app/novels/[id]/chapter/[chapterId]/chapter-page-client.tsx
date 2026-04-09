@@ -4,10 +4,11 @@ import { useState } from "react";
 import Link from "next/link";
 import type { ChapterDetail, Novel, ChapterSummary } from "@/lib/api";
 import { useChapterChildren, useChapterBounties, useChapterTips } from "@/hooks/use-chapter";
-import { shortAddress, formatBalance, timeAgo } from "@/lib/format";
+import { shortAddress, timeAgo } from "@/lib/format";
 import { ChapterCardMini } from "@/components/chapter-card-mini";
 import { ChapterEditor } from "@/components/chapter-editor";
 import { VotePanel } from "@/components/vote-panel";
+import { CommentList } from "@/components/comment-list";
 import { TipButton } from "./tip-button";
 
 interface Props {
@@ -28,14 +29,10 @@ export function ChapterPageClient({ chapter, novel }: Props) {
   const isRevealing = novel.round_phase === 3;
 
   return (
-    <div className="on-stack" style={{ gap: "1.5rem" }}>
+    <div className="on-stack on-stack-lg">
       {/* Breadcrumb */}
-      <div className="on-row" style={{ gap: "0.5rem" }}>
-        <Link
-          href={`/novels/${novelId}`}
-          className="text-caption"
-          style={{ color: "var(--color-primary)", textDecoration: "none" }}
-        >
+      <div className="on-row">
+        <Link href={`/novels/${novelId}`} className="text-link text-caption">
           {novel.title || `Novel #${novelId}`}
         </Link>
         <span className="text-muted">/</span>
@@ -43,29 +40,28 @@ export function ChapterPageClient({ chapter, novel }: Props) {
       </div>
 
       {/* Navigation buttons */}
-      <div className="on-row" style={{ gap: "0.5rem", flexWrap: "wrap" }}>
+      <div className="on-row-wrap">
         {chapter.parent_id && chapter.parent_id !== "0" && (
           <Link href={`/novels/${novelId}/chapter/${chapter.parent_id}`}>
-            <button className="on-btn on-btn-secondary">Previous</button>
+            <button type="button" className="on-btn on-btn-secondary">Previous</button>
           </Link>
         )}
         <button
+          type="button"
           className="on-btn on-btn-secondary"
           onClick={() => setShowChildren(!showChildren)}
         >
           Continue ({children?.length ?? 0})
         </button>
         <Link href={`/novels/${novelId}/tree`}>
-          <button className="on-btn on-btn-secondary">Story Tree</button>
+          <button type="button" className="on-btn on-btn-secondary">Story Tree</button>
         </Link>
       </div>
 
       {/* Children list */}
       {showChildren && children && children.length > 0 && (
-        <div className="on-card on-stack" style={{ gap: "0.5rem" }}>
-          <h4 className="text-caption" style={{ fontWeight: 600 }}>
-            Continuations
-          </h4>
+        <div className="on-card">
+          <h4 className="text-caption">Continuations</h4>
           {children.map((child: ChapterSummary) => (
             <ChapterCardMini key={child.id} chapter={child} novelId={novelId} />
           ))}
@@ -73,18 +69,14 @@ export function ChapterPageClient({ chapter, novel }: Props) {
       )}
 
       {/* Chapter meta */}
-      <div className="on-card on-stack" style={{ gap: "0.5rem" }}>
-        <div className="on-row" style={{ gap: "1rem", flexWrap: "wrap" }}>
-          <span className="text-caption">
-            Author: {shortAddress(chapter.author)}
-          </span>
+      <div className="on-card">
+        <div className="on-row-wrap">
+          <span className="text-caption">Author: {shortAddress(chapter.author)}</span>
           <span className="on-badge badge-depth">Depth: {chapter.depth}</span>
           {chapter.is_world_line && (
             <span className="on-badge badge-worldline">World Line</span>
           )}
-          <span className="text-muted" style={{ fontSize: "0.75rem" }}>
-            {timeAgo(chapter.timestamp)}
-          </span>
+          <span className="text-muted">{timeAgo(chapter.timestamp)}</span>
         </div>
 
         {tips && tips.length > 0 && (
@@ -100,22 +92,21 @@ export function ChapterPageClient({ chapter, novel }: Props) {
       </div>
 
       {/* Chapter content */}
-      <div className="prose" style={{ paddingTop: "0.5rem" }}>
+      <div className="prose">
         {chapter.content_text ? (
-          chapter.content_text.split("\n").map((para, i) =>
-            para.trim() ? <p key={i}>{para}</p> : null
-          )
+          chapter.content_text
+            .split("\n")
+            .map((para, i) => (para.trim() ? <p key={i}>{para}</p> : null))
         ) : (
-          <p className="text-muted" style={{ fontStyle: "italic" }}>
-            Content not available
-          </p>
+          <p className="text-muted">Content not available</p>
         )}
       </div>
 
       {/* Action buttons */}
-      <div className="on-row" style={{ gap: "0.5rem", flexWrap: "wrap" }}>
+      <div className="on-row-wrap">
         <TipButton chapterId={chapter.id} />
         <button
+          type="button"
           className="on-btn on-btn-primary"
           onClick={() => setShowEditor(!showEditor)}
         >
@@ -146,6 +137,9 @@ export function ChapterPageClient({ chapter, novel }: Props) {
           onSuccess={() => setShowEditor(false)}
         />
       )}
+
+      {/* Comments (off-chain, signed) */}
+      <CommentList chapterId={chapter.id} />
     </div>
   );
 }

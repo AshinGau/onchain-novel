@@ -5,7 +5,7 @@ import {
   claimBounty as claimBountyTx,
   refundBounty as refundBountyTx,
 } from "../shared/index.js";
-import { getWalletClient, getContracts } from "../utils/client.js";
+import { getWalletClient, getContracts, waitForTx } from "../utils/client.js";
 import { apiGet } from "../utils/api.js";
 import { header, kv, success, error, txHash, eth, parseDuration } from "../utils/format.js";
 
@@ -36,6 +36,7 @@ export function registerBountyCommands(program: Command): void {
           bountyBoard: contracts.bountyBoard,
         });
         txHash(hash);
+        await waitForTx(hash);
         success(`Bounty created for chapter #${chapterId} (${opts.value} ETH, deadline: ${opts.deadline})`);
       } catch (err) {
         error(String(err));
@@ -56,6 +57,7 @@ export function registerBountyCommands(program: Command): void {
         }
         const hash = await claimBountyTx(client, BigInt(bountyId), contracts.bountyBoard);
         txHash(hash);
+        await waitForTx(hash);
         success("Bounty claimed");
       } catch (err) {
         error(String(err));
@@ -76,6 +78,7 @@ export function registerBountyCommands(program: Command): void {
         }
         const hash = await refundBountyTx(client, BigInt(bountyId), contracts.bountyBoard);
         txHash(hash);
+        await waitForTx(hash);
         success("Bounty refunded");
       } catch (err) {
         error(String(err));

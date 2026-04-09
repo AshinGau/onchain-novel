@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { formatEther } from "viem";
+import { formatEther, toHex } from "viem";
+import { randomBytes } from "node:crypto";
 import {
   commitVote,
   revealVote,
@@ -13,8 +14,14 @@ import {
 } from "../shared/index.js";
 import { config } from "../config.js";
 import { getPublicClient, getWalletClient } from "../utils/client.js";
-import { hasApi, apiGet } from "../utils/api.js";
+import { hasApi, apiGet, apiPost } from "../utils/api.js";
+import { saveVoteSalt, getVoteSalt, getStorePath } from "../utils/vote-store.js";
 import { ok, fail } from "../utils/response.js";
+
+/** Generate a fresh 32-byte random salt as 0x-prefixed hex */
+function generateSalt(): `0x${string}` {
+  return toHex(randomBytes(32));
+}
 
 export function registerVoteTools(server: McpServer): void {
   // ── vote_start ──
@@ -38,22 +45,28 @@ export function registerVoteTools(server: McpServer): void {
   // ── vote_commit ──
   server.tool(
     "vote_commit",
-    "Commit a vote for a candidate chapter. The salt is a memorable string you must remember for reveal.",
+    "Commit a vote. If `salt` is omitted, a random 32-byte salt is generated, " +
+      "saved locally as backup, and submitted to the backend for keeper-assisted reveal.",
     {
       novelId: z.number().describe("Novel ID"),
       candidateId: z.number().describe("Candidate chapter ID to vote for"),
-      salt: z.string().describe("A memorable salt string (you MUST remember this for reveal)"),
+      salt: z.string().optional().describe("Optional memorable salt string. If omitted, generated automatically."),
+      keeperAssisted: z.boolean().default(true).describe("Submit plaintext to backend so keeper can auto-reveal"),
     },
     async (params) => {
       try {
         const wallet = getWalletClient();
         const pub = getPublicClient();
-        const saltBytes = toBytes32Salt(params.salt);
+        const voter = wallet.account!.address;
+
+        // Auto-generate fresh random salt when not provided
+        const saltBytes: `0x${string}` = params.salt ? toBytes32Salt(params.salt) : generateSalt();
         const hash32 = computeCommitHash(BigInt(params.candidateId), saltBytes);
 
-        // Get vote stake from novel config
+        // Get vote stake + current round from novel config
         const novel = (await getNovel(pub, BigInt(params.novelId), config.novelCore)) as any;
         const stake = novel.config.voteStake as bigint;
+        const currentRound = Number(novel.currentRound ?? 0);
 
         const txHash = await commitVote(wallet, {
           novelId: BigInt(params.novelId),
@@ -62,9 +75,56 @@ export function registerVoteTools(server: McpServer): void {
           novelCore: config.novelCore,
         });
         const receipt = await pub.waitForTransactionReceipt({ hash: txHash });
-        return ok(
-          `Vote committed.\nStake: ${formatEther(stake)} ETH\nSalt: "${params.salt}" (REMEMBER THIS)\nTx: ${txHash}\nBlock: ${receipt.blockNumber}`,
-        );
+
+        // Persist salt to local backup
+        const lines = [
+          `Vote committed.`,
+          `Stake: ${formatEther(stake)} ETH`,
+          `Salt:  ${saltBytes}`,
+          `Tx:    ${txHash}`,
+          `Block: ${receipt.blockNumber}`,
+        ];
+
+        if (currentRound > 0) {
+          saveVoteSalt({
+            novelId: params.novelId.toString(),
+            round: currentRound,
+            candidateId: params.candidateId.toString(),
+            salt: saltBytes,
+            voter,
+          });
+          lines.push(`Salt saved to ${getStorePath()}`);
+        }
+
+        // Best-effort keeper-assisted reveal submission
+        if (params.keeperAssisted && currentRound > 0 && hasApi()) {
+          const ts = Math.floor(Date.now() / 1000);
+          const message =
+            `Submit vote on novel ${params.novelId} round ${currentRound} for candidate ${params.candidateId} at ${ts}`;
+          const signature = await wallet.signMessage({ account: wallet.account!, message });
+
+          const result = await apiPost("/api/votes/submit", {
+            address: voter,
+            novelId: params.novelId,
+            round: currentRound,
+            candidateId: params.candidateId,
+            salt: saltBytes,
+            timestamp: ts,
+            signature,
+          });
+
+          if (result.status === 201) {
+            lines.push(`Keeper will auto-reveal during the reveal phase.`);
+          } else if (result.status === 503) {
+            lines.push(`Keeper-assisted reveal disabled on backend (you must reveal manually).`);
+          } else {
+            lines.push(`Backend rejected /api/votes/submit (status ${result.status}); reveal manually.`);
+          }
+        } else if (params.keeperAssisted && !hasApi()) {
+          lines.push(`API_BASE_URL not configured; skipped keeper submission.`);
+        }
+
+        return ok(lines.join("\n"));
       } catch (error) {
         return fail(`Failed: ${error instanceof Error ? error.message : String(error)}`);
       }
@@ -74,17 +134,31 @@ export function registerVoteTools(server: McpServer): void {
   // ── vote_reveal ──
   server.tool(
     "vote_reveal",
-    "Reveal a previously committed vote.",
+    "Reveal a previously committed vote. If `salt` is omitted, falls back to the local backup saved by vote_commit.",
     {
       novelId: z.number().describe("Novel ID"),
       candidateId: z.number().describe("Candidate chapter ID you voted for"),
-      salt: z.string().describe("The same salt string used during commit"),
+      salt: z.string().optional().describe("Optional salt — falls back to local store"),
     },
     async (params) => {
       try {
         const wallet = getWalletClient();
         const pub = getPublicClient();
-        const saltBytes = toBytes32Salt(params.salt);
+        const voter = wallet.account!.address;
+
+        let saltBytes: `0x${string}`;
+        if (params.salt) {
+          saltBytes = toBytes32Salt(params.salt);
+        } else {
+          const novel = (await getNovel(pub, BigInt(params.novelId), config.novelCore)) as any;
+          const currentRound = Number(novel.currentRound ?? 0);
+          const stored = getVoteSalt(BigInt(params.novelId), currentRound, voter);
+          if (!stored) {
+            return fail(`No salt provided and no local backup for round ${currentRound}.`);
+          }
+          saltBytes = stored.salt;
+        }
+
         const txHash = await revealVote(wallet, {
           novelId: BigInt(params.novelId),
           candidateId: BigInt(params.candidateId),

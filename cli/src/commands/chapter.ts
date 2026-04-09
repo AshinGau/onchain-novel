@@ -1,8 +1,8 @@
 import { Command } from "commander";
 import { parseEther } from "viem";
 import { submitChapter as submitChapterTx, buildContentSubmission } from "../shared/index.js";
-import { getWalletClient, getContracts } from "../utils/client.js";
-import { apiGet } from "../utils/api.js";
+import { getWalletClient, getContracts, waitForTx } from "../utils/client.js";
+import { apiGet, apiPost } from "../utils/api.js";
 import { header, kv, success, error, txHash, table } from "../utils/format.js";
 import chalk from "chalk";
 
@@ -44,6 +44,7 @@ export function registerChapterCommands(program: Command): void {
         });
 
         txHash(hash);
+        await waitForTx(hash);
         success("Chapter submitted");
       } catch (err) {
         error(String(err));
@@ -153,6 +154,64 @@ export function registerChapterCommands(program: Command): void {
           })),
         );
         console.log();
+      } catch (err) {
+        error(String(err));
+        process.exit(1);
+      }
+    });
+
+  chapter
+    .command("comments <chapter-id>")
+    .description("List comments on a chapter")
+    .option("--page <n>", "page number", "1")
+    .option("--limit <n>", "results per page", "20")
+    .action(async (chapterId, opts) => {
+      try {
+        const data = await apiGet<{ comments: Record<string, unknown>[] }>(
+          `/api/chapters/${chapterId}/comments?page=${opts.page}&limit=${opts.limit}`,
+        );
+        header(`Comments on Chapter #${chapterId}`);
+        if (data.comments.length === 0) {
+          console.log(chalk.gray("  (no comments)\n"));
+          return;
+        }
+        for (const c of data.comments) {
+          console.log(
+            `${chalk.cyan(String(c.author ?? "").slice(0, 12) + "...")} ` +
+              chalk.gray(`#${c.id} ${c.created_at}`),
+          );
+          console.log(`  ${c.content}\n`);
+        }
+      } catch (err) {
+        error(String(err));
+        process.exit(1);
+      }
+    });
+
+  chapter
+    .command("comment <chapter-id> <content>")
+    .description("Post an off-chain comment (EIP-191 signed, no on-chain tx)")
+    .action(async (chapterId, content) => {
+      try {
+        const client = getWalletClient();
+        const address = client.account!.address;
+        const ts = Math.floor(Date.now() / 1000);
+        const message = `Comment on chapter ${chapterId} at ${ts}: ${content}`;
+        const signature = await client.signMessage({ account: client.account!, message });
+
+        const result = await apiPost<{ id: number }>(`/api/chapters/${chapterId}/comments`, {
+          address,
+          content,
+          timestamp: ts,
+          signature,
+        });
+
+        if (result.status === 201 && result.body?.id) {
+          success(`Comment posted (id=${result.body.id})`);
+        } else {
+          error(`Backend rejected comment (status ${result.status})`);
+          process.exit(1);
+        }
       } catch (err) {
         error(String(err));
         process.exit(1);
