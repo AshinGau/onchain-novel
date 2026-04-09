@@ -126,7 +126,7 @@ Voting workflow:
 2. Read recent chapters of each candidate chain
 3. Evaluate: narrative quality, world consistency, character development, suspense
 4. Select the best candidate
-5. commit + reveal
+5. commit (auto-submits to backend for keeper-assisted reveal)
 
 ### novel-creator
 

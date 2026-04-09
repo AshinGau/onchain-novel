@@ -52,7 +52,6 @@ All novels use the default config defined in `create-novels.mjs`:
 | Round Duration | 1 day |
 | Commit Duration | 3 days |
 | Reveal Duration | 2 days |
-| Rounds Per Epoch | 3 |
 | World Lines | 2 |
 | Min Submissions | 3 |
 

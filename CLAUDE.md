@@ -62,13 +62,13 @@ npm run build            # Compile TypeScript
 
 ### Smart Contracts (`src/`)
 Five UUPS-upgradeable contracts:
-- **NovelCore** — Chapter tree (parentId + descendants[]), DFS candidate generation, round lifecycle, worldLineAncestors tracking. Writing always available.
+- **NovelCore** — Chapter tree (parentId + descendants[]), full-scan candidate generation, round lifecycle, worldLineAncestors tracking. Writing always available.
 - **VotingEngine** — Commit-reveal voting. 3x accuracy weight. One vote per address per round.
 - **PrizePool** — Per-round distribution: creator royalty `D/(D+round)` decay, author/voter rewards. Tips. Keeper rewards.
 - **BountyBoard** — Reader bounties for continuations. 20% to pool, 80% to authors or refund.
 - **RulesEngine** — World-building rules: creator rules (before first round) + proposal-based changes (world-line authors vote).
 
-State flow: `Idle → startRound(DFS) → Nominating → closeNomination → Committing → closeCommit → Revealing → settleRound → Idle`
+State flow: `Idle → startRound(full scan) → Nominating → closeNomination → Committing → closeCommit → Revealing → settleRound → Idle`
 
 ### Web Backend (`web/backend/src/`)
 - **Indexer** — Polls chain events from 5 contracts, writes to PostgreSQL. Confirmation blocks for reorg safety.
@@ -95,7 +95,7 @@ State flow: `Idle → startRound(DFS) → Nominating → closeNomination → Com
 
 - **Writing always on** — `submitChapter` has no phase restriction.
 - **One vote per address per round** — Contract reverts `AlreadyCommitted()`.
-- **DFS candidate generation** — `startRound` finds top 3*N deepest chains from `worldLineAncestors`. Bounded by `maxDfsNodes`.
+- **DFS candidate generation** — `startRound` does full scan from `worldLineAncestors`, returns the N deepest chains.
 - **Creator royalty** — `D/(D+round)` where D=CREATOR_DECAY_DIVISOR (constant, currently 3).
 - **Voter accuracy** — 3x weight for voting on a winning world line, 1x for others who revealed.
 - **Content storage** — Three modes (Onchain/External/HTTP) set at novel creation, immutable.
