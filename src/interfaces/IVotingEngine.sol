@@ -63,27 +63,37 @@ interface IVotingEngine {
     /// @param salt The salt used in the commit hash
     function revealVote(uint64 novelId, uint32 round, address voter, uint64 candidateId, bytes32 salt) external;
 
-    /// @notice Tally votes and return ranked candidate IDs by vote weight
-    /// @dev Called during settleRound. Top winnerCount candidates are marked as winners
-    ///      for accurate voter reward computation.
+    /// @notice Tally votes and return the top winnerCount winners
+    /// @dev Called during settleRound. Sorts candidates by vote weight (descending) and marks
+    ///      the top winnerCount as winners for accurate voter reward computation.
     /// @param novelId The novel ID
     /// @param round The round number
     /// @param winnerCount Number of top candidates to mark as winners (worldLineCount)
-    /// @return rankedIds Candidate IDs ordered by vote weight (descending)
-    /// @return voteWeights Corresponding vote weights
-    function tallyVotes(uint64 novelId, uint32 round, uint32 winnerCount)
-        external
-        returns (uint64[] memory rankedIds, uint256[] memory voteWeights);
+    /// @return winners Top winnerCount candidate IDs (length <= winnerCount)
+    function tallyVotes(uint64 novelId, uint32 round, uint32 winnerCount) external returns (uint64[] memory winners);
 
     /// @notice Settle voter rewards for a round
-    /// @dev Distributes voterRewardPool + unrevealed stakes to revealed voters.
-    ///      Accurate voters (voted for winning world line) get 3x weight.
+    /// @dev Computes per-voter payouts in one pass:
+    ///      - Revealed voters: stake refund + accuracy reward (3x for accurate, 1x otherwise),
+    ///        capped per-address by maxVoterReward (applied after the 3x multiplier).
+    ///      - Unrevealed voters: stake - max(unrevealPenaltyFloor, stake * 20%) (penalty enters reward pool).
+    ///      Returns any excess (uncapped reward pool minus actually distributed) so the caller
+    ///      can deposit it back to the prize pool.
     /// @param novelId The novel ID
     /// @param round The round number
     /// @param voterRewardPool Amount from prize pool allocated to voter rewards
-    /// @param unrevealedStakes Total unrevealed stake amount to redistribute
-    function settleVoterRewards(uint64 novelId, uint32 round, uint256 voterRewardPool, uint256 unrevealedStakes)
-        external;
+    /// @param voteStake Per-voter stake amount used in this round
+    /// @param unrevealPenaltyFloor Minimum penalty for unrevealed votes (wei)
+    /// @param maxVoterReward Per-address voter reward cap per round (0 = uncapped)
+    /// @return excessReturn Amount transferred back to caller for return to prize pool
+    function settleVoterRewards(
+        uint64 novelId,
+        uint32 round,
+        uint256 voterRewardPool,
+        uint256 voteStake,
+        uint256 unrevealPenaltyFloor,
+        uint256 maxVoterReward
+    ) external returns (uint256 excessReturn);
 
     /// @notice Claim voting reward for a specific round (stake refund + accuracy reward)
     /// @param novelId The novel ID
@@ -107,4 +117,8 @@ interface IVotingEngine {
 
     /// @notice Get all candidate IDs for a voting round
     function getCandidates(uint64 novelId, uint32 round) external view returns (uint64[] memory);
+
+    /// @notice Get the claimable reward (refund + reward) for a voter in a settled round
+    /// @return Amount in wei the voter can withdraw via claimVotingReward
+    function getClaimableReward(uint64 novelId, uint32 round, address voter) external view returns (uint256);
 }

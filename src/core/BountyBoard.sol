@@ -15,6 +15,8 @@ import {DataTypes} from "../libraries/DataTypes.sol";
 /// @title BountyBoard
 /// @notice Chapter continuation bounty system: readers incentivize authors to continue specific chapters
 /// @dev Standalone module. 20% of bounty goes to prize pool immediately; 80% locked for qualifying authors.
+///      Qualifying authors are the authors of **direct child chapters** of the bounty target whose
+///      timestamp is on or before the deadline. Deeper descendants are not counted.
 contract BountyBoard is
     Initializable,
     OwnableUpgradeable,

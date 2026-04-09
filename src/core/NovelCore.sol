@@ -36,6 +36,15 @@ contract NovelCore is
     /// @notice Fork fee rate in basis points (1% of source pool balance)
     uint16 public constant FORK_FEE_RATE = 100;
 
+    /// @notice Minimum submissionFee a creator may set (anti chapter-spam floor)
+    uint256 public constant MIN_SUBMISSION_FEE = 0.0001 ether;
+
+    /// @notice Maximum world lines per round (bounds DFS scope and tally cost)
+    uint32 public constant MAX_WORLD_LINE_COUNT = 16;
+
+    /// @notice Maximum total candidates (auto + nominated) per round (bounds tally O(n^2))
+    uint256 public constant MAX_CANDIDATES_PER_ROUND = 64;
+
     /// @notice Basis points denominator
     uint16 private constant BPS_DENOMINATOR = 10000;
 
@@ -90,10 +99,6 @@ contract NovelCore is
     /// @notice Novel ID => round => total committed vote stake
     mapping(uint64 => mapping(uint32 => uint256)) private _roundCommittedStakes;
 
-    /// @notice Novel ID => round => total revealed vote stake
-    mapping(uint64 => mapping(uint32 => uint256)) private _roundRevealedStakes;
-
-
     // ============================================================
     //                         ERRORS
     // ============================================================
@@ -116,6 +121,7 @@ contract NovelCore is
     error NoCandidatesFound();
     error MinRoundGapNotMet();
     error DuplicateCandidate(uint64 chapterId);
+    error TooManyCandidates();
     error NotACandidate(uint64 chapterId);
     error CompletionNotAllowed();
     error NovelAlreadyCompleted(uint64 novelId);
@@ -500,18 +506,9 @@ contract NovelCore is
         uint32 round = novel.currentRound;
         uint32 N = novel.config.worldLineCount;
 
-        // Tally votes — pass only actual top-N winners for accurate reward computation
-        (uint64[] memory rankedIds,) = votingEngine.tallyVotes(novelId, round, N);
-
-        // Select top N winners (or fewer)
-        uint256 selectCount = rankedIds.length < N ? rankedIds.length : N;
-
-        // Collect new world line chapters: for each winner, walk up to the corresponding
-        // prevWorldLine ancestor. Deduplicate across all winners.
-        uint64[] memory winners = new uint64[](selectCount);
-        for (uint256 i = 0; i < selectCount; i++) {
-            winners[i] = rankedIds[i];
-        }
+        // Tally votes; VotingEngine returns only the top-N winners (length <= N).
+        uint64[] memory winners = votingEngine.tallyVotes(novelId, round, N);
+        uint256 selectCount = winners.length;
 
         // Collect per-chapter authors from eligible winners' new world line paths.
         // Ineligible winners (nominated but not world-line descendants) are excluded
@@ -531,39 +528,36 @@ contract NovelCore is
             );
         }
 
-        // Compute unrevealed stakes (committed - revealed)
         uint256 totalCommitted = _roundCommittedStakes[novelId][round];
-        uint256 totalRevealed = _roundRevealedStakes[novelId][round];
-        uint256 unrevealedStakes = totalCommitted > totalRevealed ? totalCommitted - totalRevealed : 0;
 
-        if (totalRevealed > 0) {
-            // Send vote stakes + voter rewards to VotingEngine for distribution
+        if (totalCommitted > 0) {
+            // Forward voter rewards + all committed stakes to VotingEngine
             uint256 totalToVotingEngine = voterRewards + totalCommitted;
             if (totalToVotingEngine > 0) {
                 (bool sent,) = address(votingEngine).call{value: totalToVotingEngine}("");
                 if (!sent) revert TransferFailed();
             }
 
-            // Settle voter rewards in VotingEngine
-            votingEngine.settleVoterRewards(novelId, round, voterRewards, unrevealedStakes);
-        } else {
-            // No voters revealed — return voter rewards + unrevealed stakes to prize pool
-            // to prevent funds from being permanently locked in VotingEngine
-            uint256 returnToPool = voterRewards + unrevealedStakes;
-            if (returnToPool > 0) {
-                prizePool.deposit{value: returnToPool}(novelId, "noReveals");
+            // VotingEngine computes per-voter payouts (capped reward + partial refund),
+            // returns any leftover (cap excess + uncovered pool) for return to prize pool.
+            uint256 excessReturn = votingEngine.settleVoterRewards(
+                novelId,
+                round,
+                voterRewards,
+                novel.config.voteStake,
+                novel.config.unrevealPenaltyFloor,
+                novel.config.maxVoterReward
+            );
+            if (excessReturn > 0) {
+                prizePool.deposit{value: excessReturn}(novelId, "voterRewardExcess");
             }
+        } else if (voterRewards > 0) {
+            // No commits at all — return voter rewards to prize pool
+            prizePool.deposit{value: voterRewards}(novelId, "noVoters");
         }
 
-        // Update worldLineAncestors
+        // Rebuild worldLineAncestors and authorship flags from the new winners
         delete _worldLineAncestors[novelId];
-
-        // Clear old world line author flags
-        // (We rebuild from scratch based on new world lines)
-        // Note: we cannot iterate all authors, so we track a superset approach.
-        // Instead, we only ADD new authors and never clear — RulesEngine checks
-        // current world line paths. For a clean approach, we clear known authors
-        // from prevWorldLines and set new ones.
         _clearWorldLineAuthors(novelId, rd.prevWorldLines);
 
         for (uint256 i = 0; i < selectCount; i++) {
@@ -607,6 +601,9 @@ contract NovelCore is
         if (ch.novelId != novelId) revert ChapterNotInNovel(chapterId, novelId);
 
         DataTypes.RoundData storage rd = _rounds[novelId][novel.currentRound];
+
+        // Cap total candidates per round to bound tally cost (auto + nominated)
+        if (rd.candidates.length >= MAX_CANDIDATES_PER_ROUND) revert TooManyCandidates();
 
         // Check not already a candidate
         for (uint256 i = 0; i < rd.candidates.length; i++) {
@@ -662,7 +659,6 @@ contract NovelCore is
 
         uint32 round = novel.currentRound;
         votingEngine.revealVote(novelId, round, msg.sender, candidateId, salt);
-        _roundRevealedStakes[novelId][round] += novel.config.voteStake;
 
         emit VoteRevealed(novelId, round, msg.sender, candidateId);
     }
@@ -742,9 +738,11 @@ contract NovelCore is
         uint64[] storage finalAncestors = _worldLineAncestors[novelId];
         address[] memory finalAuthors = _collectPathAuthors(novelId, finalAncestors);
 
-        // Distribute final rewards (release entire remaining pool)
+        // Distribute final rewards (release entire remaining pool).
+        // voterRewardRate=0, so the returned amount is rounding dust only — redeposit it
+        // back to the pool so the creator can claim it on the next call (no fund leak).
         if (finalAuthors.length > 0) {
-            prizePool.distributeRoundRewards(
+            uint256 dust = prizePool.distributeRoundRewards(
                 novelId,
                 novel.currentRound > 0 ? novel.currentRound : 1,
                 novel.creator,
@@ -752,6 +750,9 @@ contract NovelCore is
                 10000, // Release entire pool
                 0 // No voter rewards in final distribution
             );
+            if (dust > 0) {
+                prizePool.deposit{value: dust}(novelId, "completionDust");
+            }
         }
 
         novel.active = false;
@@ -832,21 +833,20 @@ contract NovelCore is
         view
         returns (uint64[] memory candidateIds)
     {
-        uint32 nodeLimit = maxDfsNodes;
+        uint32 nodeLimit = maxDfsNodes > 0 ? maxDfsNodes : 500;
         uint32 nodesVisited = 0;
 
-        // Temporary arrays — we collect leaf chapters (no descendants or at node limit)
-        // Use a generous upper bound; will trim at end.
-        uint64[] memory leaves = new uint64[](maxCandidates * 4 > 256 ? maxCandidates * 4 : 256);
-        uint32[] memory leafDepths = new uint32[](leaves.length);
+        // Each visited node can be at most one leaf, so leaves <= nodeLimit.
+        // Sizing all working arrays to nodeLimit eliminates silent truncation.
+        uint64[] memory leaves = new uint64[](nodeLimit);
+        uint32[] memory leafDepths = new uint32[](nodeLimit);
         uint256 leafCount = 0;
 
-        // DFS stack: (chapterId)
-        uint64[] memory stack = new uint64[](nodeLimit > 0 ? nodeLimit : 500);
+        // DFS stack and visited set, both bounded by nodeLimit
+        uint64[] memory stack = new uint64[](nodeLimit);
         uint256 stackTop = 0;
 
-        // Track visited nodes to prevent duplicates when ancestors share overlapping paths
-        uint64[] memory visited = new uint64[](nodeLimit > 0 ? nodeLimit : 500);
+        uint64[] memory visited = new uint64[](nodeLimit);
         uint256 visitedCount = 0;
 
         // Seed stack with all ancestors
@@ -1055,7 +1055,8 @@ contract NovelCore is
     /// @dev Config error codes:
     ///  1=minChapterLength  2=maxChapterLength  3=worldLineCount  4=voteStake
     ///  5=commitDuration  6=revealDuration  7=prizeReleaseRate  8=voterRewardRate
-    ///  9=nominateDuration  10=contentBaseUrl  11=ruleVoteDuration  12=minRoundGap
+    ///  9=nominateDuration  10=contentBaseUrl  11=ruleVoteDuration
+    ///  12=submissionFee  13=worldLineCount upper bound
     function _validateConfig(DataTypes.NovelConfig calldata config) internal pure {
         if (config.minChapterLength == 0) revert InvalidConfig(1);
         if (config.maxChapterLength <= config.minChapterLength) revert InvalidConfig(2);
@@ -1070,6 +1071,8 @@ contract NovelCore is
             revert InvalidConfig(10);
         }
         if (config.ruleQuorum > 0 && config.ruleVoteDuration == 0) revert InvalidConfig(11);
+        if (config.submissionFee < MIN_SUBMISSION_FEE) revert InvalidConfig(12);
+        if (config.worldLineCount > MAX_WORLD_LINE_COUNT) revert InvalidConfig(13);
     }
 
     function _validateMetadata(DataTypes.NovelMetadata calldata metadata) internal pure {
@@ -1136,8 +1139,11 @@ contract NovelCore is
         return false;
     }
 
-    /// @notice Accept ETH transfers (voter rewards from PrizePool during settlement)
-    receive() external payable {}
+    /// @notice Accept ETH transfers from PrizePool (voter rewards) and VotingEngine (cap excess)
+    /// @dev Whitelisted to prevent stray ETH from accumulating in this contract
+    receive() external payable {
+        if (msg.sender != address(prizePool) && msg.sender != address(votingEngine)) revert TransferFailed();
+    }
 
     // ============================================================
     //                     UUPS UPGRADE

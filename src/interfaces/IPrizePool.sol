@@ -31,15 +31,6 @@ interface IPrizePool {
     event KeeperRewardPaid(uint64 indexed novelId, address indexed keeper, uint256 amount);
 
     // ============================================================
-    //                        CONSTANTS
-    // ============================================================
-
-    /// @notice Decay divisor for creator royalty: royalty = release * D / (D + round)
-    /// @dev Set as a contract-level constant (3). Not configurable per novel.
-    ///      Upgradeable via UUPS if adjustment needed.
-    // uint256 constant CREATOR_DECAY_DIVISOR = 3;
-
-    // ============================================================
     //                  CALLED BY NOVELCORE
     // ============================================================
 

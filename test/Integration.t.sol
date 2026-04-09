@@ -109,6 +109,8 @@ abstract contract TestBase is Test {
             minRoundGap: MIN_ROUND_GAP,
             prizeReleaseRate: 2000,
             voterRewardRate: 1500,
+            maxVoterReward: 0,
+            unrevealPenaltyFloor: 0.001 ether,
             contentLocation: DataTypes.ContentLocation.Onchain,
             contentBaseUrl: "",
             ruleFee: 0.01 ether,
@@ -601,5 +603,230 @@ contract IntegrationTest is TestBase {
         // Submit during committing phase
         uint64 ch4 = _submitChapter(author1, novelId, ch2, "during committing phase!!!");
         assertTrue(ch4 > 0, "should be able to submit during committing");
+    }
+
+    // ----------------------------------------------------------
+    //  maxVoterReward cap: per-address voter reward is capped after the 3x multiplier
+    // ----------------------------------------------------------
+    function test_maxVoterReward_capsRewardAndReturnsExcess() public {
+        // Use a tiny cap so we are guaranteed to hit it.
+        DataTypes.NovelConfig memory config = _defaultConfig();
+        config.worldLineCount = 1;
+        config.maxVoterReward = 1 wei; // any reward gets capped to 1 wei
+        config.unrevealPenaltyFloor = 0;
+
+        // Seed the pool generously so the would-be voter reward is large
+        uint64 novelId = _createNovelWith(creator, config, 50 ether);
+        uint64 rootId = 1;
+        uint64 ch2 = _submitChapter(author1, novelId, rootId, "branch for cap test ch!!");
+
+        address[] memory voters = new address[](1);
+        voters[0] = voter1;
+
+        uint256 poolBefore = prizePool.getPoolBalance(novelId);
+        _runFullRound(novelId, voters, ch2, bytes32("capsalt"));
+        uint256 poolAfterSettle = prizePool.getPoolBalance(novelId);
+
+        // Voter claim: payout = stake refund + capped reward (cap = 1 wei)
+        uint256 balBefore = voter1.balance;
+        vm.prank(voter1);
+        novelCore.claimVotingReward(novelId, 1);
+        uint256 voterPayout = voter1.balance - balBefore;
+
+        assertEq(voterPayout, VOTE_STAKE + 1, "payout should be stake + capped reward (1 wei)");
+
+        // The bulk of the would-be voter reward should have been deposited back into the pool.
+        // Released = poolBefore * 20% (prizeReleaseRate=2000), of which 15% is voter rewards.
+        // Without the cap, voter1 would have received the full voter reward share.
+        // With cap=1 wei, the rest must come back to the pool.
+        uint256 release = (poolBefore * 2000) / 10000;
+        uint256 expectedVoterRewardBudget = ((release - (release * 3) / 4) * 1500) / 10000; // round 1, D=3 -> 75% to creator
+        // The pool after settle = (poolBefore - release) + excessReturn.
+        // Since cap is 1 wei, excessReturn ~= expectedVoterRewardBudget - 1.
+        uint256 excessRecovered = poolAfterSettle - (poolBefore - release);
+        assertApproxEqAbs(
+            excessRecovered, expectedVoterRewardBudget - 1, 2, "excess should return to pool (within rounding)"
+        );
+    }
+
+    // ----------------------------------------------------------
+    //  Partial unreveal penalty: voter gets back stake - max(floor, 20%)
+    // ----------------------------------------------------------
+    function test_unrevealPenalty_partialRefund() public {
+        DataTypes.NovelConfig memory config = _defaultConfig();
+        config.worldLineCount = 1;
+        config.unrevealPenaltyFloor = 0; // pure 20% so the math is exact
+        config.maxVoterReward = 0;
+
+        uint64 novelId = _createNovelWith(creator, config, 1 ether);
+        uint64 rootId = 1;
+        uint64 ch2 = _submitChapter(author1, novelId, rootId, "branch for unreveal test!!");
+
+        // Drive the round manually so voter2 commits but never reveals.
+        vm.prank(keeper);
+        novelCore.startRound(novelId);
+
+        vm.warp(block.timestamp + NOMINATE_DURATION + 1);
+        vm.prank(keeper);
+        novelCore.closeNomination(novelId);
+
+        bytes32 salt = bytes32("unrevealsalt");
+        bytes32 commitHash = keccak256(abi.encodePacked(ch2, salt));
+
+        vm.prank(voter1);
+        novelCore.commitVote{value: VOTE_STAKE}(novelId, commitHash);
+        vm.prank(voter2);
+        novelCore.commitVote{value: VOTE_STAKE}(novelId, commitHash);
+
+        vm.warp(block.timestamp + COMMIT_DURATION + 1);
+        vm.prank(keeper);
+        novelCore.closeCommit(novelId);
+
+        // Only voter1 reveals
+        vm.prank(voter1);
+        novelCore.revealVote(novelId, ch2, salt);
+
+        vm.warp(block.timestamp + REVEAL_DURATION + 1);
+        vm.prank(keeper);
+        novelCore.settleRound(novelId);
+
+        // voter2 (unrevealed) should be able to claim refund = stake - 20%
+        uint256 expectedPenalty = (VOTE_STAKE * 20) / 100;
+        uint256 expectedRefund = VOTE_STAKE - expectedPenalty;
+
+        uint256 v2Before = voter2.balance;
+        vm.prank(voter2);
+        novelCore.claimVotingReward(novelId, 1);
+        assertEq(voter2.balance - v2Before, expectedRefund, "unrevealed voter should get stake - 20%");
+
+        // voter1 (revealed) should get stake refund + reward; reward includes the penalty
+        // collected from voter2 (added to the voter reward pool).
+        uint256 v1Before = voter1.balance;
+        vm.prank(voter1);
+        novelCore.claimVotingReward(novelId, 1);
+        uint256 v1Payout = voter1.balance - v1Before;
+        assertGt(v1Payout, VOTE_STAKE, "revealed voter should get stake + nonzero reward");
+    }
+
+    // ----------------------------------------------------------
+    //  Config validation: submissionFee floor and worldLineCount ceiling
+    // ----------------------------------------------------------
+    function test_validateConfig_submissionFeeFloor() public {
+        DataTypes.NovelConfig memory config = _defaultConfig();
+        config.submissionFee = 1; // below MIN_SUBMISSION_FEE (0.0001 ether)
+        vm.prank(creator);
+        vm.expectRevert();
+        novelCore.createNovel{value: 1 ether}(
+            config, _defaultMetadata(), _makeContent("root chapter content for novel")
+        );
+    }
+
+    function test_validateConfig_worldLineCountCeiling() public {
+        DataTypes.NovelConfig memory config = _defaultConfig();
+        config.worldLineCount = 17; // above MAX_WORLD_LINE_COUNT (16)
+        vm.prank(creator);
+        vm.expectRevert();
+        novelCore.createNovel{value: 1 ether}(
+            config, _defaultMetadata(), _makeContent("root chapter content for novel")
+        );
+    }
+
+    // ----------------------------------------------------------
+    //  Nomination cap: cannot push beyond MAX_CANDIDATES_PER_ROUND
+    // ----------------------------------------------------------
+    function test_nomination_capEnforced() public {
+        DataTypes.NovelConfig memory config = _defaultConfig();
+        config.worldLineCount = 1;
+        config.nominationFee = 0.0001 ether;
+        uint64 novelId = _createNovelWith(creator, config, 1 ether);
+        uint64 rootId = 1;
+
+        // Build a wide tree of root children — DFS will pick a small subset as auto candidates
+        uint64[] memory children = new uint64[](70);
+        for (uint256 i = 0; i < 70; i++) {
+            children[i] =
+                _submitChapter(author1, novelId, rootId, abi.encodePacked("child chapter content #", bytes1(uint8(i))));
+        }
+
+        vm.prank(keeper);
+        novelCore.startRound(novelId);
+
+        // Auto candidates take some slots; nominate the rest until we hit the cap.
+        DataTypes.RoundData memory rd = novelCore.getRoundData(novelId, 1);
+        uint256 used = rd.candidates.length;
+        uint256 slotsLeft = 64 - used; // MAX_CANDIDATES_PER_ROUND = 64
+
+        // Pick chapters not already in the candidate set.
+        uint256 nominated = 0;
+        for (uint256 i = 0; i < 70 && nominated < slotsLeft; i++) {
+            bool already = false;
+            for (uint256 j = 0; j < rd.candidates.length; j++) {
+                if (rd.candidates[j] == children[i]) {
+                    already = true;
+                    break;
+                }
+            }
+            if (already) continue;
+            vm.prank(author2);
+            novelCore.nominateCandidate{value: 0.0001 ether}(novelId, children[i]);
+            nominated++;
+        }
+
+        // One more nomination must hit the cap and revert.
+        for (uint256 i = 0; i < 70; i++) {
+            bool already = false;
+            DataTypes.RoundData memory rd2 = novelCore.getRoundData(novelId, 1);
+            for (uint256 j = 0; j < rd2.candidates.length; j++) {
+                if (rd2.candidates[j] == children[i]) {
+                    already = true;
+                    break;
+                }
+            }
+            if (already) continue;
+            vm.prank(author2);
+            vm.expectRevert(); // TooManyCandidates
+            novelCore.nominateCandidate{value: 0.0001 ether}(novelId, children[i]);
+            return;
+        }
+        revert("expected cap-revert path not exercised");
+    }
+
+    // ----------------------------------------------------------
+    //  Unreveal penalty floor wins when voteStake * 20% is smaller
+    // ----------------------------------------------------------
+    function test_unrevealPenalty_floorApplies() public {
+        DataTypes.NovelConfig memory config = _defaultConfig();
+        config.worldLineCount = 1;
+        config.unrevealPenaltyFloor = 0.002 ether; // > 20% of 0.005 voteStake (= 0.001)
+        config.maxVoterReward = 0;
+
+        uint64 novelId = _createNovelWith(creator, config, 1 ether);
+        uint64 rootId = 1;
+        uint64 ch2 = _submitChapter(author1, novelId, rootId, "branch for floor test!!");
+
+        vm.prank(keeper);
+        novelCore.startRound(novelId);
+        vm.warp(block.timestamp + NOMINATE_DURATION + 1);
+        vm.prank(keeper);
+        novelCore.closeNomination(novelId);
+
+        bytes32 salt = bytes32("floorsalt");
+        bytes32 commitHash = keccak256(abi.encodePacked(ch2, salt));
+        vm.prank(voter1);
+        novelCore.commitVote{value: VOTE_STAKE}(novelId, commitHash);
+
+        vm.warp(block.timestamp + COMMIT_DURATION + 1);
+        vm.prank(keeper);
+        novelCore.closeCommit(novelId);
+        // voter1 does NOT reveal
+        vm.warp(block.timestamp + REVEAL_DURATION + 1);
+        vm.prank(keeper);
+        novelCore.settleRound(novelId);
+
+        uint256 expectedRefund = VOTE_STAKE - 0.002 ether;
+        uint256 balBefore = voter1.balance;
+        vm.prank(voter1);
+        novelCore.claimVotingReward(novelId, 1);
+        assertEq(voter1.balance - balBefore, expectedRefund, "floor penalty should apply");
     }
 }
