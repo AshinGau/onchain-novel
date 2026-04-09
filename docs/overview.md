@@ -38,7 +38,7 @@ All IDs are uint64.
 ## State Flow
 
 ```
-[Idle] -> startRound(DFS) -> [Nominating] -> closeNomination -> [Committing]
+[Idle] -> startRound(full scan) -> [Nominating] -> closeNomination -> [Committing]
 -> closeCommit -> [Revealing] -> settleRound -> [Idle]
 ```
 

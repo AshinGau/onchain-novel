@@ -44,8 +44,8 @@ onchain-novel-cli chapter descendants <chapter-id>
 # Voting
 onchain-novel-cli vote start <novel-id>
 onchain-novel-cli vote nominate <novel-id> <chapter-id>
-onchain-novel-cli vote commit <novel-id> <candidate-id> <salt>
-onchain-novel-cli vote reveal <novel-id> <candidate-id> <salt>
+onchain-novel-cli vote commit <novel-id> <candidate-id> [salt]   # salt auto-generated if omitted; submits to backend for keeper-assisted reveal
+onchain-novel-cli vote reveal <novel-id> <candidate-id> <salt>   # manual fallback; not needed if using keeper-assisted reveal
 onchain-novel-cli vote settle <novel-id>
 onchain-novel-cli vote claim <novel-id> <round>
 onchain-novel-cli vote candidates <novel-id>

@@ -115,7 +115,7 @@ Key adaptations:
 ```
 Novel Title
 Creator: 0x1234...  |  Round 3 - Idle  |  Pool: 1.5 ETH  |  N=3 world lines
-[Continue] [Vote] [Tip] [Rules] [Fork]
+[Continue] [Vote] [Tip]
 ```
 
 - Vote button: only during Committing/Revealing phases
@@ -146,10 +146,13 @@ Non-longest branches from worldLineAncestor descendants shown as collapsible lis
 - Navigation: Previous (parent) | Continue (descendants list) | Story Tree
 - Full content, author, depth, timestamp
 - Tips/bounties count
-- [Tip] [Create Bounty] [Continue] buttons
+- [Tip] [Create Bounty] [Continue] [Fork This Story] buttons
+- Fork This Story: opens fork dialog (new novel title, config, root chapter content), calls `forkNovel` with this chapter as parent
 - If current chapter is a round candidate: [Vote for This] button
-- Vote flow: enter salt -> commit (stake voteStake) -> wait for reveal phase -> reveal
-- Salt stored in localStorage
+- Vote flow: select candidate -> commit (stake voteStake) -> keeper auto-reveals
+- Manual reveal available as fallback if user opts out of keeper-assisted reveal
+- Salt stored in localStorage as backup
+- **Comments section** at the bottom: paginated list from `GET /api/chapters/:id/comments`. Connected wallet can post a new comment via `POST /api/chapters/:id/comments` — the user signs an EIP-191 message (no on-chain transaction, no fee). Comments are append-only (no edit / delete).
 
 ## 6. Story Tree `/novels/[id]/tree`
 
@@ -169,11 +172,15 @@ Non-longest branches from worldLineAncestor descendants shown as collapsible lis
 
 ## 8. Voting Flow (Frontend)
 
-Frontend handles only Committing and Revealing phases, not Nominating.
+Frontend handles Committing phase. Revealing is handled by Keeper (default) or manually by user.
 
-**Committing**: user sees candidate list -> selects candidate -> enters salt (or auto-generates) -> computes commitHash = keccak256(encodePacked(uint64(candidateId), bytes32(salt))) -> sends commitVote + voteStake -> saves salt + candidateId to localStorage.
+**Committing**: user sees candidate list -> selects candidate -> auto-generates salt -> computes commitHash = keccak256(encodePacked(uint64(candidateId), bytes32(salt))) -> sends commitVote + voteStake -> submits plaintext `(candidateId, salt)` to backend (`POST /api/votes/submit`) for keeper-assisted reveal -> saves salt + candidateId to localStorage as backup.
 
-**Revealing**: reads salt + candidateId from localStorage -> sends revealVote -> shows "revealed, awaiting settlement."
+**Revealing (automatic)**: Keeper batch-reveals all stored votes when reveal phase begins. User sees "vote committed, will be auto-revealed by keeper" status.
+
+**Revealing (manual fallback)**: If user opted out of keeper-assisted reveal, or wants to self-reveal: reads salt + candidateId from localStorage -> sends revealVote.
+
+**Unrevealed penalty**: if neither keeper nor user reveals, voter is charged `max(unrevealPenaltyFloor, voteStake * 10%)` instead of losing the full stake. Remainder is returned after settlement.
 
 ## 9. Data Flow
 
@@ -182,7 +189,7 @@ Frontend handles only Committing and Revealing phases, not Nominating.
 | Novel list | `GET /api/novels` |
 | Novel home | `GET /api/novels/:id` + `/worldlines` + `/tree` |
 | Reading page | `GET /api/chapters/:id/context` |
-| Chapter page | `GET /api/chapters/:id` + `/children` + `/bounties` + `/tips` |
+| Chapter page | `GET /api/chapters/:id` + `/children` + `/bounties` + `/tips` + `/comments` |
 | Story tree | `GET /api/novels/:id/tree` |
 | Vote candidates | `GET /api/novels/:id/rounds/:round` |
 | User info | `GET /api/users/:address/chapters` + `/votes` + `/rewards` |
@@ -190,10 +197,8 @@ Frontend handles only Committing and Revealing phases, not Nominating.
 ## 10. Not Implemented (Frontend)
 
 - Nominating UI (use CLI/MCP)
-- Comment system (backend API preserved, frontend deferred)
 - User profile page
-- Fork creation UI (use CLI)
-- Rule management UI (use CLI)
+- Rule management / governance UI (use CLI; frontend only sets initial rules at novel creation)
 - Novel completion UI (use CLI)
 
 ## 11. Component Structure
@@ -217,7 +222,9 @@ web/frontend/src/
     chapter-card-mini.tsx         # Chapter card (compact)
     chapter-reader.tsx            # Reader (pagination)
     chapter-editor.tsx            # Continuation editor
+    fork-dialog.tsx               # Fork novel dialog
     collapsed-chapters.tsx        # Collapsed chapter range
+    comment-list.tsx              # Comment list + EIP-191 signed submit form
     vote-panel.tsx                # Vote panel (commit/reveal)
     story-tree.tsx                # react-d3-tree wrapper
     nav-bar.tsx                   # Navigation bar
