@@ -1,4 +1,4 @@
-import { createPublicClient, createWalletClient, defineChain, http } from "viem";
+import { createPublicClient, createWalletClient, defineChain, http, type Hash } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { foundry } from "viem/chains";
 import { requireConfig } from "./config.js";
@@ -39,4 +39,13 @@ export function getWalletClient() {
 export function getContracts() {
   const config = requireConfig();
   return config.contracts;
+}
+
+/** Wait for a transaction receipt; throws if reverted. */
+export async function waitForTx(hash: Hash): Promise<void> {
+  const client = getPublicClient();
+  const receipt = await client.waitForTransactionReceipt({ hash });
+  if (receipt.status !== "success") {
+    throw new Error(`Transaction ${hash} reverted`);
+  }
 }

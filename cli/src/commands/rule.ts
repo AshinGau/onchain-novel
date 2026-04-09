@@ -8,7 +8,7 @@ import {
   getRule,
   getRuleProposal,
 } from "../shared/index.js";
-import { getWalletClient, getPublicClient, getContracts } from "../utils/client.js";
+import { getWalletClient, getPublicClient, getContracts, waitForTx } from "../utils/client.js";
 import { apiGet } from "../utils/api.js";
 import { header, kv, success, error, txHash } from "../utils/format.js";
 import chalk from "chalk";
@@ -67,6 +67,7 @@ export function registerRuleCommands(program: Command): void {
           rulesEngine,
         });
         txHash(hash);
+        await waitForTx(hash);
         success(`Rule "${name}" set`);
       } catch (err) {
         error(String(err));
@@ -116,6 +117,7 @@ export function registerRuleCommands(program: Command): void {
           rulesEngine,
         });
         txHash(hash);
+        await waitForTx(hash);
         success(`Rule proposal created: ${action} "${name}"`);
       } catch (err) {
         error(String(err));
@@ -132,6 +134,7 @@ export function registerRuleCommands(program: Command): void {
         const rulesEngine = requireRulesEngine(getContracts());
         const hash = await voteOnRuleProposalTx(client, BigInt(proposalId), rulesEngine);
         txHash(hash);
+        await waitForTx(hash);
         success("Voted on rule proposal");
       } catch (err) {
         error(String(err));

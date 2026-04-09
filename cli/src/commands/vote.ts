@@ -1,5 +1,6 @@
 import { Command } from "commander";
-import { parseEther } from "viem";
+import { parseEther, toHex } from "viem";
+import { randomBytes } from "node:crypto";
 import {
   startRound as startRoundTx,
   closeNomination as closeNominationTx,
@@ -12,10 +13,16 @@ import {
   computeCommitHash,
   toBytes32Salt,
 } from "../shared/index.js";
-import { getWalletClient, getContracts } from "../utils/client.js";
-import { apiGet } from "../utils/api.js";
+import { getWalletClient, getContracts, waitForTx } from "../utils/client.js";
+import { apiGet, apiPost } from "../utils/api.js";
+import { saveVoteSalt, getVoteSalt, getStorePath } from "../utils/vote-store.js";
 import { header, kv, success, error, txHash, table, roundPhaseName } from "../utils/format.js";
 import chalk from "chalk";
+
+/** Generate a fresh 32-byte random salt as 0x-prefixed hex */
+function generateSalt(): `0x${string}` {
+  return toHex(randomBytes(32));
+}
 
 export function registerVoteCommands(program: Command): void {
   const vote = program.command("vote").description("Voting commands");
@@ -29,6 +36,7 @@ export function registerVoteCommands(program: Command): void {
         const contracts = getContracts();
         const hash = await startRoundTx(client, BigInt(novelId), contracts.novelCore);
         txHash(hash);
+        await waitForTx(hash);
         success("Round started");
       } catch (err) {
         error(String(err));
@@ -45,6 +53,7 @@ export function registerVoteCommands(program: Command): void {
         const contracts = getContracts();
         const hash = await closeNominationTx(client, BigInt(novelId), contracts.novelCore);
         txHash(hash);
+        await waitForTx(hash);
         success("Nomination closed");
       } catch (err) {
         error(String(err));
@@ -61,6 +70,7 @@ export function registerVoteCommands(program: Command): void {
         const contracts = getContracts();
         const hash = await closeCommitTx(client, BigInt(novelId), contracts.novelCore);
         txHash(hash);
+        await waitForTx(hash);
         success("Commit phase closed");
       } catch (err) {
         error(String(err));
@@ -98,6 +108,7 @@ export function registerVoteCommands(program: Command): void {
           novelCore: contracts.novelCore,
         });
         txHash(hash);
+        await waitForTx(hash);
         success("Chapter nominated");
       } catch (err) {
         error(String(err));
@@ -106,32 +117,40 @@ export function registerVoteCommands(program: Command): void {
     });
 
   vote
-    .command("commit <novel-id> <candidate-id> <salt>")
-    .description("Commit a vote (commit-reveal scheme)")
+    .command("commit <novel-id> <candidate-id> [salt]")
+    .description(
+      "Commit a vote. If salt is omitted, a random 32-byte salt is generated, " +
+        "saved locally as backup, and submitted to the backend for keeper-assisted reveal.",
+    )
     .option("--value <eth>", "vote stake in ETH")
-    .action(async (novelId, candidateId, salt, opts) => {
+    .option("--no-keeper", "skip backend submission (you must reveal manually later)")
+    .action(async (novelId, candidateId, saltArg, opts) => {
       try {
         const client = getWalletClient();
         const contracts = getContracts();
+        const voter = client.account!.address;
 
-        const saltBytes32 = toBytes32Salt(salt);
+        // Auto-generate a fresh random salt when not provided.
+        const saltBytes32: `0x${string}` = saltArg ? toBytes32Salt(saltArg) : generateSalt();
         const commitHash = computeCommitHash(BigInt(candidateId), saltBytes32);
 
         console.log(chalk.gray(`  Salt (bytes32): ${saltBytes32}`));
-        console.log(chalk.gray(`  Commit hash: ${commitHash}`));
+        console.log(chalk.gray(`  Commit hash:    ${commitHash}`));
 
+        // Resolve current round (needed for backend submission and local backup)
+        const novel = await apiGet<Record<string, unknown>>(`/api/novels/${novelId}`).catch(() => null);
+        const currentRound = Number(novel?.current_round ?? 0);
+
+        // Resolve voteStake from on-chain config (fallback to flag, fallback to default)
         let value: bigint;
         if (opts.value) {
           value = parseEther(opts.value);
+        } else if (novel) {
+          const config = novel.config as Record<string, string>;
+          value = BigInt(config.voteStake ?? "0");
         } else {
-          try {
-            const novel = await apiGet<Record<string, unknown>>(`/api/novels/${novelId}`);
-            const config = novel.config as Record<string, string>;
-            value = BigInt(config.voteStake ?? "0");
-          } catch {
-            value = parseEther("0.001");
-            console.log(chalk.yellow(`  Could not fetch novel config. Using default stake: 0.001 ETH`));
-          }
+          value = parseEther("0.005");
+          console.log(chalk.yellow(`  Could not fetch novel config. Using default stake: 0.005 ETH`));
         }
 
         const hash = await commitVoteTx(client, {
@@ -141,7 +160,54 @@ export function registerVoteCommands(program: Command): void {
           novelCore: contracts.novelCore,
         });
         txHash(hash);
-        success("Vote committed. Remember your salt to reveal later!");
+        await waitForTx(hash);
+
+        // Persist salt locally as the user's backup, regardless of keeper-assisted reveal.
+        if (currentRound > 0) {
+          saveVoteSalt({
+            novelId: novelId.toString(),
+            round: currentRound,
+            candidateId: candidateId.toString(),
+            salt: saltBytes32,
+            voter,
+          });
+          console.log(chalk.gray(`  Salt saved to ${getStorePath()}`));
+        }
+
+        // Best-effort: submit plaintext vote to backend for keeper-assisted reveal.
+        // The backend signs canonical message and we sign it with the wallet.
+        if (opts.keeper !== false && currentRound > 0) {
+          const ts = Math.floor(Date.now() / 1000);
+          const message =
+            `Submit vote on novel ${novelId} round ${currentRound} for candidate ${candidateId} at ${ts}`;
+          const signature = await client.signMessage({ account: client.account!, message });
+
+          const result = await apiPost("/api/votes/submit", {
+            address: voter,
+            novelId: Number(novelId),
+            round: currentRound,
+            candidateId: Number(candidateId),
+            salt: saltBytes32,
+            timestamp: ts,
+            signature,
+          });
+
+          if (result.status === 201) {
+            success("Vote committed. Keeper will auto-reveal during the reveal phase.");
+          } else if (result.status === 503) {
+            success("Vote committed (keeper-assisted reveal disabled on backend).");
+            console.log(chalk.yellow("  You will need to reveal manually with: vote reveal <novel-id> <candidate-id> <salt>"));
+          } else {
+            success("Vote committed.");
+            console.log(
+              chalk.yellow(
+                `  Backend rejected /api/votes/submit (status ${result.status}). You will need to reveal manually.`,
+              ),
+            );
+          }
+        } else {
+          success("Vote committed. Remember to reveal during the reveal phase.");
+        }
       } catch (err) {
         error(String(err));
         process.exit(1);
@@ -149,13 +215,32 @@ export function registerVoteCommands(program: Command): void {
     });
 
   vote
-    .command("reveal <novel-id> <candidate-id> <salt>")
-    .description("Reveal a previously committed vote")
-    .action(async (novelId, candidateId, salt) => {
+    .command("reveal <novel-id> <candidate-id> [salt]")
+    .description(
+      "Reveal a previously committed vote. If salt is omitted, falls back to the local backup " +
+        "saved by `vote commit`.",
+    )
+    .action(async (novelId, candidateId, saltArg) => {
       try {
         const client = getWalletClient();
         const contracts = getContracts();
-        const saltBytes32 = toBytes32Salt(salt);
+        const voter = client.account!.address;
+
+        let saltBytes32: `0x${string}`;
+        if (saltArg) {
+          saltBytes32 = toBytes32Salt(saltArg);
+        } else {
+          // Fall back to local backup
+          const novel = await apiGet<Record<string, unknown>>(`/api/novels/${novelId}`);
+          const currentRound = Number(novel.current_round ?? 0);
+          const stored = getVoteSalt(BigInt(novelId), currentRound, voter);
+          if (!stored) {
+            error(`No salt provided and no local backup found for round ${currentRound}.`);
+            process.exit(1);
+          }
+          saltBytes32 = stored.salt;
+          console.log(chalk.gray(`  Using salt from local backup (round ${currentRound})`));
+        }
 
         const hash = await revealVoteTx(client, {
           novelId: BigInt(novelId),
@@ -164,6 +249,7 @@ export function registerVoteCommands(program: Command): void {
           novelCore: contracts.novelCore,
         });
         txHash(hash);
+        await waitForTx(hash);
         success("Vote revealed");
       } catch (err) {
         error(String(err));
@@ -180,6 +266,7 @@ export function registerVoteCommands(program: Command): void {
         const contracts = getContracts();
         const hash = await settleRoundTx(client, BigInt(novelId), contracts.novelCore);
         txHash(hash);
+        await waitForTx(hash);
         success("Round settled");
       } catch (err) {
         error(String(err));
@@ -201,6 +288,7 @@ export function registerVoteCommands(program: Command): void {
           contracts.novelCore,
         );
         txHash(hash);
+        await waitForTx(hash);
         success("Voting reward claimed");
       } catch (err) {
         error(String(err));

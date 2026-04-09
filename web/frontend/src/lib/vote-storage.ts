@@ -1,8 +1,11 @@
 /**
  * localStorage-based vote salt storage.
  *
+ * Salts are generated automatically by the wallet (32 random bytes) and
+ * persisted as 0x-prefixed hex so the user never has to remember a string.
+ *
  * Key format: `vote:${novelId}:${round}`
- * Value: JSON `{ candidateId: string, salt: string }`
+ * Value:      JSON `{ candidateId: string, salt: 0x...64hex, keeperSubmitted: bool }`
  */
 
 import { keccak256, encodePacked, toHex } from "viem";
@@ -15,28 +18,26 @@ function storageKey(novelId: string, round: number): string {
 
 export interface StoredVote {
   candidateId: string;
-  salt: string;
+  salt: `0x${string}`;
+  /** True if the plaintext was successfully submitted to the keeper-assisted reveal endpoint. */
+  keeperSubmitted: boolean;
 }
 
-/** Save vote data after successful commit */
 export function saveVote(
   novelId: string,
   round: number,
   candidateId: string,
-  salt: string
+  salt: `0x${string}`,
+  keeperSubmitted: boolean,
 ): void {
   if (typeof window === "undefined") return;
   localStorage.setItem(
     storageKey(novelId, round),
-    JSON.stringify({ candidateId, salt })
+    JSON.stringify({ candidateId, salt, keeperSubmitted } satisfies StoredVote),
   );
 }
 
-/** Load saved vote data for reveal */
-export function loadVote(
-  novelId: string,
-  round: number
-): StoredVote | null {
+export function loadVote(novelId: string, round: number): StoredVote | null {
   if (typeof window === "undefined") return null;
   const raw = localStorage.getItem(storageKey(novelId, round));
   if (!raw) return null;
@@ -47,18 +48,19 @@ export function loadVote(
   }
 }
 
-/** Remove vote data after successful reveal */
 export function clearVote(novelId: string, round: number): void {
   if (typeof window === "undefined") return;
   localStorage.removeItem(storageKey(novelId, round));
 }
 
 /**
- * Convert user-provided salt string to bytes32.
- * Used identically at commit and reveal time so the hash matches.
+ * Generate a fresh 32-byte random salt as 0x-prefixed hex.
+ * Uses crypto.getRandomValues which is available in browser + Node 19+.
  */
-export function toBytes32Salt(userInput: string): `0x${string}` {
-  return keccak256(toHex(userInput));
+export function generateSalt(): `0x${string}` {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return toHex(bytes);
 }
 
 /**
@@ -66,7 +68,7 @@ export function toBytes32Salt(userInput: string): `0x${string}` {
  */
 export function computeCommitHash(
   candidateId: bigint,
-  salt: `0x${string}`
+  salt: `0x${string}`,
 ): `0x${string}` {
   return keccak256(encodePacked(["uint64", "bytes32"], [candidateId, salt]));
 }

@@ -25,6 +25,8 @@ export interface NovelConfig {
   minRoundGap: bigint;
   prizeReleaseRate: number;
   voterRewardRate: number;
+  maxVoterReward: bigint;
+  unrevealPenaltyFloor: bigint;
   contentLocation: number;
   contentBaseUrl: string;
   ruleFee: bigint;

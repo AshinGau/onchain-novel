@@ -16,7 +16,7 @@ export default async function NovelsPage({
   const data = await fetchNovels({ page, limit: 20, sort, filter, search });
 
   return (
-    <div className="on-container on-stack" style={{ paddingTop: "1.5rem", paddingBottom: "2rem" }}>
+    <div className="on-container on-stack">
       <h1 className="text-heading">Novels</h1>
 
       <NovelListControls
@@ -28,25 +28,21 @@ export default async function NovelsPage({
       />
 
       {data.novels.length === 0 ? (
-        <div className="text-caption" style={{ textAlign: "center", padding: "3rem 0" }}>
-          No novels found
-        </div>
+        <div className="on-empty">No novels found</div>
       ) : (
-        <div className="on-grid" style={{ "--cols": 2 } as React.CSSProperties}>
+        <div className="on-grid on-grid-2">
           {data.novels.map((novel) => (
             <NovelCard key={novel.id} novel={novel} />
           ))}
         </div>
       )}
 
-      {/* Pagination */}
       {data.pagination.totalPages > 1 && (
-        <div className="on-row" style={{ justifyContent: "center", gap: "1rem", paddingTop: "1rem" }}>
+        <nav className="on-pagination">
           {page > 1 && (
             <a
               href={`/novels?page=${page - 1}&sort=${sort}&filter=${filter}&search=${search}`}
               className="on-btn on-btn-secondary"
-              style={{ textDecoration: "none" }}
             >
               Previous
             </a>
@@ -58,12 +54,11 @@ export default async function NovelsPage({
             <a
               href={`/novels?page=${page + 1}&sort=${sort}&filter=${filter}&search=${search}`}
               className="on-btn on-btn-secondary"
-              style={{ textDecoration: "none" }}
             >
               Next
             </a>
           )}
-        </div>
+        </nav>
       )}
     </div>
   );

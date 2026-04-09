@@ -9,7 +9,7 @@ import {
 } from "../shared/index.js";
 import { config } from "../config.js";
 import { getPublicClient, getWalletClient } from "../utils/client.js";
-import { hasApi, apiGet } from "../utils/api.js";
+import { hasApi, apiGet, apiPost } from "../utils/api.js";
 import { ok, fail } from "../utils/response.js";
 
 export function registerChapterTools(server: McpServer): void {
@@ -134,6 +134,64 @@ export function registerChapterTools(server: McpServer): void {
           return `--- ${label} by ${ch.author}${ch.is_canon ? " [Canon]" : ""} ---\n${body}`;
         });
         return ok(parts.join("\n\n"));
+      } catch (error) {
+        return fail(`Failed: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    },
+  );
+
+  // ── chapter_comments ──
+  server.tool(
+    "chapter_comments",
+    "List off-chain comments on a chapter. Requires API.",
+    {
+      chapterId: z.number().describe("Chapter ID"),
+      page: z.number().default(1),
+      limit: z.number().default(20),
+    },
+    async (params) => {
+      try {
+        if (!hasApi()) return fail("chapter_comments requires API_BASE_URL.");
+        const data = await apiGet<{
+          comments: { id: number; author: string; content: string; created_at: string }[];
+        }>(`/api/chapters/${params.chapterId}/comments?page=${params.page}&limit=${params.limit}`);
+        if (data.comments.length === 0) return ok(`No comments on Chapter #${params.chapterId}.`);
+        const lines = data.comments.map(
+          (c) => `  #${c.id} ${c.author.slice(0, 10)}... (${c.created_at}): ${c.content}`,
+        );
+        return ok(`Comments on Chapter #${params.chapterId}:\n${lines.join("\n")}`);
+      } catch (error) {
+        return fail(`Failed: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    },
+  );
+
+  // ── chapter_comment ──
+  server.tool(
+    "chapter_comment",
+    "Post an off-chain comment on a chapter. Wallet signs canonical message; no on-chain tx.",
+    {
+      chapterId: z.number().describe("Chapter ID"),
+      content: z.string().describe("Comment text (max 5000 chars)"),
+    },
+    async (params) => {
+      try {
+        if (!hasApi()) return fail("chapter_comment requires API_BASE_URL.");
+        const wallet = getWalletClient();
+        const address = wallet.account!.address;
+        const ts = Math.floor(Date.now() / 1000);
+        const message = `Comment on chapter ${params.chapterId} at ${ts}: ${params.content}`;
+        const signature = await wallet.signMessage({ account: wallet.account!, message });
+
+        const result = await apiPost<{ id: number }>(
+          `/api/chapters/${params.chapterId}/comments`,
+          { address, content: params.content, timestamp: ts, signature },
+        );
+
+        if (result.status === 201 && result.body?.id) {
+          return ok(`Comment posted (id=${result.body.id}) on Chapter #${params.chapterId}.`);
+        }
+        return fail(`Backend rejected comment (status ${result.status})`);
       } catch (error) {
         return fail(`Failed: ${error instanceof Error ? error.message : String(error)}`);
       }

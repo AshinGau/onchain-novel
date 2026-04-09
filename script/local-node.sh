@@ -139,13 +139,14 @@ start_frontend() {
 
     info "Building frontend..."
     cd "$FRONTEND_DIR"
-    NEXT_PUBLIC_API_URL="http://localhost:$API_PORT" \
+    NEXT_PUBLIC_API_URL="http://localhost:$API_PORT/api" \
     NEXT_PUBLIC_RPC_URL="$RPC" \
     NEXT_PUBLIC_CHAIN=foundry \
     NEXT_PUBLIC_NOVEL_CORE_ADDRESS="$NOVEL_CORE_ADDRESS" \
     NEXT_PUBLIC_VOTING_ENGINE_ADDRESS="$VOTING_ENGINE_ADDRESS" \
     NEXT_PUBLIC_PRIZE_POOL_ADDRESS="$PRIZE_POOL_ADDRESS" \
     NEXT_PUBLIC_RULES_ENGINE_ADDRESS="$RULES_ENGINE_ADDRESS" \
+    NEXT_PUBLIC_BOUNTY_BOARD_ADDRESS="$BOUNTY_BOARD_ADDRESS" \
     npx next build > "$DATA_DIR/frontend-build.log" 2>&1
 
     if [ $? -ne 0 ]; then
@@ -156,13 +157,14 @@ start_frontend() {
     ok "Frontend built"
 
     info "Starting frontend..."
-    NEXT_PUBLIC_API_URL="http://localhost:$API_PORT" \
+    NEXT_PUBLIC_API_URL="http://localhost:$API_PORT/api" \
     NEXT_PUBLIC_RPC_URL="$RPC" \
     NEXT_PUBLIC_CHAIN=foundry \
     NEXT_PUBLIC_NOVEL_CORE_ADDRESS="$NOVEL_CORE_ADDRESS" \
     NEXT_PUBLIC_VOTING_ENGINE_ADDRESS="$VOTING_ENGINE_ADDRESS" \
     NEXT_PUBLIC_PRIZE_POOL_ADDRESS="$PRIZE_POOL_ADDRESS" \
     NEXT_PUBLIC_RULES_ENGINE_ADDRESS="$RULES_ENGINE_ADDRESS" \
+    NEXT_PUBLIC_BOUNTY_BOARD_ADDRESS="$BOUNTY_BOARD_ADDRESS" \
     npx next start --port "$FRONTEND_PORT" > "$DATA_DIR/frontend.log" 2>&1 &
     save_pid "frontend" "$!"
     cd "$ROOT_DIR"
@@ -210,20 +212,23 @@ do_start() {
     done
 
     # ── Start Anvil ──
+    # --code-size-limit 50000 lets the chain accept NovelCore, which currently
+    # exceeds the EIP-170 24576-byte limit (~29KB).
     info "Starting Anvil..."
     if [ -f "$ANVIL_STATE" ]; then
         info "Loading saved state from $ANVIL_STATE"
-        anvil --host 0.0.0.0 --block-time 1 --state "$ANVIL_STATE" > "$DATA_DIR/anvil.log" 2>&1 &
     else
         info "Fresh Anvil instance"
-        anvil --host 0.0.0.0 --block-time 1 --state "$ANVIL_STATE" > "$DATA_DIR/anvil.log" 2>&1 &
     fi
+    anvil --host 0.0.0.0 --block-time 1 --code-size-limit 50000 \
+        --state "$ANVIL_STATE" > "$DATA_DIR/anvil.log" 2>&1 &
     local anvil_pid=$!
     save_pid "anvil" "$anvil_pid"
     sleep 2
 
     if ! cast block-number --rpc-url "$RPC" &>/dev/null; then
-        err "Anvil failed to start"
+        err "Anvil failed to start. Logs:"
+        tail -20 "$DATA_DIR/anvil.log" || true
         exit 1
     fi
     local block=$(cast block-number --rpc-url "$RPC" 2>/dev/null)
@@ -251,25 +256,38 @@ do_start() {
         cd "$ROOT_DIR"
 
         PK_DEPLOYER="0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+        # NovelCore exceeds the EIP-170 24576-byte limit; --disable-code-size-limit
+        # tells forge to broadcast anyway (the chain accepts it because anvil was
+        # started with --code-size-limit 50000).
+        # forge may still exit non-zero on the post-deploy size warning even after
+        # successfully writing the broadcast file, so we tolerate non-zero and rely
+        # on the broadcast JSON's existence as the source of truth.
+        DEPLOY_LOG="$DATA_DIR/deploy.log"
         PRIVATE_KEY="$PK_DEPLOYER" forge script script/Deploy.s.sol \
-            --rpc-url "$RPC" --broadcast > /dev/null 2>&1
+            --rpc-url "$RPC" --broadcast --disable-code-size-limit > "$DEPLOY_LOG" 2>&1 || true
 
         BROADCAST_JSON="broadcast/Deploy.s.sol/31337/run-latest.json"
         if [ ! -f "$BROADCAST_JSON" ]; then
-            err "Deploy failed — broadcast JSON not found"
+            err "Deploy failed — broadcast JSON not found. Logs:"
+            tail -30 "$DEPLOY_LOG" || true
             exit 1
         fi
 
+        # Deploy.s.sol creation order:
+        #   [0] NovelCore impl  [1] VotingEngine impl  [2] PrizePool impl
+        #   [3] RulesEngine impl  [4] BountyBoard impl
+        #   [5] VotingEngine proxy  [6] PrizePool proxy  [7] RulesEngine proxy
+        #   [8] NovelCore proxy  [9] BountyBoard proxy
         CREATES=$(jq -r '[.transactions[] | select(.transactionType == "CREATE") | .contractAddress] | .[]' "$BROADCAST_JSON")
         CREATES_ARR=($CREATES)
-        NOVEL_CORE="${CREATES_ARR[5]}"
-        VOTING_ENGINE="${CREATES_ARR[6]}"
-        PRIZE_POOL="${CREATES_ARR[7]}"
-        CHAPTER_NFT="${CREATES_ARR[8]}"
-        RULES_ENGINE="${CREATES_ARR[9]}"
+        VOTING_ENGINE="${CREATES_ARR[5]}"
+        PRIZE_POOL="${CREATES_ARR[6]}"
+        RULES_ENGINE="${CREATES_ARR[7]}"
+        NOVEL_CORE="${CREATES_ARR[8]}"
+        BOUNTY_BOARD="${CREATES_ARR[9]}"
 
-        # Set keeper reward
-        cast send --rpc-url "$RPC" --private-key "$PK_DEPLOYER" "$NOVEL_CORE" \
+        # Set keeper reward on PrizePool (the owner-only call lives there, NOT on NovelCore)
+        cast send --rpc-url "$RPC" --private-key "$PK_DEPLOYER" "$PRIZE_POOL" \
             "setKeeperRewardAmount(uint256)" "10000000000000" --json > /dev/null 2>&1
 
         # Save addresses
@@ -277,8 +295,8 @@ do_start() {
 NOVEL_CORE_ADDRESS=$NOVEL_CORE
 VOTING_ENGINE_ADDRESS=$VOTING_ENGINE
 PRIZE_POOL_ADDRESS=$PRIZE_POOL
-CHAPTER_NFT_ADDRESS=$CHAPTER_NFT
 RULES_ENGINE_ADDRESS=$RULES_ENGINE
+BOUNTY_BOARD_ADDRESS=$BOUNTY_BOARD
 EOF
         touch "$DEPLOY_FLAG"
         ok "Contracts deployed"
@@ -302,7 +320,7 @@ EOF
         "NOVEL_CORE_ADDRESS": "$NOVEL_CORE_ADDRESS",
         "VOTING_ENGINE_ADDRESS": "$VOTING_ENGINE_ADDRESS",
         "PRIZE_POOL_ADDRESS": "$PRIZE_POOL_ADDRESS",
-        "CHAPTER_NFT_ADDRESS": "$CHAPTER_NFT_ADDRESS",
+        "BOUNTY_BOARD_ADDRESS": "$BOUNTY_BOARD_ADDRESS",
         "RULES_ENGINE_ADDRESS": "$RULES_ENGINE_ADDRESS",
         "PRIVATE_KEY": "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d",
         "API_BASE_URL": "http://localhost:$API_PORT"
@@ -330,11 +348,13 @@ MCPEOF
     NOVEL_CORE_ADDRESS="$NOVEL_CORE_ADDRESS" \
     VOTING_ENGINE_ADDRESS="$VOTING_ENGINE_ADDRESS" \
     PRIZE_POOL_ADDRESS="$PRIZE_POOL_ADDRESS" \
-    CHAPTER_NFT_ADDRESS="$CHAPTER_NFT_ADDRESS" \
+    BOUNTY_BOARD_ADDRESS="$BOUNTY_BOARD_ADDRESS" \
     RULES_ENGINE_ADDRESS="$RULES_ENGINE_ADDRESS" \
     INDEXER_START_BLOCK=0 \
     INDEXER_BATCH_SIZE=100 \
     INDEXER_POLL_INTERVAL_MS=2000 \
+    INDEXER_CONFIRMATION_BLOCKS=0 \
+    VOTE_ENCRYPTION_KEY="0000000000000000000000000000000000000000000000000000000000000001" \
     PORT=$API_PORT \
     node dist/index.js > "$DATA_DIR/backend.log" 2>&1 &
     local backend_pid=$!
@@ -373,8 +393,8 @@ MCPEOF
     echo "    NovelCore:     $NOVEL_CORE_ADDRESS"
     echo "    VotingEngine:  $VOTING_ENGINE_ADDRESS"
     echo "    PrizePool:     $PRIZE_POOL_ADDRESS"
-    echo "    ChapterNFT:    $CHAPTER_NFT_ADDRESS"
     echo "    RulesEngine:   $RULES_ENGINE_ADDRESS"
+    echo "    BountyBoard:   $BOUNTY_BOARD_ADDRESS"
     echo ""
     echo -e "${CYAN}──────────────────────────────────────────────────────────────${NC}"
     echo -e "${CYAN}  MetaMask Setup${NC}"
@@ -445,10 +465,10 @@ do_timewarp() {
         *)  seconds=$input ;;
     esac
 
-    local before=$(cast rpc eth_getBlockByNumber latest false --rpc-url "$RPC" 2>/dev/null | jq -r '.timestamp' | xargs printf '%d\n')
+    local before=$(cast block latest -f timestamp --rpc-url "$RPC" 2>/dev/null)
     cast rpc evm_increaseTime "$seconds" --rpc-url "$RPC" > /dev/null 2>&1
     cast rpc evm_mine --rpc-url "$RPC" > /dev/null 2>&1
-    local after=$(cast rpc eth_getBlockByNumber latest false --rpc-url "$RPC" 2>/dev/null | jq -r '.timestamp' | xargs printf '%d\n')
+    local after=$(cast block latest -f timestamp --rpc-url "$RPC" 2>/dev/null)
 
     ok "Warped ${seconds}s forward ($(date -r $before '+%H:%M:%S') → $(date -r $after '+%H:%M:%S'))"
 }

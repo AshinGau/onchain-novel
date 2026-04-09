@@ -7,13 +7,10 @@ export function NovelCard({ novel }: { novel: Novel }) {
   const phase = phaseLabel(novel.round_phase);
 
   return (
-    <Link
-      href={`/novels/${novel.id}`}
-      style={{ textDecoration: "none", display: "block" }}
-    >
-      <div className="on-card on-card-hover on-stack" style={{ gap: "0.75rem" }}>
-        <div className="on-row" style={{ justifyContent: "space-between" }}>
-          <span className="text-subheading" style={{ fontSize: "1rem" }}>
+    <Link href={`/novels/${novel.id}`} className="on-link-block">
+      <div className="on-card on-card-hover">
+        <div className="on-row-between">
+          <span className="text-subheading">
             {novel.title || `Novel #${novel.id}`}
           </span>
           <span className={`on-badge ${novel.active ? "badge-active" : "badge-completed"}`}>
@@ -21,39 +18,22 @@ export function NovelCard({ novel }: { novel: Novel }) {
           </span>
         </div>
 
-        <p className="text-caption" style={{ margin: 0 }}>
-          by {shortAddress(novel.creator)}
-        </p>
+        <p className="text-caption">by {shortAddress(novel.creator)}</p>
 
         {novel.description && (
-          <p className="text-caption" style={{
-            margin: 0,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-          }}>
-            {novel.description}
-          </p>
+          <p className="text-caption text-truncate">{novel.description}</p>
         )}
 
-        <div className="on-row" style={{ gap: "1rem", flexWrap: "wrap" }}>
+        <div className="on-row-wrap">
           <span className="text-caption">
-            Round {novel.current_round} &middot; {phase}
+            Round {novel.current_round} · {phase}
           </span>
-          <span className="text-caption">
-            {novel.chapter_count} chapters
-          </span>
-          <span className="text-caption">
-            {novel.author_count} authors
-          </span>
-          <span className="text-caption">
-            Pool: {formatBalance(novel.pool_balance)}
-          </span>
+          <span className="text-caption">{novel.chapter_count} chapters</span>
+          <span className="text-caption">{novel.author_count} authors</span>
+          <span className="text-caption">Pool: {formatBalance(novel.pool_balance)}</span>
         </div>
 
-        <span className="text-muted" style={{ fontSize: "0.75rem" }}>
-          {timeAgo(novel.created_at)}
-        </span>
+        <span className="text-tiny">{timeAgo(novel.created_at)}</span>
       </div>
     </Link>
   );

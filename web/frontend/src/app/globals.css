@@ -170,36 +170,81 @@
 }
 
 /* ============================================================
-   Semantic Layout Classes
+   ON Semantic Layer
+   ============================================================
+   All semantic classes are prefixed `on-` to namespace them away
+   from Tailwind utilities and shadcn primitives. Components MUST
+   use these classes; inline `style={{ ... }}` is forbidden except
+   for dynamic values that can't be expressed in CSS variables.
    ============================================================ */
 
-.container {
+/* ---------- Layout ---------- */
+
+.on-container {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 0 1rem;
+  padding: 1.5rem 1rem 2rem;
 }
 
-.stack {
+.on-stack {
   display: flex;
   flex-direction: column;
   gap: 1rem;
 }
 
-.row {
+.on-stack-sm { gap: 0.5rem; }
+.on-stack-lg { gap: 1.5rem; }
+
+.on-row {
   display: flex;
   align-items: center;
   gap: 0.5rem;
 }
 
-.grid {
+.on-row-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.on-row-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.on-grid {
   display: grid;
   grid-template-columns: repeat(var(--cols, 3), 1fr);
   gap: 1.5rem;
 }
 
-/* ============================================================
-   Semantic Typography
-   ============================================================ */
+.on-grid-2 { --cols: 2; }
+.on-grid-3 { --cols: 3; }
+.on-grid-4 { --cols: 4; }
+
+.on-section {
+  margin-top: 1.5rem;
+}
+
+.on-empty {
+  text-align: center;
+  padding: 3rem 0;
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
+}
+
+.on-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding-top: 1rem;
+}
+
+/* ---------- Typography ---------- */
 
 .text-heading {
   font-size: 1.5rem;
@@ -226,32 +271,66 @@
 
 .text-muted {
   color: var(--color-text-muted);
+  font-size: 0.875rem;
 }
 
-/* ============================================================
-   Semantic Card Classes
-   ============================================================ */
+.text-success {
+  color: var(--color-success);
+  font-size: 0.875rem;
+}
 
-.card {
+.text-danger {
+  color: var(--color-danger);
+  font-size: 0.875rem;
+}
+
+.text-link {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+.text-link:hover {
+  text-decoration: underline;
+}
+
+.text-tiny {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.text-truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.on-text-center {
+  text-align: center;
+}
+
+/* ---------- Cards ---------- */
+
+.on-card {
   background: var(--color-bg);
   border: 1px solid var(--color-border);
   border-radius: 0.75rem;
   padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
 }
 
-.card-hover {
+.on-card-hover {
   transition: box-shadow 0.2s;
 }
 
-.card-hover:hover {
+.on-card-hover:hover {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
-/* ============================================================
-   Semantic Button Classes
-   ============================================================ */
+/* ---------- Buttons ---------- */
 
-.btn {
+.on-btn {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
@@ -260,41 +339,85 @@
   font-weight: 500;
   font-size: 0.875rem;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background 0.15s, opacity 0.15s;
   border: none;
+  font-family: inherit;
 }
 
-.btn-primary {
+.on-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.on-btn-primary {
   background: var(--color-primary);
   color: white;
 }
 
-.btn-primary:hover {
+.on-btn-primary:hover:not(:disabled) {
   background: var(--color-primary-hover);
 }
 
-.btn-secondary {
+.on-btn-secondary {
   background: var(--color-bg-tertiary);
   color: var(--color-text);
 }
 
-.btn-ghost {
+.on-btn-secondary:hover:not(:disabled) {
+  background: var(--color-bg-secondary);
+}
+
+.on-btn-ghost {
   background: transparent;
   color: var(--color-text-secondary);
 }
 
-.btn-ghost:hover {
+.on-btn-ghost:hover:not(:disabled) {
   background: var(--color-bg-tertiary);
 }
 
-.btn-danger {
+.on-btn-danger {
   background: var(--color-danger);
   color: white;
 }
 
-/* ============================================================
-   Prose (reading page)
-   ============================================================ */
+/* ---------- Forms ---------- */
+
+.on-form-input,
+.on-form-textarea {
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+  color: var(--color-text);
+  font-size: 0.875rem;
+  font-family: inherit;
+  width: 100%;
+}
+
+.on-form-input:focus,
+.on-form-textarea:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+.on-form-textarea {
+  min-height: 6rem;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.on-form-input-narrow {
+  width: 6rem;
+}
+
+.on-form-label {
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+/* ---------- Prose (reading page) ---------- */
 
 .prose {
   max-width: 680px;
@@ -302,17 +425,16 @@
   font-family: Georgia, "Noto Serif", serif;
   line-height: 1.9;
   color: var(--color-text);
+  padding-top: 0.5rem;
 }
 
 .prose p {
   margin-bottom: 1.25em;
 }
 
-/* ============================================================
-   Badge Classes
-   ============================================================ */
+/* ---------- Badges ---------- */
 
-.badge {
+.on-badge {
   display: inline-flex;
   align-items: center;
   padding: 0.125rem 0.5rem;
@@ -344,6 +466,85 @@
 .badge-completed {
   background: var(--color-text-muted);
   color: white;
+}
+
+/* ---------- Navigation ---------- */
+
+.on-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--color-border);
+  padding: 0.75rem 1.5rem;
+  background: var(--color-bg);
+}
+
+.on-nav-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  text-decoration: none;
+  color: inherit;
+}
+
+.on-nav-desktop {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.on-nav-mobile-toggle {
+  display: none;
+}
+
+.on-nav-mobile-menu {
+  display: none;
+  background: var(--color-bg);
+  border-bottom: 1px solid var(--color-border);
+  padding: 1rem 1.5rem;
+}
+
+@media (max-width: 767px) {
+  .on-nav-desktop { display: none; }
+  .on-nav-mobile-toggle { display: block; }
+  .on-nav-mobile-menu { display: block; }
+}
+
+/* ---------- Link wrappers ---------- */
+
+.on-link-block {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+}
+
+/* ---------- Comments ---------- */
+
+.on-comment {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.on-comment:last-child {
+  border-bottom: none;
+}
+
+.on-comment-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.on-comment-body {
+  color: var(--color-text);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 /* ============================================================

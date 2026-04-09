@@ -8,7 +8,7 @@ import {
   type NovelConfig,
   type NovelMetadata,
 } from "../shared/index.js";
-import { getWalletClient, getContracts } from "../utils/client.js";
+import { getWalletClient, getContracts, waitForTx } from "../utils/client.js";
 import { apiGet } from "../utils/api.js";
 import { header, kv, success, error, txHash, eth, table, roundPhaseName } from "../utils/format.js";
 
@@ -18,17 +18,19 @@ function buildNovelConfig(opts: Record<string, string>): NovelConfig {
     maxChapterLength: BigInt(opts.maxLength ?? "50000"),
     submissionFee: parseEther(opts.submissionFee ?? "0.001"),
     worldLineCount: parseInt(opts.worldLines ?? "3"),
-    voteStake: parseEther(opts.voteStake ?? "0.001"),
-    nominationFee: parseEther(opts.nominationFee ?? "0.001"),
+    voteStake: parseEther(opts.voteStake ?? "0.005"),
+    nominationFee: parseEther(opts.nominationFee ?? "0.01"),
     nominateDuration: BigInt(opts.nominateDuration ?? "3600"),
     commitDuration: BigInt(opts.commitDuration ?? "3600"),
     revealDuration: BigInt(opts.revealDuration ?? "3600"),
     minRoundGap: BigInt(opts.minRoundGap ?? "60"),
-    prizeReleaseRate: parseInt(opts.prizeReleaseRate ?? "1000"),
-    voterRewardRate: parseInt(opts.voterRewardRate ?? "3000"),
+    prizeReleaseRate: parseInt(opts.prizeReleaseRate ?? "2000"),
+    voterRewardRate: parseInt(opts.voterRewardRate ?? "1500"),
+    maxVoterReward: parseEther(opts.maxVoterReward ?? "0"),
+    unrevealPenaltyFloor: parseEther(opts.unrevealPenaltyFloor ?? "0.001"),
     contentLocation: parseInt(opts.contentLocation ?? "0"),
     contentBaseUrl: opts.contentBaseUrl ?? "",
-    ruleFee: parseEther(opts.ruleFee ?? "0.001"),
+    ruleFee: parseEther(opts.ruleFee ?? "0.01"),
     ruleVoteDuration: BigInt(opts.ruleVoteDuration ?? "86400"),
     ruleQuorum: parseInt(opts.ruleQuorum ?? "3"),
   };
@@ -55,17 +57,19 @@ export function registerNovelCommands(program: Command): void {
     .option("--max-length <n>", "max chapter length", "50000")
     .option("--submission-fee <eth>", "submission fee in ETH", "0.001")
     .option("--world-lines <n>", "world line count", "3")
-    .option("--vote-stake <eth>", "vote stake in ETH", "0.001")
-    .option("--nomination-fee <eth>", "nomination fee in ETH", "0.001")
+    .option("--vote-stake <eth>", "vote stake in ETH", "0.005")
+    .option("--nomination-fee <eth>", "nomination fee in ETH", "0.01")
     .option("--nominate-duration <s>", "nominate duration in seconds", "3600")
     .option("--commit-duration <s>", "commit duration in seconds", "3600")
     .option("--reveal-duration <s>", "reveal duration in seconds", "3600")
     .option("--min-round-gap <s>", "min round gap in seconds", "60")
-    .option("--prize-release-rate <bps>", "prize release rate in basis points", "1000")
-    .option("--voter-reward-rate <bps>", "voter reward rate in basis points", "3000")
+    .option("--prize-release-rate <bps>", "prize release rate in basis points", "2000")
+    .option("--voter-reward-rate <bps>", "voter reward rate in basis points", "1500")
+    .option("--max-voter-reward <eth>", "per-address voter reward cap per round in ETH (0 = uncapped)", "0")
+    .option("--unreveal-penalty-floor <eth>", "minimum penalty for unrevealed votes in ETH", "0.001")
     .option("--content-location <n>", "0=Onchain, 1=External, 2=HTTP", "0")
     .option("--content-base-url <url>", "content base URL (for External/HTTP)", "")
-    .option("--rule-fee <eth>", "rule proposal fee in ETH", "0.001")
+    .option("--rule-fee <eth>", "rule proposal fee in ETH", "0.01")
     .option("--rule-vote-duration <s>", "rule vote duration in seconds", "86400")
     .option("--rule-quorum <n>", "rule quorum", "3")
     .requiredOption("--content <text>", "root chapter content")
@@ -90,6 +94,7 @@ export function registerNovelCommands(program: Command): void {
         });
 
         txHash(hash);
+        await waitForTx(hash);
         success("Novel created successfully");
       } catch (err) {
         error(String(err));
@@ -174,17 +179,19 @@ export function registerNovelCommands(program: Command): void {
     .option("--max-length <n>", "max chapter length", "50000")
     .option("--submission-fee <eth>", "submission fee in ETH", "0.001")
     .option("--world-lines <n>", "world line count", "3")
-    .option("--vote-stake <eth>", "vote stake in ETH", "0.001")
-    .option("--nomination-fee <eth>", "nomination fee in ETH", "0.001")
+    .option("--vote-stake <eth>", "vote stake in ETH", "0.005")
+    .option("--nomination-fee <eth>", "nomination fee in ETH", "0.01")
     .option("--nominate-duration <s>", "nominate duration in seconds", "3600")
     .option("--commit-duration <s>", "commit duration in seconds", "3600")
     .option("--reveal-duration <s>", "reveal duration in seconds", "3600")
     .option("--min-round-gap <s>", "min round gap in seconds", "60")
-    .option("--prize-release-rate <bps>", "prize release rate in basis points", "1000")
-    .option("--voter-reward-rate <bps>", "voter reward rate in basis points", "3000")
+    .option("--prize-release-rate <bps>", "prize release rate in basis points", "2000")
+    .option("--voter-reward-rate <bps>", "voter reward rate in basis points", "1500")
+    .option("--max-voter-reward <eth>", "per-address voter reward cap per round in ETH (0 = uncapped)", "0")
+    .option("--unreveal-penalty-floor <eth>", "minimum penalty for unrevealed votes in ETH", "0.001")
     .option("--content-location <n>", "0=Onchain, 1=External, 2=HTTP", "0")
     .option("--content-base-url <url>", "content base URL", "")
-    .option("--rule-fee <eth>", "rule proposal fee in ETH", "0.001")
+    .option("--rule-fee <eth>", "rule proposal fee in ETH", "0.01")
     .option("--rule-vote-duration <s>", "rule vote duration in seconds", "86400")
     .option("--rule-quorum <n>", "rule quorum", "3")
     .requiredOption("--content <text>", "fork root chapter content")
@@ -209,6 +216,7 @@ export function registerNovelCommands(program: Command): void {
         });
 
         txHash(hash);
+        await waitForTx(hash);
         success("Novel forked successfully");
       } catch (err) {
         error(String(err));
@@ -225,6 +233,7 @@ export function registerNovelCommands(program: Command): void {
         const contracts = getContracts();
         const hash = await completeNovelTx(client, BigInt(id), contracts.novelCore);
         txHash(hash);
+        await waitForTx(hash);
         success("Novel completed");
       } catch (err) {
         error(String(err));
