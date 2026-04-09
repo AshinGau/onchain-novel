@@ -1,0 +1,96 @@
+import type { PublicClient, WalletClient } from "viem";
+import { parseAbi } from "viem";
+import { query } from "../db/index.js";
+import { decryptVoteSalt } from "../utils/crypto.js";
+import { env } from "../utils/env.js";
+
+const revealAbi = parseAbi([
+  "function revealVote(uint64 novelId, uint64 candidateId, bytes32 salt) external",
+]);
+
+interface PendingVote {
+  novelId: bigint;
+  round: number;
+  voter: string;
+  candidateId: bigint;
+  saltEncrypted: string;
+}
+
+/**
+ * Batch-reveal all `committed` pending votes for a (novelId, round) pair.
+ * Marks each as `revealed` on success or `failed` on tx error (most commonly
+ * because the user already self-revealed).
+ *
+ * Caller is the keeper module; should be invoked once per Revealing phase
+ * before settleRound.
+ */
+export async function batchReveal(
+  novelId: bigint,
+  round: number,
+  publicClient: PublicClient,
+  walletClient: WalletClient,
+  keeperAddress: `0x${string}`,
+): Promise<{ revealed: number; failed: number }> {
+  if (!env.VOTE_ENCRYPTION_KEY) return { revealed: 0, failed: 0 };
+
+  const { rows } = await query(
+    "SELECT novel_id, round, voter, candidate_id, salt_encrypted FROM pending_votes WHERE novel_id = $1 AND round = $2 AND status = 'committed'",
+    [novelId.toString(), round]
+  );
+
+  let revealed = 0;
+  let failed = 0;
+
+  for (const r of rows as Array<{
+    novel_id: string; round: number; voter: string; candidate_id: string; salt_encrypted: string;
+  }>) {
+    const vote: PendingVote = {
+      novelId: BigInt(r.novel_id),
+      round: r.round,
+      voter: r.voter,
+      candidateId: BigInt(r.candidate_id),
+      saltEncrypted: r.salt_encrypted,
+    };
+
+    let salt: `0x${string}`;
+    try {
+      salt = decryptVoteSalt(vote.saltEncrypted) as `0x${string}`;
+    } catch (err) {
+      console.error(`[Reveal] Decrypt failed for voter=${vote.voter}: ${err}`);
+      await query(
+        "UPDATE pending_votes SET status = 'failed' WHERE novel_id = $1 AND round = $2 AND voter = $3",
+        [vote.novelId.toString(), vote.round, vote.voter]
+      );
+      failed++;
+      continue;
+    }
+
+    try {
+      const { request } = await publicClient.simulateContract({
+        address: env.NOVEL_CORE_ADDRESS,
+        abi: revealAbi,
+        functionName: "revealVote",
+        args: [vote.novelId, vote.candidateId, salt],
+        account: keeperAddress,
+      });
+      const hash = await walletClient.writeContract(request as any);
+      console.log(`[Reveal] revealVote(novel=${vote.novelId}, candidate=${vote.candidateId}, voter=${vote.voter}) tx=${hash}`);
+      await query(
+        "UPDATE pending_votes SET status = 'revealed' WHERE novel_id = $1 AND round = $2 AND voter = $3",
+        [vote.novelId.toString(), vote.round, vote.voter]
+      );
+      revealed++;
+    } catch (err: any) {
+      // Most common cause: user already revealed manually, or commit hash mismatch.
+      const msg = err?.shortMessage || err?.message || String(err);
+      console.error(`[Reveal] revealVote failed voter=${vote.voter}: ${msg}`);
+      await query(
+        "UPDATE pending_votes SET status = 'failed' WHERE novel_id = $1 AND round = $2 AND voter = $3",
+        [vote.novelId.toString(), vote.round, vote.voter]
+      );
+      failed++;
+    }
+  }
+
+  return { revealed, failed };
+}

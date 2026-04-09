@@ -4,6 +4,7 @@ import { foundry } from "viem/chains";
 import { parseAbi } from "viem";
 import { env } from "../utils/env.js";
 import { query } from "../db/index.js";
+import { batchReveal } from "./reveal.js";
 
 // Keeper only needs the phase transition functions
 const keeperAbi = parseAbi([
@@ -18,6 +19,7 @@ const Phase = { Idle: 0, Nominating: 1, Committing: 2, Revealing: 3 } as const;
 
 interface NovelState {
   id: bigint;
+  currentRound: number;
   roundPhase: number;
   phaseStartTime: bigint;
   lastSettleTime: bigint;
@@ -44,10 +46,11 @@ function initClients() {
 
 async function getActiveNovels(): Promise<NovelState[]> {
   const { rows } = await query(
-    "SELECT id, round_phase, phase_start_time, last_settle_time, config FROM novels WHERE active = TRUE"
+    "SELECT id, current_round, round_phase, phase_start_time, last_settle_time, config FROM novels WHERE active = TRUE"
   );
   return rows.map((r: any) => ({
     id: BigInt(r.id),
+    currentRound: r.current_round,
     roundPhase: r.round_phase,
     phaseStartTime: BigInt(r.phase_start_time),
     lastSettleTime: BigInt(r.last_settle_time),
@@ -89,7 +92,7 @@ async function keeperCycle() {
   const now = BigInt(Math.floor(Date.now() / 1000));
 
   for (const novel of novels) {
-    const { id, roundPhase, phaseStartTime, lastSettleTime, config } = novel;
+    const { id, currentRound, roundPhase, phaseStartTime, lastSettleTime, config } = novel;
 
     switch (roundPhase) {
       case Phase.Idle:
@@ -111,6 +114,18 @@ async function keeperCycle() {
         break;
 
       case Phase.Revealing:
+        // First, batch-reveal any pending votes the user delegated to us.
+        // This must happen before settleRound so the votes count.
+        if (env.VOTE_ENCRYPTION_KEY) {
+          try {
+            const result = await batchReveal(id, currentRound, publicClient, walletClient, keeperAddress);
+            if (result.revealed > 0 || result.failed > 0) {
+              console.log(`[Keeper] batchReveal novel=${id} round=${currentRound} revealed=${result.revealed} failed=${result.failed}`);
+            }
+          } catch (err) {
+            console.error(`[Keeper] batchReveal error for novel=${id}: ${err}`);
+          }
+        }
         if (phaseStartTime + config.revealDuration <= now) {
           await sendKeeperTx("settleRound", id);
         }

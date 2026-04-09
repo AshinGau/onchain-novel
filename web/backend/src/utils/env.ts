@@ -26,4 +26,7 @@ export const env = {
   PORT: parseInt(optional("PORT", "3001")),
   KEEPER_PRIVATE_KEY: optional("KEEPER_PRIVATE_KEY", "") as `0x${string}`,
   KEEPER_POLL_INTERVAL_MS: parseInt(optional("KEEPER_POLL_INTERVAL_MS", "10000")),
+  // 32-byte key (hex or base64) used to encrypt stored plaintext votes for keeper-assisted reveal.
+  // Required only when accepting POST /api/votes/submit.
+  VOTE_ENCRYPTION_KEY: optional("VOTE_ENCRYPTION_KEY", ""),
 };

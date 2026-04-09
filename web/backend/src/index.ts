@@ -13,6 +13,7 @@ import usersRouter from "./api/users.js";
 import contentRouter from "./api/content.js";
 import rulesRouter from "./api/rules.js";
 import bountiesRouter from "./api/bounties.js";
+import votesRouter from "./api/votes.js";
 import { query } from "./db/index.js";
 
 const app = express();
@@ -40,6 +41,7 @@ const writeLimiter = rateLimit({ windowMs: 60000, max: 20, standardHeaders: true
 
 app.use("/api", apiLimiter);
 app.use("/api/chapters/*/comments", writeLimiter);
+app.use("/api/votes/submit", writeLimiter);
 
 // Health check
 app.get("/health", async (_req, res) => {
@@ -65,6 +67,7 @@ app.use("/api/users", usersRouter);
 
 app.use("/api/content", contentRouter);
 app.use("/api/bounties", bountiesRouter);
+app.use("/api/votes", votesRouter);
 app.use("/api", rulesRouter);
 
 // Start server
