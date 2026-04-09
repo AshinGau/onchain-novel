@@ -7,8 +7,9 @@ import {DataTypes} from "../libraries/DataTypes.sol";
 /// @notice Interface for the chapter continuation bounty system
 /// @dev Readers place bounties on chapters to incentivize continuations.
 ///      20% of bounty goes to prize pool immediately; 80% locked for qualifying authors.
-///      Qualifying authors = those who submit a descendant of the target chapter before the deadline.
-///      If no continuations by deadline, the locked amount is refunded to the tipper.
+///      Qualifying authors = authors of **direct child chapters** of the target whose timestamp
+///      is on or before the deadline (deeper descendants are not counted).
+///      If no qualifying continuations by the deadline, the locked amount is refundable to the tipper.
 interface IBountyBoard {
     // ============================================================
     //                          EVENTS
