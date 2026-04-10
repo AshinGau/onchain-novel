@@ -3,12 +3,16 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BookOpen, Menu, X } from "lucide-react";
+import { BookOpen, Menu, X, Plus, LayoutDashboard } from "lucide-react";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { Button } from "@/components/ui/button";
 
-const NAV_LINKS = [{ href: "/novels", label: "Novels" }] as const;
+const NAV_LINKS = [
+  { href: "/novels", label: "Novels" },
+  { href: "/create", label: "Create", icon: Plus },
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+] as const;
 
 export function NavBar() {
   const pathname = usePathname();

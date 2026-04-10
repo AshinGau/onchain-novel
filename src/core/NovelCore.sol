@@ -99,6 +99,9 @@ contract NovelCore is
     /// @notice Novel ID => round => total committed vote stake
     mapping(uint64 => mapping(uint32 => uint256)) private _roundCommittedStakes;
 
+    /// @notice Address => nickname (max 32 bytes, e.g. UTF-8 encoded display name)
+    mapping(address => bytes32) private _nicknames;
+
     // ============================================================
     //                         ERRORS
     // ============================================================
@@ -127,6 +130,7 @@ contract NovelCore is
     error NovelAlreadyCompleted(uint64 novelId);
     error ZeroAddress();
     error InsufficientForkFee(uint256 sent, uint256 required);
+    error NicknameEmpty();
 
     // ============================================================
     //                      INITIALIZER
@@ -821,6 +825,25 @@ contract NovelCore is
     }
 
     // ============================================================
+    //                     NICKNAME
+    // ============================================================
+
+    /// @notice Emitted when a user sets their nickname
+    event NicknameSet(address indexed user, bytes32 nickname);
+
+    /// @inheritdoc INovelCore
+    function setNickname(bytes32 nickname) external {
+        if (nickname == bytes32(0)) revert NicknameEmpty();
+        _nicknames[msg.sender] = nickname;
+        emit NicknameSet(msg.sender, nickname);
+    }
+
+    /// @inheritdoc INovelCore
+    function getNickname(address user) external view returns (bytes32) {
+        return _nicknames[user];
+    }
+
+    // ============================================================
     //                    INTERNAL: DFS
     // ============================================================
 
@@ -1156,5 +1179,5 @@ contract NovelCore is
     // ============================================================
 
     /// @dev Reserved storage gap for future upgrades
-    uint256[40] private __gap;
+    uint256[39] private __gap;
 }

@@ -1,12 +1,21 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import type { Novel } from "@/lib/api";
+import { fetchNickname } from "@/lib/api";
 import { shortAddress, formatBalance } from "@/lib/format";
 import { phaseLabel } from "@/lib/config";
 
 export function NovelInfo({ novel }: { novel: Novel }) {
   const phase = phaseLabel(novel.round_phase);
+  const [creatorName, setCreatorName] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchNickname(novel.creator).then(r => {
+      if (r.nickname) setCreatorName(r.nickname);
+    }).catch(() => {});
+  }, [novel.creator]);
 
   return (
     <div className="on-card on-stack" style={{ gap: "0.75rem" }}>
@@ -27,7 +36,7 @@ export function NovelInfo({ novel }: { novel: Novel }) {
 
       <div className="on-row" style={{ gap: "1rem", flexWrap: "wrap" }}>
         <span className="text-caption">
-          Creator: {shortAddress(novel.creator)}
+          Creator: {creatorName || shortAddress(novel.creator)}
         </span>
         <span className="text-caption">
           Round {novel.current_round} &middot; {phase}
@@ -51,6 +60,9 @@ export function NovelInfo({ novel }: { novel: Novel }) {
       <div className="on-row" style={{ gap: "0.5rem", flexWrap: "wrap" }}>
         <Link href={`/novels/${novel.id}/tree`}>
           <button className="on-btn on-btn-secondary">Story Tree</button>
+        </Link>
+        <Link href={`/fork/${novel.id}/1`}>
+          <button className="on-btn on-btn-secondary">Fork Novel</button>
         </Link>
       </div>
     </div>

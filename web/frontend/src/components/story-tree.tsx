@@ -1,168 +1,333 @@
 "use client";
 
-import { useMemo, useCallback } from "react";
+import { useMemo, useCallback, useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import dynamic from "next/dynamic";
 import type { ChapterSummary } from "@/lib/api";
 import { shortAddress } from "@/lib/format";
-
-// Dynamically import react-d3-tree to avoid SSR issues
-const Tree = dynamic(() => import("react-d3-tree").then((m) => m.default), {
-  ssr: false,
-  loading: () => (
-    <div className="text-caption" style={{ textAlign: "center", padding: "2rem" }}>
-      Loading tree...
-    </div>
-  ),
-});
 
 interface StoryTreeProps {
   chapters: ChapterSummary[];
   novelId: string;
 }
 
-interface D3TreeNode {
-  name: string;
-  attributes?: Record<string, string | number | boolean>;
-  children?: D3TreeNode[];
-  __chapterId?: string;
-  __isWorldLine?: boolean;
+interface TreeNode {
+  id: string;
+  chapter: ChapterSummary;
+  children: TreeNode[];
+  x: number;
+  y: number;
+  width: number;
 }
+
+const NODE_WIDTH = 160;
+const NODE_HEIGHT = 56;
+const H_GAP = 24;
+const V_GAP = 40;
+const PADDING = 40;
 
 export function StoryTree({ chapters, novelId }: StoryTreeProps) {
   const router = useRouter();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 });
+  const [dragging, setDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
 
-  const treeData = useMemo(() => {
-    return buildD3Tree(chapters);
+  const { root, totalWidth, totalHeight } = useMemo(() => {
+    return layoutTree(chapters);
   }, [chapters]);
 
-  const handleNodeClick = useCallback(
-    (nodeData: D3TreeNode) => {
-      if (nodeData.__chapterId) {
-        router.push(`/novels/${novelId}/chapter/${nodeData.__chapterId}`);
-      }
-    },
-    [novelId, router]
-  );
+  // Center the tree initially
+  useEffect(() => {
+    if (!containerRef.current || !root) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    setTransform({
+      x: Math.max(0, (rect.width - totalWidth) / 2),
+      y: PADDING,
+      scale: Math.min(1, (rect.width - PADDING * 2) / totalWidth),
+    });
+  }, [root, totalWidth, totalHeight]);
 
-  if (!treeData) {
-    return (
-      <div className="text-caption" style={{ textAlign: "center", padding: "2rem" }}>
-        No chapters to display
-      </div>
-    );
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? 0.9 : 1.1;
+    const newScale = Math.max(0.2, Math.min(2.5, transform.scale * delta));
+    const rect = containerRef.current!.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    setTransform(prev => ({
+      x: mx - (mx - prev.x) * (newScale / prev.scale),
+      y: my - (my - prev.y) * (newScale / prev.scale),
+      scale: newScale,
+    }));
+  }, [transform.scale]);
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if (e.button !== 0) return;
+    setDragging(true);
+    setDragStart({ x: e.clientX - transform.x, y: e.clientY - transform.y });
+  }, [transform]);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!dragging) return;
+    setTransform(prev => ({
+      ...prev,
+      x: e.clientX - dragStart.x,
+      y: e.clientY - dragStart.y,
+    }));
+  }, [dragging, dragStart]);
+
+  const handleMouseUp = useCallback(() => setDragging(false), []);
+
+  if (!root) {
+    return <div className="text-caption on-text-center" style={{ padding: "2rem" }}>No chapters to display</div>;
   }
 
   return (
-    <div style={{ width: "100%", height: "600px" }}>
-      <Tree
-        data={treeData}
-        orientation="vertical"
-        pathFunc="step"
-        translate={{ x: 400, y: 50 }}
-        nodeSize={{ x: 200, y: 100 }}
-        separation={{ siblings: 1.2, nonSiblings: 1.5 }}
-        renderCustomNodeElement={(rd3tProps) => (
-          <CustomNode
-            nodeDatum={rd3tProps.nodeDatum as unknown as D3TreeNode}
-            onNodeClick={handleNodeClick}
-          />
-        )}
-        zoom={0.8}
-        enableLegacyTransitions={false}
-      />
+    <div
+      ref={containerRef}
+      className="story-tree-container"
+      onWheel={handleWheel}
+      onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseUp}
+    >
+      <svg
+        width="100%"
+        height="100%"
+        style={{ cursor: dragging ? "grabbing" : "grab" }}
+      >
+        <g transform={`translate(${transform.x}, ${transform.y}) scale(${transform.scale})`}>
+          {/* Edges */}
+          {renderEdges(root)}
+          {/* Nodes */}
+          {renderNodes(root, novelId, router, hoveredId, setHoveredId)}
+        </g>
+      </svg>
     </div>
   );
 }
 
-function CustomNode({
-  nodeDatum,
-  onNodeClick,
-}: {
-  nodeDatum: D3TreeNode;
-  onNodeClick: (node: D3TreeNode) => void;
-}) {
-  const isWl = nodeDatum.__isWorldLine;
+function renderEdges(node: TreeNode): React.ReactNode[] {
+  const edges: React.ReactNode[] = [];
+  for (const child of node.children) {
+    const x1 = node.x + NODE_WIDTH / 2;
+    const y1 = node.y + NODE_HEIGHT;
+    const x2 = child.x + NODE_WIDTH / 2;
+    const y2 = child.y;
+    const midY = (y1 + y2) / 2;
 
-  return (
-    <g onClick={() => onNodeClick(nodeDatum)} style={{ cursor: "pointer" }}>
-      <rect
-        x={-80}
-        y={-30}
-        width={160}
-        height={60}
-        rx={8}
-        className={isWl ? "tree-node tree-node-worldline" : "tree-node"}
+    edges.push(
+      <path
+        key={`edge-${node.id}-${child.id}`}
+        d={`M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`}
+        fill="none"
+        stroke="var(--color-border)"
+        strokeWidth={2}
+        opacity={0.6}
       />
+    );
+    edges.push(...renderEdges(child));
+  }
+  return edges;
+}
+
+function renderNodes(
+  node: TreeNode,
+  novelId: string,
+  router: ReturnType<typeof useRouter>,
+  hoveredId: string | null,
+  setHoveredId: (id: string | null) => void,
+): React.ReactNode[] {
+  const nodes: React.ReactNode[] = [];
+  const isWl = node.chapter.is_world_line;
+  const isHovered = hoveredId === node.id;
+
+  const bgColor = isWl ? "var(--color-primary)" : "var(--color-bg)";
+  const textColor = isWl ? "white" : "var(--color-text)";
+  const borderColor = isHovered
+    ? "var(--color-primary)"
+    : isWl ? "var(--color-primary)" : "var(--color-border)";
+  const shadowOpacity = isHovered ? 0.15 : 0;
+
+  nodes.push(
+    <g
+      key={`node-${node.id}`}
+      style={{ cursor: "pointer" }}
+      onClick={(e) => { e.stopPropagation(); router.push(`/novels/${novelId}/chapter/${node.id}`); }}
+      onMouseEnter={() => setHoveredId(node.id)}
+      onMouseLeave={() => setHoveredId(null)}
+    >
+      {/* Shadow */}
+      <rect
+        x={node.x - 2}
+        y={node.y + 2}
+        width={NODE_WIDTH + 4}
+        height={NODE_HEIGHT}
+        rx={10}
+        fill="black"
+        opacity={shadowOpacity}
+        style={{ transition: "opacity 0.15s" }}
+      />
+      {/* Card */}
+      <rect
+        x={node.x}
+        y={node.y}
+        width={NODE_WIDTH}
+        height={NODE_HEIGHT}
+        rx={10}
+        fill={bgColor}
+        stroke={borderColor}
+        strokeWidth={isWl ? 2.5 : 1.5}
+        style={{ transition: "stroke 0.15s, transform 0.15s" }}
+      />
+      {/* Chapter ID */}
       <text
-        x={0}
-        y={-10}
-        textAnchor="middle"
+        x={node.x + 12}
+        y={node.y + 22}
         style={{
-          fontSize: "12px",
-          fontWeight: 600,
-          fill: "var(--color-text)",
+          fontSize: "13px",
+          fontWeight: 700,
+          fill: textColor,
+          fontFamily: "var(--font-sans)",
         }}
       >
-        {nodeDatum.name}
+        Ch.{node.id}
       </text>
-      {nodeDatum.attributes?.author && (
-        <text
-          x={0}
-          y={6}
-          textAnchor="middle"
-          style={{
-            fontSize: "10px",
-            fill: "var(--color-text-secondary)",
-          }}
-        >
-          by {nodeDatum.attributes.author}
-        </text>
-      )}
-      {nodeDatum.attributes?.depth && (
-        <text
-          x={0}
-          y={20}
-          textAnchor="middle"
-          style={{
-            fontSize: "10px",
-            fill: "var(--color-text-muted)",
-          }}
-        >
-          depth: {nodeDatum.attributes.depth}
-        </text>
+      {/* Depth badge */}
+      <rect
+        x={node.x + NODE_WIDTH - 44}
+        y={node.y + 8}
+        width={32}
+        height={20}
+        rx={10}
+        fill={isWl ? "rgba(255,255,255,0.2)" : "var(--color-bg-tertiary)"}
+      />
+      <text
+        x={node.x + NODE_WIDTH - 28}
+        y={node.y + 22}
+        textAnchor="middle"
+        style={{
+          fontSize: "10px",
+          fontWeight: 600,
+          fill: isWl ? "rgba(255,255,255,0.9)" : "var(--color-text-muted)",
+          fontFamily: "var(--font-sans)",
+        }}
+      >
+        d:{node.chapter.depth}
+      </text>
+      {/* Author */}
+      <text
+        x={node.x + 12}
+        y={node.y + 42}
+        style={{
+          fontSize: "11px",
+          fill: isWl ? "rgba(255,255,255,0.75)" : "var(--color-text-secondary)",
+          fontFamily: "var(--font-sans)",
+        }}
+      >
+        {shortAddress(node.chapter.author)}
+      </text>
+      {/* WL indicator dot */}
+      {isWl && (
+        <circle
+          cx={node.x + NODE_WIDTH - 12}
+          cy={node.y + NODE_HEIGHT - 12}
+          r={4}
+          fill="white"
+          opacity={0.6}
+        />
       )}
     </g>
   );
+
+  for (const child of node.children) {
+    nodes.push(...renderNodes(child, novelId, router, hoveredId, setHoveredId));
+  }
+
+  return nodes;
 }
 
-function buildD3Tree(chapters: ChapterSummary[]): D3TreeNode | null {
-  if (chapters.length === 0) return null;
+function layoutTree(chapters: ChapterSummary[]): { root: TreeNode | null; totalWidth: number; totalHeight: number } {
+  if (chapters.length === 0) return { root: null, totalWidth: 0, totalHeight: 0 };
 
-  const map = new Map<string, D3TreeNode>();
-  let root: D3TreeNode | null = null;
+  // Build tree structure
+  const nodeMap = new Map<string, TreeNode>();
+  let root: TreeNode | null = null;
 
   for (const ch of chapters) {
-    map.set(ch.id, {
-      name: `Ch.${ch.id}`,
-      attributes: {
-        author: shortAddress(ch.author),
-        depth: String(ch.depth),
-      },
+    nodeMap.set(ch.id, {
+      id: ch.id,
+      chapter: ch,
       children: [],
-      __chapterId: ch.id,
-      __isWorldLine: ch.is_world_line,
+      x: 0,
+      y: 0,
+      width: NODE_WIDTH,
     });
   }
 
   for (const ch of chapters) {
-    const node = map.get(ch.id)!;
-    if (ch.parent_id === "0" || !map.has(ch.parent_id)) {
+    const node = nodeMap.get(ch.id)!;
+    if (ch.parent_id === "0" || !nodeMap.has(ch.parent_id)) {
       root = node;
     } else {
-      map.get(ch.parent_id)!.children!.push(node);
+      nodeMap.get(ch.parent_id)!.children.push(node);
     }
   }
 
-  return root;
+  if (!root) return { root: null, totalWidth: 0, totalHeight: 0 };
+
+  // Sort children by id for consistent layout
+  function sortChildren(node: TreeNode) {
+    node.children.sort((a, b) => Number(a.id) - Number(b.id));
+    for (const child of node.children) sortChildren(child);
+  }
+  sortChildren(root);
+
+  // Calculate subtree widths bottom-up
+  function calcWidth(node: TreeNode): number {
+    if (node.children.length === 0) return NODE_WIDTH;
+    const childWidths = node.children.map(calcWidth);
+    const totalChildWidth = childWidths.reduce((sum, w) => sum + w, 0) + (node.children.length - 1) * H_GAP;
+    return Math.max(NODE_WIDTH, totalChildWidth);
+  }
+
+  const treeWidth = calcWidth(root);
+
+  // Position nodes
+  function position(node: TreeNode, x: number, y: number) {
+    node.y = y;
+
+    if (node.children.length === 0) {
+      node.x = x;
+      return;
+    }
+
+    const childWidths = node.children.map(calcWidth);
+    const totalChildWidth = childWidths.reduce((sum, w) => sum + w, 0) + (node.children.length - 1) * H_GAP;
+
+    // Center this node above its children
+    node.x = x + (totalChildWidth - NODE_WIDTH) / 2;
+
+    let cx = x;
+    for (let i = 0; i < node.children.length; i++) {
+      position(node.children[i], cx, y + NODE_HEIGHT + V_GAP);
+      cx += childWidths[i] + H_GAP;
+    }
+  }
+
+  position(root, PADDING, PADDING);
+
+  // Calculate total dimensions
+  let maxX = 0;
+  let maxY = 0;
+  function measure(node: TreeNode) {
+    maxX = Math.max(maxX, node.x + NODE_WIDTH);
+    maxY = Math.max(maxY, node.y + NODE_HEIGHT);
+    for (const child of node.children) measure(child);
+  }
+  measure(root);
+
+  return { root, totalWidth: maxX + PADDING, totalHeight: maxY + PADDING };
 }

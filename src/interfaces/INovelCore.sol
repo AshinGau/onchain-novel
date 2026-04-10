@@ -207,4 +207,17 @@ interface INovelCore {
 
     /// @notice Get novel metadata
     function getNovelMetadata(uint64 novelId) external view returns (DataTypes.NovelMetadata memory);
+
+    // ============================================================
+    //                       NICKNAME
+    // ============================================================
+
+    /// @notice Set a display nickname for the caller (max 32 bytes UTF-8)
+    /// @param nickname The nickname encoded as bytes32
+    function setNickname(bytes32 nickname) external;
+
+    /// @notice Get the nickname for an address
+    /// @param user The address to look up
+    /// @return The nickname as bytes32 (bytes32(0) if not set)
+    function getNickname(address user) external view returns (bytes32);
 }

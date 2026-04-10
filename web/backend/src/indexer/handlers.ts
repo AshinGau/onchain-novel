@@ -222,6 +222,24 @@ export async function handleNovelCoreEvent(log: Log, db: Client, rpc: PublicClie
       );
       break;
     }
+
+    case "NicknameSet": {
+      const { user, nickname } = decoded.args;
+      // nickname is bytes32 — strip trailing null bytes to get UTF-8 string
+      const hexStr = nickname as `0x${string}`;
+      const buf = Buffer.from(hexStr.slice(2), "hex");
+      const nullIdx = buf.indexOf(0);
+      const nicknameStr = buf.subarray(0, nullIdx === -1 ? buf.length : nullIdx).toString("utf-8");
+
+      console.log(`[event] NicknameSet user=${user} nickname="${nicknameStr}" block=${blockNumber}`);
+      await db.query(
+        `INSERT INTO nicknames (address, nickname, block_number)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (address) DO UPDATE SET nickname = $2, block_number = $3`,
+        [user.toLowerCase(), nicknameStr, blockNumber]
+      );
+      break;
+    }
   }
 }
 

@@ -4,7 +4,33 @@ import { validateAddress, safeInt } from "../utils/validate.js";
 
 const router = Router();
 
-// Validate address on all routes
+// GET /api/users/nicknames/batch — Batch lookup nicknames for multiple addresses
+// NOTE: Must be defined BEFORE /:address routes to avoid matching "nicknames" as an address
+router.get("/nicknames/batch", async (req, res) => {
+  try {
+    const addresses = (req.query.addresses as string)?.split(",").map(a => a.toLowerCase()).filter(Boolean);
+    if (!addresses || addresses.length === 0) {
+      res.json({ nicknames: {} });
+      return;
+    }
+    const limited = addresses.slice(0, 100);
+    const placeholders = limited.map((_, i) => `$${i + 1}`).join(",");
+    const result = await query(
+      `SELECT address, nickname FROM nicknames WHERE address IN (${placeholders})`,
+      limited
+    );
+    const map: Record<string, string> = {};
+    for (const row of result.rows) {
+      map[row.address] = row.nickname;
+    }
+    res.json({ nicknames: map });
+  } catch (err) {
+    console.error("GET /api/users/nicknames/batch error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Validate address on all /:address routes
 router.use("/:address", validateAddress);
 router.use("/:address/*", validateAddress);
 
@@ -109,6 +135,21 @@ router.get("/:address/chapters", async (req, res) => {
     res.json({ chapters: chaptersRes.rows });
   } catch (err) {
     console.error("GET /api/users/:address/chapters error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /api/users/:address/nickname — User nickname
+router.get("/:address/nickname", async (req, res) => {
+  try {
+    const { address } = req.params;
+    const result = await query(
+      "SELECT nickname FROM nicknames WHERE address = $1",
+      [address.toLowerCase()]
+    );
+    res.json({ nickname: result.rows[0]?.nickname ?? null });
+  } catch (err) {
+    console.error("GET /api/users/:address/nickname error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });

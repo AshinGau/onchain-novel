@@ -17,7 +17,10 @@ export default async function NovelsPage({
 
   return (
     <div className="on-container on-stack">
-      <h1 className="text-heading">Novels</h1>
+      <div className="on-row-between">
+        <h1 className="text-heading">Novels</h1>
+        <a href="/create" className="on-btn on-btn-primary">+ Create Novel</a>
+      </div>
 
       <NovelListControls
         currentSort={sort}
@@ -30,7 +33,7 @@ export default async function NovelsPage({
       {data.novels.length === 0 ? (
         <div className="on-empty">No novels found</div>
       ) : (
-        <div className="on-grid on-grid-2">
+        <div className="on-grid on-grid-3">
           {data.novels.map((novel) => (
             <NovelCard key={novel.id} novel={novel} />
           ))}

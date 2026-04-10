@@ -11,17 +11,14 @@ interface TreePageClientProps {
 export function TreePageClient({ novelId, chapters }: TreePageClientProps) {
   if (chapters.length === 0) {
     return (
-      <div className="text-caption" style={{ textAlign: "center", padding: "3rem 0" }}>
+      <div className="text-caption on-text-center" style={{ padding: "3rem 0" }}>
         No chapters to display in the tree.
       </div>
     );
   }
 
   return (
-    <div
-      className="on-card"
-      style={{ padding: 0, overflow: "hidden", minHeight: "600px" }}
-    >
+    <div className="on-card" style={{ padding: 0, overflow: "hidden" }}>
       <StoryTree chapters={chapters} novelId={novelId} />
     </div>
   );

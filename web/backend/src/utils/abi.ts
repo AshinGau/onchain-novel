@@ -23,6 +23,7 @@ export const novelCoreAbi = parseAbi([
   "event Tipped(uint64 indexed novelId, uint64 indexed chapterId, address indexed tipper, uint256 amount)",
   "event KeeperRewarded(uint64 indexed novelId, address indexed keeper, uint256 amount)",
   "event NovelMetadataUpdated(uint64 indexed novelId, string title, string description, string coverUri)",
+  "event NicknameSet(address indexed user, bytes32 nickname)",
 
   // --- View functions ---
   "function getNovel(uint64 novelId) external view returns ((uint64 id, address creator, (uint64 minChapterLength, uint64 maxChapterLength, uint256 submissionFee, uint32 worldLineCount, uint256 voteStake, uint256 nominationFee, uint64 nominateDuration, uint64 commitDuration, uint64 revealDuration, uint64 minRoundGap, uint16 prizeReleaseRate, uint16 voterRewardRate, uint256 maxVoterReward, uint256 unrevealPenaltyFloor, uint8 contentLocation, string contentBaseUrl, uint256 ruleFee, uint64 ruleVoteDuration, uint32 ruleQuorum) config, uint32 currentRound, uint8 roundPhase, uint64 phaseStartTime, uint64 lastSettleTime, bool active))",
@@ -32,6 +33,7 @@ export const novelCoreAbi = parseAbi([
   "function getRoundData(uint64 novelId, uint32 round) external view returns ((uint64[] candidates, bool[] candidateIsEligible, uint64[] prevWorldLines, uint64 nominateEndTime, uint64 commitEndTime, uint64 revealEndTime, bool settled))",
   "function getNovelCount() external view returns (uint64)",
   "function getChapterCount() external view returns (uint64)",
+  "function getNickname(address user) external view returns (bytes32)",
 
   // --- Write functions ---
   "function submitChapter(uint64 novelId, uint64 parentId, (bytes32 contentHash, uint64 declaredLength, bytes content) submission) external payable",

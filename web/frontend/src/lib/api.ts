@@ -192,6 +192,65 @@ export interface Tip {
 }
 
 /* ============================================================
+   Nicknames
+   ============================================================ */
+
+export function fetchNickname(address: string) {
+  return apiFetch<{ nickname: string | null }>(`/users/${address}/nickname`);
+}
+
+export function fetchNicknamesBatch(addresses: string[]) {
+  if (addresses.length === 0) return Promise.resolve({ nicknames: {} as Record<string, string> });
+  return apiFetch<{ nicknames: Record<string, string> }>(
+    `/users/nicknames/batch?addresses=${addresses.join(",")}`
+  );
+}
+
+/* ============================================================
+   User dashboard
+   ============================================================ */
+
+export interface UserChapter {
+  id: string;
+  novel_id: string;
+  depth: number;
+  timestamp: string;
+  is_world_line: boolean;
+  created_at: string;
+  novel_title: string;
+}
+
+export interface UserVote {
+  novel_id: string;
+  round: number;
+  voter: string;
+  revealed: boolean;
+  candidate_id: string | null;
+  claimed: boolean;
+  commit_block: string;
+  novel_title: string;
+  round_phase: number;
+}
+
+export interface RewardSummary {
+  unclaimedVotes: { novel_id: string; round: number; novel_title: string }[];
+  rewardClaims: { novel_id: string; source: string; total_amount: string; novel_title: string }[];
+  participatedNovels: { novel_id: string; novel_title: string }[];
+}
+
+export function fetchUserChapters(address: string) {
+  return apiFetch<{ chapters: UserChapter[] }>(`/users/${address}/chapters`);
+}
+
+export function fetchUserVotes(address: string, page = 1) {
+  return apiFetch<{ votes: UserVote[]; total: number }>(`/users/${address}/votes?page=${page}`);
+}
+
+export function fetchUserRewards(address: string) {
+  return apiFetch<RewardSummary>(`/users/${address}/rewards`);
+}
+
+/* ============================================================
    Comments (off-chain, EIP-191 signed)
    ============================================================ */
 
