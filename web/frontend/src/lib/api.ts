@@ -55,12 +55,13 @@ export interface NovelConfig {
   minRoundGap: number;
   prizeReleaseRate: number;
   voterRewardRate: number;
-  /** Per-address voter reward cap per round, in wei. "0" = uncapped. */
   maxVoterReward: string;
-  /** Minimum penalty for unrevealed votes, in wei. */
   unrevealPenaltyFloor: string;
   contentLocation: number;
   contentBaseUrl: string;
+  ruleFee: string;
+  ruleVoteDuration: number;
+  ruleQuorum: number;
 }
 
 export interface ChapterSummary {
