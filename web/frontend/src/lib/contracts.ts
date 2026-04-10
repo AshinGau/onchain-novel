@@ -12,12 +12,26 @@ export const BOUNTY_BOARD_ADDRESS =
   (process.env.NEXT_PUBLIC_BOUNTY_BOARD_ADDRESS as `0x${string}`) ??
   ("0x0000000000000000000000000000000000000000" as `0x${string}`);
 
+export const PRIZE_POOL_ADDRESS =
+  (process.env.NEXT_PUBLIC_PRIZE_POOL_ADDRESS as `0x${string}`) ??
+  ("0x0000000000000000000000000000000000000000" as `0x${string}`);
+
+export const VOTING_ENGINE_ADDRESS =
+  (process.env.NEXT_PUBLIC_VOTING_ENGINE_ADDRESS as `0x${string}`) ??
+  ("0x0000000000000000000000000000000000000000" as `0x${string}`);
+
+export const RULES_ENGINE_ADDRESS =
+  (process.env.NEXT_PUBLIC_RULES_ENGINE_ADDRESS as `0x${string}`) ??
+  ("0x0000000000000000000000000000000000000000" as `0x${string}`);
+
 /* ============================================================
    NovelCore ABI (write + view functions used by frontend)
    ============================================================ */
 
 export const novelCoreAbi = parseAbi([
   // Write
+  "function createNovel((uint64 minChapterLength, uint64 maxChapterLength, uint256 submissionFee, uint32 worldLineCount, uint256 voteStake, uint256 nominationFee, uint64 nominateDuration, uint64 commitDuration, uint64 revealDuration, uint64 minRoundGap, uint16 prizeReleaseRate, uint16 voterRewardRate, uint256 maxVoterReward, uint256 unrevealPenaltyFloor, uint8 contentLocation, string contentBaseUrl, uint256 ruleFee, uint64 ruleVoteDuration, uint32 ruleQuorum) config, (string title, string description, string coverUri) metadata, (bytes32 contentHash, uint64 declaredLength, bytes content) rootChapter) external payable returns (uint64 novelId)",
+  "function forkNovel(uint64 sourceChapterId, (uint64 minChapterLength, uint64 maxChapterLength, uint256 submissionFee, uint32 worldLineCount, uint256 voteStake, uint256 nominationFee, uint64 nominateDuration, uint64 commitDuration, uint64 revealDuration, uint64 minRoundGap, uint16 prizeReleaseRate, uint16 voterRewardRate, uint256 maxVoterReward, uint256 unrevealPenaltyFloor, uint8 contentLocation, string contentBaseUrl, uint256 ruleFee, uint64 ruleVoteDuration, uint32 ruleQuorum) config, (string title, string description, string coverUri) metadata, (bytes32 contentHash, uint64 declaredLength, bytes content) rootChapter) external payable returns (uint64 novelId)",
   "function submitChapter(uint64 novelId, uint64 parentId, (bytes32 contentHash, uint64 declaredLength, bytes content) submission) external payable",
   "function commitVote(uint64 novelId, bytes32 commitHash) external payable",
   "function revealVote(uint64 novelId, uint64 candidateId, bytes32 salt) external",
@@ -25,12 +39,39 @@ export const novelCoreAbi = parseAbi([
   "function claimVotingReward(uint64 novelId, uint32 round) external",
   "function tipNovel(uint64 novelId) external payable",
   "function tipChapter(uint64 chapterId) external payable",
+  "function setNickname(bytes32 nickname) external",
 
   // View
-  "function getNovel(uint64 novelId) external view returns ((uint64 id, address creator, (uint64 minChapterLength, uint64 maxChapterLength, uint256 submissionFee, uint32 worldLineCount, uint256 voteStake, uint256 nominationFee, uint64 nominateDuration, uint64 commitDuration, uint64 revealDuration, uint64 minRoundGap, uint16 prizeReleaseRate, uint16 voterRewardRate, uint8 contentLocation, string contentBaseUrl, uint256 ruleFee, uint64 ruleVoteDuration, uint32 ruleQuorum) config, uint32 currentRound, uint8 roundPhase, uint64 phaseStartTime, uint64 lastSettleTime, bool active))",
+  "function getNovel(uint64 novelId) external view returns ((uint64 id, address creator, (uint64 minChapterLength, uint64 maxChapterLength, uint256 submissionFee, uint32 worldLineCount, uint256 voteStake, uint256 nominationFee, uint64 nominateDuration, uint64 commitDuration, uint64 revealDuration, uint64 minRoundGap, uint16 prizeReleaseRate, uint16 voterRewardRate, uint256 maxVoterReward, uint256 unrevealPenaltyFloor, uint8 contentLocation, string contentBaseUrl, uint256 ruleFee, uint64 ruleVoteDuration, uint32 ruleQuorum) config, uint32 currentRound, uint8 roundPhase, uint64 phaseStartTime, uint64 lastSettleTime, bool active))",
   "function getChapter(uint64 chapterId) external view returns ((uint64 id, uint64 novelId, uint64 parentId, address author, bytes32 contentHash, uint64 declaredLength, uint32 depth, uint64 timestamp, uint64[] descendants))",
   "function getRoundData(uint64 novelId, uint32 round) external view returns ((uint64[] candidates, bool[] candidateIsEligible, uint64[] prevWorldLines, uint64 nominateEndTime, uint64 commitEndTime, uint64 revealEndTime, bool settled))",
   "function getVoteCommit(uint64 novelId, uint32 round, address voter) external view returns (bytes32)",
+  "function getNickname(address user) external view returns (bytes32)",
+]);
+
+/* ============================================================
+   PrizePool ABI
+   ============================================================ */
+
+export const prizePoolAbi = parseAbi([
+  "function getPendingReward(uint64 novelId, address user) external view returns (uint256)",
+  "function getPoolBalance(uint64 novelId) external view returns (uint256)",
+]);
+
+/* ============================================================
+   VotingEngine ABI
+   ============================================================ */
+
+export const votingEngineAbi = parseAbi([
+  "function claimVotingReward(uint64 novelId, uint32 round) external",
+]);
+
+/* ============================================================
+   RulesEngine ABI
+   ============================================================ */
+
+export const rulesEngineAbi = parseAbi([
+  "function setCreatorRules(uint64 novelId, string[] names, string[] contents) external",
 ]);
 
 /* ============================================================

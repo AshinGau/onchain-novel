@@ -7,6 +7,9 @@ export function shortAddress(addr: string): string {
   return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 }
 
+/** Alias for formatBalance */
+export const formatEth = (wei: string | bigint) => formatBalance(wei);
+
 /** Format wei string to readable token amount */
 export function formatBalance(wei: string | bigint): string {
   const value = typeof wei === "string" ? BigInt(wei || "0") : wei;

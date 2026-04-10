@@ -3,10 +3,11 @@
 # Local Development Node
 #
 # Usage:
-#   ./script/local-node.sh start   — Start Anvil + deploy contracts + start web backend
-#   ./script/local-node.sh stop    — Stop all services
-#   ./script/local-node.sh reset   — Clear all data (Anvil state + database) and restart
-#   ./script/local-node.sh status  — Show running services
+#   ./script/local-node.sh start             — Dev mode (hot reload)
+#   ./script/local-node.sh start --release   — Production build
+#   ./script/local-node.sh stop              — Stop all services
+#   ./script/local-node.sh reset             — Clear all data and restart
+#   ./script/local-node.sh status            — Show running services
 # =============================================================================
 set -uo pipefail
 
@@ -32,6 +33,7 @@ else
 fi
 API_PORT=3001
 FRONTEND_PORT=3000
+RELEASE_MODE=false
 
 # Anvil default mnemonic
 ANVIL_MNEMONIC="test test test test test test test test test test test junk"
@@ -137,35 +139,33 @@ start_frontend() {
         return
     fi
 
-    info "Building frontend..."
+    local frontend_env=(
+        NEXT_PUBLIC_API_URL="http://localhost:$API_PORT/api"
+        NEXT_PUBLIC_RPC_URL="$RPC"
+        NEXT_PUBLIC_CHAIN=foundry
+        NEXT_PUBLIC_NOVEL_CORE_ADDRESS="$NOVEL_CORE_ADDRESS"
+        NEXT_PUBLIC_VOTING_ENGINE_ADDRESS="$VOTING_ENGINE_ADDRESS"
+        NEXT_PUBLIC_PRIZE_POOL_ADDRESS="$PRIZE_POOL_ADDRESS"
+        NEXT_PUBLIC_RULES_ENGINE_ADDRESS="$RULES_ENGINE_ADDRESS"
+        NEXT_PUBLIC_BOUNTY_BOARD_ADDRESS="$BOUNTY_BOARD_ADDRESS"
+    )
+
     cd "$FRONTEND_DIR"
-    NEXT_PUBLIC_API_URL="http://localhost:$API_PORT/api" \
-    NEXT_PUBLIC_RPC_URL="$RPC" \
-    NEXT_PUBLIC_CHAIN=foundry \
-    NEXT_PUBLIC_NOVEL_CORE_ADDRESS="$NOVEL_CORE_ADDRESS" \
-    NEXT_PUBLIC_VOTING_ENGINE_ADDRESS="$VOTING_ENGINE_ADDRESS" \
-    NEXT_PUBLIC_PRIZE_POOL_ADDRESS="$PRIZE_POOL_ADDRESS" \
-    NEXT_PUBLIC_RULES_ENGINE_ADDRESS="$RULES_ENGINE_ADDRESS" \
-    NEXT_PUBLIC_BOUNTY_BOARD_ADDRESS="$BOUNTY_BOARD_ADDRESS" \
-    npx next build > "$DATA_DIR/frontend-build.log" 2>&1
-
-    if [ $? -ne 0 ]; then
-        err "Frontend build failed. Logs:"
-        tail -20 "$DATA_DIR/frontend-build.log"
-        exit 1
+    if [ "$RELEASE_MODE" = true ]; then
+        info "Building frontend..."
+        env "${frontend_env[@]}" npx next build > "$DATA_DIR/frontend-build.log" 2>&1
+        if [ $? -ne 0 ]; then
+            err "Frontend build failed. Logs:"
+            tail -20 "$DATA_DIR/frontend-build.log"
+            exit 1
+        fi
+        ok "Frontend built"
+        info "Starting frontend (release)..."
+        env "${frontend_env[@]}" npx next start --port "$FRONTEND_PORT" > "$DATA_DIR/frontend.log" 2>&1 &
+    else
+        info "Starting frontend (dev)..."
+        env "${frontend_env[@]}" npx next dev --port "$FRONTEND_PORT" > "$DATA_DIR/frontend.log" 2>&1 &
     fi
-    ok "Frontend built"
-
-    info "Starting frontend..."
-    NEXT_PUBLIC_API_URL="http://localhost:$API_PORT/api" \
-    NEXT_PUBLIC_RPC_URL="$RPC" \
-    NEXT_PUBLIC_CHAIN=foundry \
-    NEXT_PUBLIC_NOVEL_CORE_ADDRESS="$NOVEL_CORE_ADDRESS" \
-    NEXT_PUBLIC_VOTING_ENGINE_ADDRESS="$VOTING_ENGINE_ADDRESS" \
-    NEXT_PUBLIC_PRIZE_POOL_ADDRESS="$PRIZE_POOL_ADDRESS" \
-    NEXT_PUBLIC_RULES_ENGINE_ADDRESS="$RULES_ENGINE_ADDRESS" \
-    NEXT_PUBLIC_BOUNTY_BOARD_ADDRESS="$BOUNTY_BOARD_ADDRESS" \
-    npx next start --port "$FRONTEND_PORT" > "$DATA_DIR/frontend.log" 2>&1 &
     save_pid "frontend" "$!"
     cd "$ROOT_DIR"
 
@@ -332,31 +332,38 @@ MCPEOF
     ok "MCP config written to mcp/local-node-config.json"
 
     # ── Start Backend ──
-    info "Building backend..."
-    cd "$BACKEND_DIR"
-    npx tsc > "$DATA_DIR/backend-build.log" 2>&1
-    if [ $? -ne 0 ]; then
-        err "Backend build failed. Logs:"
-        tail -20 "$DATA_DIR/backend-build.log"
-        exit 1
-    fi
-    ok "Backend built"
+    local backend_env=(
+        DATABASE_URL="$DB_URL"
+        RPC_URL="$RPC"
+        NOVEL_CORE_ADDRESS="$NOVEL_CORE_ADDRESS"
+        VOTING_ENGINE_ADDRESS="$VOTING_ENGINE_ADDRESS"
+        PRIZE_POOL_ADDRESS="$PRIZE_POOL_ADDRESS"
+        BOUNTY_BOARD_ADDRESS="$BOUNTY_BOARD_ADDRESS"
+        RULES_ENGINE_ADDRESS="$RULES_ENGINE_ADDRESS"
+        INDEXER_START_BLOCK=0
+        INDEXER_BATCH_SIZE=100
+        INDEXER_POLL_INTERVAL_MS=2000
+        INDEXER_CONFIRMATION_BLOCKS=0
+        VOTE_ENCRYPTION_KEY="0000000000000000000000000000000000000000000000000000000000000001"
+        PORT=$API_PORT
+    )
 
-    info "Starting backend..."
-    DATABASE_URL="$DB_URL" \
-    RPC_URL="$RPC" \
-    NOVEL_CORE_ADDRESS="$NOVEL_CORE_ADDRESS" \
-    VOTING_ENGINE_ADDRESS="$VOTING_ENGINE_ADDRESS" \
-    PRIZE_POOL_ADDRESS="$PRIZE_POOL_ADDRESS" \
-    BOUNTY_BOARD_ADDRESS="$BOUNTY_BOARD_ADDRESS" \
-    RULES_ENGINE_ADDRESS="$RULES_ENGINE_ADDRESS" \
-    INDEXER_START_BLOCK=0 \
-    INDEXER_BATCH_SIZE=100 \
-    INDEXER_POLL_INTERVAL_MS=2000 \
-    INDEXER_CONFIRMATION_BLOCKS=0 \
-    VOTE_ENCRYPTION_KEY="0000000000000000000000000000000000000000000000000000000000000001" \
-    PORT=$API_PORT \
-    node dist/index.js > "$DATA_DIR/backend.log" 2>&1 &
+    cd "$BACKEND_DIR"
+    if [ "$RELEASE_MODE" = true ]; then
+        info "Building backend..."
+        npx tsc > "$DATA_DIR/backend-build.log" 2>&1
+        if [ $? -ne 0 ]; then
+            err "Backend build failed. Logs:"
+            tail -20 "$DATA_DIR/backend-build.log"
+            exit 1
+        fi
+        ok "Backend built"
+        info "Starting backend (release)..."
+        env "${backend_env[@]}" node dist/index.js > "$DATA_DIR/backend.log" 2>&1 &
+    else
+        info "Starting backend (dev)..."
+        env "${backend_env[@]}" npx tsx watch src/index.ts > "$DATA_DIR/backend.log" 2>&1 &
+    fi
     local backend_pid=$!
     save_pid "backend" "$backend_pid"
     cd "$ROOT_DIR"
@@ -381,7 +388,11 @@ MCPEOF
     # ══════════════════════════════════════════════════════════════
     echo ""
     echo -e "${CYAN}══════════════════════════════════════════════════════════════${NC}"
-    echo -e "${CYAN}  Local Development Node Running${NC}"
+    if [ "$RELEASE_MODE" = true ]; then
+        echo -e "${CYAN}  Local Development Node Running (release)${NC}"
+    else
+        echo -e "${CYAN}  Local Development Node Running (dev — hot reload)${NC}"
+    fi
     echo -e "${CYAN}══════════════════════════════════════════════════════════════${NC}"
     echo ""
     echo -e "  ${GREEN}Frontend:${NC}     http://localhost:$FRONTEND_PORT  ← open in browser"
@@ -473,6 +484,16 @@ do_timewarp() {
     ok "Warped ${seconds}s forward ($(date -r $before '+%H:%M:%S') → $(date -r $after '+%H:%M:%S'))"
 }
 
+# Parse --release flag from any position
+ARGS=()
+for arg in "$@"; do
+    case "$arg" in
+        --release) RELEASE_MODE=true ;;
+        *)         ARGS+=("$arg") ;;
+    esac
+done
+set -- "${ARGS[@]+"${ARGS[@]}"}"
+
 case "${1:-}" in
     start)            do_start ;;
     stop)             do_stop ;;
@@ -483,7 +504,7 @@ case "${1:-}" in
     stop-frontend)    stop_frontend ;;
     restart-frontend) stop_frontend; sleep 1; start_frontend ;;
     *)
-        echo "Usage: $0 <command>"
+        echo "Usage: $0 <command> [--release]"
         echo ""
         echo "  start             Start all (Anvil + contracts + backend + frontend)"
         echo "  stop              Stop all services (preserves data)"
@@ -493,6 +514,8 @@ case "${1:-}" in
         echo "  start-frontend    Start frontend only"
         echo "  stop-frontend     Stop frontend only"
         echo "  restart-frontend  Restart frontend (useful after code changes)"
+        echo ""
+        echo "  --release         Use production build (default: dev mode with hot reload)"
         exit 1
         ;;
 esac

@@ -213,6 +213,16 @@ CREATE TABLE rule_proposal_votes (
 );
 
 -- ============================================================
+-- NICKNAMES
+-- ============================================================
+
+CREATE TABLE nicknames (
+  address         TEXT PRIMARY KEY,
+  nickname        TEXT NOT NULL,
+  block_number    BIGINT NOT NULL
+);
+
+-- ============================================================
 -- INDEXER STATE
 -- ============================================================
 
