@@ -87,6 +87,15 @@ export default function ForkNovelPage({
     if (!isConnected) { setValidationError("Please connect your wallet first."); return; }
     if (!title.trim()) { setValidationError("Title is required."); return; }
     if (!rootContent.trim()) { setValidationError("Root chapter content is required."); return; }
+    const contentLen = new TextEncoder().encode(rootContent).length;
+    if (contentLen < config.minChapterLength) {
+      setValidationError(`Content too short (${contentLen} bytes, min ${config.minChapterLength}).`);
+      return;
+    }
+    if (contentLen > config.maxChapterLength) {
+      setValidationError(`Content too long (${contentLen} bytes, max ${config.maxChapterLength}).`);
+      return;
+    }
     if (!forkFee || parseFloat(forkFee) <= 0) { setValidationError("Fork fee is required."); return; }
     const configError = validateAllFields(config);
     if (configError) { setValidationError(configError); return; }
@@ -184,7 +193,12 @@ export default function ForkNovelPage({
           <p className="text-tiny">Write new content for the fork root chapter.</p>
           <div className="on-row-between" style={{ marginBottom: "0.25rem" }}>
             <span className="on-form-label">Content</span>
-            <span className="text-tiny">{byteCount(rootContent)} bytes</span>
+            <span className="text-tiny" style={{
+              color: byteCount(rootContent) < config.minChapterLength || byteCount(rootContent) > config.maxChapterLength
+                ? "var(--color-danger)" : undefined
+            }}>
+              {byteCount(rootContent)} bytes (min: {config.minChapterLength}, max: {config.maxChapterLength})
+            </span>
           </div>
           <textarea value={rootContent} onChange={(e) => setRootContent(e.target.value)}
             placeholder="Write your fork root chapter..." rows={10} className="on-form-textarea" />

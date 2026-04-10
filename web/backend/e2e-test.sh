@@ -261,20 +261,20 @@ pass "Backend running on port $API_PORT"
 # -- Create novel with root chapter + genesis fund --
 # NovelConfig tuple (19 fields):
 #   minChapterLength=100, maxChapterLength=10000, submissionFee=0.01eth,
-#   worldLineCount=2, voteStake=0.05eth, nominationFee=0.01eth,
+#   worldLineCount=2, voteStake=0.001eth, nominationFee=0.1eth,
 #   nominateDuration=5, commitDuration=5, revealDuration=5, minRoundGap=5,
-#   prizeReleaseRate=3000 (30%), voterRewardRate=2000 (20%),
+#   prizeReleaseRate=2000 (20%), voterRewardRate=500 (5%),
 #   maxVoterReward=0 (uncapped), unrevealPenaltyFloor=0.001eth,
 #   contentLocation=0 (Onchain), contentBaseUrl='',
 #   ruleFee=0.01eth, ruleVoteDuration=60, ruleQuorum=1
 SUBMISSION_FEE="10000000000000000"     # 0.01 ether
-VOTE_STAKE="50000000000000000"         # 0.05 ether
-NOMINATION_FEE="10000000000000000"     # 0.01 ether
+VOTE_STAKE="1000000000000000"          # 0.001 ether
+NOMINATION_FEE="100000000000000000"    # 0.1 ether
 RULE_FEE="10000000000000000"           # 0.01 ether
 MAX_VOTER_REWARD="0"                   # uncapped
 UNREVEAL_PENALTY_FLOOR="1000000000000000"  # 0.001 ether
 
-NOVEL_CONFIG="(100, 10000, $SUBMISSION_FEE, 2, $VOTE_STAKE, $NOMINATION_FEE, 5, 5, 5, 5, 3000, 2000, $MAX_VOTER_REWARD, $UNREVEAL_PENALTY_FLOOR, 0, '', $RULE_FEE, 60, 1)"
+NOVEL_CONFIG="(100, 10000, $SUBMISSION_FEE, 2, $VOTE_STAKE, $NOMINATION_FEE, 5, 5, 5, 5, 2000, 500, $MAX_VOTER_REWARD, $UNREVEAL_PENALTY_FLOOR, 0, '', $RULE_FEE, 60, 1)"
 
 NOVEL_CONFIG_TYPE="(uint64,uint64,uint256,uint32,uint256,uint256,uint64,uint64,uint64,uint64,uint16,uint16,uint256,uint256,uint8,string,uint256,uint64,uint32)"
 

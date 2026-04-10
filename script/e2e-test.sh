@@ -136,7 +136,7 @@ info "Creating novel..."
 #
 # Using short durations for testing: nominate=2s, commit=2s, reveal=2s, minRoundGap=2s
 # submissionFee=0.01 ETH, voteStake=0.01 ETH, nominationFee=0.02 ETH
-# worldLineCount=2, prizeReleaseRate=3000 (30%), voterRewardRate=2000 (20%)
+# worldLineCount=2, prizeReleaseRate=2000 (20%), voterRewardRate=500 (5%)
 # contentLocation=0 (Onchain)
 
 GENESIS_CONTENT="Once upon a time in a decentralized world, where stories are written by many and owned by all. The blockchain hums with creative energy as writers from across the realm converge."

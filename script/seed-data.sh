@@ -151,7 +151,7 @@ run_round() {
 #
 # Short 5s phases → rounds settle in seconds of warped time.
 # worldLineCount=2 matches the two-branch mock tree below.
-NOVEL_CONFIG="(50, 10000, 10000000000000000, 2, 10000000000000000, 20000000000000000, 5, 5, 5, 5, 3000, 2000, 0, 0, 0, '', 10000000000000000, 86400, 2)"
+NOVEL_CONFIG="(50, 10000, 10000000000000000, 2, 1000000000000000, 100000000000000000, 5, 5, 5, 5, 2000, 500, 0, 0, 0, '', 10000000000000000, 86400, 2)"
 CREATE_NOVEL_SIG="createNovel((uint64,uint64,uint256,uint32,uint256,uint256,uint64,uint64,uint64,uint64,uint16,uint16,uint256,uint256,uint8,string,uint256,uint64,uint32),(string,string,string),(bytes32,uint64,bytes))"
 
 # ═══════════════════════════════════════════════════════════════
