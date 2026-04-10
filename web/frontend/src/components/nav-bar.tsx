@@ -10,8 +10,8 @@ import { Button } from "@/components/ui/button";
 
 const NAV_LINKS = [
   { href: "/novels", label: "Novels" },
-  { href: "/create", label: "Create", icon: Plus },
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/create", label: "Create Novel", icon: Plus },
+  { href: "/dashboard", label: "My Dashboard", icon: LayoutDashboard },
 ] as const;
 
 export function NavBar() {

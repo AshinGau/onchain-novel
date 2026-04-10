@@ -17,10 +17,7 @@ export default async function NovelsPage({
 
   return (
     <div className="on-container on-stack">
-      <div className="on-row-between">
-        <h1 className="text-heading">Novels</h1>
-        <a href="/create" className="on-btn on-btn-primary">+ Create Novel</a>
-      </div>
+      <h1 className="text-heading">Novels</h1>
 
       <NovelListControls
         currentSort={sort}

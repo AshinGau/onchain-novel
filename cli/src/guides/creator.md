@@ -59,7 +59,7 @@ Root chapter 是小说的第一章，也是你吸引协作者的**门面**。
 
 ### 章节长度
 ```
-minChapterLength: 100     # 最短 100 字节（约 30 个中文字）
+minChapterLength: 1000    # 最短 1000 字节（约 330 个中文字）
 maxChapterLength: 50000   # 最长 50000 字节（约 16000 个中文字）
 ```
 - 短篇快节奏小说可以缩小范围
@@ -68,8 +68,8 @@ maxChapterLength: 50000   # 最长 50000 字节（约 16000 个中文字）
 ### 经济参数
 ```
 submissionFee: "0.001"    # 提交费。太低 = spam 泛滥，太高 = 吓跑新作者
-voteStake: "0.005"        # 投票质押。要足够高以激励认真投票
-nominationFee: "0.01"     # 提名费。比提交费高，防止滥用
+voteStake: "0.001"        # 投票质押。低门槛鼓励参与
+nominationFee: "0.1"      # 提名费。较高，防止滥用提名
 ```
 
 ### 投票参数
@@ -84,7 +84,7 @@ minRoundGap: 86400        # 两轮最小间隔 1 天
 ### 奖励参数
 ```
 prizeReleaseRate: 2000    # 每轮释放 20% 奖池
-voterRewardRate: 1500     # 其中 15% 给投票者
+voterRewardRate: 500      # 其中 5% 给投票者
 ```
 
 ---

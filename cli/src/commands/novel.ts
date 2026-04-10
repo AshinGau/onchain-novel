@@ -14,18 +14,18 @@ import { header, kv, success, error, txHash, eth, table, roundPhaseName } from "
 
 function buildNovelConfig(opts: Record<string, string>): NovelConfig {
   return {
-    minChapterLength: BigInt(opts.minLength ?? "100"),
+    minChapterLength: BigInt(opts.minLength ?? "1000"),
     maxChapterLength: BigInt(opts.maxLength ?? "50000"),
     submissionFee: parseEther(opts.submissionFee ?? "0.001"),
     worldLineCount: parseInt(opts.worldLines ?? "3"),
-    voteStake: parseEther(opts.voteStake ?? "0.005"),
-    nominationFee: parseEther(opts.nominationFee ?? "0.01"),
+    voteStake: parseEther(opts.voteStake ?? "0.001"),
+    nominationFee: parseEther(opts.nominationFee ?? "0.1"),
     nominateDuration: BigInt(opts.nominateDuration ?? "3600"),
     commitDuration: BigInt(opts.commitDuration ?? "3600"),
     revealDuration: BigInt(opts.revealDuration ?? "3600"),
     minRoundGap: BigInt(opts.minRoundGap ?? "60"),
     prizeReleaseRate: parseInt(opts.prizeReleaseRate ?? "2000"),
-    voterRewardRate: parseInt(opts.voterRewardRate ?? "1500"),
+    voterRewardRate: parseInt(opts.voterRewardRate ?? "500"),
     maxVoterReward: parseEther(opts.maxVoterReward ?? "0"),
     unrevealPenaltyFloor: parseEther(opts.unrevealPenaltyFloor ?? "0.001"),
     contentLocation: parseInt(opts.contentLocation ?? "0"),

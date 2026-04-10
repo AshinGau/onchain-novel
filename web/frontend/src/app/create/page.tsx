@@ -73,6 +73,18 @@ export default function CreateNovelPage() {
     if (!isConnected) { setValidationError("Please connect your wallet first."); return; }
     if (!title.trim()) { setValidationError("Title is required."); return; }
     if (chapters.some((ch) => !ch.content.trim())) { setValidationError("All bootstrap chapters must have content."); return; }
+    // Validate content length against config
+    for (let i = 0; i < chapters.length; i++) {
+      const len = new TextEncoder().encode(chapters[i].content).length;
+      if (len < config.minChapterLength) {
+        setValidationError(`Chapter ${i + 1}: content too short (${len} bytes, min ${config.minChapterLength}).`);
+        return;
+      }
+      if (len > config.maxChapterLength) {
+        setValidationError(`Chapter ${i + 1}: content too long (${len} bytes, max ${config.maxChapterLength}).`);
+        return;
+      }
+    }
     const configError = validateAllFields(config);
     if (configError) { setValidationError(configError); return; }
 
@@ -165,7 +177,12 @@ export default function CreateNovelPage() {
             <div key={i}>
               <div className="on-row-between" style={{ marginBottom: "0.25rem" }}>
                 <span className="on-form-label">Chapter {i + 1}</span>
-                <span className="text-tiny">{byteCount(ch.content)} bytes</span>
+                <span className="text-tiny" style={{
+                  color: byteCount(ch.content) < config.minChapterLength || byteCount(ch.content) > config.maxChapterLength
+                    ? "var(--color-danger)" : undefined
+                }}>
+                  {byteCount(ch.content)} bytes (min: {config.minChapterLength}, max: {config.maxChapterLength})
+                </span>
               </div>
               <textarea value={ch.content} onChange={(e) => setChapters((prev) => prev.map((c, j) => j === i ? { content: e.target.value } : c))}
                 placeholder="Write your chapter..." rows={10} className="on-form-textarea" />

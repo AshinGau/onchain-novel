@@ -150,19 +150,19 @@ const TEST_CONFIG: NovelConfig = {
   maxChapterLength: 50000n,
   submissionFee: parseEther("0.001"),
   worldLineCount: 2,
-  voteStake: parseEther("0.005"),
-  nominationFee: parseEther("0.001"),
+  voteStake: parseEther("0.001"),
+  nominationFee: parseEther("0.1"),
   nominateDuration: 5n,    // 5 seconds
   commitDuration: 5n,      // 5 seconds
   revealDuration: 5n,      // 5 seconds
   minRoundGap: 5n,         // 5 seconds
   prizeReleaseRate: 2000,  // 20%
-  voterRewardRate: 1500,   // 15%
+  voterRewardRate: 500,    // 5%
   maxVoterReward: 0n,                       // uncapped
   unrevealPenaltyFloor: parseEther("0.001"), // floor for unreveal penalty
   contentLocation: 0,      // Onchain
   contentBaseUrl: "",
-  ruleFee: parseEther("0.001"),
+  ruleFee: parseEther("0.01"),
   ruleVoteDuration: 300n,
   ruleQuorum: 7,
 };
