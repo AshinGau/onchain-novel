@@ -499,7 +499,7 @@
 }
 
 .on-nav-mobile-toggle {
-  display: none;
+  display: none !important;
 }
 
 .on-nav-mobile-menu {
@@ -510,8 +510,8 @@
 }
 
 @media (max-width: 767px) {
-  .on-nav-desktop { display: none; }
-  .on-nav-mobile-toggle { display: block; }
+  .on-nav-desktop { display: none !important; }
+  .on-nav-mobile-toggle { display: flex !important; }
   .on-nav-mobile-menu { display: block; }
 }
 
