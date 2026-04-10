@@ -40,7 +40,8 @@ export function NavBar() {
           <ConnectButton showBalance={false} chainStatus="icon" accountStatus="avatar" />
         </nav>
 
-        <div className="on-nav-mobile-toggle">
+        <div className="on-nav-mobile-toggle on-row" style={{ gap: "0.25rem" }}>
+          <ThemeToggle />
           <Button variant="ghost" size="icon" onClick={() => setMobileOpen(!mobileOpen)}>
             {mobileOpen ? <X size={20} /> : <Menu size={20} />}
           </Button>
@@ -60,10 +61,7 @@ export function NavBar() {
                 {link.label}
               </Link>
             ))}
-            <div className="on-row">
-              <ThemeToggle />
-              <ConnectButton showBalance={false} chainStatus="icon" accountStatus="avatar" />
-            </div>
+            <ConnectButton showBalance={false} chainStatus="icon" accountStatus="avatar" />
           </div>
         </div>
       )}
