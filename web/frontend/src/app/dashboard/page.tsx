@@ -95,7 +95,7 @@ export default function DashboardPage() {
       {/* Nickname Setting */}
       <div className="on-card" style={{ marginBottom: "1rem" }}>
         <h3 className="text-subheading" style={{ marginBottom: "0.5rem" }}>Display Name</h3>
-        <div className="on-row" style={{ gap: "0.5rem" }}>
+        <div className="on-row">
           <input
             type="text"
             value={nickname}
@@ -312,7 +312,7 @@ function DraftsTab() {
     <div className="on-stack on-stack-sm" style={{ marginTop: "0.75rem" }}>
       {drafts.map(d => (
         <div key={d.key} className="on-card on-row-between" style={{ padding: "0.75rem 1rem" }}>
-          <div style={{ minWidth: 0, flex: 1 }}>
+          <div className="on-flex-1">
             <span style={{ fontWeight: 600 }}>Novel #{d.novelId} → Parent #{d.parentId}</span>
             <p className="text-tiny text-truncate" style={{ marginTop: "0.25rem" }}>{d.preview}...</p>
           </div>

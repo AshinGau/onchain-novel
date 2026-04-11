@@ -127,8 +127,9 @@ export function fetchNovel(id: string) {
   return apiFetch<Novel>(`/novels/${id}`);
 }
 
-export function fetchNovelTree(id: string) {
-  return apiFetch<{ chapters: ChapterSummary[] }>(`/novels/${id}/tree`);
+export function fetchNovelTree(id: string, maxDepth?: number) {
+  const params = maxDepth ? `?maxDepth=${maxDepth}` : "";
+  return apiFetch<{ chapters: ChapterSummary[]; hasMore: boolean; maxDepth: number }>(`/novels/${id}/tree${params}`);
 }
 
 export function fetchWorldlines(id: string) {

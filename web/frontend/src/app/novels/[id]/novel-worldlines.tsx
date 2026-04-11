@@ -157,7 +157,7 @@ function OtherBranches({ data, novelId }: { data: WorldlineData[]; novelId: stri
               const first = branch[0];
               const last = branch[branch.length - 1];
               return (
-                <div key={`${wlIdx}-${brIdx}`} className="on-row" style={{ justifyContent: "space-between" }}>
+                <div key={`${wlIdx}-${brIdx}`} className="on-row-between">
                   <span className="text-caption">
                     Ch.{first.id}
                     {branch.length > 2

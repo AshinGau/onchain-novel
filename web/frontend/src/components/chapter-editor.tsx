@@ -155,7 +155,7 @@ export function ChapterEditor({
           resize: "vertical",
         }}
       />
-      <div className="on-row" style={{ justifyContent: "space-between" }}>
+      <div className="on-row-between">
         <span
           className="text-caption"
           style={{

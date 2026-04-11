@@ -32,7 +32,7 @@ export function ChapterCardMini({
           transition: "box-shadow 0.2s",
         }}
       >
-        <div className="on-row" style={{ justifyContent: "space-between" }}>
+        <div className="on-row-between">
           <span style={{ fontWeight: 600, fontSize: "0.875rem", color: "var(--color-text)" }}>
             Ch.{chapter.id}
           </span>

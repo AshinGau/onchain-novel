@@ -114,19 +114,32 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-// GET /api/novels/:id/tree — Full story tree
+// GET /api/novels/:id/tree — Story tree with depth pagination
+// Query params: maxDepth (default 10) — load chapters up to this depth
 router.get("/:id/tree", async (req, res) => {
   try {
     const { id } = req.params;
+    const maxDepth = safeInt(req.query.maxDepth, 10, 1, 10000);
 
-    const chaptersRes = await query(
-      `SELECT id, parent_id, author, depth, "timestamp",
-              is_world_line, declared_length, content_hash, created_at
-       FROM chapters WHERE novel_id = $1
-       ORDER BY id ASC`,
-      [id]
-    );
-    res.json({ chapters: chaptersRes.rows });
+    const [chaptersRes, hasMoreRes] = await Promise.all([
+      query(
+        `SELECT id, parent_id, author, depth, "timestamp",
+                is_world_line, declared_length, content_hash, created_at
+         FROM chapters WHERE novel_id = $1 AND depth <= $2
+         ORDER BY id ASC`,
+        [id, maxDepth]
+      ),
+      query(
+        `SELECT EXISTS(SELECT 1 FROM chapters WHERE novel_id = $1 AND depth > $2) AS has_more`,
+        [id, maxDepth]
+      ),
+    ]);
+
+    res.json({
+      chapters: chaptersRes.rows,
+      hasMore: hasMoreRes.rows[0]?.has_more ?? false,
+      maxDepth,
+    });
   } catch (err) {
     console.error("GET /api/novels/:id/tree error:", err);
     res.status(500).json({ error: "Internal server error" });

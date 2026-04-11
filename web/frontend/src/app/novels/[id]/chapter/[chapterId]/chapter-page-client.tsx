@@ -40,7 +40,7 @@ function BountyCreateForm({ chapterId, onClose }: { chapterId: string; onClose: 
   return (
     <div className="on-card on-stack" style={{ gap: "0.5rem" }}>
       <h4 className="text-caption" style={{ margin: 0 }}>Sponsor Next Chapter</h4>
-      <div className="on-row" style={{ gap: "0.5rem" }}>
+      <div className="on-row">
         <div>
           <label className="text-tiny">Amount ({TOKEN_SYMBOL})</label>
           <input type="text" className="on-form-input on-form-input-narrow" value={amount} onChange={(e) => setAmount(e.target.value)} />
@@ -53,7 +53,7 @@ function BountyCreateForm({ chapterId, onClose }: { chapterId: string; onClose: 
       <p className="text-muted" style={{ fontSize: "0.75rem", margin: 0 }}>
         20% goes to prize pool. 80% locked for authors. You can designate a favorite before the deadline.
       </p>
-      <div className="on-row" style={{ gap: "0.5rem" }}>
+      <div className="on-row">
         <button type="button" className="on-btn on-btn-primary" onClick={handleCreate} disabled={isPending}>
           {isPending ? "…" : "Create Bounty"}
         </button>

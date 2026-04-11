@@ -31,22 +31,10 @@ function Tip({ text }: { text: string }) {
         onClick={() => setOpen(!open)}
         onMouseEnter={() => setOpen(true)}
         onMouseLeave={() => setOpen(false)}
-        style={{
-          display: "inline-flex", alignItems: "center", justifyContent: "center",
-          width: "1rem", height: "1rem", borderRadius: "50%",
-          background: "var(--color-bg-tertiary)", color: "var(--color-text-muted)",
-          fontSize: "0.625rem", fontWeight: 700, border: "none", cursor: "help",
-          lineHeight: 1,
-        }}
+        className="on-tip-trigger"
       >?</button>
       {open && (
-        <span style={{
-          position: "absolute", zIndex: 50, bottom: "calc(100% + 0.5rem)", left: "50%", transform: "translateX(-50%)",
-          width: "16rem", padding: "0.5rem 0.75rem", borderRadius: "0.5rem",
-          background: "var(--color-bg-secondary)", border: "1px solid var(--color-border)",
-          fontSize: "0.75rem", color: "var(--color-text-secondary)", lineHeight: 1.5,
-          boxShadow: "0 4px 12px rgba(0,0,0,0.15)", whiteSpace: "normal",
-        }}>
+        <span className="on-tip-popup">
           {text}
         </span>
       )}
@@ -192,14 +180,11 @@ export function NovelInfo({ novel }: { novel: Novel }) {
           <img
             src={novel.cover_uri}
             alt=""
-            style={{
-              width: "6rem", height: "8rem", objectFit: "cover",
-              borderRadius: "0.5rem", background: "var(--color-bg-tertiary)", flexShrink: 0,
-            }}
+            className="on-cover on-cover-lg"
           />
         )}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div className="on-row" style={{ justifyContent: "space-between", flexWrap: "wrap" }}>
+        <div className="on-flex-1">
+          <div className="on-row-between" style={{ flexWrap: "wrap" }}>
             <h1 className="text-heading" style={{ margin: 0 }}>
               {novel.title || `Novel #${novel.id}`}
             </h1>
@@ -326,7 +311,7 @@ export function NovelInfo({ novel }: { novel: Novel }) {
       </div>
 
       {/* Action buttons */}
-      <div className="on-row" style={{ gap: "0.5rem", flexWrap: "wrap" }}>
+      <div className="on-row-wrap">
         <Link href={`/novels/${novel.id}/tree`}>
           <button className="on-btn on-btn-secondary">Story Tree</button>
         </Link>

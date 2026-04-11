@@ -1,6 +1,8 @@
 import { fetchNovel, fetchNovelTree } from "@/lib/api";
 import { TreePageClient } from "./tree-page-client";
 
+const DEPTH_PAGE_SIZE = 10;
+
 export default async function TreePage({
   params,
 }: {
@@ -10,7 +12,7 @@ export default async function TreePage({
 
   const [novel, treeData] = await Promise.all([
     fetchNovel(id),
-    fetchNovelTree(id),
+    fetchNovelTree(id, DEPTH_PAGE_SIZE),
   ]);
 
   return (
@@ -27,7 +29,13 @@ export default async function TreePage({
         </div>
       </div>
 
-      <TreePageClient novelId={id} chapters={treeData.chapters} />
+      <TreePageClient
+        novelId={id}
+        initialChapters={treeData.chapters}
+        initialHasMore={treeData.hasMore}
+        initialMaxDepth={treeData.maxDepth}
+        depthPageSize={DEPTH_PAGE_SIZE}
+      />
 
       <div className="on-row-between" style={{ flexWrap: "wrap" }}>
         <div className="on-row" style={{ gap: "1rem" }}>
