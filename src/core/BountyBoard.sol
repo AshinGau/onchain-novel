@@ -69,13 +69,16 @@ contract BountyBoard is
 
     error ChapterNotFound();
     error DeadlineInPast();
+    error DeadlineReached();
     error BountyTooSmall(uint256 amount, uint256 minimum);
     error DeadlineNotReached();
     error AlreadyClaimed();
     error BountyFullyClaimed();
     error NoQualifyingAuthors();
     error NotQualifyingAuthor();
+    error NotDesignatedAuthor();
     error NotTipper();
+    error NotDirectChild();
     error QualifyingAuthorsExist();
     error TransferFailed();
     error GracePeriodNotExpired();
@@ -149,6 +152,7 @@ contract BountyBoard is
             tipper: msg.sender,
             lockedAmount: lockedAmount,
             deadline: deadline,
+            designatedChapterId: 0,
             claimed: false
         });
 
@@ -158,13 +162,43 @@ contract BountyBoard is
     }
 
     /// @inheritdoc IBountyBoard
+    function designateBounty(uint256 bountyId, uint64 chapterId) external whenNotPaused {
+        DataTypes.Bounty storage bounty = _bounties[bountyId];
+        if (msg.sender != bounty.tipper) revert NotTipper();
+        if (block.timestamp > bounty.deadline) revert DeadlineReached();
+
+        // Verify chapterId is a direct child of the bounty target
+        DataTypes.Chapter memory child = novelCore.getChapter(chapterId);
+        if (child.id == 0) revert ChapterNotFound();
+        if (child.parentId != bounty.chapterId) revert NotDirectChild();
+
+        bounty.designatedChapterId = chapterId;
+
+        emit BountyDesignated(bountyId, chapterId);
+    }
+
+    /// @inheritdoc IBountyBoard
     function claimBounty(uint256 bountyId) external whenNotPaused nonReentrant {
         DataTypes.Bounty storage bounty = _bounties[bountyId];
         if (block.timestamp <= bounty.deadline) revert DeadlineNotReached();
         if (bounty.claimed) revert BountyFullyClaimed();
         if (_hasClaimed[bountyId][msg.sender]) revert AlreadyClaimed();
 
-        // Get qualifying authors: descendants with timestamp <= deadline
+        // Designated path: full amount to the designated chapter's author
+        if (bounty.designatedChapterId != 0) {
+            DataTypes.Chapter memory designated = novelCore.getChapter(bounty.designatedChapterId);
+            if (msg.sender != designated.author) revert NotDesignatedAuthor();
+
+            _hasClaimed[bountyId][msg.sender] = true;
+            bounty.claimed = true;
+
+            _transferETH(msg.sender, bounty.lockedAmount);
+
+            emit BountyClaimed(bountyId, msg.sender, bounty.lockedAmount);
+            return;
+        }
+
+        // Non-designated path: split equally among qualifying authors
         (address[] memory qualifyingAuthors, uint256 qualifyingCount) = _getQualifyingAuthors(bountyId);
         if (qualifyingCount == 0) revert NoQualifyingAuthors();
 
@@ -199,8 +233,7 @@ contract BountyBoard is
         }
 
         // Transfer share to author
-        (bool success,) = msg.sender.call{value: share}("");
-        if (!success) revert TransferFailed();
+        _transferETH(msg.sender, share);
 
         emit BountyClaimed(bountyId, msg.sender, share);
     }
@@ -220,9 +253,7 @@ contract BountyBoard is
         uint256 refundAmount = bounty.lockedAmount;
         bounty.claimed = true;
 
-        // Transfer locked amount back to tipper
-        (bool success,) = msg.sender.call{value: refundAmount}("");
-        if (!success) revert TransferFailed();
+        _transferETH(msg.sender, refundAmount);
 
         emit BountyRefunded(bountyId, msg.sender, refundAmount);
     }
@@ -239,7 +270,6 @@ contract BountyBoard is
 
         uint256 remaining;
         if (qualifyingCount == 0) {
-            // No qualifying authors — full refund (same as refundBounty but after grace period)
             remaining = bounty.lockedAmount;
         } else {
             uint256 perShare = bounty.lockedAmount / qualifyingCount;
@@ -255,8 +285,7 @@ contract BountyBoard is
         bounty.claimed = true;
 
         if (remaining > 0) {
-            (bool success,) = msg.sender.call{value: remaining}("");
-            if (!success) revert TransferFailed();
+            _transferETH(msg.sender, remaining);
         }
 
         emit BountyRefunded(bountyId, msg.sender, remaining);
@@ -314,6 +343,12 @@ contract BountyBoard is
                 authors[count++] = raw[i];
             }
         }
+    }
+
+    /// @dev Transfer ETH to an address, reverting on failure
+    function _transferETH(address to, uint256 amount) internal {
+        (bool success,) = to.call{value: amount}("");
+        if (!success) revert TransferFailed();
     }
 
     // ============================================================

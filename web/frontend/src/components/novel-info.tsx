@@ -2,11 +2,14 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import { useAccount } from "wagmi";
+import { parseEther, formatEther } from "viem";
 import type { Novel } from "@/lib/api";
 import { fetchNickname } from "@/lib/api";
 import { shortAddress, formatBalance, formatDuration } from "@/lib/format";
 import { phaseLabel, TOKEN_SYMBOL } from "@/lib/config";
-import { formatEther } from "viem";
+import { NOVEL_CORE_ADDRESS, novelCoreAbi } from "@/lib/contracts";
+import { useTxAction } from "@/hooks/use-tx-action";
 
 function Tip({ text }: { text: string }) {
   const [open, setOpen] = useState(false);
@@ -60,6 +63,95 @@ function ConfigItem({ label, value, tip }: { label: string; value: string | numb
   );
 }
 
+function usePhaseRemaining(novel: Novel): string | null {
+  const [remaining, setRemaining] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!novel.active) return;
+
+    function calc() {
+      const now = Math.floor(Date.now() / 1000);
+      const c = novel.config;
+      const phaseStart = Number(novel.phase_start_time || 0);
+      const lastSettle = Number(novel.last_settle_time || 0);
+
+      let deadline = 0;
+      switch (novel.round_phase) {
+        case 0: // Idle — next round can start after minRoundGap
+          deadline = lastSettle + Number(c.minRoundGap || 0);
+          break;
+        case 1: // Nominating
+          deadline = phaseStart + Number(c.nominateDuration || 0);
+          break;
+        case 2: // Committing
+          deadline = phaseStart + Number(c.commitDuration || 0);
+          break;
+        case 3: // Revealing
+          deadline = phaseStart + Number(c.revealDuration || 0);
+          break;
+      }
+      return Math.max(0, deadline - now);
+    }
+
+    setRemaining(calc());
+    const timer = setInterval(() => setRemaining(calc()), 1000);
+    return () => clearInterval(timer);
+  }, [novel.active, novel.round_phase, novel.phase_start_time, novel.last_settle_time, novel.config]);
+
+  if (remaining === null || !novel.active) return null;
+  if (remaining <= 0) return "ready";
+
+  const h = Math.floor(remaining / 3600);
+  const m = Math.floor((remaining % 3600) / 60);
+  const s = remaining % 60;
+  if (h > 0) return `${h}h ${m}m remaining`;
+  if (m > 0) return `${m}m ${s}s remaining`;
+  return `${s}s remaining`;
+}
+
+function TipNovelButton({ novelId }: { novelId: string }) {
+  const { isConnected } = useAccount();
+  const [showInput, setShowInput] = useState(false);
+  const [amount, setAmount] = useState("0.01");
+  const { send, isPending, status, error } = useTxAction();
+
+  if (!isConnected) return null;
+
+  async function handleTip() {
+    const value = parseEther(amount);
+    await send(
+      {
+        address: NOVEL_CORE_ADDRESS,
+        abi: novelCoreAbi,
+        functionName: "tipNovel",
+        args: [BigInt(novelId)],
+        value,
+      },
+      () => { setShowInput(false); setAmount("0.01"); }
+    );
+  }
+
+  if (!showInput) {
+    return (
+      <button type="button" className="on-btn on-btn-secondary" onClick={() => setShowInput(true)}>
+        Tip This Novel
+      </button>
+    );
+  }
+
+  return (
+    <div className="on-row">
+      <input type="text" className="on-form-input on-form-input-narrow" value={amount} onChange={(e) => setAmount(e.target.value)} />
+      <button type="button" className="on-btn on-btn-primary" onClick={handleTip} disabled={isPending}>
+        {isPending ? "…" : "Send Tip"}
+      </button>
+      <button type="button" className="on-btn on-btn-ghost" onClick={() => setShowInput(false)}>Cancel</button>
+      {status === "success" && <span className="text-success">Sent!</span>}
+      {error && <span className="text-danger">{error}</span>}
+    </div>
+  );
+}
+
 export function NovelInfo({ novel }: { novel: Novel }) {
   const phase = phaseLabel(novel.round_phase);
   const [creatorName, setCreatorName] = useState<string | null>(null);
@@ -83,6 +175,7 @@ export function NovelInfo({ novel }: { novel: Novel }) {
   const voterReward = remaining * BigInt(voterRate) / BigInt(10000);
   const authorReward = remaining - voterReward;
 
+  const phaseRemaining = usePhaseRemaining(novel);
   const c = novel.config;
   const fmtWei = (v: string | number) => {
     const n = parseFloat(formatEther(BigInt(v || "0")));
@@ -123,7 +216,14 @@ export function NovelInfo({ novel }: { novel: Novel }) {
       {/* Stats row */}
       <div className="on-row" style={{ gap: "1rem", flexWrap: "wrap" }}>
         <span className="text-caption">Creator: {creatorName || shortAddress(novel.creator)}</span>
-        <span className="text-caption">Round {novel.current_round} &middot; {phase}</span>
+        <span className="text-caption">
+          Round {novel.current_round} &middot; {phase}
+          {phaseRemaining && (
+            <span style={{ marginLeft: "0.25rem", color: phaseRemaining === "ready" ? "var(--color-success)" : "var(--color-warning)" }}>
+              ({phaseRemaining})
+            </span>
+          )}
+        </span>
         <span className="text-caption">{novel.chapter_count} chapters</span>
         <span className="text-caption">{novel.author_count} authors</span>
         {c?.worldLineCount && <span className="text-caption">{c.worldLineCount} world lines</span>}
@@ -230,9 +330,7 @@ export function NovelInfo({ novel }: { novel: Novel }) {
         <Link href={`/novels/${novel.id}/tree`}>
           <button className="on-btn on-btn-secondary">Story Tree</button>
         </Link>
-        <Link href={`/fork/${novel.id}/1`}>
-          <button className="on-btn on-btn-secondary">Fork Novel</button>
-        </Link>
+        <TipNovelButton novelId={novel.id} />
       </div>
     </div>
   );

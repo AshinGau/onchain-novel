@@ -27,6 +27,9 @@ interface IBountyBoard {
     /// @notice Emitted when a qualifying author claims their share of a bounty
     event BountyClaimed(uint256 indexed bountyId, address indexed author, uint256 amount);
 
+    /// @notice Emitted when the tipper designates a preferred continuation
+    event BountyDesignated(uint256 indexed bountyId, uint64 indexed chapterId);
+
     /// @notice Emitted when a bounty is refunded to the tipper (no continuations before deadline)
     event BountyRefunded(uint256 indexed bountyId, address indexed tipper, uint256 amount);
 
@@ -41,9 +44,16 @@ interface IBountyBoard {
     /// @return bountyId The ID of the created bounty
     function createBounty(uint64 chapterId, uint64 deadline) external payable returns (uint256 bountyId);
 
+    /// @notice Designate a preferred continuation for the bounty (tipper only, before deadline)
+    /// @dev If designated, the full 80% goes to that chapter's author on claim.
+    ///      If not designated by deadline, 80% is split equally among all qualifying authors.
+    /// @param bountyId The bounty ID
+    /// @param chapterId The preferred chapter (must be a direct child of the bounty target, submitted before deadline)
+    function designateBounty(uint256 bountyId, uint64 chapterId) external;
+
     /// @notice Claim a share of a bounty as a qualifying author (deadline must have passed)
-    /// @dev Qualifying = author of a descendant of chapterId with timestamp <= deadline.
-    ///      Locked amount is split equally among all qualifying authors.
+    /// @dev If tipper designated a chapter, only that chapter's author can claim the full amount.
+    ///      Otherwise, locked amount is split equally among all qualifying authors.
     /// @param bountyId The bounty ID to claim from
     function claimBounty(uint256 bountyId) external;
 

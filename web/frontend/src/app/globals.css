@@ -422,10 +422,34 @@
   font-weight: 500;
 }
 
+.on-form-tip {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  margin-bottom: 0.25rem;
+}
+
+.on-form-error {
+  font-size: 0.75rem;
+  color: var(--color-danger);
+  margin-top: 0.25rem;
+}
+
+.on-form-desc {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  margin-top: 0.25rem;
+}
+
+.on-form-section-title {
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+}
+
 /* ---------- Prose (reading page) ---------- */
 
 .prose {
-  max-width: 680px;
   margin: 0 auto;
   font-family: Georgia, "Noto Serif", serif;
   line-height: 1.9;

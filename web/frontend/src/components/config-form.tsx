@@ -19,7 +19,7 @@ function NumberField({ label, tip, value, onChange, onBlur, error, min }: {
   return (
     <div>
       <label className="on-form-label">{label}</label>
-      <p className="text-tiny" style={{ marginBottom: "0.25rem" }}>{tip}</p>
+      <p className="on-form-tip">{tip}</p>
       <input
         type="number"
         value={value}
@@ -28,7 +28,7 @@ function NumberField({ label, tip, value, onChange, onBlur, error, min }: {
         min={min ?? 0}
         className={`on-form-input ${error ? "border-danger" : ""}`}
       />
-      {error ? <p className="text-danger" style={{ fontSize: "0.75rem", marginTop: "0.25rem" }}>{error}</p> : null}
+      {error ? <p className="on-form-error">{error}</p> : null}
     </div>
   );
 }
@@ -53,7 +53,7 @@ function DurationField({ label, tip, value, onChange, error }: {
   return (
     <div>
       <label className="on-form-label">{label}</label>
-      <p className="text-tiny" style={{ marginBottom: "0.25rem" }}>{tip}</p>
+      <p className="on-form-tip">{tip}</p>
       <div className="on-row" style={{ gap: "0.5rem" }}>
         <input
           type="number"
@@ -84,7 +84,7 @@ function DurationField({ label, tip, value, onChange, error }: {
           <option value="d">days</option>
         </select>
       </div>
-      {error ? <p className="text-danger" style={{ fontSize: "0.75rem", marginTop: "0.25rem" }}>{error}</p> : null}
+      {error ? <p className="on-form-error">{error}</p> : null}
     </div>
   );
 }
@@ -95,7 +95,7 @@ function PercentSlider({ label, tip, value, onChange, max = 5000, step = 100 }: 
   return (
     <div>
       <label className="on-form-label">{label}</label>
-      <p className="text-tiny" style={{ marginBottom: "0.25rem" }}>{tip}</p>
+      <p className="on-form-tip">{tip}</p>
       <div className="on-row" style={{ gap: "0.75rem" }}>
         <input
           type="range"
@@ -179,25 +179,25 @@ export function ConfigForm({ config, onChange, contentLocationReadOnly }: Config
         <div className="on-grid on-grid-2">
           <div>
             <label className="on-form-label">Submission Fee ({TOKEN_SYMBOL})</label>
-            <p className="text-tiny" style={{ marginBottom: "0.25rem" }}>Fee per chapter submission (min 0.0001).</p>
+            <p className="on-form-tip">Fee per chapter submission (min 0.0001).</p>
             <input type="text" value={config.submissionFee}
               onChange={(e) => update("submissionFee", e.target.value)}
               onBlur={() => blur("submissionFee")}
               className={`on-form-input ${errors.submissionFee ? "border-danger" : ""}`} />
-            {errors.submissionFee && <p className="text-danger" style={{ fontSize: "0.75rem", marginTop: "0.25rem" }}>{errors.submissionFee}</p>}
+            {errors.submissionFee && <p className="on-form-error">{errors.submissionFee}</p>}
           </div>
           <div>
             <label className="on-form-label">Vote Stake ({TOKEN_SYMBOL})</label>
-            <p className="text-tiny" style={{ marginBottom: "0.25rem" }}>Required stake per vote commitment.</p>
+            <p className="on-form-tip">Required stake per vote commitment.</p>
             <input type="text" value={config.voteStake}
               onChange={(e) => update("voteStake", e.target.value)}
               onBlur={() => blur("voteStake")}
               className={`on-form-input ${errors.voteStake ? "border-danger" : ""}`} />
-            {errors.voteStake && <p className="text-danger" style={{ fontSize: "0.75rem", marginTop: "0.25rem" }}>{errors.voteStake}</p>}
+            {errors.voteStake && <p className="on-form-error">{errors.voteStake}</p>}
           </div>
           <div>
             <label className="on-form-label">Nomination Fee ({TOKEN_SYMBOL})</label>
-            <p className="text-tiny" style={{ marginBottom: "0.25rem" }}>Fee to nominate an additional candidate.</p>
+            <p className="on-form-tip">Fee to nominate an additional candidate.</p>
             <input type="text" value={config.nominationFee}
               onChange={(e) => update("nominationFee", e.target.value)}
               onBlur={() => blur("nominationFee")}
@@ -216,6 +216,7 @@ export function ConfigForm({ config, onChange, contentLocationReadOnly }: Config
         <div className="on-grid on-grid-2">
           <div>
             <label className="on-form-label">Rule Proposal Fee ({TOKEN_SYMBOL})</label>
+            <p className="on-form-tip">Fee required to propose a new world-building rule.</p>
             <input type="text" value={config.ruleFee}
               onChange={(e) => update("ruleFee", e.target.value)}
               onBlur={() => blur("ruleFee")}
@@ -248,7 +249,7 @@ export function ConfigForm({ config, onChange, contentLocationReadOnly }: Config
                   </button>
                 ))}
               </div>
-              {selectedLoc && <p className="text-tiny" style={{ marginTop: "0.25rem" }}>{selectedLoc.desc}</p>}
+              {selectedLoc && <p className="on-form-desc">{selectedLoc.desc}</p>}
             </>
           )}
         </div>
@@ -260,7 +261,7 @@ export function ConfigForm({ config, onChange, contentLocationReadOnly }: Config
               onBlur={() => blur("contentBaseUrl")}
               placeholder="https://..."
               className={`on-form-input ${errors.contentBaseUrl ? "border-danger" : ""}`} />
-            {errors.contentBaseUrl && <p className="text-danger" style={{ fontSize: "0.75rem", marginTop: "0.25rem" }}>{errors.contentBaseUrl}</p>}
+            {errors.contentBaseUrl && <p className="on-form-error">{errors.contentBaseUrl}</p>}
           </div>
         )}
       </Section>
@@ -271,7 +272,7 @@ export function ConfigForm({ config, onChange, contentLocationReadOnly }: Config
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <h3 className="text-caption" style={{ fontWeight: 600, marginBottom: "0.75rem" }}>{title}</h3>
+      <h3 className="on-form-section-title">{title}</h3>
       {children}
     </div>
   );

@@ -344,6 +344,23 @@ export async function createBounty(client: WalletClient, params: CreateBountyPar
   });
 }
 
+export interface DesignateBountyParams {
+  bountyId: bigint;
+  chapterId: bigint;
+  bountyBoard: `0x${string}`;
+}
+
+export async function designateBounty(client: WalletClient, params: DesignateBountyParams): Promise<Hash> {
+  return client.writeContract({
+    address: params.bountyBoard,
+    abi: bountyBoardAbi,
+    functionName: "designateBounty",
+    args: [params.bountyId, params.chapterId],
+    chain: client.chain,
+    account: client.account!,
+  });
+}
+
 export async function claimBounty(client: WalletClient, bountyId: bigint, bountyBoard: `0x${string}`): Promise<Hash> {
   return client.writeContract({
     address: bountyBoard,

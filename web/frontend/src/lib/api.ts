@@ -179,6 +179,7 @@ export interface Bounty {
   tipper: string;
   locked_amount: string;
   deadline: string;
+  designated_chapter_id: number;
   claimed: boolean;
   refunded: boolean;
   block_number: string;

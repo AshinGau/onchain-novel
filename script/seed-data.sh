@@ -451,6 +451,40 @@ ok "Novel 3 complete: 3 rounds (fork of Novel 1)"
 echo ""
 
 # ═══════════════════════════════════════════════════════════════
+#  Bounties: Request continuations on various chapters
+# ═══════════════════════════════════════════════════════════════
+step "Creating bounties"
+
+BOUNTY_DEADLINE_7D=$(( $(cast rpc --rpc-url "$RPC" eth_blockNumber | tr -d '"' | xargs printf '%d') + 1 ))
+# Use a deadline far in the future (current block timestamp + 7 days)
+BOUNTY_DEADLINE=$(( $(date +%s) + 604800 ))
+
+# Bounty on Novel 1 final chapter (encourage continuation of the main story)
+cast_send_value "$PK_VOTER_B" "0.5ether" "$BOUNTY_BOARD_ADDRESS" \
+    "createBounty(uint64,uint64)" "$N1_C29" "$BOUNTY_DEADLINE"
+ok "Bounty: 0.5 ETH on Novel 1 ch#$N1_C29 (main ending, request continuation)"
+
+# Bounty on Novel 1 archivist branch (encourage off-worldline story)
+cast_send_value "$PK_VOTER_A" "0.2ether" "$BOUNTY_BOARD_ADDRESS" \
+    "createBounty(uint64,uint64)" "$N1_C25" "$BOUNTY_DEADLINE"
+ok "Bounty: 0.2 ETH on Novel 1 ch#$N1_C25 (archivist branch)"
+
+# Bounty on Novel 2 cliff-hanger
+cast_send_value "$PK_VOTER_B" "0.3ether" "$BOUNTY_BOARD_ADDRESS" \
+    "createBounty(uint64,uint64)" "$N2_C9" "$BOUNTY_DEADLINE"
+ok "Bounty: 0.3 ETH on Novel 2 ch#$N2_C9 (Elena's thread)"
+
+# Bounty on Novel 3 with designation
+cast_send_value "$PK_VOTER_A" "0.1ether" "$BOUNTY_BOARD_ADDRESS" \
+    "createBounty(uint64,uint64)" "$N3_C5" "$BOUNTY_DEADLINE"
+# Designate a specific continuation
+cast_send "$PK_VOTER_A" "$BOUNTY_BOARD_ADDRESS" \
+    "designateBounty(uint256,uint64)" "3" "$N3_C8"
+ok "Bounty: 0.1 ETH on Novel 3 ch#$N3_C5, designated ch#$N3_C8"
+
+echo ""
+
+# ═══════════════════════════════════════════════════════════════
 #  Set nicknames for test accounts
 # ═══════════════════════════════════════════════════════════════
 step "Setting nicknames"
@@ -484,6 +518,7 @@ echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━�
 echo -e "  Novels:    $TOTAL_NOVELS (2 original + 1 fork)"
 echo -e "  Chapters:  $TOTAL_CHAPTERS"
 echo -e "  Rounds:    10 + 4 + 3 = 17 total"
+echo -e "  Bounties:  4 (3 open, 1 designated)"
 echo -e "  Nicknames: 4 accounts"
 echo ""
 echo -e "  Novel 1: 10 rounds, ~33 chapters, multi-branch tree"
@@ -491,8 +526,11 @@ echo -e "           - 2 main worldline branches (A & B)"
 echo -e "           - archivist off-worldline branch (depth 5)"
 echo -e "           - splinter group off-worldline branch (depth 3)"
 echo -e "           - extra off-worldline branches from root"
+echo -e "           - 2 bounties (0.5 ETH on ending, 0.2 ETH on archivist)"
 echo -e "  Novel 2: 4 rounds, ~11 chapters, simpler tree"
+echo -e "           - 1 bounty (0.3 ETH on Elena's thread)"
 echo -e "  Novel 3: 3 rounds, ~10 chapters, fork of Novel 1"
+echo -e "           - 1 bounty (0.1 ETH, designated)"
 echo ""
 echo -e "  Frontend:  http://localhost:3000"
 echo -e "  Indexer:   http://localhost:3001/health  (wait a few seconds for events)"

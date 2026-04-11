@@ -112,15 +112,16 @@ CREATE INDEX idx_chapter_tips_novel ON chapter_tips(novel_id);
 -- ============================================================
 
 CREATE TABLE bounties (
-  id              BIGINT PRIMARY KEY,
-  chapter_id      BIGINT NOT NULL,
-  novel_id        BIGINT NOT NULL,
-  tipper          TEXT NOT NULL,
-  locked_amount   NUMERIC NOT NULL,
-  deadline        BIGINT NOT NULL,
-  claimed         BOOLEAN NOT NULL DEFAULT FALSE,
-  block_number    BIGINT NOT NULL,
-  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  id                    BIGINT PRIMARY KEY,
+  chapter_id            BIGINT NOT NULL,
+  novel_id              BIGINT NOT NULL,
+  tipper                TEXT NOT NULL,
+  locked_amount         NUMERIC NOT NULL,
+  deadline              BIGINT NOT NULL,
+  designated_chapter_id BIGINT DEFAULT 0,
+  claimed               BOOLEAN NOT NULL DEFAULT FALSE,
+  block_number          BIGINT NOT NULL,
+  created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX idx_bounties_chapter ON bounties(chapter_id);
