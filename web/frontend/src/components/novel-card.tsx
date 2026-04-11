@@ -23,18 +23,11 @@ export function NovelCard({ novel }: { novel: Novel }) {
             <img
               src={novel.cover_uri}
               alt=""
-              style={{
-                width: "4rem",
-                height: "5.6rem",
-                objectFit: "cover",
-                borderRadius: "0.375rem",
-                background: "var(--color-bg-tertiary)",
-                flexShrink: 0,
-              }}
+              className="on-cover on-cover-sm"
             />
           )}
 
-          <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="on-flex-1">
             <p className="text-caption">
               by {shortAddress(novel.creator)}
               <span className="text-muted" style={{ marginLeft: "0.5rem" }}>{timeAgo(novel.created_at)}</span>

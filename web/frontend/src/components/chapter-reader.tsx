@@ -45,7 +45,7 @@ export function ChapterReader({ chapters, novelId }: ChapterReaderProps) {
     <div className="on-stack" style={{ gap: "1.5rem" }}>
       {/* Progress bar */}
       <div className="on-stack" style={{ gap: "0.25rem" }}>
-        <div className="on-row" style={{ justifyContent: "space-between" }}>
+        <div className="on-row-between">
           <span className="text-caption">
             Chapter {index + 1} of {total}
           </span>
@@ -89,7 +89,7 @@ export function ChapterReader({ chapters, novelId }: ChapterReaderProps) {
       </div>
 
       {/* Navigation */}
-      <div className="on-row" style={{ justifyContent: "space-between" }}>
+      <div className="on-row-between">
         <button
           className="on-btn on-btn-secondary"
           onClick={goPrev}

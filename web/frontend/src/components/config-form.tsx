@@ -54,7 +54,7 @@ function DurationField({ label, tip, value, onChange, error }: {
     <div>
       <label className="on-form-label">{label}</label>
       <p className="on-form-tip">{tip}</p>
-      <div className="on-row" style={{ gap: "0.5rem" }}>
+      <div className="on-row">
         <input
           type="number"
           min="0"
@@ -237,7 +237,7 @@ export function ConfigForm({ config, onChange, contentLocationReadOnly }: Config
             <p className="text-caption" style={{ marginTop: "0.25rem" }}>{selectedLoc?.label} — {selectedLoc?.desc}</p>
           ) : (
             <>
-              <div className="on-row" style={{ gap: "0.5rem", marginTop: "0.25rem" }}>
+              <div className="on-row" style={{ marginTop: "0.25rem" }}>
                 {CONTENT_LOCATIONS.map((loc) => (
                   <button
                     key={loc.value}

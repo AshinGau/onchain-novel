@@ -3,11 +3,15 @@
 import { useMemo, useCallback, useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import type { ChapterSummary } from "@/lib/api";
-import { shortAddress } from "@/lib/format";
+import { shortAddress, timeAgo } from "@/lib/format";
 
 interface StoryTreeProps {
   chapters: ChapterSummary[];
   novelId: string;
+  hasMore?: boolean;
+  maxDepth?: number;
+  loading?: boolean;
+  onLoadMore?: () => void;
 }
 
 interface TreeNode {
@@ -20,26 +24,46 @@ interface TreeNode {
 }
 
 const NODE_WIDTH = 160;
-const NODE_HEIGHT = 56;
+const NODE_HEIGHT = 72;
 const H_GAP = 24;
 const V_GAP = 40;
 const PADDING = 40;
 
-export function StoryTree({ chapters, novelId }: StoryTreeProps) {
+export function StoryTree({ chapters, novelId, hasMore, maxDepth, loading, onLoadMore }: StoryTreeProps) {
   const router = useRouter();
   const containerRef = useRef<HTMLDivElement>(null);
   const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 });
   const [dragging, setDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    function onFsChange() {
+      setIsFullscreen(!!document.fullscreenElement);
+    }
+    document.addEventListener("fullscreenchange", onFsChange);
+    return () => document.removeEventListener("fullscreenchange", onFsChange);
+  }, []);
+
+  const toggleFullscreen = useCallback(() => {
+    if (!containerRef.current) return;
+    if (document.fullscreenElement) {
+      document.exitFullscreen();
+    } else {
+      containerRef.current.requestFullscreen();
+    }
+  }, []);
 
   const { root, totalWidth, totalHeight } = useMemo(() => {
     return layoutTree(chapters);
   }, [chapters]);
 
-  // Center the tree initially
+  // Center the tree only on first mount
+  const initializedRef = useRef(false);
   useEffect(() => {
-    if (!containerRef.current || !root) return;
+    if (!containerRef.current || !root || initializedRef.current) return;
+    initializedRef.current = true;
     const rect = containerRef.current.getBoundingClientRect();
     setTransform({
       x: Math.max(0, (rect.width - totalWidth) / 2),
@@ -93,6 +117,42 @@ export function StoryTree({ chapters, novelId }: StoryTreeProps) {
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
     >
+      {/* Toolbar */}
+      <div style={{
+        position: "absolute", top: "0.5rem", right: "0.5rem", zIndex: 10,
+        display: "flex", gap: "0.5rem", alignItems: "center",
+      }}>
+        {hasMore && onLoadMore && (
+          <>
+            <span className="text-tiny" style={{ color: "var(--color-text-muted)" }}>
+              Depth 1–{maxDepth}
+            </span>
+            <button
+              type="button"
+              className="on-btn on-btn-secondary"
+              onClick={onLoadMore}
+              disabled={loading}
+              style={{ fontSize: "0.75rem", padding: "0.25rem 0.5rem" }}
+            >
+              {loading ? "Loading..." : "Load deeper"}
+            </button>
+          </>
+        )}
+        <button
+          type="button"
+          onClick={toggleFullscreen}
+          title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+          style={{
+            width: "2rem", height: "2rem", borderRadius: "0.375rem",
+            border: "1px solid var(--color-border)", background: "var(--color-bg)",
+            color: "var(--color-text-muted)", cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: "1rem", lineHeight: 1,
+          }}
+        >
+          {isFullscreen ? "⊡" : "⛶"}
+        </button>
+      </div>
       <svg
         width="100%"
         height="100%"
@@ -220,7 +280,7 @@ function renderNodes(
       {/* Author */}
       <text
         x={node.x + 12}
-        y={node.y + 42}
+        y={node.y + 40}
         style={{
           fontSize: "11px",
           fill: isWl ? "rgba(255,255,255,0.75)" : "var(--color-text-secondary)",
@@ -228,6 +288,18 @@ function renderNodes(
         }}
       >
         {shortAddress(node.chapter.author)}
+      </text>
+      {/* Timestamp */}
+      <text
+        x={node.x + 12}
+        y={node.y + 56}
+        style={{
+          fontSize: "10px",
+          fill: isWl ? "rgba(255,255,255,0.5)" : "var(--color-text-muted)",
+          fontFamily: "var(--font-sans)",
+        }}
+      >
+        {timeAgo(node.chapter.timestamp)}
       </text>
       {/* WL indicator dot */}
       {isWl && (
