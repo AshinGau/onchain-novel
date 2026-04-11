@@ -2,6 +2,7 @@ import { Command } from "commander";
 import { parseEther } from "viem";
 import {
   createBounty as createBountyTx,
+  designateBounty as designateBountyTx,
   claimBounty as claimBountyTx,
   refundBounty as refundBountyTx,
 } from "../shared/index.js";
@@ -38,6 +39,59 @@ export function registerBountyCommands(program: Command): void {
         txHash(hash);
         await waitForTx(hash);
         success(`Bounty created for chapter #${chapterId} (${opts.value} ETH, deadline: ${opts.deadline})`);
+      } catch (err) {
+        error(String(err));
+        process.exit(1);
+      }
+    });
+
+  bounty
+    .command("designate <bounty-id> <chapter-id>")
+    .description("Designate a preferred continuation for your bounty (before deadline)")
+    .action(async (bountyId, chapterId) => {
+      try {
+        const client = getWalletClient();
+        const contracts = getContracts();
+        if (!contracts.bountyBoard) {
+          error("BountyBoard contract address not configured.");
+          return process.exit(1);
+        }
+        const hash = await designateBountyTx(client, {
+          bountyId: BigInt(bountyId),
+          chapterId: BigInt(chapterId),
+          bountyBoard: contracts.bountyBoard,
+        });
+        txHash(hash);
+        await waitForTx(hash);
+        success(`Bounty #${bountyId} designated chapter #${chapterId}`);
+      } catch (err) {
+        error(String(err));
+        process.exit(1);
+      }
+    });
+
+  bounty
+    .command("list")
+    .description("List active bounties (earning opportunities)")
+    .option("--novel-id <id>", "Filter by novel ID")
+    .action(async (opts) => {
+      try {
+        const url = opts.novelId ? `/api/bounties/active?novelId=${opts.novelId}` : "/api/bounties/active";
+        const data = await apiGet<{ bounties: Record<string, unknown>[] }>(url);
+        if (data.bounties.length === 0) {
+          console.log("No active bounties found.");
+          return;
+        }
+        header("Active Bounties");
+        for (const b of data.bounties) {
+          kv(`Bounty #${b.id}`, `Chapter #${b.chapter_id} (${b.novel_title})`);
+          kv("  Locked", eth(BigInt(String(b.locked_amount ?? "0"))));
+          kv("  Deadline", new Date(Number(b.deadline) * 1000).toISOString());
+          if (Number(b.designated_chapter_id) > 0) {
+            kv("  Designated", `Chapter #${b.designated_chapter_id}`);
+          }
+          console.log();
+        }
       } catch (err) {
         error(String(err));
         process.exit(1);

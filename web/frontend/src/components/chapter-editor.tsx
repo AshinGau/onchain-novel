@@ -1,11 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useAccount } from "wagmi";
-import { toHex, keccak256 } from "viem";
+import { writeContract } from "wagmi/actions";
+import { toHex, keccak256, decodeEventLog, createPublicClient, http } from "viem";
+import { foundry, base } from "wagmi/chains";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
-import { useTxAction } from "@/hooks/use-tx-action";
 import { NOVEL_CORE_ADDRESS, novelCoreAbi } from "@/lib/contracts";
+import { wagmiConfig } from "@/lib/wagmi-config";
 
 interface ChapterEditorProps {
   novelId: string;
@@ -28,14 +31,18 @@ export function ChapterEditor({
   onSuccess,
 }: ChapterEditorProps) {
   const { isConnected } = useAccount();
+  const router = useRouter();
   const [content, setContent] = useState("");
-  const { send, status, error, isPending, reset } = useTxAction();
+  const [blurred, setBlurred] = useState(false);
+  const [status, setStatus] = useState<"idle" | "confirming" | "waiting" | "success" | "error">("idle");
+  const [error, setError] = useState<string | null>(null);
 
   const contentBytes = new TextEncoder().encode(content);
   const byteLength = contentBytes.length;
   const tooShort = byteLength < minLength;
   const tooLong = byteLength > maxLength;
   const valid = !tooShort && !tooLong && content.trim().length > 0;
+  const showLengthError = blurred && (tooShort || tooLong);
 
   async function handleSubmit() {
     if (!valid) return;
@@ -46,36 +53,81 @@ export function ChapterEditor({
 
     const submission =
       contentLocation === 0
-        ? {
-            contentHash,
-            declaredLength,
-            content: contentHex as `0x${string}`,
-          }
-        : {
-            contentHash,
-            declaredLength,
-            content: "0x" as `0x${string}`,
-          };
+        ? { contentHash, declaredLength, content: contentHex as `0x${string}` }
+        : { contentHash, declaredLength, content: "0x" as `0x${string}` };
 
-    await send(
-      {
+    setStatus("confirming");
+    setError(null);
+
+    try {
+      const chain = process.env.NEXT_PUBLIC_CHAIN === "base" ? base : foundry;
+
+      const publicClient = createPublicClient({
+        chain,
+        transport: http(process.env.NEXT_PUBLIC_RPC_URL || "http://localhost:8545"),
+      });
+
+      const hash = await writeContract(wagmiConfig, {
         address: NOVEL_CORE_ADDRESS,
         abi: novelCoreAbi,
         functionName: "submitChapter",
         args: [BigInt(novelId), BigInt(parentId), submission],
         value: BigInt(submissionFee),
-      },
-      () => {
-        setContent("");
-        onSuccess?.();
+      });
+
+      setStatus("waiting");
+
+      // Wait for receipt and extract new chapter ID from event logs
+      const receipt = await publicClient.waitForTransactionReceipt({ hash, timeout: 120_000 });
+
+      if (receipt.status !== "success") {
+        setStatus("error");
+        setError("Transaction reverted");
+        return;
       }
-    );
+
+      // Parse ChapterSubmitted event to get new chapterId
+      let newChapterId: string | null = null;
+      for (const log of receipt.logs) {
+        try {
+          const decoded = decodeEventLog({
+            abi: novelCoreAbi,
+            data: log.data,
+            topics: log.topics,
+          });
+          if (decoded.eventName === "ChapterSubmitted") {
+            newChapterId = String((decoded.args as any).chapterId);
+            break;
+          }
+        } catch {
+          // Not this event
+        }
+      }
+
+      setStatus("success");
+      setContent("");
+      onSuccess?.();
+
+      if (newChapterId) {
+        router.push(`/novels/${novelId}/chapter/${newChapterId}`);
+      }
+    } catch (err: unknown) {
+      setStatus("error");
+      const msg = err instanceof Error ? err.message : "Transaction rejected";
+      if (msg.includes("User rejected")) {
+        setError("Transaction cancelled");
+      } else {
+        setError(msg.slice(0, 200));
+      }
+    }
   }
+
+  const isPending = status === "confirming" || status === "waiting";
 
   if (!isConnected) {
     return (
       <div className="on-card on-stack" style={{ gap: "0.75rem", alignItems: "center" }}>
-        <p className="text-caption">Connect wallet to write a continuation</p>
+        <p className="text-caption">Connect wallet to write the next chapter</p>
         <ConnectButton />
       </div>
     );
@@ -83,17 +135,18 @@ export function ChapterEditor({
 
   return (
     <div className="on-card on-stack" style={{ gap: "0.75rem" }}>
-      <h3 className="text-subheading" style={{ margin: 0 }}>Write continuation</h3>
+      <h3 className="text-subheading" style={{ margin: 0 }}>Write Next Chapter</h3>
       <textarea
         value={content}
-        onChange={(e) => setContent(e.target.value)}
+        onChange={(e) => { setContent(e.target.value); setBlurred(false); }}
+        onBlur={() => setBlurred(true)}
         placeholder="Write your chapter here..."
         rows={10}
         style={{
           width: "100%",
           padding: "0.75rem",
           borderRadius: "0.5rem",
-          border: "1px solid var(--color-border)",
+          border: `1px solid ${showLengthError ? "var(--color-danger)" : "var(--color-border)"}`,
           background: "var(--color-bg-secondary)",
           color: "var(--color-text)",
           fontFamily: "Georgia, 'Noto Serif', serif",
@@ -106,7 +159,7 @@ export function ChapterEditor({
         <span
           className="text-caption"
           style={{
-            color: tooShort || tooLong ? "var(--color-danger)" : undefined,
+            color: showLengthError ? "var(--color-danger)" : undefined,
           }}
         >
           {byteLength} bytes (min: {minLength}, max: {maxLength})
@@ -117,12 +170,16 @@ export function ChapterEditor({
           disabled={!valid || isPending}
           style={{ opacity: !valid || isPending ? 0.5 : 1 }}
         >
-          {isPending ? "Submitting..." : "Submit Chapter"}
+          {status === "confirming"
+            ? "Confirm in wallet..."
+            : status === "waiting"
+              ? "Waiting for block..."
+              : "Submit Chapter"}
         </button>
       </div>
       {status === "success" && (
         <p style={{ color: "var(--color-success)", margin: 0, fontSize: "0.875rem" }}>
-          Chapter submitted successfully!
+          Chapter submitted! Redirecting...
         </p>
       )}
       {error && (

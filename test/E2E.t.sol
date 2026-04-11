@@ -139,6 +139,67 @@ contract E2ETest is TestBase {
     }
 
     // ----------------------------------------------------------
+    //  BountyBoard: designate bounty, designated author claims full amount
+    // ----------------------------------------------------------
+    function test_bountyBoard_designateAndClaim() public {
+        uint64 novelId = _createNovel();
+        uint64 rootId = 1;
+
+        uint64 deadline = uint64(block.timestamp + 7 days);
+        uint256 bountyAmount = 1 ether;
+
+        vm.prank(voter1);
+        uint256 bountyId = bountyBoard.createBounty{value: bountyAmount}(rootId, deadline);
+
+        // Authors submit continuations before deadline
+        uint64 ch2 = _submitChapter(author1, novelId, rootId, "designated bounty response!!");
+        uint64 ch3 = _submitChapter(author2, novelId, rootId, "other bounty response here!");
+
+        // Tipper designates author1's chapter
+        vm.prank(voter1);
+        bountyBoard.designateBounty(bountyId, ch2);
+
+        DataTypes.Bounty memory b = bountyBoard.getBounty(bountyId);
+        assertEq(b.designatedChapterId, ch2);
+
+        // Warp past deadline
+        vm.warp(deadline + 1);
+
+        // Non-designated author cannot claim
+        vm.prank(author2);
+        vm.expectRevert();
+        bountyBoard.claimBounty(bountyId);
+
+        // Designated author claims full amount
+        uint256 balBefore = author1.balance;
+        vm.prank(author1);
+        bountyBoard.claimBounty(bountyId);
+
+        assertEq(author1.balance - balBefore, b.lockedAmount, "designated author should receive full locked amount");
+        assertTrue(bountyBoard.getBounty(bountyId).claimed);
+    }
+
+    // ----------------------------------------------------------
+    //  BountyBoard: designate reverts after deadline
+    // ----------------------------------------------------------
+    function test_bountyBoard_designateAfterDeadlineReverts() public {
+        _createNovel();
+        uint64 rootId = 1;
+
+        uint64 deadline = uint64(block.timestamp + 7 days);
+
+        vm.prank(voter1);
+        uint256 bountyId = bountyBoard.createBounty{value: 1 ether}(rootId, deadline);
+
+        // Warp past deadline
+        vm.warp(deadline + 1);
+
+        vm.prank(voter1);
+        vm.expectRevert();
+        bountyBoard.designateBounty(bountyId, 999);
+    }
+
+    // ----------------------------------------------------------
     //  BountyBoard: create bounty, no submissions, refund
     // ----------------------------------------------------------
     function test_bountyBoard_refund() public {

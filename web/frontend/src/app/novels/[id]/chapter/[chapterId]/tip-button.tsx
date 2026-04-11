@@ -38,7 +38,7 @@ export function TipButton({ chapterId }: { chapterId: string }) {
         className="on-btn on-btn-secondary"
         onClick={() => setShowInput(true)}
       >
-        Tip
+        Tip Author
       </button>
     );
   }

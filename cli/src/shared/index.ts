@@ -19,6 +19,7 @@ export {
   type TipParams,
   type ForkNovelParams,
   type CreateBountyParams,
+  type DesignateBountyParams,
   type ProposeRuleParams,
   type SetCreatorRulesParams,
 
@@ -44,6 +45,7 @@ export {
   completeNovel,
   forkNovel,
   createBounty,
+  designateBounty,
   claimBounty,
   refundBounty,
   setCreatorRules,

@@ -80,6 +80,7 @@ export const rulesEngineAbi = parseAbi([
 
 export const bountyBoardAbi = parseAbi([
   "function createBounty(uint64 chapterId, uint64 deadline) external payable returns (uint256 bountyId)",
+  "function designateBounty(uint256 bountyId, uint64 chapterId) external",
   "function claimBounty(uint256 bountyId) external",
   "function refundBounty(uint256 bountyId) external",
 ]);

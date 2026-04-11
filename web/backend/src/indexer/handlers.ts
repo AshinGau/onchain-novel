@@ -409,6 +409,16 @@ export async function handleBountyBoardEvent(log: Log, db: Client) {
       break;
     }
 
+    case "BountyDesignated": {
+      const { bountyId, chapterId } = decoded.args;
+      console.log(`[event] BountyDesignated bountyId=${bountyId} chapterId=${chapterId}`);
+      await db.query(
+        "UPDATE bounties SET designated_chapter_id = $1 WHERE id = $2",
+        [chapterId.toString(), bountyId.toString()]
+      );
+      break;
+    }
+
     case "BountyClaimed": {
       // BountyClaimed is emitted per-author. The contract only sets bounty.claimed = true
       // when ALL qualifying authors have claimed. We don't mark claimed here;

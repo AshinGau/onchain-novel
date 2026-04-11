@@ -86,10 +86,12 @@ export const prizePoolAbi = parseAbi([
 
 export const bountyBoardAbi = parseAbi([
   "event BountyCreated(uint256 indexed bountyId, uint64 indexed chapterId, address indexed tipper, uint256 lockedAmount, uint64 deadline)",
+  "event BountyDesignated(uint256 indexed bountyId, uint64 indexed chapterId)",
   "event BountyClaimed(uint256 indexed bountyId, address indexed author, uint256 amount)",
   "event BountyRefunded(uint256 indexed bountyId, address indexed tipper, uint256 amount)",
 
   "function createBounty(uint64 chapterId, uint64 deadline) external payable returns (uint256 bountyId)",
+  "function designateBounty(uint256 bountyId, uint64 chapterId) external",
   "function claimBounty(uint256 bountyId) external",
   "function refundBounty(uint256 bountyId) external",
 ]);

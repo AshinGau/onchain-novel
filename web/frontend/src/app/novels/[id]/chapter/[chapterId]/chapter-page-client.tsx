@@ -2,14 +2,110 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import type { ChapterDetail, Novel, ChapterSummary } from "@/lib/api";
+import { useAccount } from "wagmi";
+import { parseEther, formatEther } from "viem";
+import type { ChapterDetail, Novel, ChapterSummary, Bounty } from "@/lib/api";
 import { useChapterChildren, useChapterBounties, useChapterTips } from "@/hooks/use-chapter";
 import { shortAddress, timeAgo } from "@/lib/format";
+import { TOKEN_SYMBOL } from "@/lib/config";
+import { BOUNTY_BOARD_ADDRESS, bountyBoardAbi } from "@/lib/contracts";
+import { useTxAction } from "@/hooks/use-tx-action";
 import { ChapterCardMini } from "@/components/chapter-card-mini";
 import { ChapterEditor } from "@/components/chapter-editor";
 import { VotePanel } from "@/components/vote-panel";
 import { CommentList } from "@/components/comment-list";
 import { TipButton } from "./tip-button";
+
+/* ── Sponsor Next Chapter (追更) form ── */
+function BountyCreateForm({ chapterId, onClose }: { chapterId: string; onClose: () => void }) {
+  const [amount, setAmount] = useState("0.01");
+  const [days, setDays] = useState("7");
+  const { send, isPending, status, error } = useTxAction();
+
+  async function handleCreate() {
+    const value = parseEther(amount);
+    const deadline = BigInt(Math.floor(Date.now() / 1000) + Number(days) * 86400);
+    await send(
+      {
+        address: BOUNTY_BOARD_ADDRESS,
+        abi: bountyBoardAbi,
+        functionName: "createBounty",
+        args: [BigInt(chapterId), deadline],
+        value,
+      },
+      () => onClose()
+    );
+  }
+
+  return (
+    <div className="on-card on-stack" style={{ gap: "0.5rem" }}>
+      <h4 className="text-caption" style={{ margin: 0 }}>Sponsor Next Chapter</h4>
+      <div className="on-row" style={{ gap: "0.5rem" }}>
+        <div>
+          <label className="text-tiny">Amount ({TOKEN_SYMBOL})</label>
+          <input type="text" className="on-form-input on-form-input-narrow" value={amount} onChange={(e) => setAmount(e.target.value)} />
+        </div>
+        <div>
+          <label className="text-tiny">Deadline (days)</label>
+          <input type="text" className="on-form-input on-form-input-narrow" value={days} onChange={(e) => setDays(e.target.value)} />
+        </div>
+      </div>
+      <p className="text-muted" style={{ fontSize: "0.75rem", margin: 0 }}>
+        20% goes to prize pool. 80% locked for authors. You can designate a favorite before the deadline.
+      </p>
+      <div className="on-row" style={{ gap: "0.5rem" }}>
+        <button type="button" className="on-btn on-btn-primary" onClick={handleCreate} disabled={isPending}>
+          {isPending ? "…" : "Create Bounty"}
+        </button>
+        <button type="button" className="on-btn on-btn-ghost" onClick={onClose}>Cancel</button>
+      </div>
+      {status === "success" && <span className="text-success">Bounty created!</span>}
+      {error && <span className="text-danger">{error}</span>}
+    </div>
+  );
+}
+
+/* ── Active bounty list for a chapter ── */
+function BountyList({ bounties, chapterId }: { bounties: Bounty[]; chapterId: string }) {
+  const now = Math.floor(Date.now() / 1000);
+
+  const active = bounties.filter((b) => !b.claimed && Number(b.deadline) > now);
+  if (active.length === 0) return null;
+
+  return (
+    <div className="on-card on-stack" style={{ gap: "0.5rem" }}>
+      <h4 className="text-caption" style={{ margin: 0 }}>Active Bounties ({active.length})</h4>
+      {active.map((b) => {
+        const remaining = Number(b.deadline) - now;
+        const days = Math.floor(remaining / 86400);
+        const hours = Math.floor((remaining % 86400) / 3600);
+        const designated = Number(b.designated_chapter_id || 0);
+
+        return (
+          <div key={b.id} style={{
+            padding: "0.5rem 0.75rem", borderRadius: "0.375rem",
+            background: "var(--color-bg-secondary)", border: "1px solid var(--color-border)",
+          }}>
+            <div className="on-row-wrap" style={{ gap: "0.5rem" }}>
+              <span style={{ fontWeight: 600, color: "var(--color-warning)" }}>
+                {formatEther(BigInt(b.locked_amount))} {TOKEN_SYMBOL}
+              </span>
+              <span className="text-muted">
+                {days > 0 ? `${days}d ${hours}h remaining` : `${hours}h remaining`}
+              </span>
+              <span className="text-muted">by {shortAddress(b.tipper)}</span>
+              {designated > 0 && (
+                <span className="on-badge badge-active">
+                  Designated: Chapter #{designated}
+                </span>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 interface Props {
   chapter: ChapterDetail;
@@ -19,6 +115,8 @@ interface Props {
 export function ChapterPageClient({ chapter, novel }: Props) {
   const [showEditor, setShowEditor] = useState(false);
   const [showChildren, setShowChildren] = useState(false);
+  const [showBountyForm, setShowBountyForm] = useState(false);
+  const { isConnected } = useAccount();
 
   const { data: children } = useChapterChildren(chapter.id);
   const { data: bounties } = useChapterBounties(chapter.id);
@@ -84,12 +182,10 @@ export function ChapterPageClient({ chapter, novel }: Props) {
             {tips.length} tip{tips.length !== 1 ? "s" : ""}
           </span>
         )}
-        {bounties && bounties.length > 0 && (
-          <span className="text-caption">
-            {bounties.length} bounty/bounties
-          </span>
-        )}
       </div>
+
+      {/* Active bounties */}
+      {bounties && <BountyList bounties={bounties} chapterId={chapter.id} />}
 
       {/* Chapter content */}
       <div className="prose">
@@ -110,9 +206,26 @@ export function ChapterPageClient({ chapter, novel }: Props) {
           className="on-btn on-btn-primary"
           onClick={() => setShowEditor(!showEditor)}
         >
-          {showEditor ? "Cancel" : "Write continuation"}
+          {showEditor ? "Cancel" : "Write Next Chapter"}
         </button>
+        <Link href={`/fork/${novelId}/${chapter.id}`}>
+          <button type="button" className="on-btn on-btn-secondary">Fork Novel</button>
+        </Link>
+        {isConnected && (
+          <button
+            type="button"
+            className="on-btn on-btn-secondary"
+            onClick={() => setShowBountyForm(!showBountyForm)}
+          >
+            {showBountyForm ? "Cancel" : "Sponsor Next Chapter"}
+          </button>
+        )}
       </div>
+
+      {/* Bounty creation form */}
+      {showBountyForm && (
+        <BountyCreateForm chapterId={chapter.id} onClose={() => setShowBountyForm(false)} />
+      )}
 
       {/* Vote panel (if in committing/revealing phase) */}
       {(isCommitting || isRevealing) && (
