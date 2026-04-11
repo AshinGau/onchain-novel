@@ -95,14 +95,17 @@ export function CommentList({ chapterId }: Props) {
           />
           <div className="on-row-between">
             <span className="text-muted">{content.length}/5000</span>
-            <button
-              type="button"
-              className="on-btn on-btn-primary"
-              onClick={handleSubmit}
-              disabled={submitting || !content.trim()}
-            >
-              {submitting ? "Signing…" : "Post comment"}
-            </button>
+            <div className="on-row">
+              {submitting && <span className="text-tiny text-muted">Sign in your wallet — free, no gas</span>}
+              <button
+                type="button"
+                className="on-btn on-btn-primary"
+                onClick={handleSubmit}
+                disabled={submitting || !content.trim()}
+              >
+                {submitting ? "Signing…" : "Post Comment"}
+              </button>
+            </div>
           </div>
           {error && <p className="text-danger">{error}</p>}
         </div>

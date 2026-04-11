@@ -131,6 +131,7 @@ contract NovelCore is
     error ZeroAddress();
     error InsufficientForkFee(uint256 sent, uint256 required);
     error NicknameEmpty();
+    error NicknameAlreadySet();
 
     // ============================================================
     //                      INITIALIZER
@@ -834,6 +835,7 @@ contract NovelCore is
     /// @inheritdoc INovelCore
     function setNickname(bytes32 nickname) external {
         if (nickname == bytes32(0)) revert NicknameEmpty();
+        if (_nicknames[msg.sender] != bytes32(0)) revert NicknameAlreadySet();
         _nicknames[msg.sender] = nickname;
         emit NicknameSet(msg.sender, nickname);
     }

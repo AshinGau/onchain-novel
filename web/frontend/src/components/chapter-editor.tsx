@@ -105,11 +105,14 @@ export function ChapterEditor({
       }
 
       setStatus("success");
-      setContent("");
-      onSuccess?.();
 
       if (newChapterId) {
+        // Navigate to the new chapter — no need to call onSuccess since we're leaving the page
         router.push(`/novels/${novelId}/chapter/${newChapterId}`);
+      } else {
+        // Fallback: couldn't parse chapter ID from receipt
+        setContent("");
+        onSuccess?.();
       }
     } catch (err: unknown) {
       setStatus("error");
