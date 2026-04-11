@@ -101,7 +101,7 @@ function TipNovelButton({ novelId }: { novelId: string }) {
   const { isConnected } = useAccount();
   const [showInput, setShowInput] = useState(false);
   const [amount, setAmount] = useState("0.01");
-  const { send, isPending, status, error } = useTxAction();
+  const { send, isPending, status, error, reset } = useTxAction();
 
   if (!isConnected) return null;
 
@@ -115,7 +115,7 @@ function TipNovelButton({ novelId }: { novelId: string }) {
         args: [BigInt(novelId)],
         value,
       },
-      () => { setShowInput(false); setAmount("0.01"); }
+      () => { setTimeout(() => { setShowInput(false); setAmount("0.01"); reset(); }, 2000); }
     );
   }
 
@@ -129,12 +129,16 @@ function TipNovelButton({ novelId }: { novelId: string }) {
 
   return (
     <div className="on-row">
-      <input type="text" className="on-form-input on-form-input-narrow" value={amount} onChange={(e) => setAmount(e.target.value)} />
-      <button type="button" className="on-btn on-btn-primary" onClick={handleTip} disabled={isPending}>
-        {isPending ? "…" : "Send Tip"}
-      </button>
-      <button type="button" className="on-btn on-btn-ghost" onClick={() => setShowInput(false)}>Cancel</button>
-      {status === "success" && <span className="text-success">Sent!</span>}
+      {status !== "success" && (
+        <input type="text" className="on-form-input on-form-input-narrow" value={amount} onChange={(e) => setAmount(e.target.value)} />
+      )}
+      {status !== "success" && (
+        <button type="button" className="on-btn on-btn-primary" onClick={handleTip} disabled={isPending}>
+          {status === "confirming" ? "Confirm in wallet..." : status === "waiting" ? "Waiting for block..." : "Send Tip"}
+        </button>
+      )}
+      {!isPending && status !== "success" && <button type="button" className="on-btn on-btn-ghost" onClick={() => setShowInput(false)}>Cancel</button>}
+      {status === "success" && <span className="text-success">Tip sent!</span>}
       {error && <span className="text-danger">{error}</span>}
     </div>
   );

@@ -43,7 +43,6 @@ export default function DashboardPage() {
       setVotes(voteData.votes || []);
       setRewards(rewardData);
       setCurrentNickname(nicknameData.nickname);
-      if (nicknameData.nickname) setNickname(nicknameData.nickname);
     }).catch((err) => {
       setFetchError(`Failed to load dashboard data: ${err.message}`);
     }).finally(() => {
@@ -92,33 +91,37 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Nickname Setting */}
-      <div className="on-card" style={{ marginBottom: "1rem" }}>
-        <h3 className="text-subheading" style={{ marginBottom: "0.5rem" }}>Display Name</h3>
-        <div className="on-row">
-          <input
-            type="text"
-            value={nickname}
-            onChange={(e) => setNickname(e.target.value)}
-            placeholder="Set your nickname (max 32 bytes)"
-            maxLength={32}
-            className="on-form-input"
-            style={{ flex: 1 }}
-          />
-          <button
-            onClick={handleSetNickname}
-            disabled={nicknameTx.isPending || !nickname.trim()}
-            className="on-btn on-btn-primary"
-          >
-            {nicknameTx.isPending ? "Saving..." : nicknameTx.status === "success" ? "Saved!" : "Save"}
-          </button>
+      {/* Nickname Setting — only show if not yet set */}
+      {!currentNickname && (
+        <div className="on-card" style={{ marginBottom: "1rem" }}>
+          <h3 className="text-subheading" style={{ marginBottom: "0.5rem" }}>Set Display Name</h3>
+          <p className="text-tiny text-muted" style={{ marginBottom: "0.5rem" }}>
+            Choose carefully — your display name cannot be changed once set.
+          </p>
+          <div className="on-row">
+            <input
+              type="text"
+              value={nickname}
+              onChange={(e) => setNickname(e.target.value)}
+              placeholder="Your nickname (max 32 bytes)"
+              maxLength={32}
+              className="on-form-input"
+              style={{ flex: 1 }}
+            />
+            <button
+              onClick={handleSetNickname}
+              disabled={nicknameTx.isPending || !nickname.trim()}
+              className="on-btn on-btn-primary"
+            >
+              {nicknameTx.isPending ? "Saving..." : nicknameTx.status === "success" ? "Saved!" : "Save"}
+            </button>
+          </div>
+          <p className="text-tiny" style={{ marginTop: "0.25rem" }}>
+            {new TextEncoder().encode(nickname).length}/32 bytes
+          </p>
+          {nicknameTx.error && <p className="text-danger" style={{ fontSize: "0.75rem", marginTop: "0.25rem" }}>{nicknameTx.error}</p>}
         </div>
-        <p className="text-tiny" style={{ marginTop: "0.25rem" }}>
-          {new TextEncoder().encode(nickname).length}/32 bytes
-          {currentNickname && ` · Current: ${currentNickname}`}
-        </p>
-        {nicknameTx.error && <p className="text-danger" style={{ fontSize: "0.75rem", marginTop: "0.25rem" }}>{nicknameTx.error}</p>}
-      </div>
+      )}
 
       {fetchError && (
         <div className="on-card" style={{ borderColor: "var(--color-danger)", color: "var(--color-danger)", marginBottom: "1rem" }}>

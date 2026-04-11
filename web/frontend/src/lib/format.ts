@@ -28,10 +28,14 @@ export function formatCompact(n: number): string {
 
 /** Relative time string */
 export function timeAgo(isoOrTimestamp: string | number): string {
-  const ms =
-    typeof isoOrTimestamp === "number"
-      ? isoOrTimestamp * 1000
-      : new Date(isoOrTimestamp).getTime();
+  let ms: number;
+  if (typeof isoOrTimestamp === "number") {
+    ms = isoOrTimestamp * 1000;
+  } else if (/^\d+$/.test(isoOrTimestamp)) {
+    ms = Number(isoOrTimestamp) * 1000;
+  } else {
+    ms = new Date(isoOrTimestamp).getTime();
+  }
   const diff = Date.now() - ms;
   const secs = Math.floor(diff / 1000);
   if (secs < 60) return "just now";
