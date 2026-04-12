@@ -3,7 +3,8 @@
 import { useMemo, useCallback, useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import type { ChapterSummary } from "@/lib/api";
-import { shortAddress, timeAgo } from "@/lib/format";
+import { timeAgo } from "@/lib/format";
+import { useNicknames } from "@/hooks/use-nickname";
 
 interface StoryTreeProps {
   chapters: ChapterSummary[];
@@ -31,6 +32,7 @@ const PADDING = 40;
 
 export function StoryTree({ chapters, novelId, hasMore, maxDepth, loading, onLoadMore }: StoryTreeProps) {
   const router = useRouter();
+  const displayName = useNicknames(chapters.map((c) => c.author));
   const containerRef = useRef<HTMLDivElement>(null);
   const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 });
   const [dragging, setDragging] = useState(false);
@@ -162,7 +164,7 @@ export function StoryTree({ chapters, novelId, hasMore, maxDepth, loading, onLoa
           {/* Edges */}
           {renderEdges(root)}
           {/* Nodes */}
-          {renderNodes(root, novelId, router, hoveredId, setHoveredId)}
+          {renderNodes(root, novelId, router, hoveredId, setHoveredId, displayName)}
         </g>
       </svg>
     </div>
@@ -199,6 +201,7 @@ function renderNodes(
   router: ReturnType<typeof useRouter>,
   hoveredId: string | null,
   setHoveredId: (id: string | null) => void,
+  displayName: (addr: string) => string,
 ): React.ReactNode[] {
   const nodes: React.ReactNode[] = [];
   const isWl = node.chapter.is_world_line;
@@ -253,7 +256,7 @@ function renderNodes(
           fontFamily: "var(--font-sans)",
         }}
       >
-        Ch.{node.id}
+        ID.{node.id}
       </text>
       {/* Depth badge */}
       <rect
@@ -275,7 +278,7 @@ function renderNodes(
           fontFamily: "var(--font-sans)",
         }}
       >
-        d:{node.chapter.depth}
+        #{node.chapter.depth}
       </text>
       {/* Author */}
       <text
@@ -287,7 +290,7 @@ function renderNodes(
           fontFamily: "var(--font-sans)",
         }}
       >
-        {shortAddress(node.chapter.author)}
+        by {displayName(node.chapter.author)}
       </text>
       {/* Timestamp */}
       <text
@@ -315,7 +318,7 @@ function renderNodes(
   );
 
   for (const child of node.children) {
-    nodes.push(...renderNodes(child, novelId, router, hoveredId, setHoveredId));
+    nodes.push(...renderNodes(child, novelId, router, hoveredId, setHoveredId, displayName));
   }
 
   return nodes;

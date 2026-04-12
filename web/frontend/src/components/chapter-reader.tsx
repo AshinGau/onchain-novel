@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import type { ChapterContext } from "@/lib/api";
-import { shortAddress } from "@/lib/format";
+import { useNicknames } from "@/hooks/use-nickname";
 
 interface ChapterReaderProps {
   /** Ordered chain from root to leaf */
@@ -12,6 +12,7 @@ interface ChapterReaderProps {
 }
 
 export function ChapterReader({ chapters, novelId }: ChapterReaderProps) {
+  const displayName = useNicknames(chapters.map((c) => c.author));
   const [index, setIndex] = useState(0);
 
   const current = chapters[index];
@@ -61,7 +62,7 @@ export function ChapterReader({ chapters, novelId }: ChapterReaderProps) {
       {/* Chapter meta */}
       <div className="on-row" style={{ gap: "0.75rem" }}>
         <span className="text-caption">
-          by {shortAddress(current.author)}
+          by {displayName(current.author)}
         </span>
         {current.is_world_line && (
           <span className="on-badge badge-worldline">World Line</span>
@@ -71,7 +72,7 @@ export function ChapterReader({ chapters, novelId }: ChapterReaderProps) {
           className="text-caption"
           style={{ color: "var(--color-primary)", textDecoration: "none" }}
         >
-          Ch.{current.id}
+          ID.{current.id}
         </Link>
       </div>
 

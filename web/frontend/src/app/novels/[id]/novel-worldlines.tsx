@@ -159,13 +159,13 @@ function OtherBranches({ data, novelId }: { data: WorldlineData[]; novelId: stri
               return (
                 <div key={`${wlIdx}-${brIdx}`} className="on-row-between">
                   <span className="text-caption">
-                    Ch.{first.id}
+                    ID.{first.id}
                     {branch.length > 2
                       ? ` → ... ${branch.length - 2} chapter${branch.length - 2 !== 1 ? "s" : ""} ... → `
                       : branch.length === 2
                       ? " → "
                       : ""}
-                    {branch.length > 1 ? `Ch.${last.id}` : ""}
+                    {branch.length > 1 ? `ID.${last.id}` : ""}
                   </span>
                   <a
                     href={`/novels/${novelId}/read/${last.id}`}

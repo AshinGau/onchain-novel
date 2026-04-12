@@ -71,7 +71,7 @@ export function VotePanel({
       return (
         <div className="on-card">
           <p className="text-success">
-            Vote committed for Ch.{storedVote.candidateId}.{" "}
+            Vote committed for ID.{storedVote.candidateId}.{" "}
             {storedVote.keeperSubmitted
               ? "Keeper will auto-reveal."
               : "You will need to reveal manually during the reveal phase."}
@@ -131,7 +131,7 @@ export function VotePanel({
 
     return (
       <div className="on-card">
-        <h4 className="text-subheading">Vote for Ch.{candidateId}</h4>
+        <h4 className="text-subheading">Vote for ID.{candidateId}</h4>
         <p className="text-caption">Stake: {voteStake} wei</p>
         <button
           type="button"
@@ -163,7 +163,7 @@ export function VotePanel({
       return (
         <div className="on-card">
           <p className="text-success">
-            Vote committed for Ch.{storedVote.candidateId}. The keeper will reveal it
+            Vote committed for ID.{storedVote.candidateId}. The keeper will reveal it
             automatically; manual reveal is only needed if the keeper fails.
           </p>
           <ManualRevealButton
@@ -181,7 +181,7 @@ export function VotePanel({
     return (
       <div className="on-card">
         <h4 className="text-subheading">Reveal vote</h4>
-        <p className="text-caption">Candidate: Ch.{storedVote.candidateId}</p>
+        <p className="text-caption">Candidate: ID.{storedVote.candidateId}</p>
         <ManualRevealButton
           novelId={novelId}
           stored={storedVote}

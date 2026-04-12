@@ -6,7 +6,8 @@ import { useAccount } from "wagmi";
 import { parseEther, formatEther } from "viem";
 import type { ChapterDetail, Novel, ChapterSummary, Bounty } from "@/lib/api";
 import { useChapterChildren, useChapterBounties, useChapterTips } from "@/hooks/use-chapter";
-import { shortAddress, timeAgo } from "@/lib/format";
+import { timeAgo } from "@/lib/format";
+import { useNicknames } from "@/hooks/use-nickname";
 import { TOKEN_SYMBOL } from "@/lib/config";
 import { BOUNTY_BOARD_ADDRESS, bountyBoardAbi } from "@/lib/contracts";
 import { useTxAction } from "@/hooks/use-tx-action";
@@ -66,7 +67,7 @@ function BountyCreateForm({ chapterId, onClose }: { chapterId: string; onClose: 
 }
 
 /* ── Active bounty list for a chapter ── */
-function BountyList({ bounties, chapterId }: { bounties: Bounty[]; chapterId: string }) {
+function BountyList({ bounties, chapterId, displayName }: { bounties: Bounty[]; chapterId: string; displayName: (addr: string) => string }) {
   const now = Math.floor(Date.now() / 1000);
 
   const active = bounties.filter((b) => !b.claimed && Number(b.deadline) > now);
@@ -93,7 +94,7 @@ function BountyList({ bounties, chapterId }: { bounties: Bounty[]; chapterId: st
               <span className="text-muted">
                 {days > 0 ? `${days}d ${hours}h remaining` : `${hours}h remaining`}
               </span>
-              <span className="text-muted">by {shortAddress(b.tipper)}</span>
+              <span className="text-muted">by {displayName(b.tipper)}</span>
               {designated > 0 && (
                 <span className="on-badge badge-active">
                   Designated: Chapter #{designated}
@@ -121,6 +122,9 @@ export function ChapterPageClient({ chapter, novel }: Props) {
   const { data: children } = useChapterChildren(chapter.id);
   const { data: bounties } = useChapterBounties(chapter.id);
   const { data: tips } = useChapterTips(chapter.id);
+
+  const addrList = [chapter.author, ...(bounties ?? []).map((b) => b.tipper)];
+  const displayName = useNicknames(addrList);
 
   const novelId = novel.id;
   const isCommitting = novel.round_phase === 2;
@@ -169,8 +173,8 @@ export function ChapterPageClient({ chapter, novel }: Props) {
       {/* Chapter meta */}
       <div className="on-card">
         <div className="on-row-wrap">
-          <span className="text-caption">Author: {shortAddress(chapter.author)}</span>
-          <span className="on-badge badge-depth">Depth: {chapter.depth}</span>
+          <span className="text-caption">Author: {displayName(chapter.author)}</span>
+          <span className="on-badge badge-depth">#{chapter.depth}</span>
           {chapter.is_world_line && (
             <span className="on-badge badge-worldline">World Line</span>
           )}
@@ -185,7 +189,7 @@ export function ChapterPageClient({ chapter, novel }: Props) {
       </div>
 
       {/* Active bounties */}
-      {bounties && <BountyList bounties={bounties} chapterId={chapter.id} />}
+      {bounties && <BountyList bounties={bounties} chapterId={chapter.id} displayName={displayName} />}
 
       {/* Chapter content */}
       <div className="prose">
