@@ -133,6 +133,7 @@ contract FuzzTest is TestBase {
         uint64 rootId = novelCore.getChapterCount();
 
         uint64 ch2 = _submitChapter(author1, novelId, rootId, "fuzz reward test chapter!!");
+        _submitChapter(author2, novelId, rootId, "fuzz reward branch B chapter!");
 
         address[] memory voters = new address[](1);
         voters[0] = voter1;

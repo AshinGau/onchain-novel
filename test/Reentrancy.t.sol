@@ -98,6 +98,7 @@ contract ReentrancyTest is TestBase {
         uint64 novelId = _createNovel();
         uint64 rootId = 1;
         uint64 ch2 = _submitChapter(author1, novelId, rootId, "reentrancy test chapter!!");
+        _submitChapter(author2, novelId, rootId, "reentrancy test branch B!!");
 
         address[] memory voters = new address[](1);
         voters[0] = voter1;
@@ -130,6 +131,7 @@ contract ReentrancyTest is TestBase {
         uint64 novelId = _createNovel();
         uint64 rootId = 1;
         uint64 ch2 = _submitChapter(author1, novelId, rootId, "voting reentrancy chapter!");
+        _submitChapter(author2, novelId, rootId, "voting reentrancy branch B!!");
 
         // Run a full round so voter can claim
         vm.prank(keeper);

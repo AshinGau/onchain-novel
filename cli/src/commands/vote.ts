@@ -29,7 +29,7 @@ export function registerVoteCommands(program: Command): void {
 
   vote
     .command("start <novel-id>")
-    .description("Start a new voting round (keeper action)")
+    .description("Start a new voting round (keeper action). Requires every world line to have >= 1 continuation; otherwise reverts with InsufficientCandidates.")
     .action(async (novelId) => {
       try {
         const client = getWalletClient();

@@ -144,7 +144,19 @@ function TipNovelButton({ novelId }: { novelId: string }) {
   );
 }
 
-export function NovelInfo({ novel }: { novel: Novel }) {
+interface NovelInfoProps {
+  novel: Novel;
+  worldLineCount?: number;
+  worldlinesWithContinuations?: number;
+  totalWorldlines?: number;
+}
+
+export function NovelInfo({
+  novel,
+  worldLineCount = 0,
+  worldlinesWithContinuations = 0,
+  totalWorldlines = 0,
+}: NovelInfoProps) {
   const phase = phaseLabel(novel.round_phase);
   const [creatorName, setCreatorName] = useState<string | null>(null);
   const [configOpen, setConfigOpen] = useState(false);
@@ -217,6 +229,28 @@ export function NovelInfo({ novel }: { novel: Novel }) {
         <span className="text-caption">{novel.author_count} authors</span>
         {c?.worldLineCount && <span className="text-caption">{c.worldLineCount} world lines</span>}
       </div>
+
+      {/* Continuation readiness hint (only during Idle, when waiting to start next round) */}
+      {novel.active && novel.round_phase === 0 && novel.current_round > 0 && worldLineCount > 0 && (
+        <div style={{
+          padding: "0.5rem 0.75rem", borderRadius: "0.5rem",
+          background: worldlinesWithContinuations >= worldLineCount
+            ? "var(--color-bg-secondary)"
+            : "rgba(255, 165, 0, 0.08)",
+          border: `1px solid ${worldlinesWithContinuations >= worldLineCount ? "var(--color-border)" : "var(--color-warning)"}`,
+          fontSize: "0.8125rem",
+        }}>
+          {worldlinesWithContinuations >= worldLineCount ? (
+            <span>✓ Ready for next round: all {totalWorldlines} world line(s) have continuations.</span>
+          ) : (
+            <span>
+              Waiting for continuations: <b>{worldlinesWithContinuations}/{totalWorldlines}</b> world line(s) have a next chapter.
+              The next round starts automatically when every world line has at least one continuation.
+              Help out by writing the next chapter or sponsoring one.
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Prize & Rewards row */}
       <div className="on-row-wrap" style={{
