@@ -1,5 +1,6 @@
-import { fetchNovel, fetchNovelTree, fetchWorldlines } from "@/lib/api";
+import { fetchNovel, fetchNovelTree, fetchWorldlines, fetchRound } from "@/lib/api";
 import { NovelInfo } from "@/components/novel-info";
+import { VoteCandidates } from "@/components/vote-candidates";
 import { NovelWorldlines } from "./novel-worldlines";
 
 export default async function NovelDetailPage({
@@ -14,6 +15,17 @@ export default async function NovelDetailPage({
     fetchNovelTree(id),
     fetchWorldlines(id),
   ]);
+
+  // If a round is in progress (phase != Idle), fetch its candidates
+  let roundCandidates: Awaited<ReturnType<typeof fetchRound>>["candidates"] = [];
+  if (novel.round_phase > 0 && novel.current_round > 0) {
+    try {
+      const round = await fetchRound(id, novel.current_round);
+      roundCandidates = round.candidates;
+    } catch {
+      // Round data not yet indexed; ignore
+    }
+  }
 
   // Compute continuation readiness: how many world lines have at least one descendant?
   const worldLineCount = Number(novel.config?.worldLineCount ?? 0);
@@ -33,6 +45,15 @@ export default async function NovelDetailPage({
         worldlinesWithContinuations={worldlinesWithContinuations}
         totalWorldlines={wlData.worldlines.length}
       />
+
+      {roundCandidates.length > 0 && (
+        <VoteCandidates
+          novelId={id}
+          candidates={roundCandidates}
+          chapters={treeData.chapters}
+          phase={novel.round_phase}
+        />
+      )}
 
       <NovelWorldlines
         novelId={id}

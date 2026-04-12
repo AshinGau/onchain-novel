@@ -139,7 +139,7 @@ export function fetchWorldlines(id: string) {
 }
 
 export function fetchRound(novelId: string, round: number) {
-  return apiFetch<{ votes: RoundVote[] }>(
+  return apiFetch<{ votes: RoundVote[]; candidates: RoundCandidate[] }>(
     `/novels/${novelId}/rounds/${round}`
   );
 }
@@ -151,6 +151,15 @@ export interface RoundVote {
   claimed: boolean;
   commit_block: string;
   reveal_block: string | null;
+}
+
+export interface RoundCandidate {
+  chapter_id: string;
+  position: number;
+  author: string;
+  depth: number;
+  timestamp: string;
+  parent_id: string;
 }
 
 export function fetchChapter(id: string) {
