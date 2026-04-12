@@ -27,7 +27,7 @@ export function registerVoteTools(server: McpServer): void {
   // ── vote_start ──
   server.tool(
     "vote_start",
-    "Start a new voting round (keeper action). DFS generates candidate set automatically.",
+    "Start a new voting round (keeper action). DFS generates candidate set automatically. Requires every current world line to have at least one continuation chapter (N >= worldLineCount). Reverts with InsufficientCandidates otherwise.",
     { novelId: z.number().describe("Novel ID") },
     async (params) => {
       try {

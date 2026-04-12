@@ -122,6 +122,7 @@ contract NovelCore is
     error OnchainContentRequired();
     error OnchainContentForbidden();
     error NoCandidatesFound();
+    error InsufficientCandidates(uint256 available, uint32 required);
     error MinRoundGapNotMet();
     error DuplicateCandidate(uint64 chapterId);
     error TooManyCandidates();
@@ -417,7 +418,11 @@ contract NovelCore is
         uint32 maxCandidates = 3 * novel.config.worldLineCount;
 
         uint64[] memory candidates = _dfsDeepestChains(novelId, ancestors, maxCandidates);
-        if (candidates.length == 0) revert NoCandidatesFound();
+        // Require at least N candidates (one per world line) to start a round.
+        // A round cannot start if some world lines have no continuations yet.
+        if (candidates.length < novel.config.worldLineCount) {
+            revert InsufficientCandidates(candidates.length, novel.config.worldLineCount);
+        }
 
         // Increment round
         novel.currentRound++;
@@ -869,18 +874,24 @@ contract NovelCore is
 
         // DFS stack and visited set, both bounded by nodeLimit
         uint64[] memory stack = new uint64[](nodeLimit);
+        // Parallel flag: true if the stack entry is a seeded ancestor (not a strict descendant)
+        bool[] memory stackIsAncestor = new bool[](nodeLimit);
         uint256 stackTop = 0;
 
         uint64[] memory visited = new uint64[](nodeLimit);
         uint256 visitedCount = 0;
 
-        // Seed stack with all ancestors
+        // Seed stack with all ancestors, marked as ancestor
         for (uint256 a = 0; a < ancestors.length && stackTop < stack.length; a++) {
-            stack[stackTop++] = ancestors[a];
+            stack[stackTop] = ancestors[a];
+            stackIsAncestor[stackTop] = true;
+            stackTop++;
         }
 
         while (stackTop > 0 && nodesVisited < nodeLimit) {
-            uint64 current = stack[--stackTop];
+            stackTop--;
+            uint64 current = stack[stackTop];
+            bool isAncestor = stackIsAncestor[stackTop];
 
             // Skip if already visited
             if (_isInArray64(current, visited, visitedCount)) continue;
@@ -896,17 +907,20 @@ contract NovelCore is
 
             uint64[] storage desc = ch.descendants;
 
-            // Filter descendants to same novel
+            // Filter descendants to same novel, push as non-ancestors
             bool hasNovelDescendant = false;
             for (uint256 d = 0; d < desc.length && stackTop < stack.length && nodesVisited + d < nodeLimit; d++) {
                 if (_chapters[desc[d]].novelId == novelId) {
-                    stack[stackTop++] = desc[d];
+                    stack[stackTop] = desc[d];
+                    stackIsAncestor[stackTop] = false;
+                    stackTop++;
                     hasNovelDescendant = true;
                 }
             }
 
-            // If no descendants in this novel (or stack/node limit reached), it's a leaf
-            if (!hasNovelDescendant && leafCount < leaves.length) {
+            // Only strict descendants (not seeded ancestors) can become candidate leaves.
+            // A world line ancestor with no continuations does NOT count as a candidate.
+            if (!hasNovelDescendant && !isAncestor && leafCount < leaves.length) {
                 leaves[leafCount] = current;
                 leafDepths[leafCount] = ch.depth;
                 leafCount++;

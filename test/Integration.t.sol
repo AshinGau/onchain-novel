@@ -418,6 +418,7 @@ contract IntegrationTest is TestBase {
         uint64 rootId = 1;
 
         uint64 ch2 = _submitChapter(author1, novelId, rootId, "chapter for royalty test!!");
+        _submitChapter(author2, novelId, rootId, "royalty test branch B chapter!");
 
         address[] memory voters = new address[](1);
         voters[0] = voter1;
@@ -428,7 +429,9 @@ contract IntegrationTest is TestBase {
         assertTrue(creatorReward1 > 0, "creator should have reward after round 1");
 
         vm.warp(block.timestamp + MIN_ROUND_GAP + 1);
-        uint64 ch3 = _submitChapter(author1, novelId, ch2, "chapter for royalty round 2");
+        uint64[] memory wl = novelCore.getWorldLineAncestors(novelId);
+        uint64 ch3 = _submitChapter(author1, novelId, wl[0], "chapter for royalty round 2");
+        if (wl.length > 1) _submitChapter(author2, novelId, wl[1], "royalty round 2 branch B!");
 
         _runFullRound(novelId, voters, ch3, bytes32("royalty2"));
 
@@ -494,6 +497,7 @@ contract IntegrationTest is TestBase {
         uint64 novelId = _createNovel();
         uint64 rootId = 1;
         uint64 ch2 = _submitChapter(author1, novelId, rootId, "claim reward test chapter!");
+        _submitChapter(author2, novelId, rootId, "claim reward test branch B!");
 
         address[] memory voters = new address[](1);
         voters[0] = voter1;
@@ -588,6 +592,7 @@ contract IntegrationTest is TestBase {
         uint64 rootId = 1;
 
         uint64 ch2 = _submitChapter(author1, novelId, rootId, "pre-round chapter content!");
+        _submitChapter(author2, novelId, rootId, "pre-round branch B chapter!");
 
         vm.prank(keeper);
         novelCore.startRound(novelId);

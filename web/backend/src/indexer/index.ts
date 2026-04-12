@@ -3,6 +3,7 @@ import { foundry } from "viem/chains";
 import { getClient, query } from "../db/index.js";
 import { env } from "../utils/env.js";
 import { handleNovelCoreEvent, handleVotingEvent, handlePrizePoolEvent, handleBountyBoardEvent, handleRulesEvent } from "./handlers.js";
+import { KeeperSignalBuffer } from "../keeper/index.js";
 
 let currentRpcIndex = 0;
 const allRpcUrls = [env.RPC_URL, ...env.RPC_FALLBACK_URLS];
@@ -115,12 +116,15 @@ async function fetchBatchWithRetry(
 
 async function processBatch(logs: Log[], endBlock: bigint, endBlockHash: string | null, client: PublicClient) {
   const dbClient = await getClient();
+  // Buffer keeper signals during the transaction; flush only on successful COMMIT
+  // so workers read committed DB state.
+  const keeperBuf = new KeeperSignalBuffer();
   try {
     await dbClient.query("BEGIN");
 
     for (const log of logs) {
       try {
-        await processLog(log, dbClient, client);
+        await processLog(log, dbClient, client, keeperBuf);
       } catch (err) {
         // Log and skip individual event failures to avoid rolling back the entire batch
         const topic0 = log.topics[0]?.slice(0, 10) ?? "unknown";
@@ -134,19 +138,23 @@ async function processBatch(logs: Log[], endBlock: bigint, endBlockHash: string 
     );
 
     await dbClient.query("COMMIT");
+
+    // DB now reflects all events; safe to wake up keeper.
+    keeperBuf.flush();
   } catch (err) {
     await dbClient.query("ROLLBACK");
+    // Discard buffered signals — events were not committed.
     throw err;
   } finally {
     dbClient.release();
   }
 }
 
-async function processLog(log: Log, dbClient: pg.PoolClient, rpcClient: PublicClient) {
+async function processLog(log: Log, dbClient: pg.PoolClient, rpcClient: PublicClient, keeperBuf: KeeperSignalBuffer) {
   const address = log.address.toLowerCase();
 
   if (address === env.NOVEL_CORE_ADDRESS.toLowerCase()) {
-    await handleNovelCoreEvent(log, dbClient, rpcClient);
+    await handleNovelCoreEvent(log, dbClient, rpcClient, keeperBuf);
   } else if (env.VOTING_ENGINE_ADDRESS && address === env.VOTING_ENGINE_ADDRESS.toLowerCase()) {
     await handleVotingEvent(log, dbClient);
   } else if (env.PRIZE_POOL_ADDRESS && address === env.PRIZE_POOL_ADDRESS.toLowerCase()) {

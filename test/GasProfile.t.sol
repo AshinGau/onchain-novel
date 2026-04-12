@@ -104,6 +104,7 @@ contract GasProfileTest is TestBase {
         uint64 novelId = _createNovel();
         uint64 rootId = 1;
         uint64 ch2 = _submitChapter(author1, novelId, rootId, "voting gas benchmark chapter");
+        _submitChapter(author2, novelId, rootId, "voting gas benchmark branch B");
 
         vm.prank(keeper);
         novelCore.startRound(novelId);

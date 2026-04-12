@@ -4,6 +4,7 @@ import { novelCoreAbi, votingEngineAbi, prizePoolAbi, bountyBoardAbi, rulesEngin
 import { env } from "../utils/env.js";
 import { ContentLocation } from "../utils/validate.js";
 import { fetchChapterContent } from "./content-fetcher.js";
+import { signalKeeper, type KeeperSignalBuffer } from "../keeper/index.js";
 
 
 type Client = pg.PoolClient;
@@ -12,7 +13,7 @@ type Client = pg.PoolClient;
 // NovelCore Event Handler
 // ============================================================
 
-export async function handleNovelCoreEvent(log: Log, db: Client, rpc: PublicClient) {
+export async function handleNovelCoreEvent(log: Log, db: Client, rpc: PublicClient, keeperBuf: KeeperSignalBuffer | null = null) {
   let decoded;
   try {
     decoded = decodeEventLog({ abi: novelCoreAbi, data: log.data, topics: log.topics });
@@ -95,6 +96,8 @@ export async function handleNovelCoreEvent(log: Log, db: Client, rpc: PublicClie
         );
       }
       console.log(`[event] ChapterSubmitted chapterId=${chapterId} done in ${Date.now() - handlerStart}ms`);
+      // A new chapter may unblock InsufficientCandidates → signal keeper to recheck.
+      signalKeeper(novelId, keeperBuf);
       break;
     }
 
@@ -107,6 +110,7 @@ export async function handleNovelCoreEvent(log: Log, db: Client, rpc: PublicClie
         [round, await getBlockTimestamp(rpc, log.blockNumber ?? null), novelId.toString()]
       );
 
+      signalKeeper(novelId, keeperBuf);
       break;
     }
 
@@ -119,6 +123,7 @@ export async function handleNovelCoreEvent(log: Log, db: Client, rpc: PublicClie
         [await getBlockTimestamp(rpc, log.blockNumber ?? null), novelId.toString()]
       );
 
+      signalKeeper(novelId, keeperBuf);
       break;
     }
 
@@ -130,6 +135,7 @@ export async function handleNovelCoreEvent(log: Log, db: Client, rpc: PublicClie
         "UPDATE novels SET round_phase = 3, phase_start_time = $1 WHERE id = $2",
         [await getBlockTimestamp(rpc, log.blockNumber ?? null), novelId.toString()]
       );
+      signalKeeper(novelId, keeperBuf);
       break;
     }
 
@@ -152,6 +158,7 @@ export async function handleNovelCoreEvent(log: Log, db: Client, rpc: PublicClie
         await db.query("UPDATE chapters SET is_world_line = TRUE WHERE id = $1", [id.toString()]);
       }
 
+      signalKeeper(novelId, keeperBuf);
       break;
     }
 

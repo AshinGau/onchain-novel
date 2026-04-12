@@ -38,8 +38,9 @@ contract RulesTest is TestBase {
         uint64 novelId = _createNovel();
         uint64 rootId = 1;
 
-        // Submit a chapter so DFS has candidates
+        // Submit 2 chapters so DFS has enough candidates (N=2 world lines)
         _submitChapter(author1, novelId, rootId, "chapter for first round!!");
+        _submitChapter(author2, novelId, rootId, "chapter B for first round!");
 
         // Start a round
         vm.prank(keeper);
@@ -108,6 +109,8 @@ contract RulesTest is TestBase {
         // Build tree and run a round to establish world line authors
         uint64 ch2 = _submitChapter(author1, novelId, rootId, "chapter 2 for rules vote!");
         uint64 ch3 = _submitChapter(author2, novelId, ch2, "chapter 3 for rules vote!");
+        // Add a sibling branch so we have >= 2 candidates (worldLineCount = 2)
+        _submitChapter(author3, novelId, rootId, "branch B for rules vote!!!");
 
         address[] memory voters = new address[](1);
         voters[0] = voter1;
@@ -146,8 +149,9 @@ contract RulesTest is TestBase {
         uint64 novelId = _createNovel();
         uint64 rootId = 1;
 
-        // Build tree: only author1 on world line
+        // Build tree: author1 on world line, author2 as sibling branch
         uint64 ch2 = _submitChapter(author1, novelId, rootId, "chapter by author1 wl test");
+        _submitChapter(author2, novelId, rootId, "chapter B for wl vote test!");
 
         address[] memory voters = new address[](1);
         voters[0] = voter1;

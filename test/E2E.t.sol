@@ -43,6 +43,10 @@ contract E2ETest is TestBase {
         // --- Round 3 ---
         vm.warp(block.timestamp + MIN_ROUND_GAP + 1);
         uint64 ch6 = _submitChapter(author2, novelId, wl2[0], "round3 continuation chapter!");
+        // Each world line must have a continuation to start a round
+        if (wl2.length > 1) {
+            _submitChapter(author3, novelId, wl2[1], "round3 continuation B chapter!");
+        }
 
         _runFullRound(novelId, voters, ch6, bytes32("r3salt"));
 

@@ -75,7 +75,7 @@ Example: two story lines `C1<-C2<-C3` and `C1<-A1<-A2`. Three votes: C2(weight 1
 
 ### 2.2 Candidate Generation -- Full Scan from World Line Ancestors
 
-Using the descendants bidirectional index, `startRound` does a full DFS from each worldLineAncestor, scanning all descendants to find the N deepest chains (N = `worldLineCount`, set by creator).
+Using the descendants bidirectional index, `startRound` does a full DFS from each worldLineAncestor, scanning all (strict) descendants to find the N deepest chains (N = `worldLineCount`, set by creator). Seeded ancestors themselves are never candidates — they must have at least one descendant to contribute a chain. This guarantees rounds only proceed when the story has progressed on every world line.
 
 **Gas cost**: full traversal of all chapters derived from N ancestors between two rounds. submissionFee naturally limits chapter count.
 
@@ -85,7 +85,7 @@ Using the descendants bidirectional index, `startRound` does a full DFS from eac
 Nominating -> Committing -> Revealing -> Settlement
 ```
 
-**Nominating**: Keeper calls `startRound()`. Contract does full scan from worldLineAncestors to auto-generate the N deepest chains as candidates. Requires candidates >= 1. Users can pay `nominationFee` to nominate additional chains. Duration: `nominateDuration`.
+**Nominating**: Keeper calls `startRound()`. Contract does full scan from worldLineAncestors to auto-generate the N deepest chains as candidates. **Requires candidates >= N (`worldLineCount`)** — every world line must have at least one continuation. A childless world line ancestor does NOT count as its own candidate. If the precondition fails, `startRound` reverts with `InsufficientCandidates(available, required)`; keeper retries on next poll (typically triggered once more authors submit continuations, often incentivized via BountyBoard). Users can pay `nominationFee` to nominate additional chains. Duration: `nominateDuration`.
 
 **Committing**: `commitVote(novelId, commitHash)`, requires staking `voteStake`. One vote per address per round. Duration: `commitDuration`.
 
