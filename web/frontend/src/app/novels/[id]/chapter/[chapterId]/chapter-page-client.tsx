@@ -138,7 +138,7 @@ export function ChapterPageClient({ chapter, novel }: Props) {
           {novel.title || `Novel #${novelId}`}
         </Link>
         <span className="text-muted">/</span>
-        <span className="text-caption">Chapter {chapter.id}</span>
+        <span className="text-caption">Chapter {chapter.depth} (ID.{chapter.id})</span>
       </div>
 
       {/* Navigation buttons */}
@@ -153,7 +153,7 @@ export function ChapterPageClient({ chapter, novel }: Props) {
           className="on-btn on-btn-secondary"
           onClick={() => setShowChildren(!showChildren)}
         >
-          Continue ({children?.length ?? 0})
+          Next Chapters ({children?.length ?? 0})
         </button>
         <Link href={`/novels/${novelId}/tree`}>
           <button type="button" className="on-btn on-btn-secondary">Story Tree</button>

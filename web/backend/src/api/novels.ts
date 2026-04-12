@@ -170,15 +170,24 @@ router.get("/:id/rounds/:round", async (req, res) => {
   try {
     const { id, round } = req.params;
 
-    // Get votes for this round
-    const votesRes = await query(
-      `SELECT voter, revealed, candidate_id, claimed, commit_block, reveal_block
-       FROM votes WHERE novel_id = $1 AND round = $2
-       ORDER BY commit_block ASC`,
-      [id, round]
-    );
+    const [votesRes, candidatesRes] = await Promise.all([
+      query(
+        `SELECT voter, revealed, candidate_id, claimed, commit_block, reveal_block
+         FROM votes WHERE novel_id = $1 AND round = $2
+         ORDER BY commit_block ASC`,
+        [id, round]
+      ),
+      query(
+        `SELECT rc.chapter_id, rc.position, c.author, c.depth, c."timestamp", c.parent_id
+         FROM round_candidates rc
+         JOIN chapters c ON c.id = rc.chapter_id
+         WHERE rc.novel_id = $1 AND rc.round = $2
+         ORDER BY rc.position ASC`,
+        [id, round]
+      ),
+    ]);
 
-    res.json({ votes: votesRes.rows });
+    res.json({ votes: votesRes.rows, candidates: candidatesRes.rows });
   } catch (err) {
     console.error("GET /api/novels/:id/rounds/:round error:", err);
     res.status(500).json({ error: "Internal server error" });

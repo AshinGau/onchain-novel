@@ -75,6 +75,20 @@ CREATE UNIQUE INDEX idx_votes_unique_commit ON votes(novel_id, round, LOWER(vote
 CREATE INDEX idx_votes_voter ON votes(LOWER(voter));
 
 -- ============================================================
+-- ROUND CANDIDATES (populated on RoundStarted event)
+-- ============================================================
+CREATE TABLE round_candidates (
+  novel_id        BIGINT NOT NULL,
+  round           INT NOT NULL,
+  chapter_id      BIGINT NOT NULL,
+  position        INT NOT NULL,
+  block_number    BIGINT NOT NULL,
+  PRIMARY KEY (novel_id, round, chapter_id)
+);
+
+CREATE INDEX idx_round_candidates_lookup ON round_candidates(novel_id, round);
+
+-- ============================================================
 -- TIPS (novel-level)
 -- ============================================================
 

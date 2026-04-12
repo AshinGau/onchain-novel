@@ -87,7 +87,7 @@ function usePhaseRemaining(novel: Novel): string | null {
   }, [novel.active, novel.round_phase, novel.phase_start_time, novel.last_settle_time, novel.config]);
 
   if (remaining === null || !novel.active) return null;
-  if (remaining <= 0) return "ready";
+  if (remaining <= 0) return "changing";
 
   const h = Math.floor(remaining / 3600);
   const m = Math.floor((remaining % 3600) / 60);
@@ -220,7 +220,7 @@ export function NovelInfo({
         <span className="text-caption">
           Round {novel.current_round} &middot; {phase}
           {phaseRemaining && (
-            <span style={{ marginLeft: "0.25rem", color: phaseRemaining === "ready" ? "var(--color-success)" : "var(--color-warning)" }}>
+            <span style={{ marginLeft: "0.25rem", color: phaseRemaining === "changing" ? "var(--color-success)" : "var(--color-warning)" }}>
               ({phaseRemaining})
             </span>
           )}

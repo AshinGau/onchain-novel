@@ -110,6 +110,15 @@ export async function handleNovelCoreEvent(log: Log, db: Client, rpc: PublicClie
         [round, await getBlockTimestamp(rpc, log.blockNumber ?? null), novelId.toString()]
       );
 
+      // Store candidates for this round so frontend can show them
+      for (let i = 0; i < candidates.length; i++) {
+        await db.query(
+          `INSERT INTO round_candidates (novel_id, round, chapter_id, position, block_number)
+           VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING`,
+          [novelId.toString(), round, candidates[i].toString(), i, blockNumber]
+        );
+      }
+
       signalKeeper(novelId, keeperBuf);
       break;
     }
