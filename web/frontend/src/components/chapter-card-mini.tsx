@@ -1,6 +1,8 @@
+"use client";
+
 import Link from "next/link";
 import type { ChapterSummary } from "@/lib/api";
-import { shortAddress } from "@/lib/format";
+import { useNicknames } from "@/hooks/use-nickname";
 
 interface ChapterCardMiniProps {
   chapter: ChapterSummary;
@@ -15,6 +17,7 @@ export function ChapterCardMini({
   highlight,
   showWorldLine,
 }: ChapterCardMiniProps) {
+  const displayName = useNicknames([chapter.author]);
   return (
     <Link
       href={`/novels/${novelId}/chapter/${chapter.id}`}
@@ -34,17 +37,17 @@ export function ChapterCardMini({
       >
         <div className="on-row-between">
           <span style={{ fontWeight: 600, fontSize: "0.875rem", color: "var(--color-text)" }}>
-            Ch.{chapter.id}
+            ID.{chapter.id}
           </span>
           <div className="on-row" style={{ gap: "0.25rem" }}>
-            <span className="on-badge badge-depth">d:{chapter.depth}</span>
+            <span className="on-badge badge-depth">#{chapter.depth}</span>
             {(showWorldLine || chapter.is_world_line) && (
               <span className="on-badge badge-worldline">WL</span>
             )}
           </div>
         </div>
         <span className="text-caption" style={{ fontSize: "0.75rem" }}>
-          by {shortAddress(chapter.author)}
+          by {displayName(chapter.author)}
         </span>
       </div>
     </Link>

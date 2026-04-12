@@ -14,7 +14,8 @@ import { useEffect, useState } from "react";
 import { useAccount, useSignMessage } from "wagmi";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { fetchComments, postComment, type Comment } from "@/lib/api";
-import { shortAddress, timeAgo } from "@/lib/format";
+import { timeAgo } from "@/lib/format";
+import { useNicknames } from "@/hooks/use-nickname";
 
 interface Props {
   chapterId: string;
@@ -29,6 +30,7 @@ export function CommentList({ chapterId }: Props) {
   const [content, setContent] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const displayName = useNicknames(comments.map((c) => c.author));
 
   async function refresh() {
     try {
@@ -126,7 +128,7 @@ export function CommentList({ chapterId }: Props) {
           comments.map((c) => (
             <article key={c.id} className="on-comment">
               <div className="on-comment-meta">
-                <span>{shortAddress(c.author)}</span>
+                <span>{displayName(c.author)}</span>
                 <span>·</span>
                 <span>{timeAgo(c.created_at)}</span>
               </div>

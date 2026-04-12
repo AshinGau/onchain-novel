@@ -1,9 +1,13 @@
+"use client";
+
 import Link from "next/link";
 import type { Novel } from "@/lib/api";
-import { shortAddress, formatBalance, timeAgo } from "@/lib/format";
+import { formatBalance, timeAgo } from "@/lib/format";
 import { phaseLabel } from "@/lib/config";
+import { useNicknames } from "@/hooks/use-nickname";
 
 export function NovelCard({ novel }: { novel: Novel }) {
+  const displayName = useNicknames([novel.creator]);
   const phase = phaseLabel(novel.round_phase);
 
   return (
@@ -29,7 +33,7 @@ export function NovelCard({ novel }: { novel: Novel }) {
 
           <div className="on-flex-1">
             <p className="text-caption">
-              by {shortAddress(novel.creator)}
+              by {displayName(novel.creator)}
               <span className="text-muted" style={{ marginLeft: "0.5rem" }}>{timeAgo(novel.created_at)}</span>
             </p>
 

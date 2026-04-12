@@ -165,7 +165,7 @@ export default function DashboardPage() {
                     <div className="on-card on-card-hover on-row-between" style={{ padding: "0.75rem 1rem" }}>
                       <div>
                         <span style={{ fontWeight: 600 }}>{ch.novel_title || `Novel #${ch.novel_id}`}</span>
-                        <span className="text-caption" style={{ marginLeft: "0.5rem" }}>Ch.{ch.id} · Depth {ch.depth}</span>
+                        <span className="text-caption" style={{ marginLeft: "0.5rem" }}>ID.{ch.id} · #{ch.depth}</span>
                       </div>
                       <div className="on-row" style={{ gap: "0.25rem" }}>
                         {ch.is_world_line && <span className="on-badge badge-worldline">WL</span>}
@@ -190,7 +190,7 @@ export default function DashboardPage() {
                         {v.novel_title || `Novel #${v.novel_id}`}
                       </Link>
                       <span className="text-caption" style={{ marginLeft: "0.5rem" }}>Round {v.round}</span>
-                      {v.candidate_id && <span className="text-caption" style={{ marginLeft: "0.5rem" }}>→ Ch.{v.candidate_id}</span>}
+                      {v.candidate_id && <span className="text-caption" style={{ marginLeft: "0.5rem" }}>→ ID.{v.candidate_id}</span>}
                     </div>
                     <div className="on-row" style={{ gap: "0.25rem" }}>
                       {!v.revealed && <span className="on-badge" style={{ background: "var(--color-danger)", color: "white" }}>Unrevealed</span>}
