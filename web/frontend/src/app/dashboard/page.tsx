@@ -6,10 +6,9 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { toHex } from "viem";
 import { NOVEL_CORE_ADDRESS, novelCoreAbi, PRIZE_POOL_ADDRESS, prizePoolAbi } from "@/lib/contracts";
-import { TOKEN_SYMBOL } from "@/lib/config";
 import {
   fetchUserChapters, fetchUserVotes, fetchUserRewards,
-  fetchNickname,
+  fetchNickname, fetchNovel, fetchChapter,
   type UserChapter, type UserVote, type RewardSummary,
 } from "@/lib/api";
 import { shortAddress, formatBalance, formatEth, timeAgo } from "@/lib/format";
@@ -28,6 +27,16 @@ export default function DashboardPage() {
   const [nickname, setNickname] = useState("");
   const [currentNickname, setCurrentNickname] = useState<string | null>(null);
   const nicknameTx = useTxAction();
+
+  // Draft count (localStorage)
+  const [draftCount, setDraftCount] = useState(0);
+  useEffect(() => {
+    let n = 0;
+    for (let i = 0; i < localStorage.length; i++) {
+      if (localStorage.key(i)?.startsWith("draft:")) n++;
+    }
+    setDraftCount(n);
+  }, []);
 
   useEffect(() => {
     if (!address) return;
@@ -151,29 +160,53 @@ export default function DashboardPage() {
           <TabsList>
             <TabsTrigger value="chapters">My Chapters ({chapters.length})</TabsTrigger>
             <TabsTrigger value="votes">My Votes ({votes.length})</TabsTrigger>
-            <TabsTrigger value="rewards">Rewards</TabsTrigger>
-            <TabsTrigger value="drafts">Drafts</TabsTrigger>
+            <TabsTrigger value="rewards">Rewards ({rewards?.participatedNovels.length ?? 0})</TabsTrigger>
+            <TabsTrigger value="drafts">Drafts ({draftCount})</TabsTrigger>
           </TabsList>
 
           <TabsContent value="chapters">
             {chapters.length === 0 ? (
               <p className="text-caption on-empty">No chapters submitted yet.</p>
             ) : (
-              <div className="on-stack on-stack-sm" style={{ marginTop: "0.75rem" }}>
-                {chapters.map(ch => (
-                  <Link key={ch.id} href={`/novels/${ch.novel_id}/chapter/${ch.id}`} className="on-link-block">
-                    <div className="on-card on-card-hover on-row-between" style={{ padding: "0.75rem 1rem" }}>
-                      <div>
-                        <span style={{ fontWeight: 600 }}>{ch.novel_title || `Novel #${ch.novel_id}`}</span>
-                        <span className="text-caption" style={{ marginLeft: "0.5rem" }}>ID.{ch.id} · #{ch.depth}</span>
-                      </div>
-                      <div className="on-row" style={{ gap: "0.25rem" }}>
-                        {ch.is_world_line && <span className="on-badge badge-worldline">WL</span>}
-                        <span className="text-tiny">{timeAgo(ch.created_at)}</span>
-                      </div>
-                    </div>
-                  </Link>
-                ))}
+              <div className="on-table-wrap" style={{ marginTop: "0.75rem" }}>
+                <table className="on-table">
+                  <thead>
+                    <tr>
+                      <th>Novel</th>
+                      <th>Chapter ID</th>
+                      <th>Chapter Index</th>
+                      <th>Status</th>
+                      <th className="num">Comments</th>
+                      <th className="num">Votes Received</th>
+                      <th>Submitted</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {chapters.map(ch => (
+                      <tr key={ch.id}>
+                        <td>
+                          <Link href={`/novels/${ch.novel_id}`} className="cell-title text-link">
+                            {ch.novel_title || `Novel #${ch.novel_id}`}
+                          </Link>
+                        </td>
+                        <td>
+                          <Link href={`/novels/${ch.novel_id}/chapter/${ch.id}`} className="text-link on-table-mono">
+                            ID.{ch.id}
+                          </Link>
+                        </td>
+                        <td className="num">#{ch.depth}</td>
+                        <td>
+                          {ch.is_world_line
+                            ? <span className="on-badge badge-worldline">World Line</span>
+                            : <span className="on-badge" style={{ background: "var(--color-bg-tertiary)", color: "var(--color-text-secondary)" }}>Branch</span>}
+                        </td>
+                        <td className="num">{ch.comment_count ?? 0}</td>
+                        <td className="num">{ch.vote_count ?? 0}</td>
+                        <td className="text-muted">{timeAgo(ch.created_at)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </TabsContent>
@@ -182,23 +215,43 @@ export default function DashboardPage() {
             {votes.length === 0 ? (
               <p className="text-caption on-empty">No votes cast yet.</p>
             ) : (
-              <div className="on-stack on-stack-sm" style={{ marginTop: "0.75rem" }}>
-                {votes.map((v, i) => (
-                  <div key={i} className="on-card on-row-between" style={{ padding: "0.75rem 1rem" }}>
-                    <div>
-                      <Link href={`/novels/${v.novel_id}`} className="text-link" style={{ fontWeight: 600 }}>
-                        {v.novel_title || `Novel #${v.novel_id}`}
-                      </Link>
-                      <span className="text-caption" style={{ marginLeft: "0.5rem" }}>Round {v.round}</span>
-                      {v.candidate_id && <span className="text-caption" style={{ marginLeft: "0.5rem" }}>→ ID.{v.candidate_id}</span>}
-                    </div>
-                    <div className="on-row" style={{ gap: "0.25rem" }}>
-                      {!v.revealed && <span className="on-badge" style={{ background: "var(--color-danger)", color: "white" }}>Unrevealed</span>}
-                      {v.revealed && !v.claimed && <span className="on-badge badge-active">Revealed</span>}
-                      {v.claimed && <span className="on-badge badge-completed">Claimed</span>}
-                    </div>
-                  </div>
-                ))}
+              <div className="on-table-wrap" style={{ marginTop: "0.75rem" }}>
+                <table className="on-table">
+                  <thead>
+                    <tr>
+                      <th>Novel</th>
+                      <th>Round</th>
+                      <th>Voted For</th>
+                      <th>Phase</th>
+                      <th>Status</th>
+                      <th className="num">Committed @</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {votes.map((v, i) => (
+                      <tr key={i}>
+                        <td>
+                          <Link href={`/novels/${v.novel_id}`} className="cell-title text-link">
+                            {v.novel_title || `Novel #${v.novel_id}`}
+                          </Link>
+                        </td>
+                        <td className="on-table-mono">R{v.round}</td>
+                        <td>
+                          {v.candidate_id
+                            ? <Link href={`/novels/${v.novel_id}/chapter/${v.candidate_id}`} className="text-link on-table-mono">ID.{v.candidate_id}</Link>
+                            : <span className="text-muted">Hidden</span>}
+                        </td>
+                        <td className="text-muted" style={{ fontSize: "0.8125rem" }}>{phaseLabel(v.round_phase)}</td>
+                        <td>
+                          {!v.revealed && <span className="on-badge" style={{ background: "var(--color-danger)", color: "white" }}>Unrevealed</span>}
+                          {v.revealed && !v.claimed && <span className="on-badge badge-active">Revealed</span>}
+                          {v.claimed && <span className="on-badge badge-completed">Claimed</span>}
+                        </td>
+                        <td className="num text-muted on-table-mono">#{v.commit_block}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </TabsContent>
@@ -210,19 +263,82 @@ export default function DashboardPage() {
               <p className="text-caption on-empty">No reward activity yet. Participate in a novel to earn rewards.</p>
             ) : (
               <div className="on-stack" style={{ marginTop: "0.75rem" }}>
-                {rewards.participatedNovels.map((pn) => (
-                  <RewardsCard key={pn.novel_id} novelId={pn.novel_id} title={pn.novel_title} />
-                ))}
+                <h3 className="on-section-title">
+                  Pending Rewards
+                  <span className="count">{rewards.participatedNovels.length}</span>
+                </h3>
+                <div className="on-table-wrap">
+                  <table className="on-table">
+                    <thead>
+                      <tr>
+                        <th>Novel</th>
+                        <th className="num">Chapters Authored</th>
+                        <th>Contributing Chapters</th>
+                        <th className="num">Pending</th>
+                        <th className="num">Lifetime Claimed</th>
+                        <th>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rewards.participatedNovels.map((pn) => {
+                        const mine = chapters.filter(c => c.novel_id === pn.novel_id);
+                        const claimedSum = rewards.rewardClaims
+                          .filter(rc => rc.novel_id === pn.novel_id)
+                          .reduce((s, rc) => s + BigInt(rc.amount), BigInt(0));
+                        return (
+                          <RewardsRow
+                            key={pn.novel_id}
+                            novelId={pn.novel_id}
+                            title={pn.novel_title}
+                            chaptersInNovel={mine}
+                            lifetimeClaimed={claimedSum}
+                          />
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
 
-                {rewards.rewardClaims.length > 0 && (
-                  <div className="on-card">
-                    <h3 className="text-subheading" style={{ marginBottom: "0.5rem" }}>Claim History</h3>
-                    {rewards.rewardClaims.map((rc, i) => (
-                      <div key={i} className="on-row-between text-caption" style={{ padding: "0.25rem 0" }}>
-                        <span>{rc.novel_title || `Novel #${rc.novel_id}`} — {rc.source}</span>
-                        <span style={{ color: "var(--color-success)" }}>{formatEth(rc.total_amount)}</span>
-                      </div>
-                    ))}
+                <h3 className="on-section-title">
+                  Claim History
+                  <span className="count">{rewards.rewardClaims.length}</span>
+                </h3>
+                {rewards.rewardClaims.length === 0 ? (
+                  <p className="text-caption on-empty">No claims yet.</p>
+                ) : (
+                  <div className="on-table-wrap">
+                    <table className="on-table">
+                      <thead>
+                        <tr>
+                          <th>Novel</th>
+                          <th>Source</th>
+                          <th>Round</th>
+                          <th className="num">Amount</th>
+                          <th>Block</th>
+                          <th>Time</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rewards.rewardClaims.map((rc, i) => (
+                          <tr key={i}>
+                            <td>
+                              <Link href={`/novels/${rc.novel_id}`} className="cell-title text-link">
+                                {rc.novel_title || `Novel #${rc.novel_id}`}
+                              </Link>
+                            </td>
+                            <td>
+                              <span className="on-badge" style={{ background: "var(--color-bg-tertiary)", color: "var(--color-text-secondary)" }}>
+                                {rc.source}
+                              </span>
+                            </td>
+                            <td className="on-table-mono">{rc.round != null ? `R${rc.round}` : "—"}</td>
+                            <td className="on-table-amount">{formatEth(rc.amount)}</td>
+                            <td className="text-muted on-table-mono">#{rc.block_number}</td>
+                            <td className="text-muted">{timeAgo(rc.created_at)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 )}
               </div>
@@ -238,7 +354,18 @@ export default function DashboardPage() {
   );
 }
 
-function RewardsCard({ novelId, title }: { novelId: string; title: string }) {
+function phaseLabel(phase: number): string {
+  return ["Idle", "Nominating", "Committing", "Revealing", "Settling"][phase] ?? "—";
+}
+
+function RewardsRow({
+  novelId, title, chaptersInNovel, lifetimeClaimed,
+}: {
+  novelId: string;
+  title: string;
+  chaptersInNovel: UserChapter[];
+  lifetimeClaimed: bigint;
+}) {
   const { address } = useAccount();
 
   const { data: pendingReward } = useReadContract({
@@ -252,42 +379,77 @@ function RewardsCard({ novelId, title }: { novelId: string; title: string }) {
   const hasPending = pendingReward !== undefined && pendingReward > BigInt(0);
   const claimTx = useTxAction();
 
+  const contributing = chaptersInNovel.filter(c => c.is_world_line);
+  const contribList = contributing.length > 0 ? contributing : chaptersInNovel;
+
   return (
-    <div className="on-card on-row-between" style={{ padding: "0.75rem 1rem" }}>
-      <div>
-        <Link href={`/novels/${novelId}`} className="text-link" style={{ fontWeight: 600 }}>
+    <tr>
+      <td>
+        <Link href={`/novels/${novelId}`} className="cell-title text-link">
           {title || `Novel #${novelId}`}
         </Link>
-        <p className="text-caption" style={{ marginTop: "0.25rem" }}>
-          Pending: <span style={{ color: hasPending ? "var(--color-warning)" : "var(--color-text-muted)" }}>
-            {pendingReward !== undefined ? formatBalance(pendingReward.toString()) : "..."}
-          </span>
-        </p>
-      </div>
-      {hasPending && (
-        <button
-          className="on-btn on-btn-primary"
-          disabled={claimTx.isPending}
-          onClick={() => claimTx.send({
-            address: NOVEL_CORE_ADDRESS,
-            abi: novelCoreAbi,
-            functionName: "claimReward",
-            args: [BigInt(novelId)],
-          })}
-        >
-          {claimTx.isPending ? "Claiming..." : claimTx.status === "success" ? "Claimed!" : "Claim"}
-        </button>
-      )}
-      {claimTx.error && <p className="text-danger" style={{ fontSize: "0.75rem" }}>{claimTx.error}</p>}
-    </div>
+      </td>
+      <td className="num">{chaptersInNovel.length}</td>
+      <td>
+        {contribList.length === 0 ? (
+          <span className="text-muted">—</span>
+        ) : (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.25rem" }}>
+            {contribList.slice(0, 5).map(c => (
+              <Link key={c.id} href={`/novels/${novelId}/chapter/${c.id}`}
+                className="on-badge on-table-mono"
+                style={{
+                  background: c.is_world_line ? "color-mix(in srgb, var(--color-primary) 12%, transparent)" : "var(--color-bg-tertiary)",
+                  color: c.is_world_line ? "var(--color-primary)" : "var(--color-text-secondary)",
+                  textDecoration: "none",
+                }}>
+                ID.{c.id}
+              </Link>
+            ))}
+            {contribList.length > 5 && <span className="text-muted text-tiny">+{contribList.length - 5}</span>}
+          </div>
+        )}
+      </td>
+      <td className="num" style={{ color: hasPending ? "var(--color-warning)" : "var(--color-text-muted)", fontWeight: hasPending ? 600 : 400 }}>
+        {pendingReward !== undefined ? formatBalance(pendingReward.toString()) : "…"}
+      </td>
+      <td className="num" style={{ color: lifetimeClaimed > BigInt(0) ? "var(--color-success)" : "var(--color-text-muted)" }}>
+        {lifetimeClaimed > BigInt(0) ? formatEth(lifetimeClaimed.toString()) : "—"}
+      </td>
+      <td>
+        {hasPending ? (
+          <button
+            className="on-btn-soft"
+            disabled={claimTx.isPending}
+            onClick={() => claimTx.send({
+              address: NOVEL_CORE_ADDRESS,
+              abi: novelCoreAbi,
+              functionName: "claimReward",
+              args: [BigInt(novelId)],
+            })}
+          >
+            {claimTx.isPending ? "Claiming…" : claimTx.status === "success" ? "Claimed ✓" : "Claim"}
+          </button>
+        ) : (
+          <span className="text-muted">—</span>
+        )}
+        {claimTx.error && <div className="text-danger" style={{ fontSize: "0.7rem", marginTop: "0.25rem" }}>{claimTx.error}</div>}
+      </td>
+    </tr>
   );
 }
 
+interface DraftRow {
+  key: string; novelId: string; parentId: string;
+  preview: string; size: number;
+  novelTitle?: string; parentDepth?: number;
+}
+
 function DraftsTab() {
-  const [drafts, setDrafts] = useState<{ key: string; novelId: string; parentId: string; preview: string }[]>([]);
+  const [drafts, setDrafts] = useState<DraftRow[]>([]);
 
   useEffect(() => {
-    const found: typeof drafts = [];
+    const found: DraftRow[] = [];
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
       if (key?.startsWith("draft:")) {
@@ -295,10 +457,35 @@ function DraftsTab() {
         const novelId = parts[1];
         const parentId = parts[2];
         const content = localStorage.getItem(key) || "";
-        found.push({ key, novelId, parentId, preview: content.slice(0, 100) });
+        found.push({
+          key, novelId, parentId,
+          preview: content.slice(0, 120),
+          size: new TextEncoder().encode(content).length,
+        });
       }
     }
     setDrafts(found);
+
+    // Enrich with novel title and parent chapter depth
+    const novelIds = [...new Set(found.map(d => d.novelId))];
+    const parentIds = [...new Set(found.map(d => d.parentId))];
+    Promise.all([
+      ...novelIds.map(id => fetchNovel(id).then(n => ({ id, title: n.title })).catch(() => null)),
+      ...parentIds.map(id => fetchChapter(id).then(c => ({ id, depth: c.depth })).catch(() => null)),
+    ]).then(results => {
+      const titles: Record<string, string> = {};
+      const depths: Record<string, number> = {};
+      for (const r of results) {
+        if (!r) continue;
+        if ("title" in r) titles[r.id] = r.title;
+        if ("depth" in r) depths[r.id] = r.depth;
+      }
+      setDrafts(prev => prev.map(d => ({
+        ...d,
+        novelTitle: titles[d.novelId],
+        parentDepth: depths[d.parentId],
+      })));
+    });
   }, []);
 
   function deleteDraft(key: string) {
@@ -312,19 +499,48 @@ function DraftsTab() {
   }
 
   return (
-    <div className="on-stack on-stack-sm" style={{ marginTop: "0.75rem" }}>
-      {drafts.map(d => (
-        <div key={d.key} className="on-card on-row-between" style={{ padding: "0.75rem 1rem" }}>
-          <div className="on-flex-1">
-            <span style={{ fontWeight: 600 }}>Novel #{d.novelId} → Parent #{d.parentId}</span>
-            <p className="text-tiny text-truncate" style={{ marginTop: "0.25rem" }}>{d.preview}...</p>
-          </div>
-          <button onClick={() => deleteDraft(d.key)}
-            className="on-btn on-btn-ghost" style={{ color: "var(--color-danger)" }}>
-            Delete
-          </button>
-        </div>
-      ))}
+    <div className="on-table-wrap" style={{ marginTop: "0.75rem" }}>
+      <table className="on-table">
+        <thead>
+          <tr>
+            <th>Novel</th>
+            <th>Parent ID</th>
+            <th>Parent Chapter Index</th>
+            <th>Preview</th>
+            <th className="num">Size</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {drafts.map(d => (
+            <tr key={d.key}>
+              <td>
+                <Link href={`/novels/${d.novelId}`} className="cell-title text-link">
+                  {d.novelTitle || `Novel #${d.novelId}`}
+                </Link>
+              </td>
+              <td>
+                <Link href={`/novels/${d.novelId}/chapter/${d.parentId}`} className="text-link on-table-mono">
+                  ID.{d.parentId}
+                </Link>
+              </td>
+              <td className="num">{d.parentDepth != null ? `#${d.parentDepth}` : <span className="text-muted">—</span>}</td>
+              <td className="text-muted" style={{ maxWidth: "28rem" }}>
+                <div className="text-truncate">{d.preview || <em>(empty)</em>}</div>
+              </td>
+              <td className="num text-muted">{d.size} B</td>
+              <td style={{ display: "flex", gap: "0.5rem" }}>
+                <Link href={`/novels/${d.novelId}/chapter/${d.parentId}`} className="on-btn-soft">
+                  Continue
+                </Link>
+                <button onClick={() => deleteDraft(d.key)} className="on-btn-soft-danger">
+                  Delete
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
