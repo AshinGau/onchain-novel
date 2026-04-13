@@ -54,8 +54,6 @@ library DataTypes {
         // --- Economic parameters ---
         uint16 prizeReleaseRate; // Per-round release rate in basis points (e.g. 2000 = 20%, max 5000)
         uint16 voterRewardRate; // Voter reward share in basis points (e.g. 1500 = 15%, max 5000)
-        uint256 maxVoterReward; // Per-address voter reward cap per round (0 = uncapped). Cap applied AFTER 3x accuracy multiplier; excess returns to prize pool
-        uint256 unrevealPenaltyFloor; // Minimum penalty for unrevealed votes (wei). Effective penalty = max(this, voteStake * 20%)
         // --- Content storage ---
         ContentLocation contentLocation; // Storage strategy (Onchain/External/HTTP)
         string contentBaseUrl; // Base URL for External/HTTP modes (ignored for Onchain)

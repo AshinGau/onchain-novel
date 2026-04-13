@@ -11,8 +11,6 @@ export interface NovelConfigForm {
   minRoundGap: number;
   prizeReleaseRate: number;
   voterRewardRate: number;
-  maxVoterReward: string;
-  unrevealPenaltyFloor: string;
   contentLocation: number;
   contentBaseUrl: string;
   ruleFee: string;
@@ -33,8 +31,6 @@ export const DEFAULT_CONFIG: NovelConfigForm = {
   minRoundGap: 86400,
   prizeReleaseRate: 2000,
   voterRewardRate: 500,
-  maxVoterReward: "0",
-  unrevealPenaltyFloor: "0",
   contentLocation: 0,
   contentBaseUrl: "",
   ruleFee: "0.01",
@@ -63,7 +59,7 @@ const FIELD_RULES: Partial<Record<keyof NovelConfigForm, Rule>> = {
   nominateDuration:    { check: (c) => c.nominateDuration > 0, msg: "Must be > 0" },
   minRoundGap:         { check: (c) => c.minRoundGap > 0, msg: "Must be > 0" },
   submissionFee:       { check: (c) => !!c.submissionFee && parseFloat(c.submissionFee) >= 0.0001, msg: "Must be >= 0.0001" },
-  voteStake:           { check: (c) => !!c.voteStake && parseFloat(c.voteStake) > 0, msg: "Must be > 0" },
+  voteStake:           { check: (c) => !!c.voteStake && parseFloat(c.voteStake) > 0 && parseFloat(c.voteStake) <= parseFloat(c.submissionFee || "0"), msg: "Must be > 0 and <= Submission Fee", revalidate: [] },
   nominationFee:       { check: (c) => !!c.nominationFee && parseFloat(c.nominationFee) >= 0, msg: "Must be >= 0" },
   ruleFee:             { check: (c) => !!c.ruleFee && parseFloat(c.ruleFee) >= 0, msg: "Must be >= 0" },
   ruleVoteDuration:    { check: (c) => c.ruleQuorum === 0 || c.ruleVoteDuration > 0, msg: "Must be > 0 when quorum > 0" },

@@ -259,24 +259,21 @@ curl -sf "$API/health" > /dev/null 2>&1 || { fail "Backend not ready after 30s";
 pass "Backend running on port $API_PORT"
 
 # -- Create novel with root chapter + genesis fund --
-# NovelConfig tuple (19 fields):
+# NovelConfig tuple (17 fields):
 #   minChapterLength=100, maxChapterLength=10000, submissionFee=0.01eth,
 #   worldLineCount=2, voteStake=0.001eth, nominationFee=0.1eth,
 #   nominateDuration=5, commitDuration=5, revealDuration=5, minRoundGap=5,
 #   prizeReleaseRate=2000 (20%), voterRewardRate=500 (5%),
-#   maxVoterReward=0 (uncapped), unrevealPenaltyFloor=0.001eth,
 #   contentLocation=0 (Onchain), contentBaseUrl='',
 #   ruleFee=0.01eth, ruleVoteDuration=60, ruleQuorum=1
 SUBMISSION_FEE="10000000000000000"     # 0.01 ether
-VOTE_STAKE="1000000000000000"          # 0.001 ether
+VOTE_STAKE="1000000000000000"          # 0.001 ether (must be <= submissionFee)
 NOMINATION_FEE="100000000000000000"    # 0.1 ether
 RULE_FEE="10000000000000000"           # 0.01 ether
-MAX_VOTER_REWARD="0"                   # uncapped
-UNREVEAL_PENALTY_FLOOR="1000000000000000"  # 0.001 ether
 
-NOVEL_CONFIG="(100, 10000, $SUBMISSION_FEE, 2, $VOTE_STAKE, $NOMINATION_FEE, 5, 5, 5, 5, 2000, 500, $MAX_VOTER_REWARD, $UNREVEAL_PENALTY_FLOOR, 0, '', $RULE_FEE, 60, 1)"
+NOVEL_CONFIG="(100, 10000, $SUBMISSION_FEE, 2, $VOTE_STAKE, $NOMINATION_FEE, 5, 5, 5, 5, 2000, 500, 0, '', $RULE_FEE, 60, 1)"
 
-NOVEL_CONFIG_TYPE="(uint64,uint64,uint256,uint32,uint256,uint256,uint64,uint64,uint64,uint64,uint16,uint16,uint256,uint256,uint8,string,uint256,uint64,uint32)"
+NOVEL_CONFIG_TYPE="(uint64,uint64,uint256,uint32,uint256,uint256,uint64,uint64,uint64,uint64,uint16,uint16,uint8,string,uint256,uint64,uint32)"
 
 GENESIS_CONTENT="Once upon a time in a decentralized world, where stories are written by many and owned by all. The protocol hums with creative energy as writers from across the globe converge to craft tales never before imagined."
 GENESIS_HEX="0x$(echo -n "$GENESIS_CONTENT" | xxd -p | tr -d '\n')"
@@ -813,17 +810,6 @@ STALE_BODY=$(jq -nc \
 HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST -H "Content-Type: application/json" \
     -d "$STALE_BODY" "$API/api/chapters/${COMMENT_CHAPTER_ID}/comments")
 [ "$HTTP_CODE" = "400" ] && pass "POST comment rejects stale timestamp (400)" || fail "Stale-ts got HTTP $HTTP_CODE, expected 400"
-
-# =============================================================================
-# PHASE 12: NovelConfig new fields are indexed
-# =============================================================================
-
-info "========================================="
-info "Phase 12: maxVoterReward / unrevealPenaltyFloor in indexed config"
-info "========================================="
-
-api_check "/api/novels/1" ".config.maxVoterReward" "$MAX_VOTER_REWARD" "Indexed config carries maxVoterReward"
-api_check "/api/novels/1" ".config.unrevealPenaltyFloor" "$UNREVEAL_PENALTY_FLOOR" "Indexed config carries unrevealPenaltyFloor"
 
 # =============================================================================
 # PHASE 13: votes/submit (keeper-assisted reveal endpoint, no encryption key configured)

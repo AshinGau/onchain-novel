@@ -4,7 +4,7 @@
  * Spawns the MCP server as a subprocess and exercises the tool layer via the
  * MCP SDK client. Verifies the new flows added per docs/cli.md + docs/backend.md:
  *
- *   - novel_create with maxVoterReward / unrevealPenaltyFloor
+ *   - novel_create (voteStake <= submissionFee invariant)
  *   - chapter_submit
  *   - chapter_comment + chapter_comments (off-chain EIP-191 signed)
  *   - vote_commit (auto-salt + keeper-assisted submission)
@@ -142,8 +142,6 @@ async function main() {
         minRoundGap: 5,
         prizeReleaseRate: 2000,
         voterRewardRate: 500,
-        maxVoterReward: "0",
-        unrevealPenaltyFloor: "0.001",
         ruleFee: "0.01",
         ruleVoteDuration: 60,
         ruleQuorum: 1,
@@ -157,14 +155,6 @@ async function main() {
 
   await waitForApiNovel(1);
   pass("indexer picked up novel #1");
-
-  // Verify the new config fields landed in the API
-  const novelJson = await (await fetch(`${API_BASE_URL}/api/novels/1`)).json();
-  const cfg = novelJson.config as Record<string, string>;
-  if (cfg.maxVoterReward === "0") pass(`config.maxVoterReward = 0`);
-  else fail(`maxVoterReward expected "0", got ${JSON.stringify(cfg.maxVoterReward)}`);
-  if (cfg.unrevealPenaltyFloor === "1000000000000000") pass(`config.unrevealPenaltyFloor = 1e15`);
-  else fail(`unrevealPenaltyFloor expected "1000000000000000", got ${JSON.stringify(cfg.unrevealPenaltyFloor)}`);
 
   // ============================================================
   // chapter_submit (two children of root for round-1 candidates)

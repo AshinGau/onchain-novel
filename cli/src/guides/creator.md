@@ -96,8 +96,8 @@ onchain-novel-cli novel create \
   --title "你的小说名" \
   --description "一句话简介" \
   --content "你的 root chapter 内容..." \
-  --submission-fee 0.001 \
-  --vote-stake 0.005 \
+  --submission-fee 0.005 \
+  --vote-stake 0.001 \
   --world-lines 3 \
   --value 0.1
 ```

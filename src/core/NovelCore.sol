@@ -554,9 +554,7 @@ contract NovelCore is
                 novelId,
                 round,
                 voterRewards,
-                novel.config.voteStake,
-                novel.config.unrevealPenaltyFloor,
-                novel.config.maxVoterReward
+                novel.config.voteStake
             );
             if (excessReturn > 0) {
                 prizePool.deposit{value: excessReturn}(novelId, "voterRewardExcess");
@@ -1095,7 +1093,7 @@ contract NovelCore is
     ///  1=minChapterLength  2=maxChapterLength  3=worldLineCount  4=voteStake
     ///  5=commitDuration  6=revealDuration  7=prizeReleaseRate  8=voterRewardRate
     ///  9=nominateDuration  10=contentBaseUrl  11=ruleVoteDuration
-    ///  12=submissionFee  13=worldLineCount upper bound
+    ///  12=submissionFee  13=worldLineCount upper bound  14=voteStake > submissionFee
     function _validateConfig(DataTypes.NovelConfig calldata config) internal pure {
         if (config.minChapterLength == 0) revert InvalidConfig(1);
         if (config.maxChapterLength <= config.minChapterLength) revert InvalidConfig(2);
@@ -1112,6 +1110,7 @@ contract NovelCore is
         if (config.ruleQuorum > 0 && config.ruleVoteDuration == 0) revert InvalidConfig(11);
         if (config.submissionFee < MIN_SUBMISSION_FEE) revert InvalidConfig(12);
         if (config.worldLineCount > MAX_WORLD_LINE_COUNT) revert InvalidConfig(13);
+        if (config.voteStake > config.submissionFee) revert InvalidConfig(14);
     }
 
     function _validateMetadata(DataTypes.NovelMetadata calldata metadata) internal pure {

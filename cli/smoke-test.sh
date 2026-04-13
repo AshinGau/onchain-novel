@@ -4,7 +4,7 @@
 #
 # Spins up an isolated anvil + deploys contracts + runs the backend, then
 # exercises the CLI commands that changed:
-#   - novel create (with new maxVoterReward / unrevealPenaltyFloor flags)
+#   - novel create (voteStake <= submissionFee invariant)
 #   - chapter submit
 #   - chapter comment / chapter comments (off-chain EIP-191 signed)
 #   - vote commit (auto-generated salt + keeper-assisted reveal submission)
@@ -187,7 +187,7 @@ pass "CLI configured"
 # =============================================================================
 
 info "========================================="
-info "novel create with maxVoterReward / unrevealPenaltyFloor"
+info "novel create (protocol constants: 20x voter reward cap, 50% unreveal penalty)"
 info "========================================="
 
 CONTENT="A long enough genesis chapter so it passes the minChapterLength validation. Decentralized stories begin here, with many sentences and paragraphs to satisfy the minimum length floor."
@@ -195,7 +195,7 @@ CREATE_OUT=$(node_cli novel create \
   --title "Smoke Test Novel" \
   --description "CLI smoke" \
   --content "$CONTENT" \
-  --submission-fee 0.001 \
+  --submission-fee 0.005 \
   --vote-stake 0.005 \
   --nomination-fee 0.001 \
   --nominate-duration 5 \
@@ -204,20 +204,11 @@ CREATE_OUT=$(node_cli novel create \
   --min-round-gap 5 \
   --prize-release-rate 2000 \
   --voter-reward-rate 1500 \
-  --max-voter-reward 0 \
-  --unreveal-penalty-floor 0.001 \
   --rule-fee 0.001 \
   --value 0.1 2>&1)
 echo "$CREATE_OUT" | grep -q "Novel created successfully" && pass "novel create succeeded" || { fail "novel create"; echo "$CREATE_OUT"; }
 
 wait_indexer 15 && pass "indexer caught up after create" || fail "indexer did not catch up"
-
-# Check the indexed config carries the new fields
-NOVEL_JSON=$(api_get "/api/novels/1")
-MAX_VR=$(echo "$NOVEL_JSON" | jq -r '.config.maxVoterReward')
-UPF=$(echo "$NOVEL_JSON" | jq -r '.config.unrevealPenaltyFloor')
-[ "$MAX_VR" = "0" ] && pass "indexed maxVoterReward=0" || fail "maxVoterReward expected 0, got $MAX_VR"
-[ "$UPF" = "1000000000000000" ] && pass "indexed unrevealPenaltyFloor=1e15" || fail "unrevealPenaltyFloor expected 1000000000000000, got $UPF"
 
 # =============================================================================
 # CLI: chapter submit (sanity)

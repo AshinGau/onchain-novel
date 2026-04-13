@@ -575,8 +575,6 @@ function buildConfigJson(config: any): Record<string, unknown> {
     minRoundGap: config.minRoundGap.toString(),
     prizeReleaseRate: config.prizeReleaseRate,
     voterRewardRate: config.voterRewardRate,
-    maxVoterReward: config.maxVoterReward.toString(),
-    unrevealPenaltyFloor: config.unrevealPenaltyFloor.toString(),
     contentLocation: config.contentLocation,
     contentBaseUrl: config.contentBaseUrl,
     ruleFee: config.ruleFee.toString(),

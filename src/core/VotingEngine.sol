@@ -15,6 +15,17 @@ import {DataTypes} from "../libraries/DataTypes.sol";
 ///      NovelCore handles phase enforcement; this contract manages vote data and rewards.
 contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuard, UUPSUpgradeable, IVotingEngine {
     // ============================================================
+    //                        CONSTANTS
+    // ============================================================
+
+    /// @notice Per-address voter reward cap = voteStake * this multiplier
+    /// @dev Protocol-level safety rail for cases where reward pool is massive vs voter count
+    uint256 public constant VOTER_REWARD_CAP_MULTIPLIER = 20;
+
+    /// @notice Penalty rate for unrevealed votes in basis points (5000 = 50%)
+    uint256 public constant UNREVEAL_PENALTY_RATE_BP = 5000;
+
+    // ============================================================
     //                         STORAGE
     // ============================================================
 
@@ -259,14 +270,11 @@ contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuard, UUP
     }
 
     /// @inheritdoc IVotingEngine
-    function settleVoterRewards(
-        uint64 novelId,
-        uint32 round,
-        uint256 voterRewardPool,
-        uint256 voteStake,
-        uint256 unrevealPenaltyFloor,
-        uint256 maxVoterReward
-    ) external onlyNovelCore returns (uint256 excessReturn) {
+    function settleVoterRewards(uint64 novelId, uint32 round, uint256 voterRewardPool, uint256 voteStake)
+        external
+        onlyNovelCore
+        returns (uint256 excessReturn)
+    {
         bytes32 roundKey = _roundKey(novelId, round);
         VotingRoundData storage rd = _votingRounds[roundKey];
 
@@ -277,13 +285,15 @@ contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuard, UUP
 
         address[] storage voters = _voters[roundKey];
         uint256 voterCount = voters.length;
+        uint256 penaltyPerUnreveal = _unrevealPenalty(voteStake);
+        uint256 maxVoterReward = voteStake * VOTER_REWARD_CAP_MULTIPLIER;
 
         // ---- Pass 1: compute total unreveal penalty ----
         uint256 totalPenalty = 0;
         for (uint256 i = 0; i < voterCount; i++) {
             DataTypes.VoteCommit storage c = _voteCommits[roundKey][voters[i]];
             if (c.revealed) continue;
-            totalPenalty += _unrevealPenalty(voteStake, unrevealPenaltyFloor);
+            totalPenalty += penaltyPerUnreveal;
         }
 
         // ---- Reward pool = base from prize pool + collected penalties ----
@@ -304,15 +314,14 @@ contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuard, UUP
                     bool isAccurate = _winningCandidates[roundKey][c.revealedCandidateId];
                     uint256 myWeight = isAccurate ? c.stakeAmount * 3 : c.stakeAmount;
                     reward = (totalRewardPool * myWeight) / totalWeight;
-                    if (maxVoterReward > 0 && reward > maxVoterReward) {
+                    if (reward > maxVoterReward) {
                         reward = maxVoterReward;
                     }
                 }
                 _claimable[roundKey][voter] = c.stakeAmount + reward;
                 totalDistributed += reward;
             } else {
-                uint256 penalty = _unrevealPenalty(voteStake, unrevealPenaltyFloor);
-                _claimable[roundKey][voter] = c.stakeAmount - penalty;
+                _claimable[roundKey][voter] = c.stakeAmount - penaltyPerUnreveal;
             }
         }
 
@@ -350,11 +359,9 @@ contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuard, UUP
         emit VotingRewardClaimed(novelId, round, voter, amount);
     }
 
-    /// @dev Compute the penalty applied to an unrevealed voter
-    function _unrevealPenalty(uint256 voteStake, uint256 floor) internal pure returns (uint256 penalty) {
-        penalty = (voteStake * 20) / 100; // 20%
-        if (floor > penalty) penalty = floor;
-        if (penalty > voteStake) penalty = voteStake;
+    /// @dev Compute the penalty applied to an unrevealed voter (fixed 50% of stake)
+    function _unrevealPenalty(uint256 voteStake) internal pure returns (uint256) {
+        return (voteStake * UNREVEAL_PENALTY_RATE_BP) / 10000;
     }
 
     /// @notice Accept ETH transfers from NovelCore (stake deposits + voter rewards)

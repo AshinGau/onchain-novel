@@ -55,8 +55,6 @@ export interface NovelConfig {
   minRoundGap: number;
   prizeReleaseRate: number;
   voterRewardRate: number;
-  maxVoterReward: string;
-  unrevealPenaltyFloor: string;
   contentLocation: number;
   contentBaseUrl: string;
   ruleFee: string;

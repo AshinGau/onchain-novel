@@ -145,14 +145,15 @@ Only rewards chapters newly added to world lines this round. Walk from each Wi u
 
 Voted for world line: 3x weight. Did not: 1x weight.
 
-**Per-address reward cap**: a single voter's payout in one round is capped at `maxVoterReward`. The cap is applied **after** the 3x accuracy multiplier, on the final payable amount. Any excess remains in the prize pool for future rounds. This prevents whale wallets from monopolizing voter rewards while keeping the linear stake-weight scheme inside the cap. Together with commit-reveal and the 3x accuracy bonus, this is the protocol's primary defense against stake-weighted dominance.
+**Per-address reward cap** (protocol constant): a single voter's payout in one round is capped at `voteStake * VOTER_REWARD_CAP_MULTIPLIER` (20×). The cap is applied **after** the 3x accuracy multiplier. Any excess returns to the prize pool. Since voteStake is fixed per round, this is a safety rail for edge cases where the reward pool is huge relative to the number of revealed voters — not a per-novel tuning knob.
 
-**Unrevealed stake penalty**: instead of full confiscation, unrevealed voters are charged `max(unrevealPenaltyFloor, voteStake * 20%)`. The penalty goes to the round's voter reward pool. The remainder is returned to the voter. This balances deterrence against honest users who lose their salt or miss the reveal window.
+**Unrevealed stake penalty** (protocol constant): unrevealed voters are charged `voteStake * UNREVEAL_PENALTY_RATE_BP / 10000` = 50% of stake. The penalty enters the round's voter reward pool. The remainder is returned to the voter.
 
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `maxVoterReward` | 0.1 ETH | Per-address voter reward cap per round (excess returns to pool) |
-| `unrevealPenaltyFloor` | 0.001 ETH | Minimum penalty for unrevealed votes |
+| Protocol Constant | Value | Description |
+|-------------------|-------|-------------|
+| `VOTER_REWARD_CAP_MULTIPLIER` | 20 | Per-address voter reward cap = 20 × voteStake |
+| `UNREVEAL_PENALTY_RATE_BP` | 5000 (50%) | Unrevealed voters forfeit half their stake |
+| `CREATOR_DECAY_DIVISOR` | 3 | Creator royalty decay: share = 3/(3+round) |
 
 ### 3.6 Keeper Rewards
 
@@ -182,7 +183,7 @@ Full amount goes to prize pool.
 
 - **Keeper trustlessness**: candidates come from full descendant scan, deterministic algorithm. Nomination as fallback.
 - **DFS gas safety**: submissionFee naturally limits chapter count between rounds, bounding traversal cost.
-- **Voting game theory**: linear weight inside a per-address `maxVoterReward` cap (whales cannot monopolize voter rewards), commit-reveal prevents following, 3x accuracy incentive. Keeper-assisted reveal reduces user friction without compromising commit-reveal security (Keeper cannot alter committed votes).
+- **Voting game theory**: fixed `voteStake` (every voter stakes the same amount), linear weight inside a protocol-level cap of `20 × voteStake`, commit-reveal prevents following, 3× accuracy incentive. Keeper-assisted reveal reduces user friction without compromising commit-reveal security (Keeper cannot alter committed votes).
 - **Chapter spam**: submissionFee + minChapterLength + N candidate slots + Nomination rescue.
 - **Protocol fee**: removed; can be added via upgrade.
 
@@ -194,9 +195,9 @@ Full amount goes to prize pool.
 |-----------|-------------------|-------------|
 | `minChapterLength` | 100 bytes | Minimum chapter length |
 | `maxChapterLength` | 50,000 bytes | Maximum chapter length |
-| `submissionFee` | 0.001 ETH | Submission fee |
+| `submissionFee` | 0.005 ETH | Submission fee (also floor for `voteStake`) |
 | `worldLineCount` (N) | 3 | World lines per round |
-| `voteStake` | 0.005 ETH | Vote stake |
+| `voteStake` | 0.001 ETH | Vote stake (must be ≤ `submissionFee`) |
 | `nominationFee` | 0.01 ETH | Nomination fee |
 | `nominateDuration` | 1 day | Nomination phase |
 | `commitDuration` | 2 days | Commit phase |
@@ -204,5 +205,5 @@ Full amount goes to prize pool.
 | `minRoundGap` | 1 day | Minimum gap between rounds |
 | `prizeReleaseRate` | 2000 (20%) | Per-round release rate |
 | `voterRewardRate` | 1500 (15%) | Voter reward rate |
-| `maxVoterReward` | 0.1 ETH | Per-address voter reward cap per round |
-| `unrevealPenaltyFloor` | 0.001 ETH | Minimum penalty for unrevealed votes |
+
+**Invariant**: `voteStake ≤ submissionFee` — voting must not cost more than writing.

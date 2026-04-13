@@ -158,8 +158,6 @@ const TEST_CONFIG: NovelConfig = {
   minRoundGap: 5n,         // 5 seconds
   prizeReleaseRate: 2000,  // 20%
   voterRewardRate: 500,    // 5%
-  maxVoterReward: 0n,                       // uncapped
-  unrevealPenaltyFloor: parseEther("0.001"), // floor for unreveal penalty
   contentLocation: 0,      // Onchain
   contentBaseUrl: "",
   ruleFee: parseEther("0.01"),

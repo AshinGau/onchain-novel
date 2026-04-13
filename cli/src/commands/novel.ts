@@ -26,8 +26,6 @@ function buildNovelConfig(opts: Record<string, string>): NovelConfig {
     minRoundGap: BigInt(opts.minRoundGap ?? "60"),
     prizeReleaseRate: parseInt(opts.prizeReleaseRate ?? "2000"),
     voterRewardRate: parseInt(opts.voterRewardRate ?? "500"),
-    maxVoterReward: parseEther(opts.maxVoterReward ?? "0"),
-    unrevealPenaltyFloor: parseEther(opts.unrevealPenaltyFloor ?? "0.001"),
     contentLocation: parseInt(opts.contentLocation ?? "0"),
     contentBaseUrl: opts.contentBaseUrl ?? "",
     ruleFee: parseEther(opts.ruleFee ?? "0.01"),
@@ -57,7 +55,7 @@ export function registerNovelCommands(program: Command): void {
     .option("--max-length <n>", "max chapter length", "50000")
     .option("--submission-fee <eth>", "submission fee in ETH", "0.001")
     .option("--world-lines <n>", "world line count", "3")
-    .option("--vote-stake <eth>", "vote stake in ETH", "0.005")
+    .option("--vote-stake <eth>", "vote stake in ETH (must be <= submission fee)", "0.001")
     .option("--nomination-fee <eth>", "nomination fee in ETH", "0.01")
     .option("--nominate-duration <s>", "nominate duration in seconds", "3600")
     .option("--commit-duration <s>", "commit duration in seconds", "3600")
@@ -65,8 +63,6 @@ export function registerNovelCommands(program: Command): void {
     .option("--min-round-gap <s>", "min round gap in seconds", "60")
     .option("--prize-release-rate <bps>", "prize release rate in basis points", "2000")
     .option("--voter-reward-rate <bps>", "voter reward rate in basis points", "1500")
-    .option("--max-voter-reward <eth>", "per-address voter reward cap per round in ETH (0 = uncapped)", "0")
-    .option("--unreveal-penalty-floor <eth>", "minimum penalty for unrevealed votes in ETH", "0.001")
     .option("--content-location <n>", "0=Onchain, 1=External, 2=HTTP", "0")
     .option("--content-base-url <url>", "content base URL (for External/HTTP)", "")
     .option("--rule-fee <eth>", "rule proposal fee in ETH", "0.01")
@@ -179,7 +175,7 @@ export function registerNovelCommands(program: Command): void {
     .option("--max-length <n>", "max chapter length", "50000")
     .option("--submission-fee <eth>", "submission fee in ETH", "0.001")
     .option("--world-lines <n>", "world line count", "3")
-    .option("--vote-stake <eth>", "vote stake in ETH", "0.005")
+    .option("--vote-stake <eth>", "vote stake in ETH (must be <= submission fee)", "0.001")
     .option("--nomination-fee <eth>", "nomination fee in ETH", "0.01")
     .option("--nominate-duration <s>", "nominate duration in seconds", "3600")
     .option("--commit-duration <s>", "commit duration in seconds", "3600")
@@ -187,8 +183,6 @@ export function registerNovelCommands(program: Command): void {
     .option("--min-round-gap <s>", "min round gap in seconds", "60")
     .option("--prize-release-rate <bps>", "prize release rate in basis points", "2000")
     .option("--voter-reward-rate <bps>", "voter reward rate in basis points", "1500")
-    .option("--max-voter-reward <eth>", "per-address voter reward cap per round in ETH (0 = uncapped)", "0")
-    .option("--unreveal-penalty-floor <eth>", "minimum penalty for unrevealed votes in ETH", "0.001")
     .option("--content-location <n>", "0=Onchain, 1=External, 2=HTTP", "0")
     .option("--content-base-url <url>", "content base URL", "")
     .option("--rule-fee <eth>", "rule proposal fee in ETH", "0.01")

@@ -119,8 +119,6 @@ export default function CreateNovelPage() {
           minRoundGap: BigInt(config.minRoundGap),
           prizeReleaseRate: config.prizeReleaseRate,
           voterRewardRate: config.voterRewardRate,
-          maxVoterReward: parseEther(config.maxVoterReward || "0"),
-          unrevealPenaltyFloor: parseEther(config.unrevealPenaltyFloor || "0"),
           contentLocation: config.contentLocation,
           contentBaseUrl: config.contentBaseUrl,
           ruleFee: parseEther(config.ruleFee),

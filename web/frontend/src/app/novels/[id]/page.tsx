@@ -49,9 +49,11 @@ export default async function NovelDetailPage({
       {roundCandidates.length > 0 && (
         <VoteCandidates
           novelId={id}
+          round={novel.current_round}
+          phase={novel.round_phase}
+          voteStake={novel.config?.voteStake || "0"}
           candidates={roundCandidates}
           chapters={treeData.chapters}
-          phase={novel.round_phase}
         />
       )}
 
