@@ -127,11 +127,11 @@ run_round() {
     advance 6   # minRoundGap
 }
 
-# NovelConfig (19 fields)
-# Short 5s phases, worldLineCount=2
-NOVEL_CONFIG="(50, 10000, 10000000000000000, 2, 1000000000000000, 100000000000000000, 5, 5, 5, 5, 2000, 500, 0, 0, 0, '', 10000000000000000, 86400, 2)"
-CREATE_NOVEL_SIG="createNovel((uint64,uint64,uint256,uint32,uint256,uint256,uint64,uint64,uint64,uint64,uint16,uint16,uint256,uint256,uint8,string,uint256,uint64,uint32),(string,string,string),(bytes32,uint64,bytes))"
-FORK_NOVEL_SIG="forkNovel(uint64,(uint64,uint64,uint256,uint32,uint256,uint256,uint64,uint64,uint64,uint64,uint16,uint16,uint256,uint256,uint8,string,uint256,uint64,uint32),(string,string,string),(bytes32,uint64,bytes))"
+# NovelConfig (17 fields after removing maxVoterReward / unrevealPenaltyFloor)
+# Short 5s phases, worldLineCount=2. voteStake (1e15) <= submissionFee (1e16)
+NOVEL_CONFIG="(50, 10000, 10000000000000000, 2, 1000000000000000, 100000000000000000, 5, 5, 5, 5, 2000, 500, 0, '', 10000000000000000, 86400, 2)"
+CREATE_NOVEL_SIG="createNovel((uint64,uint64,uint256,uint32,uint256,uint256,uint64,uint64,uint64,uint64,uint16,uint16,uint8,string,uint256,uint64,uint32),(string,string,string),(bytes32,uint64,bytes))"
+FORK_NOVEL_SIG="forkNovel(uint64,(uint64,uint64,uint256,uint32,uint256,uint256,uint64,uint64,uint64,uint64,uint16,uint16,uint8,string,uint256,uint64,uint32),(string,string,string),(bytes32,uint64,bytes))"
 
 SALT_SEED=0
 next_salt() { SALT_SEED=$(( SALT_SEED + 1 )); }

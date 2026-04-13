@@ -10,11 +10,18 @@ export default async function NovelDetailPage({
 }) {
   const { id } = await params;
 
-  const [novel, treeData, wlData] = await Promise.all([
+  // Fetch worldlines first to know how deep we need to load the tree.
+  const [novel, wlData] = await Promise.all([
     fetchNovel(id),
-    fetchNovelTree(id),
     fetchWorldlines(id),
   ]);
+
+  // Tree must include the world-line heads and a little buffer for fresh
+  // descendants submitted after the last settle. Fall back to 10 when empty.
+  const maxDepth = wlData.worldlines.length === 0
+    ? 10
+    : Math.max(10, ...wlData.worldlines.map((w) => Number(w.depth) + 3));
+  const treeData = await fetchNovelTree(id, maxDepth);
 
   // If a round is in progress (phase != Idle), fetch its candidates
   let roundCandidates: Awaited<ReturnType<typeof fetchRound>>["candidates"] = [];
