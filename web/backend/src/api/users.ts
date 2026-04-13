@@ -83,13 +83,14 @@ router.get("/:address/rewards", async (req, res) => {
       [addr]
     );
 
-    // Past reward claims
+    // Past reward claims (per-row, newest first)
     const claimsRes = await query(
-      `SELECT rc.novel_id, rc.source, SUM(rc.amount) AS total_amount, n.title AS novel_title
+      `SELECT rc.novel_id, rc.source, rc.amount, rc.round,
+              rc.block_number, rc.created_at, n.title AS novel_title
        FROM reward_claims rc
        LEFT JOIN novels n ON n.id = rc.novel_id
        WHERE LOWER(rc.claimant) = $1
-       GROUP BY rc.novel_id, rc.source, n.title`,
+       ORDER BY rc.created_at DESC`,
       [addr]
     );
 
@@ -124,7 +125,9 @@ router.get("/:address/chapters", async (req, res) => {
 
     const chaptersRes = await query(
       `SELECT c.id, c.novel_id, c.depth, c."timestamp",
-              c.is_world_line, c.created_at, n.title AS novel_title
+              c.is_world_line, c.created_at, n.title AS novel_title,
+              (SELECT COUNT(*) FROM comments cm WHERE cm.chapter_id = c.id)::int AS comment_count,
+              (SELECT COUNT(*) FROM votes v WHERE v.candidate_id = c.id AND v.revealed = TRUE)::int AS vote_count
        FROM chapters c
        LEFT JOIN novels n ON n.id = c.novel_id
        WHERE LOWER(c.author) = $1

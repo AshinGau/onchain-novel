@@ -230,6 +230,8 @@ export interface UserChapter {
   is_world_line: boolean;
   created_at: string;
   novel_title: string;
+  comment_count: number;
+  vote_count: number;
 }
 
 export interface UserVote {
@@ -246,7 +248,7 @@ export interface UserVote {
 
 export interface RewardSummary {
   unclaimedVotes: { novel_id: string; round: number; novel_title: string }[];
-  rewardClaims: { novel_id: string; source: string; total_amount: string; novel_title: string }[];
+  rewardClaims: { novel_id: string; source: string; amount: string; round: number | null; block_number: string; created_at: string; novel_title: string }[];
   participatedNovels: { novel_id: string; novel_title: string }[];
 }
 
