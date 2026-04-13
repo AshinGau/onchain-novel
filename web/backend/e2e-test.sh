@@ -617,7 +617,7 @@ api_check_gte "/api/novels/1/bounties" ".bounties | length" 1 "Bounty appears in
 # Advance time past bounty deadline so Writer A can claim.
 advance_time 60
 
-# Writer A (author of chapter 4, which is a descendant of chapter 2) claims bounty
+# Writer A (author of chapter 4, which is a direct child of chapter 2) claims bounty
 STATUS=$(cast_send "$PK_WRITER_A" "$BOUNTY_BOARD" "claimBounty(uint256)" 0)
 [ "$STATUS" = "0x1" ] && pass "Writer A claimed bounty 0" || fail "claimBounty failed"
 
@@ -633,7 +633,7 @@ STATUS=$(cast_send "$PK_TIPPER" "$BOUNTY_BOARD" \
 # Advance past deadline
 advance_time 20
 
-# Chapter 3 has no descendants submitted before deadline, so refund should work
+# Chapter 3 has no children submitted before deadline, so refund should work
 STATUS=$(cast_send "$PK_TIPPER" "$BOUNTY_BOARD" "refundBounty(uint256)" 1)
 [ "$STATUS" = "0x1" ] && pass "Bounty 1 refunded (no qualifying authors)" || fail "refundBounty failed"
 

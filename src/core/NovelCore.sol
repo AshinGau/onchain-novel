@@ -243,7 +243,7 @@ contract NovelCore is
             declaredLength: rootChapter.declaredLength,
             depth: 1,
             timestamp: uint64(block.timestamp),
-            descendants: new uint64[](0)
+            children: new uint64[](0)
         });
 
         _novelRootId[novelId] = rootId;
@@ -320,7 +320,7 @@ contract NovelCore is
             declaredLength: rootChapter.declaredLength,
             depth: 1,
             timestamp: uint64(block.timestamp),
-            descendants: new uint64[](0)
+            children: new uint64[](0)
         });
 
         _novelRootId[novelId] = rootId;
@@ -378,11 +378,11 @@ contract NovelCore is
             declaredLength: submission.declaredLength,
             depth: newDepth,
             timestamp: uint64(block.timestamp),
-            descendants: new uint64[](0)
+            children: new uint64[](0)
         });
 
-        // Bidirectional link: push to parent's descendants
-        _chapters[parentId].descendants.push(chapterId);
+        // Bidirectional link: push to parent's children
+        _chapters[parentId].children.push(chapterId);
 
         // Fee to prize pool
         if (msg.value > 0) {
@@ -804,8 +804,8 @@ contract NovelCore is
     }
 
     /// @inheritdoc INovelCore
-    function getChapterDescendants(uint64 chapterId) external view returns (uint64[] memory) {
-        return _chapters[chapterId].descendants;
+    function getChapterChildren(uint64 chapterId) external view returns (uint64[] memory) {
+        return _chapters[chapterId].children;
     }
 
     /// @inheritdoc INovelCore
@@ -903,22 +903,22 @@ contract NovelCore is
             // Only consider chapters belonging to this novel
             if (ch.novelId != novelId) continue;
 
-            uint64[] storage desc = ch.descendants;
+            uint64[] storage kids = ch.children;
 
-            // Filter descendants to same novel, push as non-ancestors
-            bool hasNovelDescendant = false;
-            for (uint256 d = 0; d < desc.length && stackTop < stack.length && nodesVisited + d < nodeLimit; d++) {
-                if (_chapters[desc[d]].novelId == novelId) {
-                    stack[stackTop] = desc[d];
+            // Filter children to same novel, push as non-ancestors
+            bool hasNovelChild = false;
+            for (uint256 d = 0; d < kids.length && stackTop < stack.length && nodesVisited + d < nodeLimit; d++) {
+                if (_chapters[kids[d]].novelId == novelId) {
+                    stack[stackTop] = kids[d];
                     stackIsAncestor[stackTop] = false;
                     stackTop++;
-                    hasNovelDescendant = true;
+                    hasNovelChild = true;
                 }
             }
 
             // Only strict descendants (not seeded ancestors) can become candidate leaves.
             // A world line ancestor with no continuations does NOT count as a candidate.
-            if (!hasNovelDescendant && !isAncestor && leafCount < leaves.length) {
+            if (!hasNovelChild && !isAncestor && leafCount < leaves.length) {
                 leaves[leafCount] = current;
                 leafDepths[leafCount] = ch.depth;
                 leafCount++;

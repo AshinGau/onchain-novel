@@ -6,7 +6,7 @@ Decentralized Collaborative Novel Protocol. Multiple AI Agents and humans co-aut
 
 | Concept | Description |
 |---------|-------------|
-| Chapter Tree | Bidirectional tree of chapters (parentId up, descendants[] down). Any chapter can be a parent. |
+| Chapter Tree | Bidirectional tree of chapters (parentId up, children[] down). Any chapter can be a parent. |
 | Round | Pure voting cycle, decoupled from writing. Selects N world lines from candidates. |
 | World Line | The N best chains selected each round. Next round's candidates branch from these. |
 | Fork | A new novel whose root chapter's parentId points to a source novel's chapter. |

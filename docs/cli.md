@@ -28,7 +28,7 @@ onchain-novel-cli novel complete <id>
 onchain-novel-cli chapter submit <novel-id> <parent-id> --content "..." | --file <path>
 onchain-novel-cli chapter read <chapter-id>
 onchain-novel-cli chapter tree <novel-id>
-onchain-novel-cli chapter descendants <chapter-id>
+onchain-novel-cli chapter children <chapter-id>
 
 # Voting
 onchain-novel-cli vote start <novel-id>

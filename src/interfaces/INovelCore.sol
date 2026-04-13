@@ -192,8 +192,8 @@ interface INovelCore {
     /// @notice Get round data for a specific round
     function getRoundData(uint64 novelId, uint32 round) external view returns (DataTypes.RoundData memory);
 
-    /// @notice Get descendant chapter IDs for a chapter
-    function getChapterDescendants(uint64 chapterId) external view returns (uint64[] memory);
+    /// @notice Get direct child chapter IDs for a chapter
+    function getChapterChildren(uint64 chapterId) external view returns (uint64[] memory);
 
     /// @notice Check if an address is an author on the current world lines
     /// @dev Used by RulesEngine for rule proposal voting eligibility
