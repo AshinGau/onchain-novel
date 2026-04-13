@@ -82,15 +82,15 @@ router.get("/:id/context", async (req, res) => {
 
     const ancestorsRes = await query(
       `WITH RECURSIVE chain AS (
-         SELECT id, parent_id, author, depth, content_text, content_fetched, is_world_line, 0 AS chain_depth
+         SELECT id, parent_id, author, depth, content_text, content_fetched, is_world_line, "timestamp", 0 AS chain_depth
          FROM chapters WHERE id = $1
          UNION ALL
-         SELECT c.id, c.parent_id, c.author, c.depth, c.content_text, c.content_fetched, c.is_world_line, chain.chain_depth + 1
+         SELECT c.id, c.parent_id, c.author, c.depth, c.content_text, c.content_fetched, c.is_world_line, c."timestamp", chain.chain_depth + 1
          FROM chapters c
          INNER JOIN chain ON c.id = chain.parent_id
          WHERE chain.parent_id != '0' AND chain.parent_id::bigint > 0 AND chain.chain_depth < 100
        )
-       SELECT id, parent_id, author, depth, content_text, content_fetched, is_world_line
+       SELECT id, parent_id, author, depth, content_text, content_fetched, is_world_line, "timestamp"
        FROM chain ORDER BY chain_depth DESC`,
       [id]
     );

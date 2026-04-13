@@ -90,6 +90,7 @@ export interface ChapterContext {
   content_text: string | null;
   content_fetched: boolean;
   is_world_line: boolean;
+  timestamp: string;
 }
 
 export interface Pagination {

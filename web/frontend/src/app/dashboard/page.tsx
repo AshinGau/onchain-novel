@@ -14,6 +14,7 @@ import {
 import { shortAddress, formatBalance, formatEth, timeAgo } from "@/lib/format";
 import { useTxAction } from "@/hooks/use-tx-action";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { getBookmarks, deleteBookmark, type Bookmark } from "@/lib/reading-storage";
 
 export default function DashboardPage() {
   const { address, isConnected } = useAccount();
@@ -26,6 +27,7 @@ export default function DashboardPage() {
   // Nickname
   const [nickname, setNickname] = useState("");
   const [currentNickname, setCurrentNickname] = useState<string | null>(null);
+  const [showNicknameEdit, setShowNicknameEdit] = useState(false);
   const nicknameTx = useTxAction();
 
   // Draft count (localStorage)
@@ -37,6 +39,15 @@ export default function DashboardPage() {
     }
     setDraftCount(n);
   }, []);
+
+  // Bookmarks (localStorage)
+  const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
+  useEffect(() => { setBookmarks(getBookmarks()); }, []);
+  function handleDeleteBookmark(leafId: string) {
+    if (!window.confirm("Delete this bookmark?")) return;
+    deleteBookmark(leafId);
+    setBookmarks(getBookmarks());
+  }
 
   useEffect(() => {
     if (!address) return;
@@ -79,29 +90,42 @@ export default function DashboardPage() {
     }, () => { setCurrentNickname(nickname.trim()); });
   }
 
-  if (!isConnected) {
-    return (
-      <div className="on-container on-text-center" style={{ paddingTop: "4rem" }}>
-        <h1 className="text-heading">My Dashboard</h1>
-        <p className="text-caption" style={{ margin: "1rem 0 1.5rem" }}>Connect your wallet to view your activity.</p>
-        <ConnectButton />
-      </div>
-    );
-  }
-
   const pendingReveals = votes.filter(v => !v.revealed && !v.claimed && v.round_phase === 3);
+  const canEditNickname = isConnected && !currentNickname;
 
   return (
     <div className="on-container" style={{ maxWidth: "1000px" }}>
-      <div className="on-row-between" style={{ marginBottom: "1.5rem" }}>
-        <div>
-          <h1 className="text-heading">My Dashboard</h1>
-          <p className="text-caption">{currentNickname ? `${currentNickname} · ` : ""}{shortAddress(address!)}</p>
+      {/* Compact header */}
+      <div className="on-row-between" style={{ marginBottom: "1rem", alignItems: "center" }}>
+        <div className="on-row" style={{ gap: "0.75rem", alignItems: "baseline" }}>
+          <h1 className="text-heading" style={{ margin: 0 }}>My Dashboard</h1>
+          {isConnected && (
+            <span className="text-caption text-muted">
+              {currentNickname ? `${currentNickname} · ` : ""}{shortAddress(address!)}
+            </span>
+          )}
+        </div>
+        <div className="on-row" style={{ gap: "0.5rem" }}>
+          {!isConnected && <ConnectButton />}
+          {canEditNickname && (
+            <button
+              type="button"
+              onClick={() => setShowNicknameEdit(!showNicknameEdit)}
+              title="Set display name"
+              aria-label="Set display name"
+              style={{
+                width: "2rem", height: "2rem", borderRadius: "0.375rem",
+                border: "1px solid var(--color-border)", background: "var(--color-bg)",
+                cursor: "pointer", fontSize: "1rem", lineHeight: 1,
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}
+            >⚙</button>
+          )}
         </div>
       </div>
 
-      {/* Nickname Setting — only show if not yet set */}
-      {!currentNickname && (
+      {/* Nickname edit panel — hidden behind ⚙ */}
+      {canEditNickname && showNicknameEdit && (
         <div className="on-card" style={{ marginBottom: "1rem" }}>
           <h3 className="text-subheading" style={{ marginBottom: "0.5rem" }}>Set Display Name</h3>
           <p className="text-tiny text-muted" style={{ marginBottom: "0.5rem" }}>
@@ -153,17 +177,85 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {loading ? (
-        <p className="text-caption">Loading...</p>
-      ) : (
-        <Tabs defaultValue="chapters">
-          <TabsList>
-            <TabsTrigger value="chapters">My Chapters ({chapters.length})</TabsTrigger>
-            <TabsTrigger value="votes">My Votes ({votes.length})</TabsTrigger>
-            <TabsTrigger value="rewards">Rewards ({rewards?.participatedNovels.length ?? 0})</TabsTrigger>
-            <TabsTrigger value="drafts">Drafts ({draftCount})</TabsTrigger>
-          </TabsList>
+      <Tabs defaultValue="bookmarks">
+        <TabsList>
+          <TabsTrigger value="bookmarks">Bookmarks ({bookmarks.length})</TabsTrigger>
+          <TabsTrigger value="chapters">My Chapters ({isConnected ? chapters.length : "·"})</TabsTrigger>
+          <TabsTrigger value="votes">My Votes ({isConnected ? votes.length : "·"})</TabsTrigger>
+          <TabsTrigger value="rewards">Rewards ({isConnected ? (rewards?.participatedNovels.length ?? 0) : "·"})</TabsTrigger>
+          <TabsTrigger value="drafts">Drafts ({draftCount})</TabsTrigger>
+        </TabsList>
 
+        <TabsContent value="bookmarks">
+          {bookmarks.length === 0 ? (
+            <p className="text-caption on-empty">No bookmarks yet. Open a storyline in the reader to save your progress.</p>
+          ) : (
+            <div className="on-table-wrap" style={{ marginTop: "0.75rem" }}>
+              <table className="on-table">
+                <thead>
+                  <tr>
+                    <th>Novel</th>
+                    <th>Last Chapter</th>
+                    <th className="num">Progress</th>
+                    <th>Updated</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {bookmarks.map(b => (
+                    <tr key={b.leafId}>
+                      <td>
+                        <Link href={`/novels/${b.novelId}`} className="cell-title text-link">
+                          {b.novelTitle || `Novel #${b.novelId}`}
+                        </Link>
+                      </td>
+                      <td>
+                        <Link
+                          href={`/novels/${b.novelId}/chapter/${b.leafId}`}
+                          className="text-link on-table-mono"
+                        >
+                          ID.{b.leafId}
+                        </Link>
+                      </td>
+                      <td className="num">Chapter {b.depth}</td>
+                      <td className="text-muted">{timeAgo(Math.floor(b.updatedAt / 1000).toString())}</td>
+                      <td style={{ display: "flex", gap: "0.5rem" }}>
+                        <Link
+                          href={`/novels/${b.novelId}/read/${b.leafId}?depth=${b.depth}`}
+                          className="on-btn-soft"
+                        >Continue</Link>
+                        <button
+                          type="button"
+                          className="on-btn-soft-danger"
+                          onClick={() => handleDeleteBookmark(b.leafId)}
+                        >Delete</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </TabsContent>
+
+        {!isConnected ? (
+          <>
+            <TabsContent value="chapters">
+              <ConnectPrompt label="your chapters" />
+            </TabsContent>
+            <TabsContent value="votes">
+              <ConnectPrompt label="your votes" />
+            </TabsContent>
+            <TabsContent value="rewards">
+              <ConnectPrompt label="your rewards" />
+            </TabsContent>
+          </>
+        ) : loading ? (
+          <TabsContent value="chapters">
+            <p className="text-caption">Loading...</p>
+          </TabsContent>
+        ) : (
+          <>
           <TabsContent value="chapters">
             {chapters.length === 0 ? (
               <p className="text-caption on-empty">No chapters submitted yet.</p>
@@ -345,11 +437,22 @@ export default function DashboardPage() {
             )}
           </TabsContent>
 
-          <TabsContent value="drafts">
-            <DraftsTab />
-          </TabsContent>
-        </Tabs>
-      )}
+          </>
+        )}
+
+        <TabsContent value="drafts">
+          <DraftsTab />
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
+function ConnectPrompt({ label }: { label: string }) {
+  return (
+    <div className="on-card on-text-center" style={{ padding: "2rem 1rem" }}>
+      <p className="text-caption" style={{ marginBottom: "0.75rem" }}>Connect your wallet to view {label}.</p>
+      <ConnectButton />
     </div>
   );
 }

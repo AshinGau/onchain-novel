@@ -44,12 +44,16 @@ export default async function TreePage({
             <span className="text-tiny">World Line</span>
           </span>
           <span className="on-row" style={{ gap: "0.25rem" }}>
+            <span style={{ width: 12, height: 12, borderRadius: 3, border: "2px solid var(--color-primary)", background: "var(--color-bg)", display: "inline-block" }} />
+            <span className="text-tiny">Read</span>
+          </span>
+          <span className="on-row" style={{ gap: "0.25rem" }}>
             <span style={{ width: 12, height: 12, borderRadius: 3, border: "1.5px solid var(--color-border)", background: "var(--color-bg)", display: "inline-block" }} />
             <span className="text-tiny">Chapter</span>
           </span>
         </div>
         <p className="text-tiny">
-          Click a node to view details. Scroll to zoom, drag to pan.
+          Click a node to pick an action. Scroll to zoom, drag to pan.
         </p>
       </div>
     </div>

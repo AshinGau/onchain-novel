@@ -2,9 +2,11 @@
 
 import { useMemo, useCallback, useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import type { ChapterSummary } from "@/lib/api";
 import { timeAgo } from "@/lib/format";
 import { useNicknames } from "@/hooks/use-nickname";
+import { getReadSet } from "@/lib/reading-storage";
 
 interface StoryTreeProps {
   chapters: ChapterSummary[];
@@ -38,7 +40,12 @@ export function StoryTree({ chapters, novelId, hasMore, maxDepth, loading, onLoa
   const [dragging, setDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Hydrate read set on the client to avoid SSR mismatch
+  const [readSet, setReadSet] = useState<Set<string>>(new Set());
+  useEffect(() => { setReadSet(getReadSet()); }, []);
 
   useEffect(() => {
     function onFsChange() {
@@ -60,6 +67,20 @@ export function StoryTree({ chapters, novelId, hasMore, maxDepth, loading, onLoa
   const { root, totalWidth, totalHeight } = useMemo(() => {
     return layoutTree(chapters);
   }, [chapters]);
+
+  const nodeIndex = useMemo(() => {
+    const m = new Map<string, TreeNode>();
+    if (root) {
+      function walk(n: TreeNode) {
+        m.set(n.id, n);
+        for (const c of n.children) walk(c);
+      }
+      walk(root);
+    }
+    return m;
+  }, [root]);
+
+  const selectedNode = selectedId ? nodeIndex.get(selectedId) ?? null : null;
 
   // Center the tree only on first mount
   const initializedRef = useRef(false);
@@ -230,6 +251,68 @@ export function StoryTree({ chapters, novelId, hasMore, maxDepth, loading, onLoa
           {isFullscreen ? "⊡" : "⛶"}
         </button>
       </div>
+
+      {/* Selected action panel */}
+      {selectedNode && (
+        <div
+          onMouseDown={(e) => e.stopPropagation()}
+          style={{
+            position: "absolute",
+            top: "3rem",
+            right: "0.5rem",
+            zIndex: 10,
+            width: "10rem",
+            background: "var(--color-bg)",
+            border: "1px solid var(--color-border)",
+            borderRadius: "0.5rem",
+            padding: "0.75rem",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+          }}
+        >
+          <div className="on-row-between" style={{ marginBottom: "0.5rem", alignItems: "center" }}>
+            <span className="text-caption" style={{ fontWeight: 600 }}>
+              ID.{selectedNode.id} <span className="text-muted" style={{ fontWeight: 400 }}>#{selectedNode.chapter.depth}</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => setSelectedId(null)}
+              aria-label="Close"
+              style={{
+                width: "1.5rem", height: "1.5rem",
+                background: "transparent", border: "none", cursor: "pointer",
+                color: "var(--color-text-muted)", fontSize: "1rem",
+              }}
+            >×</button>
+          </div>
+          <div className="on-stack" style={{ gap: "0.375rem" }}>
+            <Link
+              href={`/novels/${novelId}/chapter/${selectedNode.id}`}
+              style={{ textDecoration: "none" }}
+            >
+              <button type="button" className="on-btn on-btn-secondary" style={{ width: "100%" }}>
+                Enter chapter
+              </button>
+            </Link>
+            <button
+              type="button"
+              className="on-btn on-btn-primary"
+              style={{ width: "100%" }}
+              onClick={() => {
+                const leaf = findDeepestDescendant(selectedNode);
+                const chain = chainFromRoot(root!, leaf.id);
+                let startIdx = 0;
+                for (let i = chain.length - 1; i >= 0; i--) {
+                  if (readSet.has(chain[i].id)) { startIdx = i; break; }
+                }
+                router.push(`/novels/${novelId}/read/${leaf.id}?depth=${startIdx + 1}`);
+              }}
+            >
+              Read storyline
+            </button>
+          </div>
+        </div>
+      )}
+
       <svg
         width="100%"
         height="100%"
@@ -239,7 +322,7 @@ export function StoryTree({ chapters, novelId, hasMore, maxDepth, loading, onLoa
           {/* Edges */}
           {renderEdges(root)}
           {/* Nodes */}
-          {renderNodes(root, novelId, router, hoveredId, setHoveredId, displayName)}
+          {renderNodes(root, hoveredId, setHoveredId, selectedId, setSelectedId, readSet, displayName)}
         </g>
       </svg>
     </div>
@@ -272,28 +355,39 @@ function renderEdges(node: TreeNode): React.ReactNode[] {
 
 function renderNodes(
   node: TreeNode,
-  novelId: string,
-  router: ReturnType<typeof useRouter>,
   hoveredId: string | null,
   setHoveredId: (id: string | null) => void,
+  selectedId: string | null,
+  setSelectedId: (id: string | null) => void,
+  readSet: Set<string>,
   displayName: (addr: string) => string,
 ): React.ReactNode[] {
   const nodes: React.ReactNode[] = [];
   const isWl = node.chapter.is_world_line;
   const isHovered = hoveredId === node.id;
+  const isSelected = selectedId === node.id;
+  const isRead = !isWl && readSet.has(node.id);
 
   const bgColor = isWl ? "var(--color-primary)" : "var(--color-bg)";
   const textColor = isWl ? "white" : "var(--color-text)";
-  const borderColor = isHovered
-    ? "var(--color-primary)"
-    : isWl ? "var(--color-primary)" : "var(--color-border)";
-  const shadowOpacity = isHovered ? 0.15 : 0;
+  const borderColor = isSelected
+    ? "var(--color-warning)"
+    : isHovered
+      ? "var(--color-primary)"
+      : isWl || isRead
+        ? "var(--color-primary)"
+        : "var(--color-border)";
+  const strokeWidth = isSelected ? 3 : isWl ? 2.5 : isRead ? 2 : 1.5;
+  const shadowOpacity = isHovered || isSelected ? 0.15 : 0;
 
   nodes.push(
     <g
       key={`node-${node.id}`}
       style={{ cursor: "pointer" }}
-      onClick={(e) => { e.stopPropagation(); router.push(`/novels/${novelId}/chapter/${node.id}`); }}
+      onClick={(e) => {
+        e.stopPropagation();
+        setSelectedId(selectedId === node.id ? null : node.id);
+      }}
       onMouseEnter={() => setHoveredId(node.id)}
       onMouseLeave={() => setHoveredId(null)}
     >
@@ -317,7 +411,7 @@ function renderNodes(
         rx={10}
         fill={bgColor}
         stroke={borderColor}
-        strokeWidth={isWl ? 2.5 : 1.5}
+        strokeWidth={strokeWidth}
         style={{ transition: "stroke 0.15s, transform 0.15s" }}
       />
       {/* Chapter ID */}
@@ -393,10 +487,43 @@ function renderNodes(
   );
 
   for (const child of node.children) {
-    nodes.push(...renderNodes(child, novelId, router, hoveredId, setHoveredId, displayName));
+    nodes.push(...renderNodes(child, hoveredId, setHoveredId, selectedId, setSelectedId, readSet, displayName));
   }
 
   return nodes;
+}
+
+/** Walk down from a node, always taking the deepest branch, return leaf. */
+function findDeepestDescendant(node: TreeNode): TreeNode {
+  function depth(n: TreeNode): number {
+    if (n.children.length === 0) return 1;
+    return 1 + Math.max(...n.children.map(depth));
+  }
+  let current = node;
+  while (current.children.length > 0) {
+    let best = current.children[0];
+    let bestDepth = depth(best);
+    for (let i = 1; i < current.children.length; i++) {
+      const d = depth(current.children[i]);
+      if (d > bestDepth) { best = current.children[i]; bestDepth = d; }
+    }
+    current = best;
+  }
+  return current;
+}
+
+/** Return chain of nodes from tree root to the node whose id matches `targetId`. */
+function chainFromRoot(root: TreeNode, targetId: string): TreeNode[] {
+  const path: TreeNode[] = [];
+  function dfs(n: TreeNode): boolean {
+    path.push(n);
+    if (n.id === targetId) return true;
+    for (const c of n.children) if (dfs(c)) return true;
+    path.pop();
+    return false;
+  }
+  dfs(root);
+  return path;
 }
 
 function layoutTree(chapters: ChapterSummary[]): { root: TreeNode | null; totalWidth: number; totalHeight: number } {

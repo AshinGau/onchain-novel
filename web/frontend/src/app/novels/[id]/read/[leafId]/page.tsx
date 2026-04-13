@@ -3,10 +3,13 @@ import { ReadPageClient } from "./read-page-client";
 
 export default async function ReadPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string; leafId: string }>;
+  searchParams: Promise<{ depth?: string }>;
 }) {
   const { id, leafId } = await params;
+  const { depth } = await searchParams;
 
   const [novel, contextData] = await Promise.all([
     fetchNovel(id),
@@ -28,6 +31,8 @@ export default async function ReadPage({
         chapters={contextData.ancestors}
         novelId={id}
         novelTitle={novel.title}
+        leafId={leafId}
+        initialDepthParam={depth ? Number(depth) : undefined}
       />
     </div>
   );
