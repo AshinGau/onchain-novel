@@ -30,9 +30,9 @@ abstract contract TestBase is Test {
     address public voter3 = address(0x7);
     address public keeper = address(0x8);
 
-    uint256 constant SUBMISSION_FEE = 0.001 ether;
+    uint256 constant SUBMISSION_FEE = 0.01 ether;
     uint256 constant VOTE_STAKE = 0.005 ether;
-    uint256 constant NOMINATION_FEE = 0.01 ether;
+    uint256 constant NOMINATION_FEE = 0.02 ether;
     uint64 constant NOMINATE_DURATION = 1 days;
     uint64 constant COMMIT_DURATION = 2 days;
     uint64 constant REVEAL_DURATION = 1 days;
@@ -109,8 +109,6 @@ abstract contract TestBase is Test {
             minRoundGap: MIN_ROUND_GAP,
             prizeReleaseRate: 2000,
             voterRewardRate: 1500,
-            maxVoterReward: 0,
-            unrevealPenaltyFloor: 0.001 ether,
             contentLocation: DataTypes.ContentLocation.Onchain,
             contentBaseUrl: "",
             ruleFee: 0.01 ether,
@@ -611,16 +609,14 @@ contract IntegrationTest is TestBase {
     }
 
     // ----------------------------------------------------------
-    //  maxVoterReward cap: per-address voter reward is capped after the 3x multiplier
+    //  Protocol voter reward cap: per-address reward capped at voteStake * VOTER_REWARD_CAP_MULTIPLIER (20x)
     // ----------------------------------------------------------
-    function test_maxVoterReward_capsRewardAndReturnsExcess() public {
-        // Use a tiny cap so we are guaranteed to hit it.
+    function test_voterRewardCap_usesProtocolMultiplier() public {
+        // Seed a pool large enough that a single voter would exceed the 20x cap without it.
+        // cap = 0.005 * 20 = 0.1 ether. Need voterRewardPool > 0.1 ether so cap triggers.
         DataTypes.NovelConfig memory config = _defaultConfig();
         config.worldLineCount = 1;
-        config.maxVoterReward = 1 wei; // any reward gets capped to 1 wei
-        config.unrevealPenaltyFloor = 0;
 
-        // Seed the pool generously so the would-be voter reward is large
         uint64 novelId = _createNovelWith(creator, config, 50 ether);
         uint64 rootId = 1;
         uint64 ch2 = _submitChapter(author1, novelId, rootId, "branch for cap test ch!!");
@@ -632,45 +628,37 @@ contract IntegrationTest is TestBase {
         _runFullRound(novelId, voters, ch2, bytes32("capsalt"));
         uint256 poolAfterSettle = prizePool.getPoolBalance(novelId);
 
-        // Voter claim: payout = stake refund + capped reward (cap = 1 wei)
+        // Expected voter reward budget (round 1: creator takes 75%, remaining 25%; voter share = 15% of remaining)
+        uint256 release = (poolBefore * 2000) / 10000;
+        uint256 voterBudget = ((release - (release * 3) / 4) * 1500) / 10000;
+        uint256 cap = VOTE_STAKE * votingEngine.VOTER_REWARD_CAP_MULTIPLIER();
+
+        assertGt(voterBudget, cap, "test setup: voter budget must exceed cap to exercise capping");
+
+        // Voter claim: payout = stake refund + capped reward
         uint256 balBefore = voter1.balance;
         vm.prank(voter1);
         novelCore.claimVotingReward(novelId, 1);
-        uint256 voterPayout = voter1.balance - balBefore;
+        assertEq(voter1.balance - balBefore, VOTE_STAKE + cap, "payout should be stake + protocol cap");
 
-        assertEq(voterPayout, VOTE_STAKE + 1, "payout should be stake + capped reward (1 wei)");
-
-        // The bulk of the would-be voter reward should have been deposited back into the pool.
-        // Released = poolBefore * 20% (prizeReleaseRate=2000), of which 15% is voter rewards.
-        // Without the cap, voter1 would have received the full voter reward share.
-        // With cap=1 wei, the rest must come back to the pool.
-        uint256 release = (poolBefore * 2000) / 10000;
-        uint256 expectedVoterRewardBudget = ((release - (release * 3) / 4) * 1500) / 10000; // round 1, D=3 -> 75% to creator
-        // The pool after settle = (poolBefore - release) + excessReturn.
-        // Since cap is 1 wei, excessReturn ~= expectedVoterRewardBudget - 1.
+        // Excess returned to pool
         uint256 excessRecovered = poolAfterSettle - (poolBefore - release);
-        assertApproxEqAbs(
-            excessRecovered, expectedVoterRewardBudget - 1, 2, "excess should return to pool (within rounding)"
-        );
+        assertApproxEqAbs(excessRecovered, voterBudget - cap, 2, "excess should return to pool");
     }
 
     // ----------------------------------------------------------
-    //  Partial unreveal penalty: voter gets back stake - max(floor, 20%)
+    //  Fixed 50% unreveal penalty (protocol constant, no per-novel floor)
     // ----------------------------------------------------------
-    function test_unrevealPenalty_partialRefund() public {
+    function test_unrevealPenalty_fiftyPercent() public {
         DataTypes.NovelConfig memory config = _defaultConfig();
         config.worldLineCount = 1;
-        config.unrevealPenaltyFloor = 0; // pure 20% so the math is exact
-        config.maxVoterReward = 0;
 
         uint64 novelId = _createNovelWith(creator, config, 1 ether);
         uint64 rootId = 1;
         uint64 ch2 = _submitChapter(author1, novelId, rootId, "branch for unreveal test!!");
 
-        // Drive the round manually so voter2 commits but never reveals.
         vm.prank(keeper);
         novelCore.startRound(novelId);
-
         vm.warp(block.timestamp + NOMINATE_DURATION + 1);
         vm.prank(keeper);
         novelCore.closeNomination(novelId);
@@ -687,7 +675,6 @@ contract IntegrationTest is TestBase {
         vm.prank(keeper);
         novelCore.closeCommit(novelId);
 
-        // Only voter1 reveals
         vm.prank(voter1);
         novelCore.revealVote(novelId, ch2, salt);
 
@@ -695,22 +682,20 @@ contract IntegrationTest is TestBase {
         vm.prank(keeper);
         novelCore.settleRound(novelId);
 
-        // voter2 (unrevealed) should be able to claim refund = stake - 20%
-        uint256 expectedPenalty = (VOTE_STAKE * 20) / 100;
-        uint256 expectedRefund = VOTE_STAKE - expectedPenalty;
+        // voter2 (unrevealed) should get stake - 50%
+        uint256 expectedPenalty = (VOTE_STAKE * votingEngine.UNREVEAL_PENALTY_RATE_BP()) / 10000;
+        assertEq(expectedPenalty, VOTE_STAKE / 2, "protocol constant should be 50%");
 
         uint256 v2Before = voter2.balance;
         vm.prank(voter2);
         novelCore.claimVotingReward(novelId, 1);
-        assertEq(voter2.balance - v2Before, expectedRefund, "unrevealed voter should get stake - 20%");
+        assertEq(voter2.balance - v2Before, VOTE_STAKE - expectedPenalty, "unrevealed voter gets stake - 50%");
 
-        // voter1 (revealed) should get stake refund + reward; reward includes the penalty
-        // collected from voter2 (added to the voter reward pool).
+        // voter1 (revealed) gets stake + reward (reward includes the penalty collected from voter2)
         uint256 v1Before = voter1.balance;
         vm.prank(voter1);
         novelCore.claimVotingReward(novelId, 1);
-        uint256 v1Payout = voter1.balance - v1Before;
-        assertGt(v1Payout, VOTE_STAKE, "revealed voter should get stake + nonzero reward");
+        assertGt(voter1.balance - v1Before, VOTE_STAKE, "revealed voter gets stake + nonzero reward");
     }
 
     // ----------------------------------------------------------
@@ -797,41 +782,15 @@ contract IntegrationTest is TestBase {
     }
 
     // ----------------------------------------------------------
-    //  Unreveal penalty floor wins when voteStake * 20% is smaller
+    //  voteStake must not exceed submissionFee (voting should not cost more than writing)
     // ----------------------------------------------------------
-    function test_unrevealPenalty_floorApplies() public {
+    function test_validateConfig_voteStakeAboveSubmissionFee() public {
         DataTypes.NovelConfig memory config = _defaultConfig();
-        config.worldLineCount = 1;
-        config.unrevealPenaltyFloor = 0.002 ether; // > 20% of 0.005 voteStake (= 0.001)
-        config.maxVoterReward = 0;
-
-        uint64 novelId = _createNovelWith(creator, config, 1 ether);
-        uint64 rootId = 1;
-        uint64 ch2 = _submitChapter(author1, novelId, rootId, "branch for floor test!!");
-
-        vm.prank(keeper);
-        novelCore.startRound(novelId);
-        vm.warp(block.timestamp + NOMINATE_DURATION + 1);
-        vm.prank(keeper);
-        novelCore.closeNomination(novelId);
-
-        bytes32 salt = bytes32("floorsalt");
-        bytes32 commitHash = keccak256(abi.encodePacked(ch2, salt));
-        vm.prank(voter1);
-        novelCore.commitVote{value: VOTE_STAKE}(novelId, commitHash);
-
-        vm.warp(block.timestamp + COMMIT_DURATION + 1);
-        vm.prank(keeper);
-        novelCore.closeCommit(novelId);
-        // voter1 does NOT reveal
-        vm.warp(block.timestamp + REVEAL_DURATION + 1);
-        vm.prank(keeper);
-        novelCore.settleRound(novelId);
-
-        uint256 expectedRefund = VOTE_STAKE - 0.002 ether;
-        uint256 balBefore = voter1.balance;
-        vm.prank(voter1);
-        novelCore.claimVotingReward(novelId, 1);
-        assertEq(voter1.balance - balBefore, expectedRefund, "floor penalty should apply");
+        config.voteStake = config.submissionFee + 1;
+        vm.prank(creator);
+        vm.expectRevert();
+        novelCore.createNovel{value: 1 ether}(
+            config, _defaultMetadata(), _makeContent("root chapter content for novel")
+        );
     }
 }

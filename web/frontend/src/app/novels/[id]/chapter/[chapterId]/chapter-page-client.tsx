@@ -13,15 +13,15 @@ import { BOUNTY_BOARD_ADDRESS, bountyBoardAbi } from "@/lib/contracts";
 import { useTxAction } from "@/hooks/use-tx-action";
 import { ChapterCardMini } from "@/components/chapter-card-mini";
 import { ChapterEditor } from "@/components/chapter-editor";
-import { VotePanel } from "@/components/vote-panel";
 import { CommentList } from "@/components/comment-list";
 import { TipButton } from "./tip-button";
+import { TxStatusLabel, txButtonLabel } from "@/components/tx-status";
 
 /* ── Sponsor Next Chapter (追更) form ── */
 function BountyCreateForm({ chapterId, onClose }: { chapterId: string; onClose: () => void }) {
   const [amount, setAmount] = useState("0.01");
   const [days, setDays] = useState("7");
-  const { send, isPending, status, error } = useTxAction();
+  const { send, isPending, status, error, reset } = useTxAction();
 
   async function handleCreate() {
     const value = parseEther(amount);
@@ -34,7 +34,7 @@ function BountyCreateForm({ chapterId, onClose }: { chapterId: string; onClose: 
         args: [BigInt(chapterId), deadline],
         value,
       },
-      () => onClose()
+      () => { setTimeout(() => { reset(); onClose(); }, 2000); }
     );
   }
 
@@ -55,13 +55,16 @@ function BountyCreateForm({ chapterId, onClose }: { chapterId: string; onClose: 
         20% goes to prize pool. 80% locked for authors. You can designate a favorite before the deadline.
       </p>
       <div className="on-row">
-        <button type="button" className="on-btn on-btn-primary" onClick={handleCreate} disabled={isPending}>
-          {isPending ? "…" : "Create Bounty"}
-        </button>
-        <button type="button" className="on-btn on-btn-ghost" onClick={onClose}>Cancel</button>
+        {status !== "success" && (
+          <button type="button" className="on-btn on-btn-primary" onClick={handleCreate} disabled={isPending}>
+            {txButtonLabel(status, "Create Bounty")}
+          </button>
+        )}
+        {!isPending && status !== "success" && (
+          <button type="button" className="on-btn on-btn-ghost" onClick={onClose}>Cancel</button>
+        )}
+        <TxStatusLabel status={status} error={error} successText="Bounty created!" />
       </div>
-      {status === "success" && <span className="text-success">Bounty created!</span>}
-      {error && <span className="text-danger">{error}</span>}
     </div>
   );
 }
@@ -231,15 +234,14 @@ export function ChapterPageClient({ chapter, novel }: Props) {
         <BountyCreateForm chapterId={chapter.id} onClose={() => setShowBountyForm(false)} />
       )}
 
-      {/* Vote panel (if in committing/revealing phase) */}
+      {/* Voting happens on the novel page — show a quick link while a round is active */}
       {(isCommitting || isRevealing) && (
-        <VotePanel
-          novelId={novelId}
-          round={novel.current_round}
-          phase={novel.round_phase}
-          candidateId={chapter.id}
-          voteStake={novel.config?.voteStake || "0"}
-        />
+        <div className="on-card">
+          <p className="text-caption" style={{ margin: 0 }}>
+            {isCommitting ? "Voting is open for this round." : "Reveal phase is active."}{" "}
+            <Link href={`/novels/${novelId}`} className="text-link">Go to novel page →</Link>
+          </p>
+        </div>
       )}
 
       {/* Chapter editor */}

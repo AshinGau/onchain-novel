@@ -5,6 +5,7 @@ import { useAccount } from "wagmi";
 import { parseEther } from "viem";
 import { useTxAction } from "@/hooks/use-tx-action";
 import { NOVEL_CORE_ADDRESS, novelCoreAbi } from "@/lib/contracts";
+import { TxStatusLabel, txButtonLabel } from "@/components/tx-status";
 
 export function TipButton({ chapterId }: { chapterId: string }) {
   const { isConnected } = useAccount();
@@ -59,7 +60,7 @@ export function TipButton({ chapterId }: { chapterId: string }) {
           onClick={handleTip}
           disabled={isPending}
         >
-          {status === "confirming" ? "Confirm in wallet..." : status === "waiting" ? "Waiting for block..." : "Send Tip"}
+          {txButtonLabel(status, "Send Tip")}
         </button>
       )}
       {!isPending && status !== "success" && (
@@ -71,8 +72,7 @@ export function TipButton({ chapterId }: { chapterId: string }) {
           Cancel
         </button>
       )}
-      {status === "success" && <span className="text-success">Tip sent!</span>}
-      {error && <span className="text-danger">{error}</span>}
+      <TxStatusLabel status={status} error={error} successText="Tip sent!" />
     </div>
   );
 }

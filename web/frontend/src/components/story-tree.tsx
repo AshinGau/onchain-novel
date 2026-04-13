@@ -105,6 +105,77 @@ export function StoryTree({ chapters, novelId, hasMore, maxDepth, loading, onLoa
 
   const handleMouseUp = useCallback(() => setDragging(false), []);
 
+  // Touch: 1 finger pan, 2 fingers pinch-zoom
+  const touchRef = useRef<{
+    mode: "pan" | "pinch" | null;
+    startX: number; startY: number;
+    initialDist: number; initialScale: number;
+    midX: number; midY: number;
+    initialTx: number; initialTy: number;
+  }>({ mode: null, startX: 0, startY: 0, initialDist: 0, initialScale: 1, midX: 0, midY: 0, initialTx: 0, initialTy: 0 });
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    const rect = containerRef.current!.getBoundingClientRect();
+    if (e.touches.length === 1) {
+      const t = e.touches[0];
+      touchRef.current = {
+        ...touchRef.current,
+        mode: "pan",
+        startX: t.clientX - transform.x,
+        startY: t.clientY - transform.y,
+      };
+    } else if (e.touches.length === 2) {
+      const [a, b] = [e.touches[0], e.touches[1]];
+      const dx = b.clientX - a.clientX;
+      const dy = b.clientY - a.clientY;
+      touchRef.current = {
+        mode: "pinch",
+        startX: 0, startY: 0,
+        initialDist: Math.hypot(dx, dy),
+        initialScale: transform.scale,
+        midX: (a.clientX + b.clientX) / 2 - rect.left,
+        midY: (a.clientY + b.clientY) / 2 - rect.top,
+        initialTx: transform.x,
+        initialTy: transform.y,
+      };
+    }
+  }, [transform]);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    const ref = touchRef.current;
+    if (ref.mode === "pan" && e.touches.length === 1) {
+      e.preventDefault();
+      const t = e.touches[0];
+      setTransform(prev => ({ ...prev, x: t.clientX - ref.startX, y: t.clientY - ref.startY }));
+    } else if (ref.mode === "pinch" && e.touches.length === 2) {
+      e.preventDefault();
+      const [a, b] = [e.touches[0], e.touches[1]];
+      const dist = Math.hypot(b.clientX - a.clientX, b.clientY - a.clientY);
+      const newScale = Math.max(0.2, Math.min(2.5, ref.initialScale * (dist / ref.initialDist)));
+      const k = newScale / ref.initialScale;
+      setTransform({
+        scale: newScale,
+        x: ref.midX - (ref.midX - ref.initialTx) * k,
+        y: ref.midY - (ref.midY - ref.initialTy) * k,
+      });
+    }
+  }, []);
+
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length === 0) {
+      touchRef.current.mode = null;
+    } else if (e.touches.length === 1 && touchRef.current.mode === "pinch") {
+      // Downgrade pinch → pan
+      const t = e.touches[0];
+      touchRef.current = {
+        ...touchRef.current,
+        mode: "pan",
+        startX: t.clientX - transform.x,
+        startY: t.clientY - transform.y,
+      };
+    }
+  }, [transform]);
+
   if (!root) {
     return <div className="text-caption on-text-center" style={{ padding: "2rem" }}>No chapters to display</div>;
   }
@@ -118,6 +189,10 @@ export function StoryTree({ chapters, novelId, hasMore, maxDepth, loading, onLoa
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchEnd}
     >
       {/* Toolbar */}
       <div style={{

@@ -322,14 +322,10 @@ export function NovelInfo({
               tip="Percentage of the prize pool released each round. Split into creator royalty, author rewards, and voter rewards." />
             <ConfigItem label="Voter Reward" value={`${(voterRate / 100).toFixed(0)}%`}
               tip="Share of round rewards allocated to voters. Accurate voters (voted for winner) get 3x weight." />
-            {c.maxVoterReward && c.maxVoterReward !== "0" && (
-              <ConfigItem label="Voter Cap" value={fmtWei(c.maxVoterReward)}
-                tip="Per-address voter reward cap per round. Excess returns to the prize pool." />
-            )}
-            {c.unrevealPenaltyFloor && c.unrevealPenaltyFloor !== "0" && (
-              <ConfigItem label="Unreveal Penalty Floor" value={fmtWei(c.unrevealPenaltyFloor)}
-                tip="Minimum penalty for unrevealed votes. Effective penalty = max(this, voteStake × 20%)." />
-            )}
+            <ConfigItem label="Voter Cap" value={`20× voteStake`}
+              tip="Protocol constant: per-address voter reward capped at 20 × voteStake. Excess returns to the prize pool." />
+            <ConfigItem label="Unreveal Penalty" value="50% of stake"
+              tip="Protocol constant: unrevealed voters lose 50% of their stake; the penalty is added to the voter reward pool." />
             <ConfigItem label="Content Storage" value={["Onchain", "External (IPFS)", "HTTP"][c.contentLocation] || "Unknown"}
               tip="Where chapter content is stored. Onchain = in calldata; External = IPFS/Arweave; HTTP = CDN." />
             {c.ruleFee !== undefined && (
