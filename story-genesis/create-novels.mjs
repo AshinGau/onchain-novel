@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Create all 34 story-genesis novels on the local Anvil chain.
+ * Create all story-genesis novels on the local Anvil chain.
  *
  * Usage:
  *   node story-genesis/create-novels.mjs
@@ -23,12 +23,11 @@ const {
   keccak256,
   toHex,
   parseAbi,
-  encodeFunctionData,
 } = require("viem");
 const { privateKeyToAccount } = require("viem/accounts");
 const { foundry } = require("viem/chains");
 
-import { readFileSync, readdirSync } from "fs";
+import { readFileSync, readdirSync, existsSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 
@@ -39,6 +38,9 @@ const ROOT = join(__dirname, "..");
 const RPC_URL = "http://127.0.0.1:8545";
 const PRIVATE_KEY =
   "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d";
+
+const COVER_BASE_URL =
+  "https://raw.githubusercontent.com/AshinGau/onchain-novel/refs/heads/main/story-genesis/images";
 
 // Read contract addresses from .local-node/env
 const envFile = readFileSync(join(ROOT, ".local-node/env"), "utf-8");
@@ -53,11 +55,13 @@ const RULES_ENGINE = env.RULES_ENGINE_ADDRESS;
 
 // ── ABI fragments ───────────────────────────────────────────────────────────
 const novelCoreAbi = parseAbi([
-  "function createNovel((uint64 minChapterLength, uint64 maxChapterLength, uint64 roundMinDuration, uint32 roundMinSubmissions, uint32 worldLineCount, uint32 roundsPerEpoch, uint16 prizeReleaseRate, uint16 voterRewardRate, uint64 commitDuration, uint64 revealDuration, uint256 stakeAmount, uint8 spamRounds, uint8 spamThreshold, uint8 contentLocation, string contentBaseUrl, uint256 ruleFee, uint64 ruleVoteDuration, uint32 ruleQuorum) config, (string title, string description, string coverUri) metadata, (bytes32 contentHash, uint64 declaredLength, bytes content)[] bootstrapChapters) external payable returns (uint256 novelId)",
+  "function createNovel((uint64 minChapterLength, uint64 maxChapterLength, uint256 submissionFee, uint32 worldLineCount, uint256 voteStake, uint256 nominationFee, uint64 nominateDuration, uint64 commitDuration, uint64 revealDuration, uint64 minRoundGap, uint16 prizeReleaseRate, uint16 voterRewardRate, uint8 contentLocation, string contentBaseUrl, uint256 ruleFee, uint64 ruleVoteDuration, uint32 ruleQuorum) config, (string title, string description, string coverUri) metadata, (bytes32 contentHash, uint64 declaredLength, bytes content) rootChapter) external payable returns (uint64 novelId)",
+  "function submitChapter(uint64 novelId, uint64 parentId, (bytes32 contentHash, uint64 declaredLength, bytes content) submission) external payable returns (uint64 chapterId)",
+  "event ChapterSubmitted(uint64 indexed novelId, uint64 indexed chapterId, address indexed author, uint64 parentId, uint32 depth)",
 ]);
 
 const rulesEngineAbi = parseAbi([
-  "function setCreatorRules(uint256 novelId, string[] names, string[] contents) external",
+  "function setCreatorRules(uint64 novelId, string[] names, string[] contents) external",
 ]);
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -76,26 +80,75 @@ function randomPrizePool() {
 }
 
 function titleFromDir(dirName) {
-  // Strip leading "01-" prefix
+  // Strip leading "NN-" prefix
   return dirName.replace(/^\d+-/, "");
 }
 
-// ── Default novel config (matches frontend defaults) ────────────────────────
+function numberFromDir(dirName) {
+  const m = dirName.match(/^(\d+)-/);
+  return m ? m[1] : null;
+}
+
+function coverUriForDir(dirName) {
+  const num = numberFromDir(dirName);
+  if (!num) return "";
+  const file = join(__dirname, "images", `${num}.jpeg`);
+  return existsSync(file) ? `${COVER_BASE_URL}/${num}.jpeg` : "";
+}
+
+// ChapterSubmitted(uint64 indexed novelId, uint64 indexed chapterId, address indexed author, ...)
+// topics: [sig, novelId, chapterId, author]
+function findChapterSubmittedLog(receipt) {
+  return receipt.logs.find(
+    (l) =>
+      l.address.toLowerCase() === NOVEL_CORE.toLowerCase() &&
+      l.topics.length >= 4
+  );
+}
+
+function parseCreateReceipt(receipt) {
+  // NovelCreated(uint64 indexed novelId, address indexed creator) → topics.length === 3
+  const novelLog = receipt.logs.find(
+    (l) =>
+      l.address.toLowerCase() === NOVEL_CORE.toLowerCase() &&
+      l.topics.length === 3
+  );
+  const chLog = findChapterSubmittedLog(receipt);
+  return {
+    novelId: novelLog ? BigInt(novelLog.topics[1]) : null,
+    rootId: chLog ? BigInt(chLog.topics[2]) : null,
+  };
+}
+
+async function submitChapterTx(client, publicClient, novelId, parentId, submission, submissionFee) {
+  const hash = await client.writeContract({
+    address: NOVEL_CORE,
+    abi: novelCoreAbi,
+    functionName: "submitChapter",
+    args: [novelId, parentId, submission],
+    value: submissionFee,
+  });
+  const receipt = await publicClient.waitForTransactionReceipt({ hash });
+  const chLog = findChapterSubmittedLog(receipt);
+  if (!chLog) throw new Error(`No ChapterSubmitted event in tx ${hash}`);
+  return BigInt(chLog.topics[2]);
+}
+
+// ── Novel config (post-2026-04-13 simplification: 17 fields) ───────────────
 const defaultConfig = {
-  minChapterLength: 500n,
+  minChapterLength: 1000n,
   maxChapterLength: 50000n,
-  roundMinDuration: 86400n, // 1 day
-  roundMinSubmissions: 3,
+  submissionFee: parseEther("0.005"),
   worldLineCount: 2,
-  roundsPerEpoch: 3,
-  prizeReleaseRate: 3000, // 30%
-  voterRewardRate: 1000, // 10%
-  commitDuration: 259200n, // 3 days
-  revealDuration: 172800n, // 2 days
-  stakeAmount: parseEther("0.01"),
-  spamRounds: 3,
-  spamThreshold: 20,
-  contentLocation: 0, // Onchain
+  voteStake: parseEther("0.001"), // must be <= submissionFee
+  nominationFee: parseEther("0.01"),
+  nominateDuration: 86400n,  // 1 day
+  commitDuration: 259200n,   // 3 days
+  revealDuration: 172800n,   // 2 days
+  minRoundGap: 172800n,      // 2 days
+  prizeReleaseRate: 2000,    // 20%
+  voterRewardRate: 1500,     // 15%
+  contentLocation: 0,        // Onchain
   contentBaseUrl: "",
   ruleFee: parseEther("0.001"),
   ruleVoteDuration: 259200n, // 3 days
@@ -135,53 +188,57 @@ async function main() {
     const ch2 = readFileSync(join(base, "chapter-2.txt"), "utf-8");
     const ch3 = readFileSync(join(base, "chapter-3.txt"), "utf-8");
 
-    const bootstrapChapters = [ch1, ch2, ch3].map(encodeChapter);
+    const rootChapter = encodeChapter(ch1);
     const prizePool = randomPrizePool();
-    const metadata = { title, description, coverUri: "" };
+    const coverUri = coverUriForDir(dir);
+    const metadata = { title, description, coverUri };
 
+    const coverTag = coverUri ? "🖼" : "  ";
     console.log(
-      `Creating: ${title}  (prize: ${Number(prizePool / 10n ** 18n)} ETH)`
+      `${coverTag} Creating: ${title}  (prize: ${Number(prizePool / 10n ** 18n)} ETH)`
     );
 
-    // 1. createNovel
-    const txHash = await client.writeContract({
+    // 1. createNovel (root chapter, must send submissionFee + initial prize pool)
+    const totalValue = defaultConfig.submissionFee + prizePool;
+    const createTx = await client.writeContract({
       address: NOVEL_CORE,
       abi: novelCoreAbi,
       functionName: "createNovel",
-      args: [defaultConfig, metadata, bootstrapChapters],
-      value: prizePool,
+      args: [defaultConfig, metadata, rootChapter],
+      value: totalValue,
+    });
+    const createReceipt = await publicClient.waitForTransactionReceipt({
+      hash: createTx,
     });
 
-    const receipt = await publicClient.waitForTransactionReceipt({
-      hash: txHash,
-    });
-
-    // Extract novelId from logs (NovelCreated event from NovelCore contract)
-    // NovelCreated(uint256 indexed novelId, address indexed creator, uint8 contentLocation)
-    const creationLog = receipt.logs.find(
-      (l) =>
-        l.address.toLowerCase() === NOVEL_CORE.toLowerCase() &&
-        l.topics.length >= 3
-    );
-    const novelId = creationLog
-      ? BigInt(creationLog.topics[1])
-      : null;
-
-    if (!novelId) {
-      console.error(`  ✗ Failed to extract novelId from tx ${txHash}`);
+    const { novelId, rootId } = parseCreateReceipt(createReceipt);
+    if (!novelId || !rootId) {
+      console.error(`  ✗ Failed to extract novelId/rootId from tx ${createTx}`);
       continue;
     }
+    console.log(`  ✓ Novel #${novelId} created, root chapter #${rootId} (tx: ${createTx.slice(0, 10)}…)`);
 
-    console.log(`  ✓ Novel #${novelId} created (tx: ${txHash.slice(0, 10)}…)`);
+    // 2. submitChapter #2 (parent = root)
+    const ch2Id = await submitChapterTx(
+      client, publicClient, novelId, rootId, encodeChapter(ch2),
+      defaultConfig.submissionFee,
+    );
+    console.log(`  ✓ Chapter #${ch2Id} submitted (parent #${rootId})`);
 
-    // 2. setCreatorRules
+    // 3. submitChapter #3 (parent = ch2)
+    const ch3Id = await submitChapterTx(
+      client, publicClient, novelId, ch2Id, encodeChapter(ch3),
+      defaultConfig.submissionFee,
+    );
+    console.log(`  ✓ Chapter #${ch3Id} submitted (parent #${ch2Id})`);
+
+    // 4. setCreatorRules
     const rulesTxHash = await client.writeContract({
       address: RULES_ENGINE,
       abi: rulesEngineAbi,
       functionName: "setCreatorRules",
       args: [novelId, ["story setting"], [rules]],
     });
-
     await publicClient.waitForTransactionReceipt({ hash: rulesTxHash });
     console.log(`  ✓ Rules set (tx: ${rulesTxHash.slice(0, 10)}…)\n`);
   }

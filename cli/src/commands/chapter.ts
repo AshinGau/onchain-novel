@@ -136,14 +136,14 @@ export function registerChapterCommands(program: Command): void {
     });
 
   chapter
-    .command("descendants <chapter-id>")
+    .command("children <chapter-id>")
     .description("Show direct children of a chapter")
     .action(async (chapterId) => {
       try {
         const data = await apiGet<{ children: Record<string, unknown>[] }>(
           `/api/chapters/${chapterId}/children`,
         );
-        header(`Descendants of Chapter #${chapterId}`);
+        header(`Children of Chapter #${chapterId}`);
         table(
           data.children.map((ch) => ({
             ID: ch.id,

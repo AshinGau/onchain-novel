@@ -245,7 +245,7 @@ contract BountyBoard is
         if (bounty.claimed) revert BountyFullyClaimed();
         if (msg.sender != bounty.tipper) revert NotTipper();
 
-        // Verify no qualifying descendants exist
+        // Verify no qualifying children exist
         (, uint256 qualifyingCount) = _getQualifyingAuthors(bountyId);
         if (qualifyingCount > 0) revert QualifyingAuthorsExist();
 
@@ -309,21 +309,21 @@ contract BountyBoard is
     //                    INTERNAL HELPERS
     // ============================================================
 
-    /// @dev Get unique qualifying authors for a bounty (descendants with timestamp <= deadline)
+    /// @dev Get unique qualifying authors for a bounty (direct children with timestamp <= deadline)
     /// @return authors Array of unique qualifying author addresses (may have trailing zero addresses)
     /// @return count Number of unique qualifying authors
     function _getQualifyingAuthors(uint256 bountyId) internal view returns (address[] memory authors, uint256 count) {
         DataTypes.Bounty storage bounty = _bounties[bountyId];
-        uint64[] memory descendants = novelCore.getChapterDescendants(bounty.chapterId);
+        uint64[] memory children = novelCore.getChapterChildren(bounty.chapterId);
 
         // First pass: collect qualifying authors (may contain duplicates)
-        address[] memory raw = new address[](descendants.length);
+        address[] memory raw = new address[](children.length);
         uint256 rawCount = 0;
 
-        for (uint256 i = 0; i < descendants.length; i++) {
-            DataTypes.Chapter memory desc = novelCore.getChapter(descendants[i]);
-            if (desc.timestamp <= bounty.deadline) {
-                raw[rawCount++] = desc.author;
+        for (uint256 i = 0; i < children.length; i++) {
+            DataTypes.Chapter memory child = novelCore.getChapter(children[i]);
+            if (child.timestamp <= bounty.deadline) {
+                raw[rawCount++] = child.author;
             }
         }
 

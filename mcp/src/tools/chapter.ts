@@ -81,7 +81,7 @@ export function registerChapterTools(server: McpServer): void {
             `Depth: ${ch.depth}`,
             `Content hash: ${ch.contentHash}`,
             `Length: ${ch.declaredLength} bytes`,
-            `Descendants: ${ch.descendants.length}`,
+            `Children: ${ch.children.length}`,
           ].join("\n"),
         );
       } catch (error) {

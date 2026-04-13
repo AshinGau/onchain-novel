@@ -14,13 +14,13 @@ struct Chapter {
     uint64 declaredLength;
     uint32 depth;           // tree depth within this novel, root = 1
     uint64 timestamp;
-    uint64[] descendants;   // child chapter ID list (bidirectional index)
+    uint64[] children;      // direct child chapter ID list (bidirectional index)
 }
 ```
 
 **uint64 IDs**: 2^64 covers all chapter/novel needs; struct packing significantly reduces storage slot consumption.
 
-**Bidirectional index**: parentId traverses up, descendants traverses down. Downward traversal enables DFS from world line ancestors at `startRound` to find the N deepest chains, without maintaining a separate candidate pool at submission time.
+**Bidirectional index**: parentId traverses up, children traverses down. Downward DFS from world line ancestors at `startRound` finds the N deepest chains, without maintaining a separate candidate pool at submission time.
 
 ### 1.2 Submission Rules
 
@@ -29,7 +29,7 @@ struct Chapter {
 - Submission pays `submissionFee` (non-refundable), goes directly to prize pool
 - Same author can submit multiple chapters, no frequency limit (fee itself is anti-spam)
 - Root chapter (depth = 1) can only be submitted by creator during `createNovel` / `forkNovel`, exactly one
-- On submission, `chapters[parentId].descendants.push(chapter.id)` automatically, O(1)
+- On submission, `chapters[parentId].children.push(chapter.id)` automatically, O(1)
 
 ### 1.3 Chain Definition
 
@@ -75,7 +75,7 @@ Example: two story lines `C1<-C2<-C3` and `C1<-A1<-A2`. Three votes: C2(weight 1
 
 ### 2.2 Candidate Generation -- Full Scan from World Line Ancestors
 
-Using the descendants bidirectional index, `startRound` does a full DFS from each worldLineAncestor, scanning all (strict) descendants to find the N deepest chains (N = `worldLineCount`, set by creator). Seeded ancestors themselves are never candidates — they must have at least one descendant to contribute a chain. This guarantees rounds only proceed when the story has progressed on every world line.
+Using the children bidirectional index, `startRound` does a full DFS from each worldLineAncestor, scanning all (strict) descendants to find the N deepest chains (N = `worldLineCount`, set by creator). Seeded ancestors themselves are never candidates — they must have at least one descendant to contribute a chain. This guarantees rounds only proceed when the story has progressed on every world line.
 
 **Gas cost**: full traversal of all chapters derived from N ancestors between two rounds. submissionFee naturally limits chapter count.
 

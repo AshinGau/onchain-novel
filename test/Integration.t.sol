@@ -265,14 +265,14 @@ contract IntegrationTest is TestBase {
         assertEq(novelCore.getChapter(ch3).parentId, rootId);
         assertEq(novelCore.getChapter(ch4).parentId, ch2);
 
-        uint64[] memory rootDesc = novelCore.getChapterDescendants(rootId);
-        assertEq(rootDesc.length, 2);
-        assertEq(rootDesc[0], ch2);
-        assertEq(rootDesc[1], ch3);
+        uint64[] memory rootKids = novelCore.getChapterChildren(rootId);
+        assertEq(rootKids.length, 2);
+        assertEq(rootKids[0], ch2);
+        assertEq(rootKids[1], ch3);
 
-        uint64[] memory ch2Desc = novelCore.getChapterDescendants(ch2);
-        assertEq(ch2Desc.length, 1);
-        assertEq(ch2Desc[0], ch4);
+        uint64[] memory ch2Kids = novelCore.getChapterChildren(ch2);
+        assertEq(ch2Kids.length, 1);
+        assertEq(ch2Kids[0], ch4);
     }
 
     // ----------------------------------------------------------

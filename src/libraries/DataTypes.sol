@@ -77,7 +77,7 @@ library DataTypes {
     }
 
     /// @notice A chapter (node) in the story tree
-    /// @dev Supports bidirectional traversal: parentId (up) and descendants (down)
+    /// @dev Supports bidirectional traversal: parentId (up) and children (down)
     struct Chapter {
         uint64 id; // Global unique ID
         uint64 novelId; // Novel this chapter belongs to
@@ -87,7 +87,7 @@ library DataTypes {
         uint64 declaredLength; // Declared content byte length
         uint32 depth; // Tree depth within this novel (root = 1)
         uint64 timestamp; // Block timestamp when submitted
-        uint64[] descendants; // Child chapter IDs (for downward DFS traversal)
+        uint64[] children; // Direct child chapter IDs (for downward DFS traversal)
     }
 
     /// @notice Per-round voting data

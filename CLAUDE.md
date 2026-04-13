@@ -62,7 +62,7 @@ npm run build            # Compile TypeScript
 
 ### Smart Contracts (`src/`)
 Five UUPS-upgradeable contracts:
-- **NovelCore** — Chapter tree (parentId + descendants[]), full-scan candidate generation, round lifecycle, worldLineAncestors tracking. Writing always available.
+- **NovelCore** — Chapter tree (parentId + children[]), full-scan candidate generation, round lifecycle, worldLineAncestors tracking. Writing always available.
 - **VotingEngine** — Commit-reveal voting. 3x accuracy weight. One vote per address per round.
 - **PrizePool** — Per-round distribution: creator royalty `D/(D+round)` decay, author/voter rewards. Tips. Keeper rewards.
 - **BountyBoard** — Reader bounties for continuations. 20% to pool, 80% to authors or refund.
