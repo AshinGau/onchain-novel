@@ -29,6 +29,8 @@ export {
   computeCommitHash,
   toBytes32Salt,
   buildContentSubmission,
+  buildWorldLineProof,
+  type VoteOnRuleProposalParams,
 
   // Write operations
   createNovel,

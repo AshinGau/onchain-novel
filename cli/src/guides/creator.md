@@ -154,13 +154,17 @@ onchain-novel-cli vote settle <novelId>      # 结算
 
 ### 规则提案管理
 
-canon 作者可以发起规则修改提案：
+世界线作者（章节当前在某条世界线上的作者）可以发起规则修改提案。
+需要传入自己拥有的、当前在世界线上的 chapterId，CLI 自动计算路径证明：
 ```bash
-onchain-novel-cli rule propose <novelId> add "新规则" "规则内容"
-onchain-novel-cli rule propose <novelId> delete "旧规则"
+onchain-novel-cli rule propose <novelId> add "新规则" <chapterId> "规则内容"
+onchain-novel-cli rule propose <novelId> delete "旧规则" <chapterId>
 ```
 
-其他 canon 作者投票通过后自动执行。
+其他世界线作者投票通过后自动执行：
+```bash
+onchain-novel-cli rule vote <proposalId> <chapterId>
+```
 
 ### 完结小说
 ```bash

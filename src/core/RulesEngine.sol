@@ -52,7 +52,6 @@ contract RulesEngine is Initializable, OwnableUpgradeable, UUPSUpgradeable, IRul
     error InvalidRuleContent();
     error RuleNotFound(string name);
     error RuleAlreadyExists(string name);
-    error NotWorldLineAuthor(uint64 novelId, address caller);
     error ProposalNotFound(uint256 proposalId);
     error ProposalExpired(uint256 proposalId);
     error ProposalAlreadyExecuted(uint256 proposalId);
@@ -115,7 +114,9 @@ contract RulesEngine is Initializable, OwnableUpgradeable, UUPSUpgradeable, IRul
         uint64 novelId,
         DataTypes.RuleProposalType proposalType,
         string calldata ruleName,
-        string calldata ruleContent
+        string calldata ruleContent,
+        uint64 chapterId,
+        uint64[] calldata path
     ) external payable returns (uint256 proposalId) {
         DataTypes.Novel memory novel = novelCore.getNovel(novelId);
         if (novel.id == 0) revert NovelNotFound(novelId);
@@ -130,6 +131,10 @@ contract RulesEngine is Initializable, OwnableUpgradeable, UUPSUpgradeable, IRul
         } else {
             if (_ruleNameIndex[novelId][ruleName] == 0) revert RuleNotFound(ruleName);
         }
+
+        // Eligibility: caller must be the author of `chapterId`, and `path` must prove
+        // chapterId is currently on one of the world lines. Reverts on failure.
+        novelCore.verifyWorldLineAuthor(novelId, msg.sender, chapterId, path);
 
         // Deposit fee to prize pool
         if (msg.value > 0) {
@@ -153,7 +158,7 @@ contract RulesEngine is Initializable, OwnableUpgradeable, UUPSUpgradeable, IRul
     }
 
     /// @inheritdoc IRulesEngine
-    function voteOnRuleProposal(uint256 proposalId) external {
+    function voteOnRuleProposal(uint256 proposalId, uint64 chapterId, uint64[] calldata path) external {
         DataTypes.RuleProposal storage proposal = _ruleProposals[proposalId];
         if (proposal.id == 0) revert ProposalNotFound(proposalId);
         if (proposal.executed) revert ProposalAlreadyExecuted(proposalId);
@@ -165,9 +170,12 @@ contract RulesEngine is Initializable, OwnableUpgradeable, UUPSUpgradeable, IRul
         if (block.timestamp > proposal.createdAt + novel.config.ruleVoteDuration) {
             revert ProposalExpired(proposalId);
         }
-        if (!novelCore.isWorldLineAuthor(novelId, msg.sender)) revert NotWorldLineAuthor(novelId, msg.sender);
-        if (_ruleProposalVotes[proposalId][msg.sender]) revert AlreadyVotedOnProposal(proposalId, msg.sender);
 
+        // Eligibility: same proof requirement as proposeRule. Validity is point-in-time —
+        // a vote that passes verification stays counted even if the world line later shifts.
+        novelCore.verifyWorldLineAuthor(novelId, msg.sender, chapterId, path);
+
+        if (_ruleProposalVotes[proposalId][msg.sender]) revert AlreadyVotedOnProposal(proposalId, msg.sender);
         _ruleProposalVotes[proposalId][msg.sender] = true;
         proposal.voteCount++;
 

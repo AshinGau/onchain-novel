@@ -5,7 +5,10 @@ import {DataTypes} from "../libraries/DataTypes.sol";
 
 /// @title IRulesEngine
 /// @notice Interface for the world-building rules governance module
-/// @dev Rule proposal voting eligibility is based on world-line authorship via isWorldLineAuthor() on NovelCore.
+/// @dev Eligibility for proposing and voting is proven on-demand: caller supplies one of their
+///      authored chapter IDs plus a parent-chain path ending at a current world-line ancestor.
+///      Validity is checked at submission time only — subsequent world-line shifts do not invalidate
+///      already-cast votes or accepted proposals.
 interface IRulesEngine {
     // ============================================================
     //                          EVENTS
@@ -42,23 +45,28 @@ interface IRulesEngine {
     /// @param contents Array of rule contents (parallel to names)
     function setCreatorRules(uint64 novelId, string[] calldata names, string[] calldata contents) external;
 
-    /// @notice Propose adding or deleting a rule (requires ruleFee payment)
+    /// @notice Propose adding or deleting a rule (requires ruleFee + world-line author proof)
     /// @param novelId The novel ID
     /// @param proposalType Add or Delete
     /// @param ruleName The rule name to add or delete
     /// @param ruleContent The rule content (empty for Delete proposals)
+    /// @param chapterId Caller-authored chapter used as eligibility credential
+    /// @param path     [worldLineAncestor, ..., chapterId] — parent-chain proof that chapterId is on a world line
     /// @return proposalId The ID of the created proposal
     function proposeRule(
         uint64 novelId,
         DataTypes.RuleProposalType proposalType,
         string calldata ruleName,
-        string calldata ruleContent
+        string calldata ruleContent,
+        uint64 chapterId,
+        uint64[] calldata path
     ) external payable returns (uint256 proposalId);
 
-    /// @notice Vote on a rule proposal (world-line authors only)
-    /// @dev Checks isWorldLineAuthor() on NovelCore for eligibility
+    /// @notice Vote on a rule proposal (world-line author proof required)
     /// @param proposalId The proposal ID to vote on
-    function voteOnRuleProposal(uint256 proposalId) external;
+    /// @param chapterId  Voter-authored chapter used as eligibility credential
+    /// @param path       [chapterId, ..., ancestorOnWorldLine] — proves chapterId is currently on a world line
+    function voteOnRuleProposal(uint256 proposalId, uint64 chapterId, uint64[] calldata path) external;
 
     // ============================================================
     //                        QUERIES

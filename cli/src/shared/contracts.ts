@@ -115,7 +115,20 @@ export interface ProposeRuleParams {
   proposalType: number; // 0 = Add, 1 = Delete
   ruleName: string;
   ruleContent: string;
+  /** Caller-authored chapter used as eligibility credential (must be on a current world line). */
+  chapterId: bigint;
+  /** Path proof: [worldLineAncestor, ..., chapterId] via parentId chain. */
+  path: bigint[];
   value?: bigint;
+  rulesEngine: `0x${string}`;
+}
+
+export interface VoteOnRuleProposalParams {
+  proposalId: bigint;
+  /** Voter-authored chapter used as eligibility credential. */
+  chapterId: bigint;
+  /** Path proof: [worldLineAncestor, ..., chapterId] via parentId chain. */
+  path: bigint[];
   rulesEngine: `0x${string}`;
 }
 
@@ -142,6 +155,48 @@ export function toBytes32Salt(salt: string): `0x${string}` {
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
   return ("0x" + hex.padEnd(64, "0")) as `0x${string}`;
+}
+
+/**
+ * Build a world-line proof path from a chapter to one of the current worldLineAncestors.
+ *
+ * Returns `[ancestorId, ..., chapterId]` (parent chain, ancestor at head). Returns `null`
+ * if the chapter is not on any current world line. Used to prove eligibility for
+ * RulesEngine.proposeRule / voteOnRuleProposal.
+ *
+ * This is a read-only off-chain computation (one EXTCALL per chapter on the path).
+ */
+export async function buildWorldLineProof(
+  client: PublicClient,
+  novelCore: `0x${string}`,
+  novelId: bigint,
+  chapterId: bigint,
+): Promise<bigint[] | null> {
+  const ancestors = (await client.readContract({
+    address: novelCore,
+    abi: novelCoreAbi,
+    functionName: "getWorldLineAncestors",
+    args: [novelId],
+  })) as readonly bigint[];
+
+  for (const ancestor of ancestors) {
+    const path: bigint[] = [];
+    let cur = ancestor;
+    // Walk parent chain from ancestor toward root
+    while (cur !== 0n) {
+      path.push(cur);
+      if (cur === chapterId) return path;
+      const ch = (await client.readContract({
+        address: novelCore,
+        abi: novelCoreAbi,
+        functionName: "getChapter",
+        args: [cur],
+      })) as { parentId: bigint; depth: number };
+      if (ch.depth <= 1) break;
+      cur = ch.parentId;
+    }
+  }
+  return null;
 }
 
 /** Build a ContentSubmission from text content */
@@ -447,23 +502,26 @@ export async function proposeRule(client: WalletClient, params: ProposeRuleParam
     address: params.rulesEngine,
     abi: rulesEngineAbi,
     functionName: "proposeRule",
-    args: [params.novelId, params.proposalType, params.ruleName, params.ruleContent],
+    args: [
+      params.novelId,
+      params.proposalType,
+      params.ruleName,
+      params.ruleContent,
+      params.chapterId,
+      params.path,
+    ],
     value: params.value ?? 0n,
     chain: client.chain,
     account: client.account!,
   });
 }
 
-export async function voteOnRuleProposal(
-  client: WalletClient,
-  proposalId: bigint,
-  rulesEngine: `0x${string}`,
-): Promise<Hash> {
+export async function voteOnRuleProposal(client: WalletClient, params: VoteOnRuleProposalParams): Promise<Hash> {
   return client.writeContract({
-    address: rulesEngine,
+    address: params.rulesEngine,
     abi: rulesEngineAbi,
     functionName: "voteOnRuleProposal",
-    args: [proposalId],
+    args: [params.proposalId, params.chapterId, params.path],
     chain: client.chain,
     account: client.account!,
   });

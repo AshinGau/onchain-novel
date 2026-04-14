@@ -5,9 +5,11 @@ import {
   setCreatorRules,
   proposeRule,
   voteOnRuleProposal,
+  buildWorldLineProof,
   getNovel,
   getRuleNames,
   getRule,
+  getRuleProposal,
 } from "../shared/index.js";
 import { config } from "../config.js";
 import { getPublicClient, getWalletClient } from "../utils/client.js";
@@ -68,12 +70,14 @@ export function registerRuleTools(server: McpServer): void {
   // ── rule_propose ──
   server.tool(
     "rule_propose",
-    "Propose adding or deleting a rule (costs ruleFee). Canon authors can vote on proposals.",
+    "Propose adding or deleting a rule (costs ruleFee). Caller must be the author of `chapterId`, " +
+      "and `chapterId` must currently be on a world line. The path proof is computed automatically.",
     {
       novelId: z.number().describe("Novel ID"),
       proposalType: z.number().describe("0 = Add, 1 = Delete"),
       ruleName: z.string().describe("Rule name"),
       ruleContent: z.string().default("").describe("Rule content (for Add type)"),
+      chapterId: z.number().describe("Chapter ID authored by caller, currently on a world line"),
       feeEth: z.string().optional().describe("Fee in ETH (defaults to novel's ruleFee)"),
     },
     async (params) => {
@@ -82,11 +86,20 @@ export function registerRuleTools(server: McpServer): void {
         const wallet = getWalletClient();
         const pub = getPublicClient();
 
-        // Get rule fee from novel config if not provided
         let value = params.feeEth ? parseEther(params.feeEth) : undefined;
         if (!value) {
           const novel = (await getNovel(pub, BigInt(params.novelId), config.novelCore)) as any;
           value = novel.config.ruleFee as bigint;
+        }
+
+        const path = await buildWorldLineProof(
+          pub,
+          config.novelCore,
+          BigInt(params.novelId),
+          BigInt(params.chapterId),
+        );
+        if (!path) {
+          return fail(`Chapter #${params.chapterId} is not on any current world line of novel #${params.novelId}.`);
         }
 
         const hash = await proposeRule(wallet, {
@@ -94,6 +107,8 @@ export function registerRuleTools(server: McpServer): void {
           proposalType: params.proposalType,
           ruleName: params.ruleName,
           ruleContent: params.ruleContent,
+          chapterId: BigInt(params.chapterId),
+          path,
           value,
           rulesEngine: config.rulesEngine,
         });
@@ -108,14 +123,33 @@ export function registerRuleTools(server: McpServer): void {
   // ── rule_vote ──
   server.tool(
     "rule_vote",
-    "Vote on a rule proposal (canon authors only).",
-    { proposalId: z.number().describe("Proposal ID") },
+    "Vote on a rule proposal. Caller must be the author of `chapterId`, and `chapterId` must " +
+      "currently be on a world line. The path proof is computed automatically.",
+    {
+      proposalId: z.number().describe("Proposal ID"),
+      chapterId: z.number().describe("Chapter ID authored by caller, currently on a world line"),
+    },
     async (params) => {
       try {
         if (!config.rulesEngine) return fail("RULES_ENGINE_ADDRESS not configured.");
         const wallet = getWalletClient();
         const pub = getPublicClient();
-        const hash = await voteOnRuleProposal(wallet, BigInt(params.proposalId), config.rulesEngine);
+
+        // Derive novelId from the proposal so we can build the proof
+        const proposal = (await getRuleProposal(pub, BigInt(params.proposalId), config.rulesEngine)) as any;
+        const path = await buildWorldLineProof(pub, config.novelCore, proposal.novelId, BigInt(params.chapterId));
+        if (!path) {
+          return fail(
+            `Chapter #${params.chapterId} is not on any current world line of novel #${proposal.novelId}.`,
+          );
+        }
+
+        const hash = await voteOnRuleProposal(wallet, {
+          proposalId: BigInt(params.proposalId),
+          chapterId: BigInt(params.chapterId),
+          path,
+          rulesEngine: config.rulesEngine,
+        });
         const receipt = await pub.waitForTransactionReceipt({ hash });
         return ok(`Voted on proposal #${params.proposalId}.\nTx: ${hash}\nBlock: ${receipt.blockNumber}`);
       } catch (error) {

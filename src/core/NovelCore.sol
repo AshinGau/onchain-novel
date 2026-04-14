@@ -31,7 +31,8 @@ contract NovelCore is
     uint256 internal constant MIN_SUBMISSION_FEE = 0.0001 ether;
     uint32 internal constant MAX_WORLD_LINE_COUNT = 16;
     uint16 private constant BPS_DENOMINATOR = 10000;
-    uint256 private constant MAX_TREE_WALK_STEPS = 1000;
+    /// @notice Hard cap on world-line proof path length (anti-grief)
+    uint256 internal constant MAX_PROOF_PATH_LENGTH = 1024;
 
     // ─────── Storage: external modules ───────
     IVotingEngine public votingEngine;
@@ -47,7 +48,6 @@ contract NovelCore is
     mapping(uint64 => DataTypes.NovelMetadata) private _novelMetadata;
     mapping(uint64 => uint64) private _novelRootId;
     mapping(uint64 => uint64[]) private _worldLineAncestors;
-    mapping(uint64 => mapping(address => bool)) public isWorldLineAuthor;
 
     // ─────── Errors ───────
     error InvalidConfig(uint8 code);
@@ -64,6 +64,9 @@ contract NovelCore is
     error InsufficientForkFee(uint256 sent, uint256 required);
     error ZeroAddress();
     error OnlyRoundManager();
+    error InvalidPath(uint8 code); // 1=empty, 2=head mismatch, 3=cross-novel, 4=parent mismatch, 5=tail not ancestor
+    error PathTooLong();
+    error AuthorMismatch(address expected, address actual);
 
     // ─────── Modifiers ───────
     modifier onlyRoundManager() {
@@ -212,7 +215,6 @@ contract NovelCore is
         });
         _novelRootId[novelId] = rootId;
         _worldLineAncestors[novelId].push(rootId);
-        isWorldLineAuthor[novelId][msg.sender] = true;
     }
 
     // ════════════════════════════════════════════════════
@@ -305,24 +307,12 @@ contract NovelCore is
     function applyWorldLineSettlement(
         uint64 novelId,
         uint64[] calldata newAncestors,
-        uint64[] calldata prevAncestors,
         DataTypes.RoundPhase newPhase,
         uint64 settleTime
     ) external onlyRoundManager {
-        // Clear flags from prev paths
-        for (uint256 i = 0; i < prevAncestors.length; i++) {
-            _walkAndSetAuthorFlag(novelId, prevAncestors[i], false);
-        }
-
-        // Replace ancestors atomically
         delete _worldLineAncestors[novelId];
         for (uint256 i = 0; i < newAncestors.length; i++) {
             _worldLineAncestors[novelId].push(newAncestors[i]);
-        }
-
-        // Set flags on new paths
-        for (uint256 i = 0; i < newAncestors.length; i++) {
-            _walkAndSetAuthorFlag(novelId, newAncestors[i], true);
         }
 
         DataTypes.Novel storage novel = _novels[novelId];
@@ -333,18 +323,6 @@ contract NovelCore is
 
     function setNovelInactive(uint64 novelId) external onlyRoundManager {
         _novels[novelId].active = false;
-    }
-
-    /// @dev Walk parent chain from `chapterId` up to root, setting/clearing the world-line author flag.
-    function _walkAndSetAuthorFlag(uint64 novelId, uint64 chapterId, bool flag) private {
-        uint64 current = chapterId;
-        for (uint256 step = 0; step < MAX_TREE_WALK_STEPS && current != 0; step++) {
-            DataTypes.Chapter storage ch = _chapters[current];
-            if (ch.novelId != novelId) break;
-            isWorldLineAuthor[novelId][ch.author] = flag;
-            if (ch.depth <= 1) break;
-            current = ch.parentId;
-        }
     }
 
     // ════════════════════════════════════════════════════
@@ -369,6 +347,54 @@ contract NovelCore is
 
     function getNovelMetadata(uint64 novelId) external view returns (DataTypes.NovelMetadata memory) {
         return _novelMetadata[novelId];
+    }
+
+    /// @notice Verify (chapterId, path) is a valid proof that `chapterId` is on a current world line
+    ///         and authored by `expectedAuthor`. Reverts on failure.
+    /// @dev World-line ancestors are the deepest chapter on each world line. A chapter X is "on a
+    ///      world line" iff some current ancestor has X as one of its parent-chain ancestors (or is X).
+    ///      Therefore the proof walks DOWN from a world-line ancestor toward X via parentId links:
+    ///        path[0]   = a current worldLineAncestor
+    ///        path[k]   = chapterId (the credential)
+    ///        path[i].parentId == path[i+1]   for each consecutive pair
+    ///      Single-element path is allowed when chapterId itself is a worldLineAncestor.
+    function verifyWorldLineAuthor(
+        uint64 novelId,
+        address expectedAuthor,
+        uint64 chapterId,
+        uint64[] calldata path
+    ) external view {
+        if (path.length == 0) revert InvalidPath(1);
+        if (path.length > MAX_PROOF_PATH_LENGTH) revert PathTooLong();
+        if (path[path.length - 1] != chapterId) revert InvalidPath(2);
+
+        // Author check on the credential chapter
+        DataTypes.Chapter storage tail = _chapters[chapterId];
+        if (tail.id == 0 || tail.novelId != novelId) revert InvalidPath(3);
+        if (tail.author != expectedAuthor) revert AuthorMismatch(expectedAuthor, tail.author);
+
+        // Head must be a current world-line ancestor
+        uint64 head = path[0];
+        DataTypes.Chapter storage headCh = _chapters[head];
+        if (headCh.id == 0 || headCh.novelId != novelId) revert InvalidPath(3);
+        {
+            uint64[] storage ancestors = _worldLineAncestors[novelId];
+            bool found;
+            for (uint256 i = 0; i < ancestors.length; i++) {
+                if (ancestors[i] == head) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) revert InvalidPath(5);
+        }
+
+        // Walk parent chain: each path[i].parentId must equal path[i+1]
+        for (uint256 i = 0; i + 1 < path.length; i++) {
+            DataTypes.Chapter storage step = _chapters[path[i]];
+            if (step.id == 0 || step.novelId != novelId) revert InvalidPath(3);
+            if (step.parentId != path[i + 1]) revert InvalidPath(4);
+        }
     }
 
     // ════════════════════════════════════════════════════

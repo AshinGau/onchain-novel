@@ -6,11 +6,43 @@ import {TestBase} from "./Integration.t.sol";
 import {DataTypes} from "../src/libraries/DataTypes.sol";
 
 /// @title RulesTest
-/// @notice Tests for the RulesEngine governance module
+/// @notice Tests for the RulesEngine governance module under the path-proof eligibility model.
 contract RulesTest is TestBase {
-    // ----------------------------------------------------------
-    //  Creator sets rules before first round
-    // ----------------------------------------------------------
+    // ─────────── helpers ───────────
+
+    /// Build a path proof: walk parentId from `from` up to `target`, returning the visited
+    /// chapter IDs in order [from, ..., target]. For our verifier, `from` should be a current
+    /// worldLineAncestor and `target` should be the credential chapter.
+    function _buildPath(uint64 from, uint64 target) internal view returns (uint64[] memory path) {
+        // First pass: count length
+        uint64 cur = from;
+        uint256 len = 1;
+        while (cur != target) {
+            DataTypes.Chapter memory ch = novelCore.getChapter(cur);
+            require(ch.id != 0, "path: chapter missing");
+            require(ch.depth > 1, "path: hit root before target");
+            cur = ch.parentId;
+            len++;
+            require(len < 256, "path: runaway");
+        }
+        path = new uint64[](len);
+        cur = from;
+        path[0] = cur;
+        for (uint256 i = 1; i < len; i++) {
+            cur = novelCore.getChapter(cur).parentId;
+            path[i] = cur;
+        }
+    }
+
+    /// Simple single-element path when chapterId IS a worldLineAncestor.
+    function _singleHopPath(uint64 chapterId) internal pure returns (uint64[] memory path) {
+        path = new uint64[](1);
+        path[0] = chapterId;
+    }
+
+    // ─────────── tests ───────────
+
+    /// Creator sets initial rules before round 1
     function test_creatorSetsRulesBeforeFirstRound() public {
         uint64 novelId = _createNovel();
 
@@ -26,27 +58,20 @@ contract RulesTest is TestBase {
 
         assertEq(rulesEngine.getRule(novelId, "genre"), "sci-fi");
         assertEq(rulesEngine.getRule(novelId, "tone"), "dark and moody");
-
-        string[] memory ruleNames = rulesEngine.getRuleNames(novelId);
-        assertEq(ruleNames.length, 2);
+        assertEq(rulesEngine.getRuleNames(novelId).length, 2);
     }
 
-    // ----------------------------------------------------------
-    //  Creator cannot set rules after first round starts
-    // ----------------------------------------------------------
+    /// Creator cannot set rules after first round starts
     function test_creatorCannotSetRulesAfterFirstRound() public {
         uint64 novelId = _createNovel();
         uint64 rootId = 1;
 
-        // Submit 2 chapters so DFS has enough candidates (N=2 world lines)
         _submitChapter(author1, novelId, rootId, "chapter for first round!!");
         _submitChapter(author2, novelId, rootId, "chapter B for first round!");
 
-        // Start a round
         vm.prank(keeper);
         roundManager.startRound(novelId);
 
-        // Complete the round
         vm.warp(block.timestamp + NOMINATE_DURATION + 1);
         vm.prank(keeper);
         roundManager.closeNomination(novelId);
@@ -70,7 +95,6 @@ contract RulesTest is TestBase {
         vm.prank(keeper);
         roundManager.settleRound(novelId);
 
-        // Now try to set rules — should revert
         string[] memory names = new string[](1);
         names[0] = "newrule";
         string[] memory contents = new string[](1);
@@ -81,94 +105,136 @@ contract RulesTest is TestBase {
         rulesEngine.setCreatorRules(novelId, names, contents);
     }
 
-    // ----------------------------------------------------------
-    //  Rule proposal by anyone (pays fee)
-    // ----------------------------------------------------------
+    /// Creator can propose a rule using the root chapter (root is worldLineAncestor at start)
     function test_ruleProposal() public {
         uint64 novelId = _createNovel();
+        uint64 rootId = 1; // creator-authored, also a worldLineAncestor pre-round-1
 
-        vm.prank(author1);
+        vm.prank(creator);
         uint256 proposalId = rulesEngine.proposeRule{value: 0.01 ether}(
-            novelId, DataTypes.RuleProposalType.Add, "setting", "medieval fantasy"
+            novelId,
+            DataTypes.RuleProposalType.Add,
+            "setting",
+            "medieval fantasy",
+            rootId,
+            _singleHopPath(rootId)
         );
 
         assertTrue(proposalId > 0);
         DataTypes.RuleProposal memory proposal = rulesEngine.getRuleProposal(proposalId);
         assertEq(proposal.novelId, novelId);
-        assertEq(proposal.proposer, author1);
+        assertEq(proposal.proposer, creator);
         assertEq(uint8(proposal.proposalType), uint8(DataTypes.RuleProposalType.Add));
     }
 
-    // ----------------------------------------------------------
-    //  World line authors vote on proposals
-    // ----------------------------------------------------------
+    /// Non-author cannot propose (path verification fails on author mismatch)
+    function test_nonAuthorCannotPropose() public {
+        uint64 novelId = _createNovel();
+        uint64 rootId = 1;
+
+        vm.prank(author1); // not the root chapter author
+        vm.expectRevert();
+        rulesEngine.proposeRule{value: 0.01 ether}(
+            novelId,
+            DataTypes.RuleProposalType.Add,
+            "setting",
+            "medieval fantasy",
+            rootId,
+            _singleHopPath(rootId)
+        );
+    }
+
+    /// World-line authors vote on proposals using path proofs.
+    /// After the first round, the world line ends at ch3 (deepest). author1's ch2 is on
+    /// the path from rootId down to ch3, so author1 can prove eligibility via path [ch3, ch2].
     function test_worldLineAuthorsVoteOnProposal() public {
         uint64 novelId = _createNovel();
         uint64 rootId = 1;
 
-        // Build tree and run a round to establish world line authors
         uint64 ch2 = _submitChapter(author1, novelId, rootId, "chapter 2 for rules vote!");
         uint64 ch3 = _submitChapter(author2, novelId, ch2, "chapter 3 for rules vote!");
-        // Add a sibling branch so we have >= 2 candidates (worldLineCount = 2)
-        _submitChapter(author3, novelId, rootId, "branch B for rules vote!!!");
+        uint64 ch4 = _submitChapter(author3, novelId, rootId, "branch B for rules vote!!!");
 
         address[] memory voters = new address[](1);
         voters[0] = voter1;
         _runFullRound(novelId, voters, ch3, bytes32("rulesvote"));
 
-        // Now author1 and author2 should be world line authors
-        assertTrue(novelCore.isWorldLineAuthor(novelId, author1));
-        assertTrue(novelCore.isWorldLineAuthor(novelId, author2));
+        // After settle, worldLineAncestors should include ch3 (the winner) and ch4 (sibling branch leaf).
+        uint64[] memory ancestors = novelCore.getWorldLineAncestors(novelId);
+        assertEq(ancestors.length, 2);
 
-        // Create a proposal
-        vm.prank(author3);
+        // author2 wrote ch3 which IS a worldLineAncestor → single-hop proof
+        // author1 wrote ch2 which is on path from ch3 → proof = [ch3, ch2]
+        // author3 wrote ch4 which IS a worldLineAncestor → single-hop proof
+
+        // Pre-compute paths BEFORE vm.prank (each prank only stamps the next call).
+        uint64[] memory ch3Single = _singleHopPath(ch3);
+        uint64[] memory pathCh2 = _buildPath(ch3, ch2);
+        uint64[] memory ch4Single = _singleHopPath(ch4);
+
+        // Create a proposal by author2 (ch3 worldLineAncestor)
+        vm.prank(author2);
         uint256 proposalId = rulesEngine.proposeRule{value: 0.01 ether}(
-            novelId, DataTypes.RuleProposalType.Add, "magic_system", "hard magic with runes"
+            novelId, DataTypes.RuleProposalType.Add, "magic_system", "hard magic with runes", ch3, ch3Single
         );
 
-        // World line authors vote
+        // author1 votes using ch2 proven via [ch3, ch2]
         vm.prank(author1);
-        rulesEngine.voteOnRuleProposal(proposalId);
+        rulesEngine.voteOnRuleProposal(proposalId, ch2, pathCh2);
 
         DataTypes.RuleProposal memory proposal = rulesEngine.getRuleProposal(proposalId);
         assertEq(proposal.voteCount, 1);
 
-        // Second vote reaches quorum (ruleQuorum=2), auto-executes
-        vm.prank(author2);
-        rulesEngine.voteOnRuleProposal(proposalId);
+        // author3 votes using ch4 (worldLineAncestor) → reaches quorum=2, auto-execute
+        vm.prank(author3);
+        rulesEngine.voteOnRuleProposal(proposalId, ch4, ch4Single);
 
         proposal = rulesEngine.getRuleProposal(proposalId);
         assertTrue(proposal.executed);
         assertEq(rulesEngine.getRule(novelId, "magic_system"), "hard magic with runes");
     }
 
-    // ----------------------------------------------------------
-    //  Non-world-line-authors cannot vote
-    // ----------------------------------------------------------
-    function test_nonWorldLineAuthorCannotVote() public {
+    /// Off-world-line author cannot vote (their chapter has no path to any current ancestor)
+    function test_offWorldLineAuthorCannotVote() public {
         uint64 novelId = _createNovel();
         uint64 rootId = 1;
 
-        // Build tree: author1 on world line, author2 as sibling branch
+        // author1 will be on world line; author2 will be on a sibling branch that loses
         uint64 ch2 = _submitChapter(author1, novelId, rootId, "chapter by author1 wl test");
-        _submitChapter(author2, novelId, rootId, "chapter B for wl vote test!");
+        uint64 ch3 = _submitChapter(author2, novelId, rootId, "chapter B for wl vote test!");
 
         address[] memory voters = new address[](1);
         voters[0] = voter1;
+        // Voters elect ch2; ch3 loses. After this round, world line includes ch2 (and ch3 as the
+        // sibling-branch leaf because worldLineCount=2 and there are exactly 2 leaves). To make
+        // the test meaningful we build a deeper world line so the loser is no longer an ancestor.
         _runFullRound(novelId, voters, ch2, bytes32("wlvote"));
 
-        // author3 is NOT on the world line
-        assertFalse(novelCore.isWorldLineAuthor(novelId, author3));
+        // After round 1, ancestors = [ch2, ch3] (both leaves at depth 2). To disqualify author2,
+        // submit a deeper continuation on ch2 only and run another round.
+        vm.warp(block.timestamp + MIN_ROUND_GAP + 1);
+        uint64 ch4 = _submitChapter(author1, novelId, ch2, "deeper chapter on ch2 line");
+        uint64 ch5 = _submitChapter(author1, novelId, ch3, "deeper on ch3 line, author1");
+        // Round 2: both lines extended; deepest leaves are ch4 and ch5
+        _runFullRound(novelId, voters, ch4, bytes32("wlvote2"));
 
-        // Propose a rule
+        // Pre-compute paths
+        uint64[] memory ch4Single = _singleHopPath(ch4);
+        uint64[] memory pathCh3 = _buildPath(ch5, ch3);
+        assertEq(pathCh3.length, 2);
+        assertEq(pathCh3[0], ch5);
+        assertEq(pathCh3[1], ch3);
+
+        // Create a proposal by author1 using ch4 (a worldLineAncestor)
         vm.prank(author1);
         uint256 proposalId = rulesEngine.proposeRule{value: 0.01 ether}(
-            novelId, DataTypes.RuleProposalType.Add, "language", "English only"
+            novelId, DataTypes.RuleProposalType.Add, "language", "English only", ch4, ch4Single
         );
 
-        // author3 tries to vote — should revert
+        // author3 has never written anything → cannot construct any valid (chapterId, path) pair.
+        // Trying with ch3 (which belongs to author2) triggers AuthorMismatch.
         vm.prank(author3);
         vm.expectRevert();
-        rulesEngine.voteOnRuleProposal(proposalId);
+        rulesEngine.voteOnRuleProposal(proposalId, ch3, pathCh3);
     }
 }

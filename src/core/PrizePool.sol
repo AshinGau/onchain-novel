@@ -166,20 +166,15 @@ contract PrizePool is
 
         DataTypes.Chapter memory ch = INovelCore(novelCore).getChapter(chapterId);
         if (ch.id == 0) revert ChapterNotFound(chapterId);
-        address author = ch.author;
-        uint64 novelId = ch.novelId;
 
+        // Pull-only: 50% credits the author's pending rewards (claim via claimReward),
+        // 50% accrues to the novel's prize pool. Avoids losing the author's share to
+        // contracts that reject ETH or to address-takeover scenarios.
         uint256 authorShare = msg.value / 2;
+        _pendingRewards[ch.novelId][ch.author] += authorShare;
+        _poolBalances[ch.novelId] += msg.value - authorShare;
 
-        // Push 50% to author; if push fails, 100% goes to pool
-        (bool success,) = author.call{value: authorShare}("");
-        if (!success) {
-            _poolBalances[novelId] += msg.value;
-        } else {
-            _poolBalances[novelId] += msg.value - authorShare;
-        }
-
-        emit ChapterTipped(novelId, chapterId, msg.sender, msg.value);
+        emit ChapterTipped(ch.novelId, chapterId, msg.sender, msg.value);
     }
 
     /// @inheritdoc IPrizePool
