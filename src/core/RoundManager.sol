@@ -14,10 +14,23 @@ import {IPrizePool} from "../interfaces/IPrizePool.sol";
 import {DataTypes} from "../libraries/DataTypes.sol";
 
 /// @title RoundManager
-/// @notice Round lifecycle: keeper-provided leaves & paths, on-chain path verification.
-/// @dev Heavy traversal (DFS, walk-to-root) lives off-chain in the keeper service. Contract
-///      validates each path is a real parent chain via `NovelCore.verifyChapterPath` and
-///      derives author lists from `Chapter.author` storage. Keeper cannot fabricate authors.
+/// @notice Round lifecycle: keeper picks the candidate leaves for startRound; everything else
+///         (winner selection, reward derivation, novel completion) is fully on-chain deterministic.
+/// @dev ## Keeper trust model (single attack surface)
+///      The keeper's ONLY privileged input is the `leaves[]` array supplied to `startRound`.
+///      A malicious keeper can at most:
+///        - include one specific favored leaf per world line (still bound by "must be a real tree
+///          leaf belonging to the novel"), thereby biasing which world line gets representation,
+///        - OR omit/delay calling `startRound` (any caller can take over after
+///          `KEEPER_INACTIVITY_TIMEOUT` — 1 day — for each phase-transition function).
+///      A keeper CANNOT:
+///        - pick winners (that comes from on-chain `VotingEngine.tallyVotes`),
+///        - fabricate or suppress reward authors (derived from `NovelCore.collectPathAuthors`
+///          walking `parentId` from each winner upward — pure on-chain state),
+///        - alter committed votes (commit-reveal prevents that),
+///        - drain / withhold prize pool (distribution rules are fixed protocol constants).
+///      This keeps "keeper picks leaves" as the single residual trust assumption — the only
+///      weakness users must accept, and the core value proposition of onchain-novel.
 contract RoundManager is
     Initializable,
     OwnableUpgradeable,
@@ -52,8 +65,6 @@ contract RoundManager is
     error DuplicateLeaf(uint64 chapterId);
     error AlreadyACandidate(uint64 chapterId);
     error InvalidPathAnchor();
-    error WinnerPathMismatch();
-    error FinalPathMismatch();
     error InvalidFee(uint256 sent, uint256 required);
     error TransferFailed();
     error NotKeeperYet();
@@ -216,7 +227,7 @@ contract RoundManager is
         emit CommitClosed(novelId, novel.currentRound);
     }
 
-    function settleRound(uint64 novelId, uint64[][] calldata winnerPaths) external whenNotPaused nonReentrant {
+    function settleRound(uint64 novelId) external whenNotPaused nonReentrant {
         DataTypes.Novel memory novel = novelCore.getNovel(novelId);
         if (novel.id == 0) revert NovelNotFound(novelId);
         if (novel.roundPhase != DataTypes.RoundPhase.Revealing) {
@@ -231,14 +242,14 @@ contract RoundManager is
         uint32 N = novel.config.worldLineCount;
         uint64[] memory winners = votingEngine.tallyVotes(novelId, round, N);
 
-        if (winnerPaths.length != winners.length) revert WinnerPathMismatch();
-
-        // Derive rewardAuthors from winnerPaths. Each non-empty path must have:
-        //   path[0] == winners[i]
-        //   path[last] is in PREV worldLineAncestors (i.e., the current ones BEFORE we apply settlement)
-        // Authors collected from path[0..last-1] (path[last] is the prev anchor — already on previous world line).
+        // Reward authors are derived fully on-chain: walk from each winner up parentId until hitting
+        // a previous world line ancestor (anchor is EXCLUDED — already rewarded in a prior round).
+        // If a winner doesn't descend from any prev ancestor (e.g. it won via an orphan nomination
+        // where the nominator skipped the path proof), that winner contributes no authors — the
+        // nominator/author chose to forfeit reward by nominating without proof. World line still
+        // advances to it.
         uint64[] memory prevAncestors = novelCore.getWorldLineAncestors(novelId);
-        address[] memory rewardAuthors = _collectRewardAuthors(novelId, winners, winnerPaths, prevAncestors);
+        address[] memory rewardAuthors = novelCore.collectPathAuthors(novelId, winners, prevAncestors, true);
 
         // Distribute round rewards
         uint256 voterRewards = 0;
@@ -277,94 +288,56 @@ contract RoundManager is
         emit RoundSettled(novelId, round, winners);
     }
 
-    function _collectRewardAuthors(
-        uint64 novelId,
-        uint64[] memory winners,
-        uint64[][] calldata winnerPaths,
-        uint64[] memory prevAncestors
-    ) internal view returns (address[] memory) {
-        // Worst-case buffer size (sum of path.length-1 over non-empty paths)
-        uint256 maxTotal = 0;
-        for (uint256 i = 0; i < winnerPaths.length; i++) {
-            if (winnerPaths[i].length == 0) continue;
-            maxTotal += winnerPaths[i].length - 1;
-        }
-        uint64[] memory uniqueIds = new uint64[](maxTotal);
-        uint256 uniqueCount = 0;
-
-        for (uint256 i = 0; i < winnerPaths.length; i++) {
-            uint64[] calldata path = winnerPaths[i];
-            if (path.length == 0) continue;
-
-            // Validate: path[0] must equal winners[i]
-            if (path[0] != winners[i]) revert WinnerPathMismatch();
-            // Anchor: path[last] must be one of the previous world line ancestors
-            uint64 anchor = path[path.length - 1];
-            bool anchorOk = false;
-            for (uint256 a = 0; a < prevAncestors.length; a++) {
-                if (prevAncestors[a] == anchor) {
-                    anchorOk = true;
-                    break;
-                }
-            }
-            if (!anchorOk) revert InvalidPathAnchor();
-
-            // Verify parent chain
-            novelCore.verifyChapterPath(novelId, path);
-
-            // Collect chapter IDs (except the anchor, already counted in prior rounds), dedup across paths
-            for (uint256 k = 0; k + 1 < path.length; k++) {
-                uint64 id = path[k];
-                bool dup = false;
-                for (uint256 u = 0; u < uniqueCount; u++) {
-                    if (uniqueIds[u] == id) {
-                        dup = true;
-                        break;
-                    }
-                }
-                if (!dup) uniqueIds[uniqueCount++] = id;
-            }
-        }
-
-        address[] memory out = new address[](uniqueCount);
-        for (uint256 i = 0; i < uniqueCount; i++) {
-            out[i] = novelCore.getChapter(uniqueIds[i]).author;
-        }
-        return out;
-    }
-
     // ────────────────────────────────────────────────────
     //                  NOMINATION & VOTING
     // ────────────────────────────────────────────────────
 
-    function nominateCandidate(uint64 novelId, uint64[] calldata path) external payable whenNotPaused {
+    /// @notice Nominate any chapter as a voting candidate. Pays nominationFee.
+    /// @param novelId Novel under which to nominate
+    /// @param chapterId The chapter to add as a candidate
+    /// @param path Optional proof that `chapterId` descends from a current worldLineAncestor.
+    ///             If non-empty: path[0] = chapterId, path[last] = a current ancestor; standard
+    ///             parent-chain validation — this candidate's author is eligible for rewards
+    ///             if it wins and the chain can be walked back to a previous world line ancestor.
+    ///             If empty: arbitrary chapter, no reward eligibility. The nominator explicitly
+    ///             forfeits author rewards for this candidate. World line still advances if it wins.
+    ///             This is the on-chain "opt-out" path — accepted as intentional behavior, not a bug.
+    function nominateCandidate(uint64 novelId, uint64 chapterId, uint64[] calldata path)
+        external
+        payable
+        whenNotPaused
+    {
         DataTypes.Novel memory novel = novelCore.getNovel(novelId);
         if (novel.id == 0) revert NovelNotFound(novelId);
         if (novel.roundPhase != DataTypes.RoundPhase.Nominating) {
             revert WrongRoundPhase(DataTypes.RoundPhase.Nominating, novel.roundPhase);
         }
         if (msg.value != novel.config.nominationFee) revert InvalidFee(msg.value, novel.config.nominationFee);
-        if (path.length < 2) revert InvalidPathAnchor();
 
-        // Validate parent chain
-        novelCore.verifyChapterPath(novelId, path);
+        // chapterId must exist under this novel
+        DataTypes.Chapter memory ch = novelCore.getChapter(chapterId);
+        if (ch.id == 0 || ch.novelId != novelId) revert NovelNotFound(novelId);
 
-        // Anchor: path[last] must be a current worldLineAncestor (proves nominated chapter is a descendant)
-        uint64 nominatedId = path[0];
-        if (!novelCore.isCurrentWorldLineAncestor(novelId, path[path.length - 1])) revert InvalidPathAnchor();
+        // If a path is supplied, validate it: path[0] must be the nominated chapter, path[last]
+        // must be a current worldLineAncestor. Empty path = forfeit (arbitrary chapter allowed).
+        if (path.length > 0) {
+            if (path[0] != chapterId) revert InvalidPathAnchor();
+            novelCore.verifyChapterPath(novelId, path);
+            if (!novelCore.isCurrentWorldLineAncestor(novelId, path[path.length - 1])) revert InvalidPathAnchor();
+        }
 
         DataTypes.RoundData storage rd = _rounds[novelId][novel.currentRound];
         if (rd.candidates.length >= MAX_CANDIDATES_PER_ROUND) revert TooManyLeaves();
         for (uint256 i = 0; i < rd.candidates.length; i++) {
-            if (rd.candidates[i] == nominatedId) revert AlreadyACandidate(nominatedId);
+            if (rd.candidates[i] == chapterId) revert AlreadyACandidate(chapterId);
         }
 
-        rd.candidates.push(nominatedId);
-        votingEngine.addCandidate(novelId, novel.currentRound, nominatedId);
+        rd.candidates.push(chapterId);
+        votingEngine.addCandidate(novelId, novel.currentRound, chapterId);
 
         if (msg.value > 0) prizePool.deposit{value: msg.value}(novelId, "nominationFee");
 
-        emit CandidateNominated(novelId, novel.currentRound, nominatedId, msg.sender);
+        emit CandidateNominated(novelId, novel.currentRound, chapterId, msg.sender);
     }
 
     function commitVote(uint64 novelId, bytes32 commitHash) external payable whenNotPaused {
@@ -404,7 +377,7 @@ contract RoundManager is
     //                NOVEL COMPLETION
     // ────────────────────────────────────────────────────
 
-    function completeNovel(uint64 novelId, uint64[][] calldata finalPaths) external whenNotPaused nonReentrant {
+    function completeNovel(uint64 novelId) external whenNotPaused nonReentrant {
         DataTypes.Novel memory novel = novelCore.getNovel(novelId);
         if (novel.id == 0) revert NovelNotFound(novelId);
         if (!novel.active) revert NovelAlreadyCompleted(novelId);
@@ -414,24 +387,23 @@ contract RoundManager is
         // Must have completed at least one settled round (creator cannot drain the pool on a fresh novel)
         if (novel.currentRound < 1) revert NovelHasNoRound();
 
+        uint64[] memory worldLineAncestors = novelCore.getWorldLineAncestors(novelId);
+
         // Permission: creator || keeper || owner || (anyone after inactivity timeout)
         if (msg.sender != novel.creator && msg.sender != keeper && msg.sender != owner()) {
-            // Compute most-recent activity from worldLineAncestors timestamps
-            uint64[] memory ancestors = novelCore.getWorldLineAncestors(novelId);
             uint64 lastActivity = novel.phaseStartTime;
-            for (uint256 i = 0; i < ancestors.length; i++) {
-                uint64 ts = novelCore.getChapter(ancestors[i]).timestamp;
+            for (uint256 i = 0; i < worldLineAncestors.length; i++) {
+                uint64 ts = novelCore.getChapter(worldLineAncestors[i]).timestamp;
                 if (ts > lastActivity) lastActivity = ts;
             }
             if (block.timestamp < lastActivity + INACTIVITY_TIMEOUT) revert NotAllowedToComplete();
         }
 
-        // Validate finalPaths cover all current world lines
-        uint64[] memory worldLineAncestors = novelCore.getWorldLineAncestors(novelId);
-        if (finalPaths.length != worldLineAncestors.length) revert FinalPathMismatch();
-
-        // Collect chapter authors from all paths (dedup chapter IDs across paths)
-        address[] memory finalAuthors = _collectFinalAuthors(novelId, finalPaths, worldLineAncestors);
+        // Collect every author on every world line by walking each ancestor up to the root.
+        // No anchors supplied → walks go to root (parentId == 0). requireAnchorHit=false because
+        // every ancestor reaches root by construction; every chapter contributes its author.
+        uint64[] memory noAnchors = new uint64[](0);
+        address[] memory finalAuthors = novelCore.collectPathAuthors(novelId, worldLineAncestors, noAnchors, false);
 
         if (finalAuthors.length > 0) {
             uint256 dust = prizePool.distributeRoundRewards(
@@ -447,48 +419,6 @@ contract RoundManager is
 
         novelCore.setNovelInactive(novelId);
         emit NovelCompleted(novelId);
-    }
-
-    function _collectFinalAuthors(
-        uint64 novelId,
-        uint64[][] calldata finalPaths,
-        uint64[] memory worldLineAncestors
-    ) internal view returns (address[] memory) {
-        // Dedup chapter IDs across all paths (paths share root and possibly intermediate ancestors)
-        // Worst case: sum of path lengths. Use a linear-scan dedup.
-        uint256 maxTotal = 0;
-        for (uint256 i = 0; i < finalPaths.length; i++) {
-            maxTotal += finalPaths[i].length;
-        }
-        uint64[] memory uniqueIds = new uint64[](maxTotal);
-        uint256 uniqueCount = 0;
-
-        for (uint256 i = 0; i < finalPaths.length; i++) {
-            uint64[] calldata path = finalPaths[i];
-            if (path.length == 0) revert FinalPathMismatch();
-            if (path[0] != worldLineAncestors[i]) revert FinalPathMismatch();
-            if (novelCore.getChapter(path[path.length - 1]).depth != 1) revert FinalPathMismatch();
-
-            novelCore.verifyChapterPath(novelId, path);
-
-            for (uint256 k = 0; k < path.length; k++) {
-                uint64 id = path[k];
-                bool dup = false;
-                for (uint256 u = 0; u < uniqueCount; u++) {
-                    if (uniqueIds[u] == id) {
-                        dup = true;
-                        break;
-                    }
-                }
-                if (!dup) uniqueIds[uniqueCount++] = id;
-            }
-        }
-
-        address[] memory authors = new address[](uniqueCount);
-        for (uint256 i = 0; i < uniqueCount; i++) {
-            authors[i] = novelCore.getChapter(uniqueIds[i]).author;
-        }
-        return authors;
     }
 
     // ────────────────────────────────────────────────────

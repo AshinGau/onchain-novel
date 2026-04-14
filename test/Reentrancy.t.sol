@@ -136,7 +136,6 @@ contract ReentrancyTest is TestBase {
         uint64[] memory leaves = new uint64[](2);
         leaves[0] = ch2;
         leaves[1] = ch3;
-        uint64[] memory prevAncestors = novelCore.getWorldLineAncestors(novelId);
 
         vm.prank(keeper);
         roundManager.startRound(novelId, leaves);
@@ -161,12 +160,8 @@ contract ReentrancyTest is TestBase {
 
         vm.warp(block.timestamp + REVEAL_DURATION + 1);
 
-        uint64[][] memory winnerPaths = new uint64[][](2);
-        winnerPaths[0] = _pathToAnyAnchor(ch2, prevAncestors);
-        winnerPaths[1] = _pathToAnyAnchor(ch3, prevAncestors);
-
         vm.prank(keeper);
-        roundManager.settleRound(novelId, winnerPaths);
+        roundManager.settleRound(novelId);
 
         // Claim voting reward through NovelCore
         uint256 balBefore = voter1.balance;

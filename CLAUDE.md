@@ -63,14 +63,14 @@ npm run build            # Compile TypeScript
 ### Smart Contracts (`src/`)
 Six UUPS-upgradeable contracts + one standalone:
 - **NovelCore** — Chapter tree (parentId + children[]), novel/chapter CRUD, metadata, worldLineAncestors storage. Writing always available. Round state is mutated only by RoundManager via privileged setters.
-- **RoundManager** — Round lifecycle (start/close/settle/nominate), commit-reveal vote forwarding, final completion. Round-phase functions are `keeper`-only (with anyone-after-timeout fallback). Keeper supplies leaves + winnerPaths + finalPaths off-chain; contract verifies parent chains via `NovelCore.verifyChapterPath` and derives authors from storage (no trust in caller's authors).
+- **RoundManager** — Round lifecycle (start/close/settle/nominate), commit-reveal vote forwarding, final completion. Round-phase functions are `keeper`-only (with anyone-after-timeout fallback). **Keeper's single attack surface = the `leaves[]` fed to `startRound`** (biasing which tree leaf per world line becomes the candidate). Everything else is fully on-chain deterministic: winners from `VotingEngine.tallyVotes`, reward authors from `NovelCore.collectPathAuthors` walking parentId, final authors likewise. Commit-reveal prevents vote alteration; prize release rules are fixed constants. This "keeper picks leaves only" property is the core trust proposition.
 - **VotingEngine** — Commit-reveal voting. 3x accuracy weight. One vote per address per round. Privileged calls gated by RoundManager.
 - **PrizePool** — Per-round distribution: creator royalty `D/(D+round)` decay, author/voter rewards. Tips (public `tipNovel` / `tipChapter`). Keeper rewards.
 - **BountyBoard** — Reader bounties for direct-child continuations. 20% to pool, 80% to authors or refund.
 - **RulesEngine** — World-building rules: creator rules (before first round) + proposal-based changes. Eligibility for proposing & voting is proven on-demand via `(chapterId, path)` — caller authored chapter that's currently on a world line.
 - **UserRegistry** — One-time immutable nickname registry (standalone, non-upgradeable).
 
-State flow (on RoundManager): `Idle → startRound(DFS) → Nominating → closeNomination → Committing → closeCommit → Revealing → settleRound → Idle`
+State flow (on RoundManager): `Idle → startRound(leaves[]) → Nominating → closeNomination → Committing → closeCommit → Revealing → settleRound → Idle`
 
 ### Web Backend (`web/backend/src/`)
 - **Indexer** — Polls chain events from all 7 contracts (NovelCore, RoundManager, VotingEngine, PrizePool, BountyBoard, RulesEngine, UserRegistry), writes to PostgreSQL. Confirmation blocks for reorg safety.
@@ -97,7 +97,7 @@ State flow (on RoundManager): `Idle → startRound(DFS) → Nominating → close
 
 - **Writing always on** — `submitChapter` has no phase restriction.
 - **One vote per address per round** — Contract reverts `AlreadyCommitted()`.
-- **Off-chain candidate selection** — Keeper supplies leaf chapter IDs to `startRound`; contract only verifies each is a true tree leaf belonging to the novel. Indexer walks the tree to pick deepest leaves.
+- **Off-chain candidate selection, on-chain everything else** — Keeper supplies leaf chapter IDs to `startRound`; contract only verifies each is a true tree leaf belonging to the novel. All downstream logic (winner tally, reward-author parent-chain walk, completion walk) runs on-chain — no path arrays flow in from off-chain. This is the keeper's single residual trust surface.
 - **Creator royalty** — `D/(D+round)` where D=CREATOR_DECAY_DIVISOR (constant, currently 3).
 - **Voter accuracy** — 3x weight for voting on a winning world line, 1x for others who revealed.
 - **Content storage** — Three modes (Onchain/External/HTTP) set at novel creation, immutable.

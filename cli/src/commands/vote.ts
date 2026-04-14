@@ -98,10 +98,12 @@ export function registerVoteCommands(program: Command): void {
   vote
     .command("nominate <novel-id> <chapter-id>")
     .description(
-      "Nominate a chapter as candidate. The chapter must be a descendant of one of the current " +
-        "worldLineAncestors; the path proof is computed automatically.",
+      "Nominate a chapter as candidate. By default the path proof (chapter → current " +
+        "worldLineAncestor) is auto-computed so the nominator is reward-eligible. " +
+        "Pass --forfeit to nominate an arbitrary chapter with no reward eligibility (empty path).",
     )
     .option("--value <eth>", "nomination fee in ETH")
+    .option("--forfeit", "nominate without reward eligibility (skip path proof)")
     .action(async (novelId, chapterId, opts) => {
       try {
         const client = getWalletClient();
@@ -122,30 +124,36 @@ export function registerVoteCommands(program: Command): void {
           }
         }
 
-        // Build path proof: nominated chapter → current worldLineAncestor
-        const ancestors = (await pub.readContract({
-          address: contracts.novelCore,
-          abi: (await import("../shared/abi.js")).novelCoreAbi,
-          functionName: "getWorldLineAncestors",
-          args: [BigInt(novelId)],
-        })) as readonly bigint[];
-        const path = await buildPathToAnchor(pub, contracts.novelCore, BigInt(novelId), BigInt(chapterId), ancestors);
-        if (!path || path.length < 2) {
-          error(
-            `Chapter #${chapterId} is not a strict descendant of any current worldLineAncestor of novel #${novelId}.`,
-          );
-          return process.exit(1);
+        let path: bigint[] = [];
+        if (!opts.forfeit) {
+          // Build path proof: nominated chapter → current worldLineAncestor
+          const ancestors = (await pub.readContract({
+            address: contracts.novelCore,
+            abi: (await import("../shared/abi.js")).novelCoreAbi,
+            functionName: "getWorldLineAncestors",
+            args: [BigInt(novelId)],
+          })) as readonly bigint[];
+          const proof = await buildPathToAnchor(pub, contracts.novelCore, BigInt(novelId), BigInt(chapterId), ancestors);
+          if (!proof || proof.length < 2) {
+            error(
+              `Chapter #${chapterId} is not a strict descendant of any current worldLineAncestor of novel #${novelId}. ` +
+                `Pass --forfeit to nominate anyway (no reward eligibility).`,
+            );
+            return process.exit(1);
+          }
+          path = proof;
         }
 
         const hash = await nominateCandidateTx(client, {
           novelId: BigInt(novelId),
+          chapterId: BigInt(chapterId),
           path,
           value,
           roundManager: contracts.roundManager,
         });
         txHash(hash);
         await waitForTx(hash);
-        success("Chapter nominated");
+        success(opts.forfeit ? "Chapter nominated (forfeit mode)" : "Chapter nominated");
       } catch (err) {
         error(String(err));
         process.exit(1);
@@ -294,21 +302,17 @@ export function registerVoteCommands(program: Command): void {
     });
 
   vote
-    .command("settle <novel-id> <winner-paths>")
+    .command("settle <novel-id>")
     .description(
-      "Settle the current round (keeper / owner only). " +
-        "<winner-paths> is a JSON array of paths, e.g. '[[5,3,1],[6,1],[]]' — winnerPaths[i] " +
-        "is [winners[i], parent, ..., prevWorldLineAncestor]. Empty path = no rewards for that winner.",
+      "Settle the current round (keeper / owner, or anyone after the timeout). " +
+        "Winner reward-author derivation happens fully on-chain via NovelCore.collectPathAuthors.",
     )
-    .action(async (novelId, winnerPathsArg) => {
+    .action(async (novelId) => {
       try {
         const client = getWalletClient();
         const contracts = getContracts();
-        const parsed = JSON.parse(winnerPathsArg) as unknown[];
-        const winnerPaths: bigint[][] = parsed.map((p) => (p as Array<number | string>).map((x) => BigInt(x)));
         const hash = await settleRoundTx(client, {
           novelId: BigInt(novelId),
-          winnerPaths,
           roundManager: contracts.roundManager,
         });
         txHash(hash);

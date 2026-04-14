@@ -7,14 +7,17 @@ import {DataTypes} from "../libraries/DataTypes.sol";
 /// @notice Round lifecycle, candidate management, voting orchestration, completion.
 /// @dev Round-phase transitions (start / closeNomination / closeCommit / settleRound) are
 ///      `keeper`-controlled (project ops). After `KEEPER_INACTIVITY_TIMEOUT` past the expected
-///      phase end, anyone may call them as a fallback. completeNovel is creator-controlled
-///      with the same fallback. nominateCandidate, commitVote, revealVote, claimVotingReward
-///      remain user-callable.
+///      phase end, anyone may call them as a fallback. completeNovel is creator-controlled with
+///      the same inactivity fallback. nominateCandidate, commitVote, revealVote,
+///      claimVotingReward remain user-callable.
 ///
-///      All "heavy" path data (settle reward authors, completion authors) is supplied by the
-///      caller as `path` arrays. Each path = [deeperChapter, ..., shallowerChapter] following
-///      parentId links. Contract verifies the parent chain on-chain and derives author lists
-///      from `Chapter.author` storage — no trust in the caller's authors.
+///      ## Keeper trust surface (single attack vector)
+///      The keeper's ONLY privileged input is the `leaves[]` array supplied to `startRound`.
+///      Everything downstream — winner selection (on-chain `VotingEngine.tallyVotes`), reward
+///      author derivation (on-chain parent-chain walk via `NovelCore.collectPathAuthors`),
+///      world line update, completion — is fully on-chain deterministic. A malicious keeper
+///      can at most bias which leaf per world line becomes the candidate (still bound by "real
+///      tree leaf belonging to the novel") or stall, after which anyone may take over.
 interface IRoundManager {
     // ─────── Events ───────
     event KeeperUpdated(address indexed oldAddr, address indexed newAddr);
@@ -40,21 +43,22 @@ interface IRoundManager {
     function closeCommit(uint64 novelId) external;
 
     /// @notice Settle the round: tally votes, distribute rewards, replace world line ancestors.
-    /// @param winnerPaths winnerPaths[i] is the parent chain proving winners[i]'s lineage:
-    ///        path[0] = winners[i] (the new world line ancestor)
-    ///        path[last] = a chapter in the previous world line ancestor set (anchor)
-    ///        Empty path => winners[i] gets no author rewards (e.g., off-world-line nominated chapter).
-    ///        Authors of all chapters on the path EXCEPT the anchor are credited as new-chapter authors.
-    function settleRound(uint64 novelId, uint64[][] calldata winnerPaths) external;
+    /// @dev Winners come from on-chain `VotingEngine.tallyVotes`. For each winner, reward
+    ///      authors are derived by walking `parentId` upward until hitting a previous world line
+    ///      ancestor (anchor excluded). Winners whose chain does not reach any previous ancestor
+    ///      (orphan nominees) contribute zero authors — an intentional forfeit, not an error.
+    function settleRound(uint64 novelId) external;
 
     // ─────── Nomination & Voting (user-facing) ───────
 
-    /// @notice Nominate a chapter as candidate. Requires nomination fee.
-    /// @param path Parent chain proving the nominated chapter is a descendant of a current
-    ///        worldLineAncestor: path[0] = nominated chapter, path[last] = worldLineAncestor.
-    ///        Length-1 path is rejected (a worldLineAncestor itself was already a candidate via
-    ///        its leaf; nominating the ancestor itself makes no sense).
-    function nominateCandidate(uint64 novelId, uint64[] calldata path) external payable;
+    /// @notice Nominate any chapter as a candidate. Pays `nominationFee`.
+    /// @param chapterId The chapter to nominate as a voting candidate.
+    /// @param path Optional proof that `chapterId` descends from a current worldLineAncestor.
+    ///        Non-empty: path[0] = chapterId, path[last] = a current worldLineAncestor. If this
+    ///        candidate wins, its path authors earn rewards in settlement.
+    ///        Empty: nominator explicitly forfeits author rewards for this candidate. Any chapter
+    ///        in the novel may be nominated. World line still advances to it if it wins.
+    function nominateCandidate(uint64 novelId, uint64 chapterId, uint64[] calldata path) external payable;
 
     function commitVote(uint64 novelId, bytes32 commitHash) external payable;
     function revealVote(uint64 novelId, uint64 candidateId, bytes32 salt) external;
@@ -63,11 +67,10 @@ interface IRoundManager {
     // ─────── Novel completion ───────
 
     /// @notice Complete the novel and pay the final reward.
-    /// @param finalPaths finalPaths[i] covers the i-th current worldLineAncestor's path:
-    ///        path[0] = worldLineAncestors[i], path[last] = root chapter (depth = 1).
-    ///        All chapter authors on every path receive a share of the final pool.
-    /// @dev Permission: novel.creator || keeper || owner || (anyone after inactivity timeout).
-    function completeNovel(uint64 novelId, uint64[][] calldata finalPaths) external;
+    /// @dev Releases the entire remaining prize pool to the authors of every chapter on every
+    ///      current world line (walked from each ancestor up to root, dedup). Permissioned to
+    ///      novel.creator || keeper || owner; anyone may call after inactivity timeout.
+    function completeNovel(uint64 novelId) external;
 
     // ─────── Admin ───────
 

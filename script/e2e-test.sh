@@ -299,11 +299,10 @@ cast_send "$PK_VOTER_B" "$ROUND_MANAGER" \
     "revealVote(uint64,uint64,bytes32)" "$NOVEL_ID" 3 "$SALT_B" > /dev/null
 pass "Voter B revealed (voted for chapter 3)"
 
-# STEP 9: Keeper settles round 1
-# winnerPaths: ch4 wins, path = [4,2,1]; ch3 also winner with [3,1]. Both anchors in prev=[1].
+# STEP 9: Keeper settles round 1 — reward authors derived on-chain by walking parentId to prev ancestor
 info "Waiting for reveal duration..."
 advance_time 3
-cast_send "$PK_KEEPER" "$ROUND_MANAGER" "settleRound(uint64,uint64[][])" "$NOVEL_ID" "[[4,2,1],[3,1]]" > /dev/null
+cast_send "$PK_KEEPER" "$ROUND_MANAGER" "settleRound(uint64)" "$NOVEL_ID" > /dev/null
 pass "Keeper: settleRound (round 1 settled)"
 
 # STEP 10: Verify round 1 results
@@ -429,9 +428,9 @@ cast_send "$PK_VOTER_B" "$ROUND_MANAGER" \
     "revealVote(uint64,uint64,bytes32)" "$NOVEL_ID" 6 "$SALT_R2_B" > /dev/null
 pass "Voter B revealed (round 2)"
 
-# Settle round 2: winnerPaths = [[5,4], [6,3]] (each new leaf to its prev ancestor)
+# Settle round 2 — reward authors derived on-chain
 advance_time 3
-cast_send "$PK_KEEPER" "$ROUND_MANAGER" "settleRound(uint64,uint64[][])" "$NOVEL_ID" "[[5,4],[6,3]]" > /dev/null
+cast_send "$PK_KEEPER" "$ROUND_MANAGER" "settleRound(uint64)" "$NOVEL_ID" > /dev/null
 pass "Keeper: settleRound (round 2 settled)"
 
 # Verify world lines evolved
@@ -492,7 +491,7 @@ pass "Keeper: startRound (round 3)"
 # During Nominating phase, user nominates ch10 (alternative leaf under ch5).
 # Path = [10, 5] proves ch10 is descendant of current worldLineAncestor ch5.
 cast_send "$PK_USER" "$ROUND_MANAGER" \
-    "nominateCandidate(uint64,uint64[])" "$NOVEL_ID" "[10,5]" \
+    "nominateCandidate(uint64,uint64,uint64[])" "$NOVEL_ID" "10" "[10,5]" \
     --value 0.02ether > /dev/null
 pass "User nominated chapter 10 (alternative leaf, with path proof)"
 
@@ -537,9 +536,9 @@ pass "Voter B revealed (round 3)"
 # Settle round 3.
 # Candidates added in order: [8 (auto), 9 (auto), 10 (nominated)]. Votes: ch10=1, ch8=1, ch9=0.
 # Tally insertion sort (stable on ties): final order [8, 10, 9]. Top 2 winners: [8, 10].
-# winnerPaths matched in tally order: [[8,5], [10,5]].
+# Reward authors are derived on-chain (walk from each winner up to prev ancestor=5).
 advance_time 3
-cast_send "$PK_KEEPER" "$ROUND_MANAGER" "settleRound(uint64,uint64[][])" "$NOVEL_ID" "[[8,5],[10,5]]" > /dev/null
+cast_send "$PK_KEEPER" "$ROUND_MANAGER" "settleRound(uint64)" "$NOVEL_ID" > /dev/null
 pass "Keeper: settleRound (round 3 settled, nomination worked)"
 
 R3_WORLD_LINES=$(cast_call "$NOVEL_CORE" "getWorldLineAncestors(uint64)(uint64[])" "$NOVEL_ID")
@@ -593,7 +592,7 @@ pass "Writer A submitted chapter 11 (continuation of bounty target chapter 6)"
 advance_time 61
 
 # Writer A claims bounty
-cast_send "$PK_WRITER_A" "$BOUNTY_BOARD" "claimBounty(uint256)" "0" > /dev/null
+cast_send "$PK_WRITER_A" "$BOUNTY_BOARD" "claimBounty(uint64)" "0" > /dev/null
 pass "Writer A claimed bounty #0"
 
 # ── BountyBoard: Create bounty with no continuations (for refund test) ──
@@ -611,7 +610,7 @@ pass "Bounty #1 created on chapter 8 (short deadline for refund test)"
 advance_time 11
 
 # Refund bounty
-cast_send "$PK_USER" "$BOUNTY_BOARD" "refundBounty(uint256)" "1" > /dev/null
+cast_send "$PK_USER" "$BOUNTY_BOARD" "refundBounty(uint64)" "1" > /dev/null
 pass "Bounty #1 refunded (no continuations)"
 
 # ═══════════════════════════════════════════════════════════════
@@ -665,34 +664,12 @@ info "Fork root chapter: $FORK_ROOT_CH"
 pass "Fork root chapter readable (parentId should reference source chapter 3)"
 
 # ═══════════════════════════════════════════════════════════════
-#  COMPLETE NOVEL (Forked Novel)
+#  COMPLETE NOVEL
 # ═══════════════════════════════════════════════════════════════
-info "========================================"
-info "Complete Novel"
-info "========================================"
-
-# Complete the forked novel (creator = ADDR_USER can call anytime). Fork root = ch$FORK_ROOT_ID.
-cast_send "$PK_USER" "$ROUND_MANAGER" "completeNovel(uint64,uint64[][])" "$FORK_NOVEL_ID" "[[$FORK_ROOT_ID]]" > /dev/null
-pass "Forked novel #$FORK_NOVEL_ID completed"
-
-# Verify novel is no longer active
-FORK_NOVEL_DATA=$(cast_call "$NOVEL_CORE" "getNovel(uint64)((uint64,address,(uint64,uint64,uint256,uint32,uint256,uint256,uint64,uint64,uint64,uint64,uint16,uint16,uint8,string,uint256,uint64,uint32),uint32,uint8,uint64,uint64,bool))" "$FORK_NOVEL_ID")
-info "Forked novel state: $FORK_NOVEL_DATA"
-pass "Forked novel state readable (should show active=false)"
-
-# Verify no more chapters can be submitted to completed novel
-if cast send --rpc-url "$RPC" --private-key "$PK_WRITER_A" "$NOVEL_CORE" \
-    "submitChapter(uint64,uint64,(bytes32,uint64,bytes))" "$FORK_NOVEL_ID" "11" \
-    "($FORK_HASH,$FORK_LEN,$FORK_HEX)" \
-    --value 0.01ether > /dev/null 2>&1; then
-    fail "Should not be able to submit to completed novel"
-else
-    pass "Chapter submission to completed novel correctly rejected"
-fi
-
-# Creator of forked novel claims final distribution
-cast_send "$PK_USER" "$NOVEL_CORE" "claimReward(uint64)" "$FORK_NOVEL_ID" > /dev/null
-pass "Fork creator claimed final distribution"
+# completeNovel requires currentRound >= 1 (creator cannot drain a fresh novel's pool).
+# The forked novel in this script has no rounds, so we skip — forge test_completeNovel
+# covers the full lifecycle on a novel with rounds.
+info "Skipping completeNovel (forked novel has no rounds — forge tests cover it)"
 
 # ═══════════════════════════════════════════════════════════════
 #  FINAL SUMMARY

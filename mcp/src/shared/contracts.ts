@@ -83,7 +83,12 @@ export interface RevealVoteParams {
 
 export interface NominateCandidateParams {
   novelId: bigint;
-  /** Path proof: [nominatedChapterId, ..., currentWorldLineAncestor] via parentId chain. */
+  /** Chapter being nominated. */
+  chapterId: bigint;
+  /**
+   * Optional path proof: [chapterId, ..., currentWorldLineAncestor] via parentId chain.
+   * Empty array = forfeit mode: nominate with no reward eligibility.
+   */
   path: bigint[];
   value?: bigint;
   roundManager: `0x${string}`;
@@ -138,15 +143,11 @@ export interface StartRoundParams {
 
 export interface SettleRoundParams {
   novelId: bigint;
-  /** winnerPaths[i] = [winners[i], ..., prevWorldLineAncestor]. Empty array = no rewards for that winner. */
-  winnerPaths: bigint[][];
   roundManager: `0x${string}`;
 }
 
 export interface CompleteNovelParams {
   novelId: bigint;
-  /** finalPaths[i] = [worldLineAncestors[i], ..., rootChapter]. */
-  finalPaths: bigint[][];
   roundManager: `0x${string}`;
 }
 
@@ -380,7 +381,7 @@ export async function settleRound(client: WalletClient, params: SettleRoundParam
     address: params.roundManager,
     abi: roundManagerAbi,
     functionName: "settleRound",
-    args: [params.novelId, params.winnerPaths],
+    args: [params.novelId],
     chain: client.chain,
     account: client.account!,
   });
@@ -391,7 +392,7 @@ export async function nominateCandidate(client: WalletClient, params: NominateCa
     address: params.roundManager,
     abi: roundManagerAbi,
     functionName: "nominateCandidate",
-    args: [params.novelId, params.path],
+    args: [params.novelId, params.chapterId, params.path],
     value: params.value ?? 0n,
     chain: client.chain,
     account: client.account!,
@@ -419,7 +420,7 @@ export async function completeNovel(client: WalletClient, params: CompleteNovelP
     address: params.roundManager,
     abi: roundManagerAbi,
     functionName: "completeNovel",
-    args: [params.novelId, params.finalPaths],
+    args: [params.novelId],
     chain: client.chain,
     account: client.account!,
   });

@@ -7,10 +7,12 @@ import {
   revealVote,
   startRound,
   settleRound,
+  nominateCandidate,
   getNovel,
   getRoundData,
   computeCommitHash,
   toBytes32Salt,
+  buildPathToAnchor,
 } from "../shared/index.js";
 import { config } from "../config.js";
 import { getPublicClient, getWalletClient } from "../utils/client.js";
@@ -184,11 +186,10 @@ export function registerVoteTools(server: McpServer): void {
   // ── vote_settle ──
   server.tool(
     "vote_settle",
-    "Settle the current voting round (keeper / owner only). Caller supplies winnerPaths: " +
-      "winnerPaths[i] = [winners[i], parent, ..., prevWorldLineAncestor]. Empty path = no rewards.",
+    "Settle the current voting round (keeper / owner, or anyone after timeout). " +
+      "Winner reward-author derivation is fully on-chain — no extra args needed.",
     {
       novelId: z.number().describe("Novel ID"),
-      winnerPaths: z.array(z.array(z.number())).describe("Per-winner parent chain to a prev worldLineAncestor"),
     },
     async (params) => {
       try {
@@ -196,11 +197,70 @@ export function registerVoteTools(server: McpServer): void {
         const pub = getPublicClient();
         const hash = await settleRound(wallet, {
           novelId: BigInt(params.novelId),
-          winnerPaths: params.winnerPaths.map((p) => p.map((x) => BigInt(x))),
           roundManager: config.roundManager,
         });
         const receipt = await pub.waitForTransactionReceipt({ hash });
         return ok(`Round settled for Novel #${params.novelId}.\nTx: ${hash}\nBlock: ${receipt.blockNumber}`);
+      } catch (error) {
+        return fail(`Failed: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    },
+  );
+
+  // ── vote_nominate ──
+  server.tool(
+    "vote_nominate",
+    "Nominate a chapter as a candidate for the current round. By default the path proof " +
+      "(chapter → current worldLineAncestor) is auto-computed for reward eligibility. " +
+      "Pass forfeit=true to nominate an arbitrary chapter with no reward eligibility (empty path).",
+    {
+      novelId: z.number().describe("Novel ID"),
+      chapterId: z.number().describe("Chapter to nominate"),
+      forfeit: z.boolean().default(false).describe("If true, skip path proof and forfeit reward eligibility"),
+    },
+    async (params) => {
+      try {
+        const wallet = getWalletClient();
+        const pub = getPublicClient();
+        const novel = (await getNovel(pub, BigInt(params.novelId), config.novelCore)) as any;
+        const nominationFee = novel.config.nominationFee as bigint;
+
+        let path: bigint[] = [];
+        if (!params.forfeit) {
+          const ancestors = (await pub.readContract({
+            address: config.novelCore,
+            abi: (await import("../shared/abi.js")).novelCoreAbi,
+            functionName: "getWorldLineAncestors",
+            args: [BigInt(params.novelId)],
+          })) as readonly bigint[];
+          const proof = await buildPathToAnchor(
+            pub,
+            config.novelCore,
+            BigInt(params.novelId),
+            BigInt(params.chapterId),
+            ancestors,
+          );
+          if (!proof || proof.length < 2) {
+            return fail(
+              `Chapter #${params.chapterId} is not a strict descendant of any current worldLineAncestor. ` +
+                `Pass forfeit=true to nominate anyway (no reward eligibility).`,
+            );
+          }
+          path = proof;
+        }
+
+        const hash = await nominateCandidate(wallet, {
+          novelId: BigInt(params.novelId),
+          chapterId: BigInt(params.chapterId),
+          path,
+          value: nominationFee,
+          roundManager: config.roundManager,
+        });
+        const receipt = await pub.waitForTransactionReceipt({ hash });
+        return ok(
+          `Chapter #${params.chapterId} nominated${params.forfeit ? " (forfeit mode)" : ""}.\n` +
+            `Tx: ${hash}\nBlock: ${receipt.blockNumber}`,
+        );
       } catch (error) {
         return fail(`Failed: ${error instanceof Error ? error.message : String(error)}`);
       }

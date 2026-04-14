@@ -73,11 +73,20 @@ Example: two story lines `C1<-C2<-C3` and `C1<-A1<-A2`. Three votes: C2(weight 1
 
 **The candidate set ensures each chain has exactly one representative (its deepest chapter), preventing vote splitting.**
 
-### 2.2 Candidate Generation -- Full Scan from World Line Ancestors
+### 2.2 Candidate Generation & Keeper Trust Model
 
-`startRound` is **keeper-only** (with anyone-after-`KEEPER_INACTIVITY_TIMEOUT` fallback). The keeper computes the N deepest leaves off-chain (one per world line) and supplies them as `leaves[]`. On-chain validation: each leaf must belong to the novel and have `children.length == 0`. Off-chain DFS is the keeper / indexer's responsibility; on-chain cost is O(leaves.length) only.
+`startRound` is **keeper-only** (with anyone-after-`KEEPER_INACTIVITY_TIMEOUT` fallback). The keeper computes the N deepest leaves off-chain (one per world line) and supplies them as `leaves[]`. On-chain validation: each leaf must belong to the novel and have `children.length == 0`.
 
-**Gas cost**: full traversal of all chapters derived from N ancestors between two rounds. submissionFee naturally limits chapter count.
+**Keeper's single attack surface.** The `leaves[]` input to `startRound` is the ONLY privileged lever the keeper controls. A malicious keeper can at most bias *which* leaf per world line becomes the candidate (still a real tree leaf belonging to the novel), or stall — after `KEEPER_INACTIVITY_TIMEOUT` anyone may take over each phase. A keeper **cannot**:
+
+- pick winners — that comes from on-chain `VotingEngine.tallyVotes`,
+- fabricate or suppress reward authors — derived on-chain via `NovelCore.collectPathAuthors` walking `parentId` from each winner up to the previous world line ancestor,
+- alter committed votes (commit-reveal prevents that), or
+- drain / withhold the prize pool — release / decay rules are fixed protocol constants.
+
+This keeps **"keeper picks which leaf per world line"** as the single residual trust assumption — the one weakness users must accept, and the core value proposition of onchain-novel. Settlement and completion run parent-chain walks entirely on-chain; no "heavy" data is ever supplied by off-chain callers.
+
+**Gas cost**: O(leaves.length) leaf check on startRound; O(total_depth_between_rounds) parent-chain walk on settleRound. submissionFee + minRoundGap naturally bound chapter count and chain depth.
 
 ### 2.3 Three-Phase Voting
 
@@ -85,13 +94,18 @@ Example: two story lines `C1<-C2<-C3` and `C1<-A1<-A2`. Three votes: C2(weight 1
 Nominating -> Committing -> Revealing -> Settlement
 ```
 
-**Nominating**: Keeper calls `startRound()`. Contract does full scan from worldLineAncestors to auto-generate the N deepest chains as candidates. **Requires candidates >= N (`worldLineCount`)** — every world line must have at least one continuation. A childless world line ancestor does NOT count as its own candidate. If the precondition fails, `startRound` reverts with `InsufficientCandidates(available, required)`; keeper retries on next poll (typically triggered once more authors submit continuations, often incentivized via BountyBoard). Users can pay `nominationFee` to nominate additional chains. Duration: `nominateDuration`.
+**Nominating**: Keeper calls `startRound(leaves[])` supplying N true tree leaves (one per world line). Users can pay `nominationFee` to add more via `nominateCandidate(novelId, chapterId, path)`:
+
+- **With proof** (`path` non-empty, `path[0]=chapterId`, `path[last]=current worldLineAncestor`): chapter must descend from a current world line; if it wins, its new-path authors earn rewards at settlement.
+- **Without proof** (`path` empty): any chapter in the novel is allowed as a candidate. If it wins, its authors get no reward — the nominator explicitly forfeits author rewards for this candidate. World line still advances. This is the on-chain opt-out path for nominating orphan chapters, accepted as intentional.
+
+Duration: `nominateDuration`.
 
 **Committing**: `commitVote(novelId, commitHash)`, requires staking `voteStake`. One vote per address per round. Duration: `commitDuration`.
 
 **Revealing**: `revealVote(novelId, candidateId, salt)`, vote weight = staked amount. Duration: `revealDuration`. Keeper can call `revealVote` on behalf of users who submitted their plaintext vote to the backend at commit time (see §2.5 Keeper-Assisted Reveal).
 
-**Settlement**: Keeper calls `settleRound()`. Selects top N world lines by weighted votes (fewer than N if insufficient candidates). Ties broken by greater depth. Updates worldLineAncestors. Distributes rewards. Processes unrevealed stakes (see §3.5). Returns to Idle.
+**Settlement**: Keeper calls `settleRound(novelId)` — no path arguments. `VotingEngine.tallyVotes` selects top N (stable insertion sort; fewer than N if insufficient candidates). For each winner, `NovelCore.collectPathAuthors` walks `parentId` up to any previous world line ancestor (anchor excluded — already rewarded); if no anchor reached (orphan winner from a forfeit nomination), that winner contributes zero authors. Rewards distributed, unrevealed stakes processed (see §3.5), worldLineAncestors replaced, return to Idle.
 
 ### 2.4 State Flow
 
@@ -190,8 +204,8 @@ Full amount goes to prize pool.
 
 ## 5. Security
 
-- **Keeper trustlessness**: candidates come from full descendant scan, deterministic algorithm. Nomination as fallback.
-- **Off-chain DFS, on-chain verification**: keeper computes leaves / paths off-chain; on-chain cost is O(leaves) leaf-check + O(path) parent-link walk per proof. submissionFee bounds tree size.
+- **Keeper single-attack-surface**: the ONLY input a malicious keeper controls is the `leaves[]` passed to `startRound` (bias which tree leaf per world line becomes the candidate). Winner selection, reward-author derivation (parent-chain walk via `NovelCore.collectPathAuthors`), vote integrity (commit-reveal), and prize distribution are fully on-chain. Phase transitions have anyone-after-`KEEPER_INACTIVITY_TIMEOUT` fallback; this single residual weakness is the core value proposition of onchain-novel (§2.2).
+- **Off-chain DFS, on-chain walk**: keeper does the off-chain DFS to pick leaves; reward author derivation and final-authors collection are on-chain parent-chain walks bounded by `MAX_PROOF_PATH_LENGTH` (1024). submissionFee + minRoundGap bound tree depth between rounds.
 - **Voting game theory**: fixed `voteStake` (every voter stakes the same amount), linear weight inside a protocol-level cap of `20 × voteStake`, commit-reveal prevents following, 3× accuracy incentive. Keeper-assisted reveal reduces user friction without compromising commit-reveal security (Keeper cannot alter committed votes).
 - **Chapter spam**: submissionFee + minChapterLength + N candidate slots + Nomination rescue.
 - **Protocol fee**: removed; can be added via upgrade.
