@@ -7,21 +7,17 @@ import { query } from "../db/index.js";
 import { batchReveal } from "./reveal.js";
 import { KeeperQueue } from "./queue.js";
 
-// Keeper needs phase transition functions plus chain reads for path computation
+// Keeper needs phase transition functions plus chain reads for leaf computation
 const keeperAbi = parseAbi([
   "function startRound(uint64 novelId, uint64[] leaves) external",
   "function closeNomination(uint64 novelId) external",
   "function closeCommit(uint64 novelId) external",
-  "function settleRound(uint64 novelId, uint64[][] winnerPaths) external",
+  "function settleRound(uint64 novelId) external",
 ]);
 
 const novelCoreReadAbi = parseAbi([
   "function getWorldLineAncestors(uint64 novelId) external view returns (uint64[])",
   "function getChapter(uint64 chapterId) external view returns ((uint64 id, uint64 novelId, uint64 parentId, address author, bytes32 contentHash, uint64 declaredLength, uint32 depth, uint64 timestamp, uint64[] children))",
-]);
-
-const votingEngineReadAbi = parseAbi([
-  "function tallyVotes(uint64 novelId, uint32 round, uint32 winnerCount) external returns (uint64[])",
 ]);
 
 // Phase enum matching the contract
@@ -119,30 +115,6 @@ async function sendKeeperTx(functionName: string, novelId: bigint): Promise<bool
   return sendKeeperTxWithArgs(functionName, novelId, []);
 }
 
-/** Walk parent chain from `from` upward, return [from, ..., anchor] or null if no anchor reached. */
-async function buildPathToAnchor(
-  novelId: bigint,
-  from: bigint,
-  anchors: readonly bigint[],
-): Promise<bigint[] | null> {
-  void novelId;
-  const path: bigint[] = [];
-  let cur = from;
-  while (cur !== 0n) {
-    path.push(cur);
-    if (anchors.includes(cur)) return path;
-    const ch = (await publicClient.readContract({
-      address: env.NOVEL_CORE_ADDRESS,
-      abi: novelCoreReadAbi,
-      functionName: "getChapter",
-      args: [cur],
-    })) as { parentId: bigint; depth: number };
-    if (ch.depth <= 1) break;
-    cur = ch.parentId;
-  }
-  return null;
-}
-
 /** Find the deepest leaf descendant of a given chapter via greedy first-child walk. */
 async function deepestLeafUnder(chapterId: bigint): Promise<bigint> {
   let cur = chapterId;
@@ -171,39 +143,6 @@ async function buildStartRoundLeaves(novelId: bigint): Promise<bigint[]> {
   const leaves: bigint[] = [];
   for (const a of ancestors) leaves.push(await deepestLeafUnder(a));
   return leaves;
-}
-
-/** Build winnerPaths for settleRound: simulate tallyVotes then walk each winner up to a prev ancestor. */
-async function buildSettleWinnerPaths(novelId: bigint, currentRound: number): Promise<bigint[][]> {
-  // Read current worldLineAncestors (these are the "prev" set for this settlement)
-  const prevAncestors = (await publicClient.readContract({
-    address: env.NOVEL_CORE_ADDRESS,
-    abi: novelCoreReadAbi,
-    functionName: "getWorldLineAncestors",
-    args: [novelId],
-  })) as readonly bigint[];
-
-  // Read worldLineCount from novel config
-  const novel = await getNovelState(novelId);
-  if (!novel) return [];
-  const N = Number((novel as any).config?.worldLineCount ?? 2); // fallback
-
-  // Simulate tallyVotes: it's onlyRoundManager but we override `from`
-  const simulation = await publicClient.simulateContract({
-    address: env.VOTING_ENGINE_ADDRESS,
-    abi: votingEngineReadAbi,
-    functionName: "tallyVotes",
-    args: [novelId, currentRound, N],
-    account: env.ROUND_MANAGER_ADDRESS,
-  });
-  const winners = simulation.result as readonly bigint[];
-
-  const winnerPaths: bigint[][] = [];
-  for (const w of winners) {
-    const path = await buildPathToAnchor(novelId, w, prevAncestors);
-    winnerPaths.push(path ?? []);
-  }
-  return winnerPaths;
 }
 
 /** Check a single novel's state and take action if a phase transition is due. */
@@ -252,12 +191,7 @@ async function checkNovel(novelId: bigint): Promise<void> {
         }
       }
       if (phaseStartTime + config.revealDuration <= now) {
-        try {
-          const winnerPaths = await buildSettleWinnerPaths(id, currentRound);
-          await sendKeeperTxWithArgs("settleRound", id, [winnerPaths]);
-        } catch (err) {
-          console.error(`[Keeper] settleRound prep error for novel=${id}: ${err}`);
-        }
+        await sendKeeperTx("settleRound", id);
       }
       break;
   }

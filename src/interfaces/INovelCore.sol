@@ -139,6 +139,22 @@ interface INovelCore {
     ///         path[0] = current worldLineAncestor; path[last] = caller's authored chapter.
     function verifyWorldLineAuthor(uint64 novelId, address expectedAuthor, uint64[] calldata path) external view;
 
+    /// @notice Walk from each `startNode` upward via parentId, collect unique chapter authors.
+    /// @dev For each startNode, the walk terminates when the current chapter equals any element of
+    ///      `stopAnchors` (anchor is EXCLUDED from collection — it was rewarded in a prior round),
+    ///      or when parentId == 0 (root reached; root IS included).
+    ///      When `requireAnchorHit` is true, walks that reach the root without hitting any anchor
+    ///      contribute nothing to the result (intentional author-forfeit semantics — e.g. an orphan
+    ///      nominee that won voting without proving descent from a previous world line).
+    ///      Authors are deduplicated across all walks. All chapters must belong to `novelId`.
+    ///      Walk length per startNode is bounded by MAX_PROOF_PATH_LENGTH.
+    function collectPathAuthors(
+        uint64 novelId,
+        uint64[] calldata startNodes,
+        uint64[] calldata stopAnchors,
+        bool requireAnchorHit
+    ) external view returns (address[] memory authors);
+
     /// @notice Total number of novels created (auto-generated public counter getter)
     function novelCount() external view returns (uint64);
 

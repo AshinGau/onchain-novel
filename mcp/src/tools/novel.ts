@@ -269,43 +269,15 @@ export function registerNovelTools(server: McpServer): void {
   // ── novel_complete ──
   server.tool(
     "novel_complete",
-    "Complete a novel (creator / keeper / owner; anyone after inactivity timeout). Auto-computes finalPaths " +
-      "by walking each current worldLineAncestor's parent chain to root.",
+    "Complete a novel (creator / keeper / owner; anyone after inactivity timeout). " +
+      "Final-path author derivation is fully on-chain via NovelCore.collectPathAuthors.",
     { novelId: z.number().describe("Novel ID") },
     async (params) => {
       try {
         const wallet = getWalletClient();
         const pub = getPublicClient();
-        const novelCoreAbi = (await import("../shared/abi.js")).novelCoreAbi;
-
-        const ancestors = (await pub.readContract({
-          address: config.novelCore,
-          abi: novelCoreAbi,
-          functionName: "getWorldLineAncestors",
-          args: [BigInt(params.novelId)],
-        })) as readonly bigint[];
-
-        const finalPaths: bigint[][] = [];
-        for (const ancestor of ancestors) {
-          const path: bigint[] = [];
-          let cur = ancestor;
-          while (cur !== 0n) {
-            path.push(cur);
-            const ch = (await pub.readContract({
-              address: config.novelCore,
-              abi: novelCoreAbi,
-              functionName: "getChapter",
-              args: [cur],
-            })) as { parentId: bigint; depth: number };
-            if (ch.depth <= 1) break;
-            cur = ch.parentId;
-          }
-          finalPaths.push(path);
-        }
-
         const hash = await completeNovel(wallet, {
           novelId: BigInt(params.novelId),
-          finalPaths,
           roundManager: config.roundManager,
         });
         const receipt = await pub.waitForTransactionReceipt({ hash });

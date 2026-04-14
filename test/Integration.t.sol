@@ -308,9 +308,6 @@ abstract contract TestBase is Test {
         uint64 target,
         bytes32 salt
     ) internal {
-        // Snapshot prev ancestors for winnerPaths
-        uint64[] memory prev = novelCore.getWorldLineAncestors(novelId);
-
         vm.prank(keeper);
         roundManager.startRound(novelId, leaves);
 
@@ -335,16 +332,8 @@ abstract contract TestBase is Test {
 
         vm.warp(block.timestamp + REVEAL_DURATION + 1);
 
-        // Build winnerPaths: each leaf's path back to a prev ancestor.
-        // Tally returns winners ordered by weight desc; on tie (0 weight), original candidate order
-        // is preserved. Caller must pass `leaves` in this expected order.
-        uint64[][] memory winnerPaths = new uint64[][](leaves.length);
-        for (uint256 i = 0; i < leaves.length; i++) {
-            winnerPaths[i] = _pathToAnyAnchor(leaves[i], prev);
-        }
-
         vm.prank(keeper);
-        roundManager.settleRound(novelId, winnerPaths);
+        roundManager.settleRound(novelId);
     }
 }
 
@@ -456,7 +445,6 @@ contract IntegrationTest is TestBase {
         uint64[] memory leaves = new uint64[](2);
         leaves[0] = ch4;
         leaves[1] = ch3;
-        uint64[] memory prevAncestors = novelCore.getWorldLineAncestors(novelId);
 
         vm.prank(keeper);
         roundManager.startRound(novelId, leaves);
@@ -492,13 +480,8 @@ contract IntegrationTest is TestBase {
 
         vm.warp(block.timestamp + REVEAL_DURATION + 1);
 
-        // winnerPaths: order = [ch4 (winner), ch3]; both come from prev ancestor (root=1)
-        uint64[][] memory winnerPaths = new uint64[][](2);
-        winnerPaths[0] = _pathToAnyAnchor(ch4, prevAncestors);
-        winnerPaths[1] = _pathToAnyAnchor(ch3, prevAncestors);
-
         vm.prank(keeper);
-        roundManager.settleRound(novelId, winnerPaths);
+        roundManager.settleRound(novelId);
 
         novel = novelCore.getNovel(novelId);
         assertEq(uint8(novel.roundPhase), uint8(DataTypes.RoundPhase.Idle));
@@ -590,14 +573,14 @@ contract IntegrationTest is TestBase {
         uint64[] memory bogusPath = _pathToRoot(ch5);
         vm.prank(author2);
         vm.expectRevert();
-        roundManager.nominateCandidate{value: NOMINATION_FEE}(novelId, bogusPath);
+        roundManager.nominateCandidate{value: NOMINATION_FEE}(novelId, ch5, bogusPath);
 
         // ch4 IS a descendant of ch2 — but ch4 is already a candidate (added by startRound).
         // Build path [ch4, ch2] and try; expect AlreadyACandidate revert.
         uint64[] memory ch4Path = _pathFromTo(ch4, ch2);
         vm.prank(author1);
         vm.expectRevert();
-        roundManager.nominateCandidate{value: NOMINATION_FEE}(novelId, ch4Path);
+        roundManager.nominateCandidate{value: NOMINATION_FEE}(novelId, ch4, ch4Path);
     }
 
     // ----------------------------------------------------------
@@ -725,12 +708,9 @@ contract IntegrationTest is TestBase {
         uint64 rootId = 1;
         _submitChapter(author1, novelId, rootId, "chapter for complete test!");
 
-        uint64[][] memory finalPaths = new uint64[][](1);
-        finalPaths[0] = _singleHop(rootId);
-
         vm.prank(creator);
         vm.expectRevert(RoundManager.NovelHasNoRound.selector);
-        roundManager.completeNovel(novelId, finalPaths);
+        roundManager.completeNovel(novelId);
     }
 
 
@@ -747,7 +727,6 @@ contract IntegrationTest is TestBase {
         uint64[] memory leaves = new uint64[](2);
         leaves[0] = ch2;
         leaves[1] = ch3;
-        uint64[] memory prevAncestors = novelCore.getWorldLineAncestors(novelId);
 
         vm.prank(keeper);
         roundManager.startRound(novelId, leaves);
@@ -776,13 +755,8 @@ contract IntegrationTest is TestBase {
 
         vm.warp(block.timestamp + REVEAL_DURATION + 1);
 
-        // Build winnerPaths for [ch2, ch3] (both as winners; tally returns same order due to weight tie/insertion)
-        uint64[][] memory winnerPaths = new uint64[][](2);
-        winnerPaths[0] = _pathToAnyAnchor(ch2, prevAncestors);
-        winnerPaths[1] = _pathToAnyAnchor(ch3, prevAncestors);
-
         vm.prank(keeper);
-        roundManager.settleRound(novelId, winnerPaths);
+        roundManager.settleRound(novelId);
 
         DataTypes.Novel memory novel = novelCore.getNovel(novelId);
         uint32 round = novel.currentRound;
@@ -883,7 +857,6 @@ contract IntegrationTest is TestBase {
 
         uint64[] memory leaves = new uint64[](1);
         leaves[0] = ch2;
-        uint64[] memory prevAncestors = novelCore.getWorldLineAncestors(novelId);
 
         vm.prank(keeper);
         roundManager.startRound(novelId, leaves);
@@ -908,11 +881,8 @@ contract IntegrationTest is TestBase {
 
         vm.warp(block.timestamp + REVEAL_DURATION + 1);
 
-        uint64[][] memory winnerPaths = new uint64[][](1);
-        winnerPaths[0] = _pathToAnyAnchor(ch2, prevAncestors);
-
         vm.prank(keeper);
-        roundManager.settleRound(novelId, winnerPaths);
+        roundManager.settleRound(novelId);
 
         // voter2 (unrevealed) should get stake - 50%
         uint256 expectedPenalty = (VOTE_STAKE * votingEngine.UNREVEAL_PENALTY_RATE_BP()) / 10000;
@@ -981,14 +951,14 @@ contract IntegrationTest is TestBase {
         for (uint256 i = 1; i < 64; i++) {
             uint64[] memory path = _pathFromTo(children[i], rootId);
             vm.prank(author2);
-            roundManager.nominateCandidate{value: 0.0001 ether}(novelId, path);
+            roundManager.nominateCandidate{value: 0.0001 ether}(novelId, children[i], path);
         }
 
         // 65th candidate (children[64]) must hit the cap and revert.
         uint64[] memory overflowPath = _pathFromTo(children[64], rootId);
         vm.prank(author2);
         vm.expectRevert(); // TooManyLeaves
-        roundManager.nominateCandidate{value: 0.0001 ether}(novelId, overflowPath);
+        roundManager.nominateCandidate{value: 0.0001 ether}(novelId, children[64], overflowPath);
     }
 
     // ----------------------------------------------------------

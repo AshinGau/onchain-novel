@@ -394,6 +394,86 @@ contract NovelCore is
         if (author != expectedAuthor) revert AuthorMismatch(expectedAuthor, author);
     }
 
+    /// @notice Walk parent chains from each startNode, collect deduplicated authors.
+    /// @dev Trust model: the protocol's single off-chain trust assumption is which N candidate
+    ///      leaves the keeper feeds into `startRound`. Everything downstream — winner selection,
+    ///      reward derivation, novel completion — is fully on-chain deterministic. This walker is
+    ///      the primitive that makes that property true for reward derivation.
+    ///
+    ///      Walk from `startNodes[i]` upward via parentId. Stop when:
+    ///        (a) current chapter ID equals some `stopAnchors[j]` — anchor EXCLUDED from output
+    ///            (its author was rewarded in a prior round), OR
+    ///        (b) parentId == 0 — root reached; root IS included in output.
+    ///      If `requireAnchorHit` is true and a walk hits (b) without first hitting (a), that
+    ///      walk contributes zero authors (intentional author-forfeit semantics — e.g. an orphan
+    ///      nominee that won voting without descent from any previous world line).
+    ///      Authors are deduplicated across all walks. Per-walk length bounded by MAX_PROOF_PATH_LENGTH.
+    function collectPathAuthors(
+        uint64 novelId,
+        uint64[] calldata startNodes,
+        uint64[] calldata stopAnchors,
+        bool requireAnchorHit
+    ) external view returns (address[] memory authors) {
+        // Upper bound for dedup buffer: all walks could go MAX steps and produce unique authors.
+        uint256 maxAuthors = startNodes.length * MAX_PROOF_PATH_LENGTH;
+        address[] memory buf = new address[](maxAuthors);
+        uint256 count = 0;
+
+        for (uint256 i = 0; i < startNodes.length; i++) {
+            uint64 cur = startNodes[i];
+            // Walk, collecting chapter authors into a scratch per-walk buffer first so we can
+            // discard it wholesale if requireAnchorHit && anchor not hit.
+            address[] memory walkAuthors = new address[](MAX_PROOF_PATH_LENGTH);
+            uint256 walkCount = 0;
+            bool anchorHit = false;
+
+            for (uint256 step = 0; step < MAX_PROOF_PATH_LENGTH; step++) {
+                if (cur == 0) break; // walked past root (shouldn't happen — root has parentId=0 and is emitted first)
+
+                // Check anchor match — if so, stop WITHOUT including this chapter
+                bool isAnchor = false;
+                for (uint256 a = 0; a < stopAnchors.length; a++) {
+                    if (stopAnchors[a] == cur) {
+                        isAnchor = true;
+                        break;
+                    }
+                }
+                if (isAnchor) {
+                    anchorHit = true;
+                    break;
+                }
+
+                DataTypes.Chapter storage ch = _chapters[cur];
+                if (ch.id == 0 || ch.novelId != novelId) revert InvalidPath(3);
+
+                walkAuthors[walkCount++] = ch.author;
+
+                if (ch.parentId == 0) break; // root reached
+                cur = ch.parentId;
+            }
+
+            if (requireAnchorHit && !anchorHit) continue; // forfeit
+
+            // Merge walkAuthors into `buf` with dedup
+            for (uint256 k = 0; k < walkCount; k++) {
+                address a = walkAuthors[k];
+                bool dup = false;
+                for (uint256 u = 0; u < count; u++) {
+                    if (buf[u] == a) {
+                        dup = true;
+                        break;
+                    }
+                }
+                if (!dup) buf[count++] = a;
+            }
+        }
+
+        authors = new address[](count);
+        for (uint256 i = 0; i < count; i++) {
+            authors[i] = buf[i];
+        }
+    }
+
     // ════════════════════════════════════════════════════
     //                    VALIDATORS
     // ════════════════════════════════════════════════════

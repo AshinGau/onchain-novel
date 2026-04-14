@@ -446,8 +446,8 @@ advance_time 10
 POOL_BEFORE=$(cast call --rpc-url "$RPC" "$PRIZE_POOL" "getPoolBalance(uint64)(uint256)" 1 2>/dev/null | awk '{print $1}') || POOL_BEFORE=0
 info "Pool balance before settleRound: $POOL_BEFORE"
 
-# settleRound — winnerPaths = [[4,2,1], [3,1]] (each new world line back to prev anchor root)
-STATUS=$(cast_send "$PK_DEPLOYER" "$ROUND_MANAGER" "settleRound(uint64,uint64[][])" 1 "[[4,2,1],[3,1]]")
+# settleRound — reward authors derived on-chain by walking parentId to prev ancestor
+STATUS=$(cast_send "$PK_DEPLOYER" "$ROUND_MANAGER" "settleRound(uint64)" 1)
 [ "$STATUS" = "0x1" ] && pass "settleRound -- round 1 settled" || fail "settleRound failed"
 
 wait_indexer 15
@@ -548,8 +548,8 @@ STATUS=$(cast_send "$PK_VOTER_B" "$ROUND_MANAGER" \
 [ "$STATUS" = "0x1" ] && pass "Voter B revealed round 2" || fail "Voter B round 2 reveal failed"
 
 advance_time 10
-# winnerPaths: [5,4] and [6,4] (each new winner anchors at prev worldLine 4)
-STATUS=$(cast_send "$PK_DEPLOYER" "$ROUND_MANAGER" "settleRound(uint64,uint64[][])" 1 "[[5,4],[6,4]]")
+# Reward authors derived on-chain
+STATUS=$(cast_send "$PK_DEPLOYER" "$ROUND_MANAGER" "settleRound(uint64)" 1)
 [ "$STATUS" = "0x1" ] && pass "settleRound -- round 2 settled" || fail "settleRound round 2 failed"
 
 wait_indexer 15
@@ -620,7 +620,7 @@ api_check_gte "/api/novels/1/bounties" ".bounties | length" 1 "Bounty appears in
 advance_time 60
 
 # Writer A (author of chapter 4, which is a direct child of chapter 2) claims bounty
-STATUS=$(cast_send "$PK_WRITER_A" "$BOUNTY_BOARD" "claimBounty(uint256)" 0)
+STATUS=$(cast_send "$PK_WRITER_A" "$BOUNTY_BOARD" "claimBounty(uint64)" 0)
 [ "$STATUS" = "0x1" ] && pass "Writer A claimed bounty 0" || fail "claimBounty failed"
 
 # Create another bounty on chapter 3 with a short deadline, no continuations -> refund
@@ -636,7 +636,7 @@ STATUS=$(cast_send "$PK_TIPPER" "$BOUNTY_BOARD" \
 advance_time 20
 
 # Chapter 3 has no children submitted before deadline, so refund should work
-STATUS=$(cast_send "$PK_TIPPER" "$BOUNTY_BOARD" "refundBounty(uint256)" 1)
+STATUS=$(cast_send "$PK_TIPPER" "$BOUNTY_BOARD" "refundBounty(uint64)" 1)
 [ "$STATUS" = "0x1" ] && pass "Bounty 1 refunded (no qualifying authors)" || fail "refundBounty failed"
 
 wait_indexer 10
@@ -745,8 +745,8 @@ info "Phase 10: Complete novel"
 info "========================================="
 
 # Complete the forked novel (creator can complete anytime when Idle).
-# Forked novel #2 root chapter is id=7 (novel 1 had chapters 1-6); finalPaths = [[7]].
-STATUS=$(cast_send "$PK_FORKER" "$ROUND_MANAGER" "completeNovel(uint64,uint64[][])" 2 "[[7]]")
+# completeNovel — final authors derived on-chain by walking each worldLineAncestor up to root.
+STATUS=$(cast_send "$PK_FORKER" "$ROUND_MANAGER" "completeNovel(uint64)" 2)
 [ "$STATUS" = "0x1" ] && pass "Forked novel completed" || fail "completeNovel failed"
 
 wait_indexer 10

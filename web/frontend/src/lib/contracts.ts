@@ -51,6 +51,7 @@ export const novelCoreAbi = parseAbi([
   "function verifyChapterPath(uint64 novelId, uint64[] path) external view",
   "function isCurrentWorldLineAncestor(uint64 novelId, uint64 chapterId) external view returns (bool)",
   "function verifyWorldLineAuthor(uint64 novelId, address expectedAuthor, uint64[] path) external view",
+  "function collectPathAuthors(uint64 novelId, uint64[] startNodes, uint64[] stopAnchors, bool requireAnchorHit) external view returns (address[])",
   "function novelCount() external view returns (uint64)",
   "function chapterCount() external view returns (uint64)",
 ]);
@@ -66,12 +67,12 @@ export const roundManagerAbi = parseAbi([
   "function startRound(uint64 novelId, uint64[] leaves) external",
   "function closeNomination(uint64 novelId) external",
   "function closeCommit(uint64 novelId) external",
-  "function settleRound(uint64 novelId, uint64[][] winnerPaths) external",
-  "function nominateCandidate(uint64 novelId, uint64[] path) external payable",
+  "function settleRound(uint64 novelId) external",
+  "function nominateCandidate(uint64 novelId, uint64 chapterId, uint64[] path) external payable",
   "function commitVote(uint64 novelId, bytes32 commitHash) external payable",
   "function revealVote(uint64 novelId, uint64 candidateId, bytes32 salt) external",
   "function claimVotingReward(uint64 novelId, uint32 round) external",
-  "function completeNovel(uint64 novelId, uint64[][] finalPaths) external",
+  "function completeNovel(uint64 novelId) external",
 
   "function getRoundData(uint64 novelId, uint32 round) external view returns ((uint64[] candidates, uint64 nominateEndTime, uint64 commitEndTime, uint64 revealEndTime, bool settled))",
   "function keeper() external view returns (address)",
