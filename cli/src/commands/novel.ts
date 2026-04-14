@@ -8,7 +8,7 @@ import {
   type NovelConfig,
   type NovelMetadata,
 } from "../shared/index.js";
-import { getWalletClient, getContracts, waitForTx } from "../utils/client.js";
+import { getWalletClient, getPublicClient, getContracts, waitForTx } from "../utils/client.js";
 import { apiGet } from "../utils/api.js";
 import { header, kv, success, error, txHash, eth, table, roundPhaseName } from "../utils/format.js";
 
@@ -220,12 +220,48 @@ export function registerNovelCommands(program: Command): void {
 
   novel
     .command("complete <id>")
-    .description("Complete a novel (creator or after inactivity timeout)")
+    .description(
+      "Complete a novel (creator / keeper / owner, or anyone after inactivity timeout). " +
+        "Auto-computes finalPaths: for each current worldLineAncestor, walks parent chain to root.",
+    )
     .action(async (id) => {
       try {
         const client = getWalletClient();
+        const pub = getPublicClient();
         const contracts = getContracts();
-        const hash = await completeNovelTx(client, BigInt(id), contracts.novelCore);
+        const novelCoreAbi = (await import("../shared/abi.js")).novelCoreAbi;
+
+        const ancestors = (await pub.readContract({
+          address: contracts.novelCore,
+          abi: novelCoreAbi,
+          functionName: "getWorldLineAncestors",
+          args: [BigInt(id)],
+        })) as readonly bigint[];
+
+        // For each ancestor: walk parent chain to the root chapter (depth=1).
+        const finalPaths: bigint[][] = [];
+        for (const ancestor of ancestors) {
+          const path: bigint[] = [];
+          let cur = ancestor;
+          while (cur !== 0n) {
+            path.push(cur);
+            const ch = (await pub.readContract({
+              address: contracts.novelCore,
+              abi: novelCoreAbi,
+              functionName: "getChapter",
+              args: [cur],
+            })) as { parentId: bigint; depth: number };
+            if (ch.depth <= 1) break;
+            cur = ch.parentId;
+          }
+          finalPaths.push(path);
+        }
+
+        const hash = await completeNovelTx(client, {
+          novelId: BigInt(id),
+          finalPaths,
+          roundManager: contracts.roundManager,
+        });
         txHash(hash);
         await waitForTx(hash);
         success("Novel completed");

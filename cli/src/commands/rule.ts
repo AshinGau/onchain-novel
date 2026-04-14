@@ -126,7 +126,6 @@ export function registerRuleCommands(program: Command): void {
           proposalType,
           ruleName: name,
           ruleContent: content ?? "",
-          chapterId: BigInt(chapterId),
           path,
           value,
           rulesEngine,
@@ -163,7 +162,6 @@ export function registerRuleCommands(program: Command): void {
 
         const hash = await voteOnRuleProposalTx(wallet, {
           proposalId: BigInt(proposalId),
-          chapterId: BigInt(chapterId),
           path,
           rulesEngine,
         });

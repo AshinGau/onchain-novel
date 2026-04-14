@@ -20,7 +20,9 @@ export const novelCoreAbi = parseAbi([
   "function getChapter(uint64 chapterId) external view returns ((uint64 id, uint64 novelId, uint64 parentId, address author, bytes32 contentHash, uint64 declaredLength, uint32 depth, uint64 timestamp, uint64[] children))",
   "function getWorldLineAncestors(uint64 novelId) external view returns (uint64[])",
   "function getChapterChildren(uint64 chapterId) external view returns (uint64[])",
-  "function verifyWorldLineAuthor(uint64 novelId, address expectedAuthor, uint64 chapterId, uint64[] path) external view",
+  "function verifyChapterPath(uint64 novelId, uint64[] path) external view",
+  "function isCurrentWorldLineAncestor(uint64 novelId, uint64 chapterId) external view returns (bool)",
+  "function verifyWorldLineAuthor(uint64 novelId, address expectedAuthor, uint64[] path) external view",
   "function novelCount() external view returns (uint64)",
   "function chapterCount() external view returns (uint64)",
 
@@ -38,6 +40,7 @@ export const novelCoreAbi = parseAbi([
 
 export const roundManagerAbi = parseAbi([
   // --- Events ---
+  "event KeeperUpdated(address indexed oldAddr, address indexed newAddr)",
   "event RoundStarted(uint64 indexed novelId, uint32 round, uint64[] candidates)",
   "event NominationClosed(uint64 indexed novelId, uint32 round)",
   "event CommitClosed(uint64 indexed novelId, uint32 round)",
@@ -50,18 +53,22 @@ export const roundManagerAbi = parseAbi([
   "event KeeperRewarded(uint64 indexed novelId, address indexed keeper, uint256 amount)",
 
   // --- View ---
-  "function getRoundData(uint64 novelId, uint32 round) external view returns ((uint64[] candidates, bool[] candidateIsEligible, uint64[] prevWorldLines, uint64 nominateEndTime, uint64 commitEndTime, uint64 revealEndTime, bool settled))",
+  "function getRoundData(uint64 novelId, uint32 round) external view returns ((uint64[] candidates, uint64 nominateEndTime, uint64 commitEndTime, uint64 revealEndTime, bool settled))",
+  "function keeper() external view returns (address)",
+
+  // --- Admin ---
+  "function setKeeper(address newKeeper) external",
 
   // --- Write ---
-  "function startRound(uint64 novelId) external",
+  "function startRound(uint64 novelId, uint64[] leaves) external",
   "function closeNomination(uint64 novelId) external",
   "function closeCommit(uint64 novelId) external",
-  "function settleRound(uint64 novelId) external",
-  "function nominateCandidate(uint64 novelId, uint64 chapterId) external payable",
+  "function settleRound(uint64 novelId, uint64[][] winnerPaths) external",
+  "function nominateCandidate(uint64 novelId, uint64[] path) external payable",
   "function commitVote(uint64 novelId, bytes32 commitHash) external payable",
   "function revealVote(uint64 novelId, uint64 candidateId, bytes32 salt) external",
   "function claimVotingReward(uint64 novelId, uint32 round) external",
-  "function completeNovel(uint64 novelId) external",
+  "function completeNovel(uint64 novelId, uint64[][] finalPaths) external",
 ]);
 
 // ============================================================
@@ -99,15 +106,15 @@ export const prizePoolAbi = parseAbi([
 // ============================================================
 
 export const bountyBoardAbi = parseAbi([
-  "event BountyCreated(uint256 indexed bountyId, uint64 indexed chapterId, address indexed tipper, uint256 lockedAmount, uint64 deadline)",
-  "event BountyDesignated(uint256 indexed bountyId, uint64 indexed chapterId)",
-  "event BountyClaimed(uint256 indexed bountyId, address indexed author, uint256 amount)",
-  "event BountyRefunded(uint256 indexed bountyId, address indexed tipper, uint256 amount)",
+  "event BountyCreated(uint64 indexed bountyId, uint64 indexed chapterId, address indexed tipper, uint256 lockedAmount, uint64 deadline)",
+  "event BountyDesignated(uint64 indexed bountyId, uint64 indexed chapterId)",
+  "event BountyClaimed(uint64 indexed bountyId, address indexed author, uint256 amount)",
+  "event BountyRefunded(uint64 indexed bountyId, address indexed tipper, uint256 amount)",
 
-  "function createBounty(uint64 chapterId, uint64 deadline) external payable returns (uint256 bountyId)",
-  "function designateBounty(uint256 bountyId, uint64 chapterId) external",
-  "function claimBounty(uint256 bountyId) external",
-  "function refundBounty(uint256 bountyId) external",
+  "function createBounty(uint64 chapterId, uint64 deadline) external payable returns (uint64 bountyId)",
+  "function designateBounty(uint64 bountyId, uint64 chapterId) external",
+  "function claimBounty(uint64 bountyId) external",
+  "function refundBounty(uint64 bountyId) external",
 ]);
 
 // ============================================================
@@ -117,16 +124,16 @@ export const bountyBoardAbi = parseAbi([
 export const rulesEngineAbi = parseAbi([
   "event RuleSet(uint64 indexed novelId, string name)",
   "event RuleDeleted(uint64 indexed novelId, string name)",
-  "event RuleProposed(uint256 indexed proposalId, uint64 indexed novelId, address indexed proposer, uint8 proposalType, string ruleName)",
-  "event RuleProposalVoted(uint256 indexed proposalId, address indexed voter, uint32 newVoteCount)",
-  "event RuleProposalExecuted(uint256 indexed proposalId, uint64 indexed novelId)",
+  "event RuleProposed(uint64 indexed proposalId, uint64 indexed novelId, address indexed proposer, uint8 proposalType, string ruleName)",
+  "event RuleProposalVoted(uint64 indexed proposalId, address indexed voter, uint32 newVoteCount)",
+  "event RuleProposalExecuted(uint64 indexed proposalId, uint64 indexed novelId)",
 
   "function getRule(uint64 novelId, string name) external view returns (string)",
   "function getRuleNames(uint64 novelId) external view returns (string[])",
-  "function getRuleProposal(uint256 proposalId) external view returns ((uint256 id, uint64 novelId, address proposer, uint8 proposalType, string ruleName, string ruleContent, uint256 createdAt, uint32 voteCount, bool executed))",
+  "function getRuleProposal(uint64 proposalId) external view returns ((uint64 id, uint64 novelId, uint64 createdAt, address proposer, uint8 proposalType, uint32 voteCount, bool executed, string ruleName, string ruleContent))",
   "function setCreatorRules(uint64 novelId, string[] names, string[] contents) external",
-  "function proposeRule(uint64 novelId, uint8 proposalType, string ruleName, string ruleContent, uint64 chapterId, uint64[] path) external payable returns (uint256 proposalId)",
-  "function voteOnRuleProposal(uint256 proposalId, uint64 chapterId, uint64[] path) external",
+  "function proposeRule(uint64 novelId, uint8 proposalType, string ruleName, string ruleContent, uint64[] path) external payable returns (uint64 proposalId)",
+  "function voteOnRuleProposal(uint64 proposalId, uint64[] path) external",
 ]);
 
 // ============================================================

@@ -73,6 +73,8 @@ contract Deploy is Script {
         PrizePool(payable(address(prizeProxy))).setBountyBoard(address(bountyProxy));
         RulesEngine(address(rulesProxy)).setNovelCore(address(novelCoreProxy));
         NovelCore(payable(address(novelCoreProxy))).setRoundManager(address(roundProxy));
+        // Initial keeper = deployer; owner should rotate via setKeeper post-deploy.
+        RoundManager(payable(address(roundProxy))).setKeeper(deployer);
 
         // 4. Standalone UserRegistry (no upgrade, no init args)
         UserRegistry userRegistry = new UserRegistry();

@@ -52,16 +52,16 @@ contract BountyBoard is
     IPrizePool public prizePool;
 
     /// @notice Total number of bounties created (used as incrementing ID)
-    uint256 public bountyCount;
+    uint64 public bountyCount;
 
     /// @notice bountyId => Bounty data
-    mapping(uint256 => DataTypes.Bounty) private _bounties;
+    mapping(uint64 => DataTypes.Bounty) private _bounties;
 
     /// @notice bountyId => author => whether they have claimed their share
-    mapping(uint256 => mapping(address => bool)) private _hasClaimed;
+    mapping(uint64 => mapping(address => bool)) private _hasClaimed;
 
     /// @notice chapterId => array of bountyIds targeting that chapter
-    mapping(uint64 => uint256[]) private _chapterBounties;
+    mapping(uint64 => uint64[]) private _chapterBounties;
 
     // ============================================================
     //                         ERRORS
@@ -129,7 +129,7 @@ contract BountyBoard is
         payable
         whenNotPaused
         nonReentrant
-        returns (uint256 bountyId)
+        returns (uint64 bountyId)
     {
         if (msg.value < MIN_BOUNTY_AMOUNT) revert BountyTooSmall(msg.value, MIN_BOUNTY_AMOUNT);
         if (deadline <= block.timestamp) revert DeadlineInPast();
@@ -162,7 +162,7 @@ contract BountyBoard is
     }
 
     /// @inheritdoc IBountyBoard
-    function designateBounty(uint256 bountyId, uint64 chapterId) external whenNotPaused {
+    function designateBounty(uint64 bountyId, uint64 chapterId) external whenNotPaused {
         DataTypes.Bounty storage bounty = _bounties[bountyId];
         if (msg.sender != bounty.tipper) revert NotTipper();
         if (block.timestamp > bounty.deadline) revert DeadlineReached();
@@ -178,7 +178,7 @@ contract BountyBoard is
     }
 
     /// @inheritdoc IBountyBoard
-    function claimBounty(uint256 bountyId) external whenNotPaused nonReentrant {
+    function claimBounty(uint64 bountyId) external whenNotPaused nonReentrant {
         DataTypes.Bounty storage bounty = _bounties[bountyId];
         if (block.timestamp <= bounty.deadline) revert DeadlineNotReached();
         if (bounty.claimed) revert BountyFullyClaimed();
@@ -239,7 +239,7 @@ contract BountyBoard is
     }
 
     /// @inheritdoc IBountyBoard
-    function refundBounty(uint256 bountyId) external whenNotPaused nonReentrant {
+    function refundBounty(uint64 bountyId) external whenNotPaused nonReentrant {
         DataTypes.Bounty storage bounty = _bounties[bountyId];
         if (block.timestamp <= bounty.deadline) revert DeadlineNotReached();
         if (bounty.claimed) revert BountyFullyClaimed();
@@ -259,7 +259,7 @@ contract BountyBoard is
     }
 
     /// @inheritdoc IBountyBoard
-    function sweepUnclaimedBounty(uint256 bountyId) external whenNotPaused nonReentrant {
+    function sweepUnclaimedBounty(uint64 bountyId) external whenNotPaused nonReentrant {
         DataTypes.Bounty storage bounty = _bounties[bountyId];
         if (bounty.claimed) revert BountyFullyClaimed();
         if (msg.sender != bounty.tipper) revert NotTipper();
@@ -296,12 +296,12 @@ contract BountyBoard is
     // ============================================================
 
     /// @inheritdoc IBountyBoard
-    function getBounty(uint256 bountyId) external view returns (DataTypes.Bounty memory) {
+    function getBounty(uint64 bountyId) external view returns (DataTypes.Bounty memory) {
         return _bounties[bountyId];
     }
 
     /// @inheritdoc IBountyBoard
-    function getBountiesForChapter(uint64 chapterId) external view returns (uint256[] memory) {
+    function getBountiesForChapter(uint64 chapterId) external view returns (uint64[] memory) {
         return _chapterBounties[chapterId];
     }
 
@@ -312,7 +312,7 @@ contract BountyBoard is
     /// @dev Get unique qualifying authors for a bounty (direct children with timestamp <= deadline)
     /// @return authors Array of unique qualifying author addresses (may have trailing zero addresses)
     /// @return count Number of unique qualifying authors
-    function _getQualifyingAuthors(uint256 bountyId) internal view returns (address[] memory authors, uint256 count) {
+    function _getQualifyingAuthors(uint64 bountyId) internal view returns (address[] memory authors, uint256 count) {
         DataTypes.Bounty storage bounty = _bounties[bountyId];
         uint64[] memory children = novelCore.getChapterChildren(bounty.chapterId);
 

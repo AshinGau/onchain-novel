@@ -14,11 +14,10 @@ import {IPrizePool} from "../interfaces/IPrizePool.sol";
 import {DataTypes} from "../libraries/DataTypes.sol";
 
 /// @title RoundManager
-/// @notice Owns the voting-round lifecycle: DFS candidate generation, phase transitions,
-///         vote forwarding, settlement (reward distribution + world-line update),
-///         and novel completion.
-/// @dev UUPS-upgradeable. Reads chapter data from NovelCore via external calls.
-///      Writes back to NovelCore through privileged setters (onlyRoundManager).
+/// @notice Round lifecycle: keeper-provided leaves & paths, on-chain path verification.
+/// @dev Heavy traversal (DFS, walk-to-root) lives off-chain in the keeper service. Contract
+///      validates each path is a real parent chain via `NovelCore.verifyChapterPath` and
+///      derives author lists from `Chapter.author` storage. Keeper cannot fabricate authors.
 contract RoundManager is
     Initializable,
     OwnableUpgradeable,
@@ -28,17 +27,15 @@ contract RoundManager is
     IRoundManager
 {
     // ─────── Constants ───────
-    uint64 internal constant INACTIVITY_TIMEOUT = 30 days;
+    uint64 internal constant INACTIVITY_TIMEOUT = 30 days; // completeNovel public-call window
+    uint64 internal constant KEEPER_INACTIVITY_TIMEOUT = 1 days; // round-fn public-call grace after phase deadline
     uint256 internal constant MAX_CANDIDATES_PER_ROUND = 64;
-    uint256 internal constant MAX_PATH_CHAPTERS = 256;
-    uint256 internal constant MAX_TREE_WALK_STEPS = 1000;
-    uint256 internal constant MAX_AUTHOR_WALK_STEPS = 500;
 
     // ─────── Storage ───────
     INovelCore public novelCore;
     IVotingEngine public votingEngine;
     IPrizePool public prizePool;
-    uint32 public maxDfsNodes;
+    address public keeper;
 
     mapping(uint64 => mapping(uint32 => DataTypes.RoundData)) private _rounds;
     mapping(uint64 => mapping(uint32 => uint256)) private _roundCommittedStakes;
@@ -46,18 +43,21 @@ contract RoundManager is
     // ─────── Errors ───────
     error NovelNotFound(uint64 novelId);
     error NovelNotActive(uint64 novelId);
-    error ChapterNotFound(uint64 chapterId);
-    error ChapterNotInNovel(uint64 chapterId, uint64 novelId);
     error WrongRoundPhase(DataTypes.RoundPhase expected, DataTypes.RoundPhase actual);
     error PhaseNotExpired();
     error MinRoundGapNotMet();
-    error InsufficientCandidates(uint256 available, uint32 required);
-    error DuplicateCandidate(uint64 chapterId);
-    error TooManyCandidates();
-    error NotACandidate(uint64 chapterId);
+    error InsufficientLeaves(uint256 supplied, uint32 required);
+    error TooManyLeaves();
+    error LeafHasChildren(uint64 chapterId);
+    error DuplicateLeaf(uint64 chapterId);
+    error AlreadyACandidate(uint64 chapterId);
+    error InvalidPathAnchor();
+    error WinnerPathMismatch();
+    error FinalPathMismatch();
     error InvalidFee(uint256 sent, uint256 required);
     error TransferFailed();
-    error CompletionNotAllowed();
+    error NotKeeperYet();
+    error NotAllowedToComplete();
     error NovelAlreadyCompleted(uint64 novelId);
     error ZeroAddress();
 
@@ -75,7 +75,6 @@ contract RoundManager is
         novelCore = INovelCore(novelCore_);
         votingEngine = IVotingEngine(votingEngine_);
         prizePool = IPrizePool(prizePool_);
-        maxDfsNodes = 500;
     }
 
     // ─────── Admin ───────
@@ -94,8 +93,9 @@ contract RoundManager is
         prizePool = IPrizePool(addr);
     }
 
-    function setMaxDfsNodes(uint32 val) external onlyOwner {
-        maxDfsNodes = val;
+    function setKeeper(address newKeeper) external onlyOwner {
+        emit KeeperUpdated(keeper, newKeeper);
+        keeper = newKeeper;
     }
 
     function pause() external onlyOwner {
@@ -107,10 +107,31 @@ contract RoundManager is
     }
 
     // ────────────────────────────────────────────────────
+    //          INTERNAL: PERMISSION + PHASE HELPERS
+    // ────────────────────────────────────────────────────
+
+    /// @dev Permission for round-phase functions: keeper / owner immediate; anyone after grace timeout.
+    function _checkRoundCaller(DataTypes.Novel memory novel, uint64 expectedDeadline) internal view {
+        if (msg.sender == keeper || msg.sender == owner()) return;
+        if (block.timestamp < expectedDeadline + KEEPER_INACTIVITY_TIMEOUT) revert NotKeeperYet();
+        novel; // silence unused
+    }
+
+    function _phaseDeadline(DataTypes.Novel memory novel, DataTypes.RoundData storage rd) internal view returns (uint64) {
+        if (novel.roundPhase == DataTypes.RoundPhase.Idle) {
+            // For startRound: deadline = lastSettleTime + minRoundGap (round 1 = 0)
+            return novel.currentRound > 0 ? novel.lastSettleTime + novel.config.minRoundGap : 0;
+        }
+        if (novel.roundPhase == DataTypes.RoundPhase.Nominating) return rd.nominateEndTime;
+        if (novel.roundPhase == DataTypes.RoundPhase.Committing) return rd.commitEndTime;
+        return rd.revealEndTime; // Revealing
+    }
+
+    // ────────────────────────────────────────────────────
     //               ROUND PHASE TRANSITIONS
     // ────────────────────────────────────────────────────
 
-    function startRound(uint64 novelId) external whenNotPaused {
+    function startRound(uint64 novelId, uint64[] calldata leaves) external whenNotPaused {
         DataTypes.Novel memory novel = novelCore.getNovel(novelId);
         if (novel.id == 0) revert NovelNotFound(novelId);
         if (!novel.active) revert NovelNotActive(novelId);
@@ -118,33 +139,43 @@ contract RoundManager is
             revert WrongRoundPhase(DataTypes.RoundPhase.Idle, novel.roundPhase);
         }
 
+        // minRoundGap (skip for round 1)
         if (novel.currentRound > 0) {
             if (block.timestamp < novel.lastSettleTime + novel.config.minRoundGap) revert MinRoundGapNotMet();
         }
 
-        uint64[] memory ancestors = novelCore.getWorldLineAncestors(novelId);
-        uint32 maxCandidates = 3 * novel.config.worldLineCount;
-        uint64[] memory candidates = _dfsDeepestChains(novelId, ancestors, maxCandidates);
+        uint32 N = novel.config.worldLineCount;
+        uint256 leafCount = leaves.length;
+        if (leafCount < N) revert InsufficientLeaves(leafCount, N);
+        if (leafCount > MAX_CANDIDATES_PER_ROUND) revert TooManyLeaves();
 
-        if (candidates.length < novel.config.worldLineCount) {
-            revert InsufficientCandidates(candidates.length, novel.config.worldLineCount);
+        // Permission gate: keeper/owner immediate, anyone after grace timeout
+        // (deadline = lastSettleTime + minRoundGap for round>0; for round 1, deadline=0 so fallback always allowed)
+        DataTypes.RoundData storage placeholder = _rounds[novelId][0];
+        _checkRoundCaller(novel, _phaseDeadline(novel, placeholder));
+
+        // Validate each leaf: belongs to novel, has no children, not duplicated
+        for (uint256 i = 0; i < leafCount; i++) {
+            uint64 leafId = leaves[i];
+            DataTypes.Chapter memory ch = novelCore.getChapter(leafId);
+            if (ch.id == 0 || ch.novelId != novelId) revert NovelNotFound(novelId);
+            if (ch.children.length != 0) revert LeafHasChildren(leafId);
+            for (uint256 j = i + 1; j < leafCount; j++) {
+                if (leaves[j] == leafId) revert DuplicateLeaf(leafId);
+            }
         }
 
         uint32 round = novelCore.advanceRound(novelId, DataTypes.RoundPhase.Nominating, uint64(block.timestamp));
 
         DataTypes.RoundData storage rd = _rounds[novelId][round];
-        for (uint256 i = 0; i < candidates.length; i++) {
-            rd.candidates.push(candidates[i]);
-            rd.candidateIsEligible.push(true);
-        }
-        for (uint256 i = 0; i < ancestors.length; i++) {
-            rd.prevWorldLines.push(ancestors[i]);
+        for (uint256 i = 0; i < leafCount; i++) {
+            rd.candidates.push(leaves[i]);
         }
         rd.nominateEndTime = uint64(block.timestamp) + novel.config.nominateDuration;
 
-        votingEngine.initializeVoting(novelId, round, candidates);
+        votingEngine.initializeVoting(novelId, round, leaves);
         _payKeeper(novelId);
-        emit RoundStarted(novelId, round, candidates);
+        emit RoundStarted(novelId, round, leaves);
     }
 
     function closeNomination(uint64 novelId) external whenNotPaused {
@@ -156,6 +187,7 @@ contract RoundManager is
 
         DataTypes.RoundData storage rd = _rounds[novelId][novel.currentRound];
         if (block.timestamp < rd.nominateEndTime) revert PhaseNotExpired();
+        _checkRoundCaller(novel, rd.nominateEndTime);
 
         novelCore.setNovelPhase(novelId, DataTypes.RoundPhase.Committing, uint64(block.timestamp));
         rd.commitEndTime = uint64(block.timestamp) + novel.config.commitDuration;
@@ -173,6 +205,7 @@ contract RoundManager is
 
         DataTypes.RoundData storage rd = _rounds[novelId][novel.currentRound];
         if (block.timestamp < rd.commitEndTime) revert PhaseNotExpired();
+        _checkRoundCaller(novel, rd.commitEndTime);
 
         novelCore.setNovelPhase(novelId, DataTypes.RoundPhase.Revealing, uint64(block.timestamp));
         rd.revealEndTime = uint64(block.timestamp) + novel.config.revealDuration;
@@ -181,7 +214,7 @@ contract RoundManager is
         emit CommitClosed(novelId, novel.currentRound);
     }
 
-    function settleRound(uint64 novelId) external whenNotPaused nonReentrant {
+    function settleRound(uint64 novelId, uint64[][] calldata winnerPaths) external whenNotPaused nonReentrant {
         DataTypes.Novel memory novel = novelCore.getNovel(novelId);
         if (novel.id == 0) revert NovelNotFound(novelId);
         if (novel.roundPhase != DataTypes.RoundPhase.Revealing) {
@@ -191,13 +224,21 @@ contract RoundManager is
         uint32 round = novel.currentRound;
         DataTypes.RoundData storage rd = _rounds[novelId][round];
         if (block.timestamp < rd.revealEndTime) revert PhaseNotExpired();
+        _checkRoundCaller(novel, rd.revealEndTime);
 
         uint32 N = novel.config.worldLineCount;
         uint64[] memory winners = votingEngine.tallyVotes(novelId, round, N);
 
-        // Collect per-chapter authors from eligible-winner new world line paths
-        address[] memory rewardAuthors = _collectEligibleNewAuthors(novelId, winners, rd);
+        if (winnerPaths.length != winners.length) revert WinnerPathMismatch();
 
+        // Derive rewardAuthors from winnerPaths. Each non-empty path must have:
+        //   path[0] == winners[i]
+        //   path[last] is in PREV worldLineAncestors (i.e., the current ones BEFORE we apply settlement)
+        // Authors collected from path[0..last-1] (path[last] is the prev anchor — already on previous world line).
+        uint64[] memory prevAncestors = novelCore.getWorldLineAncestors(novelId);
+        address[] memory rewardAuthors = _collectRewardAuthors(novelId, winners, winnerPaths, prevAncestors);
+
+        // Distribute round rewards
         uint256 voterRewards = 0;
         if (rewardAuthors.length > 0) {
             voterRewards = prizePool.distributeRoundRewards(
@@ -210,6 +251,7 @@ contract RoundManager is
             );
         }
 
+        // Forward voter rewards + stakes to VotingEngine
         uint256 totalCommitted = _roundCommittedStakes[novelId][round];
         if (totalCommitted > 0) {
             uint256 totalToVotingEngine = voterRewards + totalCommitted;
@@ -217,56 +259,97 @@ contract RoundManager is
                 (bool sent,) = address(votingEngine).call{value: totalToVotingEngine}("");
                 if (!sent) revert TransferFailed();
             }
-            uint256 excessReturn =
+            uint256 excess =
                 votingEngine.settleVoterRewards(novelId, round, voterRewards, novel.config.voteStake);
-            if (excessReturn > 0) prizePool.deposit{value: excessReturn}(novelId, "voterRewardExcess");
+            if (excess > 0) prizePool.deposit{value: excess}(novelId, "voterRewardExcess");
         } else if (voterRewards > 0) {
             prizePool.deposit{value: voterRewards}(novelId, "noVoters");
         }
 
-        // Update world line ancestors via NovelCore (no more author flag walking needed)
-        uint64[] memory newAncestors = winners; // winners.length == selectCount
-        novelCore.applyWorldLineSettlement(
-            novelId, newAncestors, DataTypes.RoundPhase.Idle, uint64(block.timestamp)
-        );
+        // Replace world line ancestors with winners
+        novelCore.applyWorldLineSettlement(novelId, winners, DataTypes.RoundPhase.Idle, uint64(block.timestamp));
 
         rd.settled = true;
-
         _payKeeper(novelId);
-        emit RoundSettled(novelId, round, newAncestors);
+        emit RoundSettled(novelId, round, winners);
+    }
+
+    function _collectRewardAuthors(
+        uint64 novelId,
+        uint64[] memory winners,
+        uint64[][] calldata winnerPaths,
+        uint64[] memory prevAncestors
+    ) internal view returns (address[] memory) {
+        // First pass: count total authors needed (sum of (path.length - 1) over non-empty paths)
+        uint256 total = 0;
+        for (uint256 i = 0; i < winnerPaths.length; i++) {
+            if (winnerPaths[i].length == 0) continue;
+            total += winnerPaths[i].length - 1;
+        }
+        address[] memory out = new address[](total);
+        uint256 idx = 0;
+
+        for (uint256 i = 0; i < winnerPaths.length; i++) {
+            uint64[] calldata path = winnerPaths[i];
+            if (path.length == 0) continue;
+
+            // Validate: path[0] must equal winners[i]
+            if (path[0] != winners[i]) revert WinnerPathMismatch();
+            // Anchor: path[last] must be one of the previous world line ancestors
+            uint64 anchor = path[path.length - 1];
+            bool anchorOk = false;
+            for (uint256 a = 0; a < prevAncestors.length; a++) {
+                if (prevAncestors[a] == anchor) {
+                    anchorOk = true;
+                    break;
+                }
+            }
+            if (!anchorOk) revert InvalidPathAnchor();
+
+            // Verify parent chain
+            novelCore.verifyChapterPath(novelId, path);
+
+            // Collect authors of all chapters except the anchor (already counted in prior rounds)
+            for (uint256 k = 0; k + 1 < path.length; k++) {
+                out[idx++] = novelCore.getChapter(path[k]).author;
+            }
+        }
+
+        return out;
     }
 
     // ────────────────────────────────────────────────────
     //                  NOMINATION & VOTING
     // ────────────────────────────────────────────────────
 
-    function nominateCandidate(uint64 novelId, uint64 chapterId) external payable whenNotPaused {
+    function nominateCandidate(uint64 novelId, uint64[] calldata path) external payable whenNotPaused {
         DataTypes.Novel memory novel = novelCore.getNovel(novelId);
         if (novel.id == 0) revert NovelNotFound(novelId);
         if (novel.roundPhase != DataTypes.RoundPhase.Nominating) {
             revert WrongRoundPhase(DataTypes.RoundPhase.Nominating, novel.roundPhase);
         }
         if (msg.value != novel.config.nominationFee) revert InvalidFee(msg.value, novel.config.nominationFee);
+        if (path.length < 2) revert InvalidPathAnchor();
 
-        DataTypes.Chapter memory ch = novelCore.getChapter(chapterId);
-        if (ch.id == 0) revert ChapterNotFound(chapterId);
-        if (ch.novelId != novelId) revert ChapterNotInNovel(chapterId, novelId);
+        // Validate parent chain
+        novelCore.verifyChapterPath(novelId, path);
+
+        // Anchor: path[last] must be a current worldLineAncestor (proves nominated chapter is a descendant)
+        uint64 nominatedId = path[0];
+        if (!novelCore.isCurrentWorldLineAncestor(novelId, path[path.length - 1])) revert InvalidPathAnchor();
 
         DataTypes.RoundData storage rd = _rounds[novelId][novel.currentRound];
-        if (rd.candidates.length >= MAX_CANDIDATES_PER_ROUND) revert TooManyCandidates();
+        if (rd.candidates.length >= MAX_CANDIDATES_PER_ROUND) revert TooManyLeaves();
         for (uint256 i = 0; i < rd.candidates.length; i++) {
-            if (rd.candidates[i] == chapterId) revert DuplicateCandidate(chapterId);
+            if (rd.candidates[i] == nominatedId) revert AlreadyACandidate(nominatedId);
         }
 
-        bool eligible = _isDescendantOfWorldLine(novelId, chapterId);
-        rd.candidates.push(chapterId);
-        rd.candidateIsEligible.push(eligible);
-
-        votingEngine.addCandidate(novelId, novel.currentRound, chapterId);
+        rd.candidates.push(nominatedId);
+        votingEngine.addCandidate(novelId, novel.currentRound, nominatedId);
 
         if (msg.value > 0) prizePool.deposit{value: msg.value}(novelId, "nominationFee");
 
-        emit CandidateNominated(novelId, novel.currentRound, chapterId, msg.sender);
+        emit CandidateNominated(novelId, novel.currentRound, nominatedId, msg.sender);
     }
 
     function commitVote(uint64 novelId, bytes32 commitHash) external payable whenNotPaused {
@@ -306,7 +389,7 @@ contract RoundManager is
     //                NOVEL COMPLETION
     // ────────────────────────────────────────────────────
 
-    function completeNovel(uint64 novelId) external whenNotPaused nonReentrant {
+    function completeNovel(uint64 novelId, uint64[][] calldata finalPaths) external whenNotPaused nonReentrant {
         DataTypes.Novel memory novel = novelCore.getNovel(novelId);
         if (novel.id == 0) revert NovelNotFound(novelId);
         if (!novel.active) revert NovelAlreadyCompleted(novelId);
@@ -314,18 +397,25 @@ contract RoundManager is
             revert WrongRoundPhase(DataTypes.RoundPhase.Idle, novel.roundPhase);
         }
 
-        uint64[] memory ancestors = novelCore.getWorldLineAncestors(novelId);
-
-        if (msg.sender != novel.creator) {
+        // Permission: creator || keeper || owner || (anyone after inactivity timeout)
+        if (msg.sender != novel.creator && msg.sender != keeper && msg.sender != owner()) {
+            // Compute most-recent activity from worldLineAncestors timestamps
+            uint64[] memory ancestors = novelCore.getWorldLineAncestors(novelId);
             uint64 lastActivity = novel.phaseStartTime;
             for (uint256 i = 0; i < ancestors.length; i++) {
                 uint64 ts = novelCore.getChapter(ancestors[i]).timestamp;
                 if (ts > lastActivity) lastActivity = ts;
             }
-            if (block.timestamp < lastActivity + INACTIVITY_TIMEOUT) revert CompletionNotAllowed();
+            if (block.timestamp < lastActivity + INACTIVITY_TIMEOUT) revert NotAllowedToComplete();
         }
 
-        address[] memory finalAuthors = _collectPathAuthors(novelId, ancestors);
+        // Validate finalPaths cover all current world lines
+        uint64[] memory worldLineAncestors = novelCore.getWorldLineAncestors(novelId);
+        if (finalPaths.length != worldLineAncestors.length) revert FinalPathMismatch();
+
+        // Collect chapter authors from all paths (dedup chapter IDs across paths)
+        address[] memory finalAuthors = _collectFinalAuthors(novelId, finalPaths, worldLineAncestors);
+
         if (finalAuthors.length > 0) {
             uint256 dust = prizePool.distributeRoundRewards(
                 novelId,
@@ -333,13 +423,55 @@ contract RoundManager is
                 novel.creator,
                 finalAuthors,
                 10000, // release entire pool
-                0 // no voter rewards in final distribution
+                0 // no voter rewards
             );
             if (dust > 0) prizePool.deposit{value: dust}(novelId, "completionDust");
         }
 
         novelCore.setNovelInactive(novelId);
         emit NovelCompleted(novelId);
+    }
+
+    function _collectFinalAuthors(
+        uint64 novelId,
+        uint64[][] calldata finalPaths,
+        uint64[] memory worldLineAncestors
+    ) internal view returns (address[] memory) {
+        // Dedup chapter IDs across all paths (paths share root and possibly intermediate ancestors)
+        // Worst case: sum of path lengths. Use a linear-scan dedup.
+        uint256 maxTotal = 0;
+        for (uint256 i = 0; i < finalPaths.length; i++) {
+            maxTotal += finalPaths[i].length;
+        }
+        uint64[] memory uniqueIds = new uint64[](maxTotal);
+        uint256 uniqueCount = 0;
+
+        for (uint256 i = 0; i < finalPaths.length; i++) {
+            uint64[] calldata path = finalPaths[i];
+            if (path.length == 0) revert FinalPathMismatch();
+            if (path[0] != worldLineAncestors[i]) revert FinalPathMismatch();
+            if (novelCore.getChapter(path[path.length - 1]).depth != 1) revert FinalPathMismatch();
+
+            novelCore.verifyChapterPath(novelId, path);
+
+            for (uint256 k = 0; k < path.length; k++) {
+                uint64 id = path[k];
+                bool dup = false;
+                for (uint256 u = 0; u < uniqueCount; u++) {
+                    if (uniqueIds[u] == id) {
+                        dup = true;
+                        break;
+                    }
+                }
+                if (!dup) uniqueIds[uniqueCount++] = id;
+            }
+        }
+
+        address[] memory authors = new address[](uniqueCount);
+        for (uint256 i = 0; i < uniqueCount; i++) {
+            authors[i] = novelCore.getChapter(uniqueIds[i]).author;
+        }
+        return authors;
     }
 
     // ────────────────────────────────────────────────────
@@ -351,197 +483,12 @@ contract RoundManager is
     }
 
     // ────────────────────────────────────────────────────
-    //                   INTERNAL: DFS
-    // ────────────────────────────────────────────────────
-
-    /// @dev Iterative DFS reading chapter data via NovelCore external calls.
-    function _dfsDeepestChains(uint64 novelId, uint64[] memory ancestors, uint32 maxCandidates)
-        internal
-        view
-        returns (uint64[] memory candidateIds)
-    {
-        uint32 nodeLimit = maxDfsNodes > 0 ? maxDfsNodes : 500;
-        uint32 nodesVisited = 0;
-
-        uint64[] memory leaves = new uint64[](nodeLimit);
-        uint32[] memory leafDepths = new uint32[](nodeLimit);
-        uint256 leafCount = 0;
-
-        uint64[] memory stack = new uint64[](nodeLimit);
-        bool[] memory stackIsAncestor = new bool[](nodeLimit);
-        uint256 stackTop = 0;
-
-        uint64[] memory visited = new uint64[](nodeLimit);
-        uint256 visitedCount = 0;
-
-        for (uint256 a = 0; a < ancestors.length && stackTop < stack.length; a++) {
-            stack[stackTop] = ancestors[a];
-            stackIsAncestor[stackTop] = true;
-            stackTop++;
-        }
-
-        while (stackTop > 0 && nodesVisited < nodeLimit) {
-            stackTop--;
-            uint64 current = stack[stackTop];
-            bool isAncestor = stackIsAncestor[stackTop];
-
-            if (_isInArray64(current, visited, visitedCount)) continue;
-            if (visitedCount < visited.length) visited[visitedCount++] = current;
-
-            nodesVisited++;
-
-            DataTypes.Chapter memory ch = novelCore.getChapter(current);
-            if (ch.novelId != novelId) continue;
-
-            uint64[] memory kids = ch.children;
-            bool hasNovelChild = false;
-            for (uint256 d = 0; d < kids.length && stackTop < stack.length && nodesVisited + d < nodeLimit; d++) {
-                if (novelCore.getChapter(kids[d]).novelId == novelId) {
-                    stack[stackTop] = kids[d];
-                    stackIsAncestor[stackTop] = false;
-                    stackTop++;
-                    hasNovelChild = true;
-                }
-            }
-
-            if (!hasNovelChild && !isAncestor && leafCount < leaves.length) {
-                leaves[leafCount] = current;
-                leafDepths[leafCount] = ch.depth;
-                leafCount++;
-            }
-        }
-
-        if (leafCount == 0) return new uint64[](0);
-
-        // Sort by depth descending (insertion sort)
-        for (uint256 i = 1; i < leafCount; i++) {
-            uint64 keyId = leaves[i];
-            uint32 keyDepth = leafDepths[i];
-            uint256 j = i;
-            while (j > 0 && leafDepths[j - 1] < keyDepth) {
-                leaves[j] = leaves[j - 1];
-                leafDepths[j] = leafDepths[j - 1];
-                j--;
-            }
-            leaves[j] = keyId;
-            leafDepths[j] = keyDepth;
-        }
-
-        uint256 resultCount = leafCount < maxCandidates ? leafCount : maxCandidates;
-        candidateIds = new uint64[](resultCount);
-        for (uint256 i = 0; i < resultCount; i++) {
-            candidateIds[i] = leaves[i];
-        }
-    }
-
-    // ────────────────────────────────────────────────────
-    //              INTERNAL: WORLD LINE HELPERS
-    // ────────────────────────────────────────────────────
-
-    function _isDescendantOfWorldLine(uint64 novelId, uint64 chapterId) internal view returns (bool) {
-        uint64[] memory ancestors = novelCore.getWorldLineAncestors(novelId);
-        uint64 current = chapterId;
-        for (uint256 step = 0; step < MAX_TREE_WALK_STEPS && current != 0; step++) {
-            for (uint256 i = 0; i < ancestors.length; i++) {
-                if (current == ancestors[i]) return true;
-            }
-            DataTypes.Chapter memory ch = novelCore.getChapter(current);
-            if (ch.depth <= 1) break;
-            current = ch.parentId;
-            if (ch.novelId != novelId) break;
-        }
-        return false;
-    }
-
-    function _collectEligibleNewAuthors(uint64 novelId, uint64[] memory winners, DataTypes.RoundData storage rd)
-        internal
-        view
-        returns (address[] memory)
-    {
-        uint64[] memory newChapterIds = new uint64[](MAX_PATH_CHAPTERS);
-        uint256 newCount = 0;
-
-        for (uint256 w = 0; w < winners.length; w++) {
-            uint256 candIdx = _findCandidateIndex(rd, winners[w]);
-            if (!rd.candidateIsEligible[candIdx]) continue;
-
-            uint64 current = winners[w];
-            for (uint256 step = 0; step < MAX_AUTHOR_WALK_STEPS && current != 0; step++) {
-                DataTypes.Chapter memory ch = novelCore.getChapter(current);
-
-                if (_isInArrayMem(current, rd.prevWorldLines)) break;
-                if (ch.novelId != novelId) break;
-
-                if (!_isInArray64(current, newChapterIds, newCount)) {
-                    if (newCount < newChapterIds.length) newChapterIds[newCount++] = current;
-                }
-
-                if (ch.depth <= 1) break;
-                current = ch.parentId;
-            }
-        }
-
-        address[] memory authors = new address[](newCount);
-        for (uint256 i = 0; i < newCount; i++) {
-            authors[i] = novelCore.getChapter(newChapterIds[i]).author;
-        }
-        return authors;
-    }
-
-    function _collectPathAuthors(uint64 novelId, uint64[] memory ancestors) internal view returns (address[] memory) {
-        uint64[] memory chapIds = new uint64[](MAX_PATH_CHAPTERS);
-        uint256 count = 0;
-
-        for (uint256 a = 0; a < ancestors.length; a++) {
-            uint64 current = ancestors[a];
-            for (uint256 step = 0; step < MAX_TREE_WALK_STEPS && current != 0; step++) {
-                DataTypes.Chapter memory ch = novelCore.getChapter(current);
-                if (ch.novelId != novelId) break;
-
-                if (!_isInArray64(current, chapIds, count)) {
-                    if (count < chapIds.length) chapIds[count++] = current;
-                }
-
-                if (ch.depth <= 1) break;
-                current = ch.parentId;
-            }
-        }
-
-        address[] memory authors = new address[](count);
-        for (uint256 i = 0; i < count; i++) {
-            authors[i] = novelCore.getChapter(chapIds[i]).author;
-        }
-        return authors;
-    }
-
-    // ────────────────────────────────────────────────────
     //                INTERNAL: UTILITIES
     // ────────────────────────────────────────────────────
 
     function _payKeeper(uint64 novelId) internal {
         uint256 amount = prizePool.payKeeperReward(novelId, msg.sender);
         if (amount > 0) emit KeeperRewarded(novelId, msg.sender, amount);
-    }
-
-    function _findCandidateIndex(DataTypes.RoundData storage rd, uint64 chapterId) internal view returns (uint256) {
-        for (uint256 i = 0; i < rd.candidates.length; i++) {
-            if (rd.candidates[i] == chapterId) return i;
-        }
-        revert NotACandidate(chapterId);
-    }
-
-    function _isInArrayMem(uint64 val, uint64[] storage arr) internal view returns (bool) {
-        for (uint256 i = 0; i < arr.length; i++) {
-            if (arr[i] == val) return true;
-        }
-        return false;
-    }
-
-    function _isInArray64(uint64 val, uint64[] memory arr, uint256 len) internal pure returns (bool) {
-        for (uint256 i = 0; i < len; i++) {
-            if (arr[i] == val) return true;
-        }
-        return false;
     }
 
     /// @notice Accept ETH from PrizePool / VotingEngine for round settlement only

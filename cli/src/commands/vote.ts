@@ -10,10 +10,19 @@ import {
   commitVote as commitVoteTx,
   revealVote as revealVoteTx,
   claimVotingReward as claimVotingRewardTx,
+  buildPathToAnchor,
   computeCommitHash,
   toBytes32Salt,
 } from "../shared/index.js";
-import { getWalletClient, getContracts, waitForTx } from "../utils/client.js";
+
+function parseIdList(raw: string): bigint[] {
+  return raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0)
+    .map((s) => BigInt(s));
+}
+import { getWalletClient, getPublicClient, getContracts, waitForTx } from "../utils/client.js";
 import { apiGet, apiPost } from "../utils/api.js";
 import { saveVoteSalt, getVoteSalt, getStorePath } from "../utils/vote-store.js";
 import { header, kv, success, error, txHash, table, roundPhaseName } from "../utils/format.js";
@@ -28,13 +37,21 @@ export function registerVoteCommands(program: Command): void {
   const vote = program.command("vote").description("Voting commands");
 
   vote
-    .command("start <novel-id>")
-    .description("Start a new voting round (keeper action). Requires every world line to have >= 1 continuation; otherwise reverts with InsufficientCandidates.")
-    .action(async (novelId) => {
+    .command("start <novel-id> <leaves>")
+    .description(
+      "Start a new voting round (keeper / owner only). " +
+        "<leaves> is a comma-separated list of leaf chapter IDs (one per current world line, " +
+        "deepest leaf preferred). Each must be a true tree leaf (no children).",
+    )
+    .action(async (novelId, leavesArg) => {
       try {
         const client = getWalletClient();
         const contracts = getContracts();
-        const hash = await startRoundTx(client, BigInt(novelId), contracts.roundManager);
+        const hash = await startRoundTx(client, {
+          novelId: BigInt(novelId),
+          leaves: parseIdList(leavesArg),
+          roundManager: contracts.roundManager,
+        });
         txHash(hash);
         await waitForTx(hash);
         success("Round started");
@@ -80,11 +97,15 @@ export function registerVoteCommands(program: Command): void {
 
   vote
     .command("nominate <novel-id> <chapter-id>")
-    .description("Nominate a chapter as candidate")
+    .description(
+      "Nominate a chapter as candidate. The chapter must be a descendant of one of the current " +
+        "worldLineAncestors; the path proof is computed automatically.",
+    )
     .option("--value <eth>", "nomination fee in ETH")
     .action(async (novelId, chapterId, opts) => {
       try {
         const client = getWalletClient();
+        const pub = getPublicClient();
         const contracts = getContracts();
 
         let value: bigint;
@@ -101,9 +122,24 @@ export function registerVoteCommands(program: Command): void {
           }
         }
 
+        // Build path proof: nominated chapter → current worldLineAncestor
+        const ancestors = (await pub.readContract({
+          address: contracts.novelCore,
+          abi: (await import("../shared/abi.js")).novelCoreAbi,
+          functionName: "getWorldLineAncestors",
+          args: [BigInt(novelId)],
+        })) as readonly bigint[];
+        const path = await buildPathToAnchor(pub, contracts.novelCore, BigInt(novelId), BigInt(chapterId), ancestors);
+        if (!path || path.length < 2) {
+          error(
+            `Chapter #${chapterId} is not a strict descendant of any current worldLineAncestor of novel #${novelId}.`,
+          );
+          return process.exit(1);
+        }
+
         const hash = await nominateCandidateTx(client, {
           novelId: BigInt(novelId),
-          chapterId: BigInt(chapterId),
+          path,
           value,
           roundManager: contracts.roundManager,
         });
@@ -258,13 +294,23 @@ export function registerVoteCommands(program: Command): void {
     });
 
   vote
-    .command("settle <novel-id>")
-    .description("Settle the current round (keeper action)")
-    .action(async (novelId) => {
+    .command("settle <novel-id> <winner-paths>")
+    .description(
+      "Settle the current round (keeper / owner only). " +
+        "<winner-paths> is a JSON array of paths, e.g. '[[5,3,1],[6,1],[]]' — winnerPaths[i] " +
+        "is [winners[i], parent, ..., prevWorldLineAncestor]. Empty path = no rewards for that winner.",
+    )
+    .action(async (novelId, winnerPathsArg) => {
       try {
         const client = getWalletClient();
         const contracts = getContracts();
-        const hash = await settleRoundTx(client, BigInt(novelId), contracts.roundManager);
+        const parsed = JSON.parse(winnerPathsArg) as unknown[];
+        const winnerPaths: bigint[][] = parsed.map((p) => (p as Array<number | string>).map((x) => BigInt(x)));
+        const hash = await settleRoundTx(client, {
+          novelId: BigInt(novelId),
+          winnerPaths,
+          roundManager: contracts.roundManager,
+        });
         txHash(hash);
         await waitForTx(hash);
         success("Round settled");

@@ -106,6 +106,8 @@ abstract contract TestBase is Test {
         prizePool.setBountyBoard(address(bountyProxy));
         rulesEngine.setNovelCore(address(novelCoreProxy));
         novelCore.setRoundManager(address(roundProxy));
+        // Configure the test `keeper` address as RoundManager's keeper so vm.prank(keeper) works.
+        roundManager.setKeeper(keeper);
 
         // UserRegistry standalone
         userRegistry = new UserRegistry();
@@ -171,15 +173,150 @@ abstract contract TestBase is Test {
         return countBefore + 1;
     }
 
-    function _runFullRound(uint64 novelId, address[] memory voters, uint64 targetCandidate, bytes32 salt) internal {
+    // ─── Path-proof helpers ───
+
+    /// Walk parentId chain from `from` up to (and including) `to`. Returns [from, ..., to].
+    function _pathFromTo(uint64 from, uint64 to) internal view returns (uint64[] memory path) {
+        uint64 cur = from;
+        uint256 len = 1;
+        while (cur != to) {
+            DataTypes.Chapter memory ch = novelCore.getChapter(cur);
+            require(ch.id != 0 && ch.depth > 1, "path: hit boundary before target");
+            cur = ch.parentId;
+            len++;
+            require(len < 1024, "path: runaway");
+        }
+        path = new uint64[](len);
+        cur = from;
+        path[0] = cur;
+        for (uint256 i = 1; i < len; i++) {
+            cur = novelCore.getChapter(cur).parentId;
+            path[i] = cur;
+        }
+    }
+
+    /// Walk parentId chain from `from` until hitting any element of `anchors`.
+    /// Returns path = [from, ..., anchor]. Reverts if no anchor found in chain.
+    function _pathToAnyAnchor(uint64 from, uint64[] memory anchors) internal view returns (uint64[] memory path) {
+        // First locate anchor in chain
+        uint64 cur = from;
+        uint256 len = 1;
+        bool found = false;
+        for (uint256 step = 0; step < 1024; step++) {
+            for (uint256 a = 0; a < anchors.length; a++) {
+                if (anchors[a] == cur) {
+                    found = true;
+                    break;
+                }
+            }
+            if (found) break;
+            DataTypes.Chapter memory ch = novelCore.getChapter(cur);
+            require(ch.id != 0, "anchor walk: missing chapter");
+            require(ch.depth > 1, "anchor walk: hit root before anchor");
+            cur = ch.parentId;
+            len++;
+        }
+        require(found, "anchor walk: anchor not found");
+        path = new uint64[](len);
+        cur = from;
+        path[0] = cur;
+        for (uint256 i = 1; i < len; i++) {
+            cur = novelCore.getChapter(cur).parentId;
+            path[i] = cur;
+        }
+    }
+
+    /// Path from `chapterId` up to root (depth 1).
+    function _pathToRoot(uint64 chapterId) internal view returns (uint64[] memory) {
+        // Find root by walking
+        uint64 cur = chapterId;
+        while (novelCore.getChapter(cur).depth > 1) cur = novelCore.getChapter(cur).parentId;
+        return _pathFromTo(chapterId, cur);
+    }
+
+    /// Single-element path. Useful when chapterId is itself an anchor.
+    function _singleHop(uint64 id) internal pure returns (uint64[] memory path) {
+        path = new uint64[](1);
+        path[0] = id;
+    }
+
+    /// Find the first leaf descendant of `chapterId` by following children[0] greedily.
+    function _firstLeafUnder(uint64 chapterId) internal view returns (uint64) {
+        uint64 cur = chapterId;
+        while (true) {
+            DataTypes.Chapter memory ch = novelCore.getChapter(cur);
+            if (ch.children.length == 0) return cur;
+            cur = ch.children[0];
+        }
+        revert("unreachable");
+    }
+
+    /// Auto-build leaves: one leaf under each current worldLineAncestor, ensuring `target` is first.
+    /// Uses worldLineCount to size the array.
+    function _autoLeaves(uint64 novelId, uint64 target) internal view returns (uint64[] memory leaves) {
+        DataTypes.Novel memory n = novelCore.getNovel(novelId);
+        uint32 N = n.config.worldLineCount;
+        uint64[] memory ancestors = novelCore.getWorldLineAncestors(novelId);
+        leaves = new uint64[](N);
+        leaves[0] = target;
+        uint256 idx = 1;
+        for (uint256 a = 0; a < ancestors.length && idx < N; a++) {
+            uint64 leaf = _firstLeafUnder(ancestors[a]);
+            bool dup;
+            for (uint256 i = 0; i < idx; i++) {
+                if (leaves[i] == leaf) {
+                    dup = true;
+                    break;
+                }
+            }
+            if (!dup) leaves[idx++] = leaf;
+        }
+        // If still short, fall back to scanning recent chapters that are leaves
+        uint64 cnt = novelCore.chapterCount();
+        for (uint64 c = cnt; c >= 1 && idx < N; c--) {
+            DataTypes.Chapter memory ch = novelCore.getChapter(c);
+            if (ch.id == 0 || ch.novelId != novelId || ch.children.length != 0) {
+                if (c == 1) break;
+                continue;
+            }
+            bool dup;
+            for (uint256 i = 0; i < idx; i++) {
+                if (leaves[i] == c) {
+                    dup = true;
+                    break;
+                }
+            }
+            if (!dup) leaves[idx++] = c;
+            if (c == 1) break;
+        }
+        require(idx == N, "_autoLeaves: not enough distinct leaves");
+    }
+
+    /// Backward-compat wrapper: auto-compute leaves from worldLineAncestors.
+    function _runFullRound(uint64 novelId, address[] memory voters, uint64 target, bytes32 salt) internal {
+        uint64[] memory leaves = _autoLeaves(novelId, target);
+        _runFullRound(novelId, leaves, voters, target, salt);
+    }
+
+    /// Run a full round. Caller provides leaves in tally order (target first, then by candidate position).
+    function _runFullRound(
+        uint64 novelId,
+        uint64[] memory leaves,
+        address[] memory voters,
+        uint64 target,
+        bytes32 salt
+    ) internal {
+        // Snapshot prev ancestors for winnerPaths
+        uint64[] memory prev = novelCore.getWorldLineAncestors(novelId);
+
         vm.prank(keeper);
-        roundManager.startRound(novelId);
+        roundManager.startRound(novelId, leaves);
 
         vm.warp(block.timestamp + NOMINATE_DURATION + 1);
         vm.prank(keeper);
         roundManager.closeNomination(novelId);
 
-        bytes32 commitHash = keccak256(abi.encodePacked(targetCandidate, salt));
+        bytes32 commitHash = keccak256(abi.encodePacked(target, salt));
         for (uint256 i = 0; i < voters.length; i++) {
             vm.prank(voters[i]);
             roundManager.commitVote{value: VOTE_STAKE}(novelId, commitHash);
@@ -191,12 +328,21 @@ abstract contract TestBase is Test {
 
         for (uint256 i = 0; i < voters.length; i++) {
             vm.prank(voters[i]);
-            roundManager.revealVote(novelId, targetCandidate, salt);
+            roundManager.revealVote(novelId, target, salt);
         }
 
         vm.warp(block.timestamp + REVEAL_DURATION + 1);
+
+        // Build winnerPaths: each leaf's path back to a prev ancestor.
+        // Tally returns winners ordered by weight desc; on tie (0 weight), original candidate order
+        // is preserved. Caller must pass `leaves` in this expected order.
+        uint64[][] memory winnerPaths = new uint64[][](leaves.length);
+        for (uint256 i = 0; i < leaves.length; i++) {
+            winnerPaths[i] = _pathToAnyAnchor(leaves[i], prev);
+        }
+
         vm.prank(keeper);
-        roundManager.settleRound(novelId);
+        roundManager.settleRound(novelId, winnerPaths);
     }
 }
 
@@ -304,8 +450,14 @@ contract IntegrationTest is TestBase {
         uint64 ch3 = _submitChapter(author2, novelId, rootId, "branch B chapter 3!!");
         uint64 ch4 = _submitChapter(author1, novelId, ch2, "branch A chapter 4!!");
 
+        // Leaves: ch4 (depth 3) and ch3 (depth 2)
+        uint64[] memory leaves = new uint64[](2);
+        leaves[0] = ch4;
+        leaves[1] = ch3;
+        uint64[] memory prevAncestors = novelCore.getWorldLineAncestors(novelId);
+
         vm.prank(keeper);
-        roundManager.startRound(novelId);
+        roundManager.startRound(novelId, leaves);
 
         DataTypes.Novel memory novel = novelCore.getNovel(novelId);
         assertEq(novel.currentRound, 1);
@@ -337,8 +489,14 @@ contract IntegrationTest is TestBase {
         roundManager.revealVote(novelId, targetCandidate, salt);
 
         vm.warp(block.timestamp + REVEAL_DURATION + 1);
+
+        // winnerPaths: order = [ch4 (winner), ch3]; both come from prev ancestor (root=1)
+        uint64[][] memory winnerPaths = new uint64[][](2);
+        winnerPaths[0] = _pathToAnyAnchor(ch4, prevAncestors);
+        winnerPaths[1] = _pathToAnyAnchor(ch3, prevAncestors);
+
         vm.prank(keeper);
-        roundManager.settleRound(novelId);
+        roundManager.settleRound(novelId, winnerPaths);
 
         novel = novelCore.getNovel(novelId);
         assertEq(uint8(novel.roundPhase), uint8(DataTypes.RoundPhase.Idle));
@@ -366,7 +524,10 @@ contract IntegrationTest is TestBase {
         voters[1] = voter2;
         bytes32 salt = bytes32("salt1");
 
-        _runFullRound(novelId, voters, ch2, salt);
+        uint64[] memory leaves1 = new uint64[](2);
+        leaves1[0] = ch2;
+        leaves1[1] = ch3;
+        _runFullRound(novelId, leaves1, voters, ch2, salt);
 
         uint64[] memory wl1 = novelCore.getWorldLineAncestors(novelId);
         assertTrue(wl1.length > 0);
@@ -377,7 +538,13 @@ contract IntegrationTest is TestBase {
         uint64 ch6 = _submitChapter(author2, novelId, wl1[0], "round 2 continuation 2!!");
 
         salt = bytes32("salt2");
-        _runFullRound(novelId, voters, ch5, salt);
+        // wl1 = [ch2, ch3]. ch5 and ch6 both extend ch2; ch3 has no continuation, but is still
+        // a worldLineAncestor (and a leaf since no children). Use leaves [ch5 (target), ch6, ch3].
+        // worldLineCount = 2, so leaves needs >= 2.
+        uint64[] memory leaves2 = new uint64[](2);
+        leaves2[0] = ch5;
+        leaves2[1] = ch6;
+        _runFullRound(novelId, leaves2, voters, ch5, salt);
 
         DataTypes.Novel memory novel = novelCore.getNovel(novelId);
         assertEq(novel.currentRound, 2);
@@ -387,10 +554,9 @@ contract IntegrationTest is TestBase {
     }
 
     // ----------------------------------------------------------
-    //  Nomination: non-world-line-descendant has candidateIsEligible=false
+    //  Nomination: any user pays fee; path proof required (chapter must descend from worldLine)
     // ----------------------------------------------------------
-    function test_nomination_nonWorldLineDescendant() public {
-        // Use worldLineCount=1 so only one winner per round
+    function test_nomination_requiresPathToWorldLine() public {
         DataTypes.NovelConfig memory config = _defaultConfig();
         config.worldLineCount = 1;
         uint64 novelId = _createNovelWith(creator, config, 1 ether);
@@ -401,29 +567,35 @@ contract IntegrationTest is TestBase {
 
         address[] memory voters = new address[](1);
         voters[0] = voter1;
-        _runFullRound(novelId, voters, ch2, bytes32("s1"));
+        uint64[] memory leaves1 = new uint64[](1);
+        leaves1[0] = ch2;
+        _runFullRound(novelId, leaves1, voters, ch2, bytes32("s1"));
 
         vm.warp(block.timestamp + MIN_ROUND_GAP + 1);
 
         uint64 ch4 = _submitChapter(author1, novelId, ch2, "world line descendant ch4!");
         uint64 ch5 = _submitChapter(author2, novelId, ch3, "non-world-line branch ch5!");
 
+        // Round 2: leaves = [ch4]. ch4 is descendant of ch2 (current worldLine).
+        uint64[] memory leaves2 = new uint64[](1);
+        leaves2[0] = ch4;
         vm.prank(keeper);
-        roundManager.startRound(novelId);
+        roundManager.startRound(novelId, leaves2);
 
+        // ch5 nomination requires a path to a current worldLineAncestor (which is ch2 now).
+        // ch5's parent is ch3, ch3's parent is root. ch2 is NOT in ch5's parent chain.
+        // So no valid path exists — nomination should revert.
+        uint64[] memory bogusPath = _pathToRoot(ch5);
         vm.prank(author2);
-        roundManager.nominateCandidate{value: NOMINATION_FEE}(novelId, ch5);
+        vm.expectRevert();
+        roundManager.nominateCandidate{value: NOMINATION_FEE}(novelId, bogusPath);
 
-        DataTypes.RoundData memory rd = roundManager.getRoundData(novelId, 2);
-        uint256 ch5Idx = type(uint256).max;
-        for (uint256 i = 0; i < rd.candidates.length; i++) {
-            if (rd.candidates[i] == ch5) {
-                ch5Idx = i;
-                break;
-            }
-        }
-        assertTrue(ch5Idx < rd.candidates.length, "ch5 not found in candidates");
-        assertFalse(rd.candidateIsEligible[ch5Idx], "ch5 should be ineligible");
+        // ch4 IS a descendant of ch2 — but ch4 is already a candidate (added by startRound).
+        // Build path [ch4, ch2] and try; expect AlreadyACandidate revert.
+        uint64[] memory ch4Path = _pathFromTo(ch4, ch2);
+        vm.prank(author1);
+        vm.expectRevert();
+        roundManager.nominateCandidate{value: NOMINATION_FEE}(novelId, ch4Path);
     }
 
     // ----------------------------------------------------------
@@ -544,8 +716,12 @@ contract IntegrationTest is TestBase {
         uint64 rootId = 1;
         _submitChapter(author1, novelId, rootId, "chapter for complete test!");
 
+        // Current world line ancestor is just root; pass [[root]] as finalPaths
+        uint64[][] memory finalPaths = new uint64[][](1);
+        finalPaths[0] = _singleHop(rootId);
+
         vm.prank(creator);
-        roundManager.completeNovel(novelId);
+        roundManager.completeNovel(novelId, finalPaths);
 
         DataTypes.Novel memory novel = novelCore.getNovel(novelId);
         assertFalse(novel.active, "novel should be inactive after completion");
@@ -561,8 +737,13 @@ contract IntegrationTest is TestBase {
         uint64 ch2 = _submitChapter(author1, novelId, rootId, "branch for voter accuracy!");
         uint64 ch3 = _submitChapter(author2, novelId, rootId, "branch B for voter accuracy");
 
+        uint64[] memory leaves = new uint64[](2);
+        leaves[0] = ch2;
+        leaves[1] = ch3;
+        uint64[] memory prevAncestors = novelCore.getWorldLineAncestors(novelId);
+
         vm.prank(keeper);
-        roundManager.startRound(novelId);
+        roundManager.startRound(novelId, leaves);
 
         vm.warp(block.timestamp + NOMINATE_DURATION + 1);
         vm.prank(keeper);
@@ -587,8 +768,14 @@ contract IntegrationTest is TestBase {
         roundManager.revealVote(novelId, ch3, salt);
 
         vm.warp(block.timestamp + REVEAL_DURATION + 1);
+
+        // Build winnerPaths for [ch2, ch3] (both as winners; tally returns same order due to weight tie/insertion)
+        uint64[][] memory winnerPaths = new uint64[][](2);
+        winnerPaths[0] = _pathToAnyAnchor(ch2, prevAncestors);
+        winnerPaths[1] = _pathToAnyAnchor(ch3, prevAncestors);
+
         vm.prank(keeper);
-        roundManager.settleRound(novelId);
+        roundManager.settleRound(novelId, winnerPaths);
 
         DataTypes.Novel memory novel = novelCore.getNovel(novelId);
         uint32 round = novel.currentRound;
@@ -616,10 +803,14 @@ contract IntegrationTest is TestBase {
         uint64 rootId = 1;
 
         uint64 ch2 = _submitChapter(author1, novelId, rootId, "pre-round chapter content!");
-        _submitChapter(author2, novelId, rootId, "pre-round branch B chapter!");
+        uint64 ch2b = _submitChapter(author2, novelId, rootId, "pre-round branch B chapter!");
+
+        uint64[] memory leaves = new uint64[](2);
+        leaves[0] = ch2;
+        leaves[1] = ch2b;
 
         vm.prank(keeper);
-        roundManager.startRound(novelId);
+        roundManager.startRound(novelId, leaves);
 
         // Submit during nominating phase
         uint64 ch3 = _submitChapter(author2, novelId, rootId, "during nominating phase!!!");
@@ -683,8 +874,12 @@ contract IntegrationTest is TestBase {
         uint64 rootId = 1;
         uint64 ch2 = _submitChapter(author1, novelId, rootId, "branch for unreveal test!!");
 
+        uint64[] memory leaves = new uint64[](1);
+        leaves[0] = ch2;
+        uint64[] memory prevAncestors = novelCore.getWorldLineAncestors(novelId);
+
         vm.prank(keeper);
-        roundManager.startRound(novelId);
+        roundManager.startRound(novelId, leaves);
         vm.warp(block.timestamp + NOMINATE_DURATION + 1);
         vm.prank(keeper);
         roundManager.closeNomination(novelId);
@@ -705,8 +900,12 @@ contract IntegrationTest is TestBase {
         roundManager.revealVote(novelId, ch2, salt);
 
         vm.warp(block.timestamp + REVEAL_DURATION + 1);
+
+        uint64[][] memory winnerPaths = new uint64[][](1);
+        winnerPaths[0] = _pathToAnyAnchor(ch2, prevAncestors);
+
         vm.prank(keeper);
-        roundManager.settleRound(novelId);
+        roundManager.settleRound(novelId, winnerPaths);
 
         // voter2 (unrevealed) should get stake - 50%
         uint256 expectedPenalty = (VOTE_STAKE * votingEngine.UNREVEAL_PENALTY_RATE_BP()) / 10000;
@@ -757,54 +956,32 @@ contract IntegrationTest is TestBase {
         uint64 novelId = _createNovelWith(creator, config, 1 ether);
         uint64 rootId = 1;
 
-        // Build a wide tree of root children — DFS will pick a small subset as auto candidates
+        // Build a wide tree of root children — keeper picks the first as the (single) leaf candidate.
         uint64[] memory children = new uint64[](70);
         for (uint256 i = 0; i < 70; i++) {
             children[i] =
                 _submitChapter(author1, novelId, rootId, abi.encodePacked("child chapter content #", bytes1(uint8(i))));
         }
 
+        // Keeper picks just one leaf to start the round (worldLineCount = 1)
+        uint64[] memory leaves = new uint64[](1);
+        leaves[0] = children[0];
         vm.prank(keeper);
-        roundManager.startRound(novelId);
+        roundManager.startRound(novelId, leaves);
 
-        // Auto candidates take some slots; nominate the rest until we hit the cap.
-        DataTypes.RoundData memory rd = roundManager.getRoundData(novelId, 1);
-        uint256 used = rd.candidates.length;
-        uint256 slotsLeft = 64 - used; // MAX_CANDIDATES_PER_ROUND = 64
-
-        // Pick chapters not already in the candidate set.
-        uint256 nominated = 0;
-        for (uint256 i = 0; i < 70 && nominated < slotsLeft; i++) {
-            bool already = false;
-            for (uint256 j = 0; j < rd.candidates.length; j++) {
-                if (rd.candidates[j] == children[i]) {
-                    already = true;
-                    break;
-                }
-            }
-            if (already) continue;
+        // Nominate children[1..63] (63 nominations + 1 auto leaf = 64 candidates, the cap).
+        // Each nomination needs a path proving the chapter is descendant of current worldLineAncestor (root).
+        for (uint256 i = 1; i < 64; i++) {
+            uint64[] memory path = _pathFromTo(children[i], rootId);
             vm.prank(author2);
-            roundManager.nominateCandidate{value: 0.0001 ether}(novelId, children[i]);
-            nominated++;
+            roundManager.nominateCandidate{value: 0.0001 ether}(novelId, path);
         }
 
-        // One more nomination must hit the cap and revert.
-        for (uint256 i = 0; i < 70; i++) {
-            bool already = false;
-            DataTypes.RoundData memory rd2 = roundManager.getRoundData(novelId, 1);
-            for (uint256 j = 0; j < rd2.candidates.length; j++) {
-                if (rd2.candidates[j] == children[i]) {
-                    already = true;
-                    break;
-                }
-            }
-            if (already) continue;
-            vm.prank(author2);
-            vm.expectRevert(); // TooManyCandidates
-            roundManager.nominateCandidate{value: 0.0001 ether}(novelId, children[i]);
-            return;
-        }
-        revert("expected cap-revert path not exercised");
+        // 65th candidate (children[64]) must hit the cap and revert.
+        uint64[] memory overflowPath = _pathFromTo(children[64], rootId);
+        vm.prank(author2);
+        vm.expectRevert(); // TooManyLeaves
+        roundManager.nominateCandidate{value: 0.0001 ether}(novelId, overflowPath);
     }
 
     // ----------------------------------------------------------

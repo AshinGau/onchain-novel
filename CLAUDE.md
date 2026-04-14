@@ -63,7 +63,7 @@ npm run build            # Compile TypeScript
 ### Smart Contracts (`src/`)
 Six UUPS-upgradeable contracts + one standalone:
 - **NovelCore** — Chapter tree (parentId + children[]), novel/chapter CRUD, metadata, worldLineAncestors storage. Writing always available. Round state is mutated only by RoundManager via privileged setters.
-- **RoundManager** — Round lifecycle (start/close/settle/nominate), DFS candidate generation, commit-reveal vote forwarding, final completion.
+- **RoundManager** — Round lifecycle (start/close/settle/nominate), commit-reveal vote forwarding, final completion. Round-phase functions are `keeper`-only (with anyone-after-timeout fallback). Keeper supplies leaves + winnerPaths + finalPaths off-chain; contract verifies parent chains via `NovelCore.verifyChapterPath` and derives authors from storage (no trust in caller's authors).
 - **VotingEngine** — Commit-reveal voting. 3x accuracy weight. One vote per address per round. Privileged calls gated by RoundManager.
 - **PrizePool** — Per-round distribution: creator royalty `D/(D+round)` decay, author/voter rewards. Tips (public `tipNovel` / `tipChapter`). Keeper rewards.
 - **BountyBoard** — Reader bounties for direct-child continuations. 20% to pool, 80% to authors or refund.
@@ -97,7 +97,7 @@ State flow (on RoundManager): `Idle → startRound(DFS) → Nominating → close
 
 - **Writing always on** — `submitChapter` has no phase restriction.
 - **One vote per address per round** — Contract reverts `AlreadyCommitted()`.
-- **DFS candidate generation** — `RoundManager.startRound` does full scan from `worldLineAncestors` (via NovelCore views), returns the N deepest chains.
+- **Off-chain candidate selection** — Keeper supplies leaf chapter IDs to `startRound`; contract only verifies each is a true tree leaf belonging to the novel. Indexer walks the tree to pick deepest leaves.
 - **Creator royalty** — `D/(D+round)` where D=CREATOR_DECAY_DIVISOR (constant, currently 3).
 - **Voter accuracy** — 3x weight for voting on a winning world line, 1x for others who revealed.
 - **Content storage** — Three modes (Onchain/External/HTTP) set at novel creation, immutable.

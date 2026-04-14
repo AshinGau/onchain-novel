@@ -114,7 +114,7 @@ contract E2ETest is TestBase {
         uint256 bountyAmount = 1 ether;
 
         vm.prank(voter1);
-        uint256 bountyId = bountyBoard.createBounty{value: bountyAmount}(rootId, deadline);
+        uint64 bountyId = bountyBoard.createBounty{value: bountyAmount}(rootId, deadline);
 
         DataTypes.Bounty memory b = bountyBoard.getBounty(bountyId);
         assertEq(b.chapterId, rootId);
@@ -153,7 +153,7 @@ contract E2ETest is TestBase {
         uint256 bountyAmount = 1 ether;
 
         vm.prank(voter1);
-        uint256 bountyId = bountyBoard.createBounty{value: bountyAmount}(rootId, deadline);
+        uint64 bountyId = bountyBoard.createBounty{value: bountyAmount}(rootId, deadline);
 
         // Authors submit continuations before deadline
         uint64 ch2 = _submitChapter(author1, novelId, rootId, "designated bounty response!!");
@@ -193,7 +193,7 @@ contract E2ETest is TestBase {
         uint64 deadline = uint64(block.timestamp + 7 days);
 
         vm.prank(voter1);
-        uint256 bountyId = bountyBoard.createBounty{value: 1 ether}(rootId, deadline);
+        uint64 bountyId = bountyBoard.createBounty{value: 1 ether}(rootId, deadline);
 
         // Warp past deadline
         vm.warp(deadline + 1);
@@ -214,7 +214,7 @@ contract E2ETest is TestBase {
         uint256 bountyAmount = 1 ether;
 
         vm.prank(voter1);
-        uint256 bountyId = bountyBoard.createBounty{value: bountyAmount}(rootId, deadline);
+        uint64 bountyId = bountyBoard.createBounty{value: bountyAmount}(rootId, deadline);
 
         // Warp past deadline without any submissions
         vm.warp(deadline + 1);

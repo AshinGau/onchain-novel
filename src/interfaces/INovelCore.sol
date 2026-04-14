@@ -127,15 +127,17 @@ interface INovelCore {
     /// @notice Get direct child chapter IDs for a chapter
     function getChapterChildren(uint64 chapterId) external view returns (uint64[] memory);
 
-    /// @notice Verify (chapterId, path) is a valid proof that `chapterId` is on a current world line
-    ///         and authored by `expectedAuthor`. Reverts with InvalidPath / PathTooLong / AuthorMismatch on failure.
-    /// @dev Used by RulesEngine to gate proposeRule / voteOnRuleProposal.
-    function verifyWorldLineAuthor(
-        uint64 novelId,
-        address expectedAuthor,
-        uint64 chapterId,
-        uint64[] calldata path
-    ) external view;
+    /// @notice Verify `path` forms a valid parent chain within `novelId`. Reverts on failure.
+    /// @dev path[0].parentId == path[1], path[1].parentId == path[2], etc. All chapters belong to novelId.
+    ///      Caller is responsible for any anchor check (e.g. path[0] in current worldLineAncestors).
+    function verifyChapterPath(uint64 novelId, uint64[] calldata path) external view;
+
+    /// @notice True iff `chapterId` is in the current worldLineAncestors of `novelId`.
+    function isCurrentWorldLineAncestor(uint64 novelId, uint64 chapterId) external view returns (bool);
+
+    /// @notice Convenience: verify path + author + current-world-line anchor in one call.
+    ///         path[0] = current worldLineAncestor; path[last] = caller's authored chapter.
+    function verifyWorldLineAuthor(uint64 novelId, address expectedAuthor, uint64[] calldata path) external view;
 
     /// @notice Total number of novels created (auto-generated public counter getter)
     function novelCount() external view returns (uint64);

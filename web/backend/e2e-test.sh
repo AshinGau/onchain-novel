@@ -380,8 +380,8 @@ info "========================================="
 # Advance time past minRoundGap (5s), needed even though first round skips gap check
 advance_time 10
 
-# startRound: DFS finds deepest chain candidates
-STATUS=$(cast_send "$PK_DEPLOYER" "$ROUND_MANAGER" "startRound(uint64)" 1)
+# startRound: keeper passes leaves [4 (depth-3 leaf), 3 (depth-2 leaf)] explicitly
+STATUS=$(cast_send "$PK_DEPLOYER" "$ROUND_MANAGER" "startRound(uint64,uint64[])" 1 "[4,3]")
 [ "$STATUS" = "0x1" ] && pass "startRound(1) -- round 1 started" || fail "startRound failed"
 
 wait_indexer 10
@@ -446,8 +446,8 @@ advance_time 10
 POOL_BEFORE=$(cast call --rpc-url "$RPC" "$PRIZE_POOL" "getPoolBalance(uint64)(uint256)" 1 2>/dev/null | awk '{print $1}') || POOL_BEFORE=0
 info "Pool balance before settleRound: $POOL_BEFORE"
 
-# settleRound
-STATUS=$(cast_send "$PK_DEPLOYER" "$ROUND_MANAGER" "settleRound(uint64)" 1)
+# settleRound — winnerPaths = [[4,2,1], [3,1]] (each new world line back to prev anchor root)
+STATUS=$(cast_send "$PK_DEPLOYER" "$ROUND_MANAGER" "settleRound(uint64,uint64[][])" 1 "[[4,2,1],[3,1]]")
 [ "$STATUS" = "0x1" ] && pass "settleRound -- round 1 settled" || fail "settleRound failed"
 
 wait_indexer 15
@@ -508,8 +508,8 @@ STATUS=$(cast_send "$PK_WRITER_B" "$NOVEL_CORE" \
 # Advance time past minRoundGap (5s)
 advance_time 10
 
-# Run round 2 lifecycle
-STATUS=$(cast_send "$PK_DEPLOYER" "$ROUND_MANAGER" "startRound(uint64)" 1)
+# Run round 2 lifecycle. Leaves: ch5 and ch6 (both children of FIRST_WL=4).
+STATUS=$(cast_send "$PK_DEPLOYER" "$ROUND_MANAGER" "startRound(uint64,uint64[])" 1 "[5,6]")
 [ "$STATUS" = "0x1" ] && pass "startRound -- round 2 started" || fail "startRound round 2 failed"
 
 advance_time 10
@@ -548,7 +548,8 @@ STATUS=$(cast_send "$PK_VOTER_B" "$ROUND_MANAGER" \
 [ "$STATUS" = "0x1" ] && pass "Voter B revealed round 2" || fail "Voter B round 2 reveal failed"
 
 advance_time 10
-STATUS=$(cast_send "$PK_DEPLOYER" "$ROUND_MANAGER" "settleRound(uint64)" 1)
+# winnerPaths: [5,4] and [6,4] (each new winner anchors at prev worldLine 4)
+STATUS=$(cast_send "$PK_DEPLOYER" "$ROUND_MANAGER" "settleRound(uint64,uint64[][])" 1 "[[5,4],[6,4]]")
 [ "$STATUS" = "0x1" ] && pass "settleRound -- round 2 settled" || fail "settleRound round 2 failed"
 
 wait_indexer 15
@@ -743,8 +744,9 @@ info "========================================="
 info "Phase 10: Complete novel"
 info "========================================="
 
-# Complete the forked novel (creator can complete anytime when Idle)
-STATUS=$(cast_send "$PK_FORKER" "$ROUND_MANAGER" "completeNovel(uint64)" 2)
+# Complete the forked novel (creator can complete anytime when Idle).
+# Forked novel #2 root chapter is id=7 (novel 1 had chapters 1-6); finalPaths = [[7]].
+STATUS=$(cast_send "$PK_FORKER" "$ROUND_MANAGER" "completeNovel(uint64,uint64[][])" 2 "[[7]]")
 [ "$STATUS" = "0x1" ] && pass "Forked novel completed" || fail "completeNovel failed"
 
 wait_indexer 10

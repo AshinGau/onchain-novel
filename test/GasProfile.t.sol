@@ -50,12 +50,16 @@ contract GasProfileTest is TestBase {
         _submitChapter(author1, novelId, rootId, "small tree ch2 gas test!!");
         _submitChapter(author2, novelId, rootId, "small tree ch3 gas test!!");
         uint64 ch2 = 2;
-        _submitChapter(author1, novelId, ch2, "small tree ch4 gas test!!");
-        _submitChapter(author2, novelId, ch2, "small tree ch5 gas test!!");
+        uint64 ch4 = _submitChapter(author1, novelId, ch2, "small tree ch4 gas test!!");
+        uint64 ch5 = _submitChapter(author2, novelId, ch2, "small tree ch5 gas test!!");
+
+        uint64[] memory leaves = new uint64[](2);
+        leaves[0] = ch4;
+        leaves[1] = ch5;
 
         vm.prank(keeper);
         uint256 gasBefore = gasleft();
-        roundManager.startRound(novelId);
+        roundManager.startRound(novelId, leaves);
         uint256 gasUsed = gasBefore - gasleft();
 
         emit log_named_uint("Gas: startRound (5 chapters)", gasUsed);
@@ -89,9 +93,14 @@ contract GasProfileTest is TestBase {
             );
         }
 
+        // current = leaf of main line, branch = leaf of side branch
+        uint64[] memory leaves = new uint64[](2);
+        leaves[0] = current;
+        leaves[1] = branch;
+
         vm.prank(keeper);
         uint256 gasBefore = gasleft();
-        roundManager.startRound(novelId);
+        roundManager.startRound(novelId, leaves);
         uint256 gasUsed = gasBefore - gasleft();
 
         emit log_named_uint("Gas: startRound (20 chapters)", gasUsed);
@@ -104,17 +113,19 @@ contract GasProfileTest is TestBase {
         uint64 novelId = _createNovel();
         uint64 rootId = 1;
         uint64 ch2 = _submitChapter(author1, novelId, rootId, "voting gas benchmark chapter");
-        _submitChapter(author2, novelId, rootId, "voting gas benchmark branch B");
+        uint64 ch3 = _submitChapter(author2, novelId, rootId, "voting gas benchmark branch B");
 
+        uint64[] memory leaves = new uint64[](2);
+        leaves[0] = ch2;
+        leaves[1] = ch3;
         vm.prank(keeper);
-        roundManager.startRound(novelId);
+        roundManager.startRound(novelId, leaves);
 
         vm.warp(block.timestamp + NOMINATE_DURATION + 1);
         vm.prank(keeper);
         roundManager.closeNomination(novelId);
 
-        DataTypes.RoundData memory rd = roundManager.getRoundData(novelId, 1);
-        uint64 target = rd.candidates[0];
+        uint64 target = ch2;
         bytes32 salt = bytes32("gassalt");
         bytes32 commitHash = keccak256(abi.encodePacked(target, salt));
 
@@ -148,15 +159,19 @@ contract GasProfileTest is TestBase {
         uint64 ch2 = _submitChapter(author1, novelId, rootId, "settle gas benchmark ch!!");
         uint64 ch3 = _submitChapter(author2, novelId, rootId, "settle gas second branch!!");
 
+        uint64[] memory leaves = new uint64[](2);
+        leaves[0] = ch2;
+        leaves[1] = ch3;
+        uint64[] memory prevAncestors = novelCore.getWorldLineAncestors(novelId);
+
         vm.prank(keeper);
-        roundManager.startRound(novelId);
+        roundManager.startRound(novelId, leaves);
 
         vm.warp(block.timestamp + NOMINATE_DURATION + 1);
         vm.prank(keeper);
         roundManager.closeNomination(novelId);
 
-        DataTypes.RoundData memory rd = roundManager.getRoundData(novelId, 1);
-        uint64 target = rd.candidates[0];
+        uint64 target = ch2;
         bytes32 salt = bytes32("settlegas");
         bytes32 commitHash = keccak256(abi.encodePacked(target, salt));
 
@@ -172,9 +187,13 @@ contract GasProfileTest is TestBase {
 
         vm.warp(block.timestamp + REVEAL_DURATION + 1);
 
+        uint64[][] memory winnerPaths = new uint64[][](2);
+        winnerPaths[0] = _pathToAnyAnchor(ch2, prevAncestors);
+        winnerPaths[1] = _pathToAnyAnchor(ch3, prevAncestors);
+
         vm.prank(keeper);
         uint256 gasBefore = gasleft();
-        roundManager.settleRound(novelId);
+        roundManager.settleRound(novelId, winnerPaths);
         uint256 gasUsed = gasBefore - gasleft();
 
         emit log_named_uint("Gas: settleRound", gasUsed);
