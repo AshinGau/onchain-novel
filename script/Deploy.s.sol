@@ -9,15 +9,18 @@ import {VotingEngine} from "../src/core/VotingEngine.sol";
 import {PrizePool} from "../src/core/PrizePool.sol";
 import {RulesEngine} from "../src/core/RulesEngine.sol";
 import {BountyBoard} from "../src/core/BountyBoard.sol";
+import {RoundManager} from "../src/core/RoundManager.sol";
+import {UserRegistry} from "../src/core/UserRegistry.sol";
 
 /// @title Deploy
 /// @notice Deploys all protocol contracts behind UUPS proxies and wires them together
 /// @dev Decentralized Collaborative Novel Protocol
+///      Deploy order matters: implementations first, then proxies (with placeholder
+///      addresses where a circular reference exists), then wiring.
 contract Deploy is Script {
     function run() external {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         address deployer = vm.addr(deployerPrivateKey);
-
         console.log("Deployer:", deployer);
 
         vm.startBroadcast(deployerPrivateKey);
@@ -28,53 +31,61 @@ contract Deploy is Script {
         PrizePool prizePoolImpl = new PrizePool();
         RulesEngine rulesEngineImpl = new RulesEngine();
         BountyBoard bountyBoardImpl = new BountyBoard();
+        RoundManager roundManagerImpl = new RoundManager();
 
         console.log("NovelCore impl:", address(novelCoreImpl));
         console.log("VotingEngine impl:", address(votingEngineImpl));
         console.log("PrizePool impl:", address(prizePoolImpl));
         console.log("RulesEngine impl:", address(rulesEngineImpl));
         console.log("BountyBoard impl:", address(bountyBoardImpl));
+        console.log("RoundManager impl:", address(roundManagerImpl));
 
-        // 2. Deploy VotingEngine proxy (with placeholder NovelCore address)
+        // 2. Deploy proxies (with placeholder addresses for circular refs; wired in step 3)
         bytes memory votingData = abi.encodeCall(VotingEngine.initialize, (deployer, address(0)));
         ERC1967Proxy votingProxy = new ERC1967Proxy(address(votingEngineImpl), votingData);
 
-        // 3. Deploy PrizePool proxy (with placeholder NovelCore address)
         bytes memory prizeData = abi.encodeCall(PrizePool.initialize, (deployer, address(0)));
         ERC1967Proxy prizeProxy = new ERC1967Proxy(address(prizePoolImpl), prizeData);
 
-        // 4. Deploy RulesEngine proxy (with placeholder addresses)
         bytes memory rulesData = abi.encodeCall(RulesEngine.initialize, (deployer, address(0), address(prizeProxy)));
         ERC1967Proxy rulesProxy = new ERC1967Proxy(address(rulesEngineImpl), rulesData);
 
-        // 5. Deploy NovelCore proxy (with real module addresses)
         bytes memory novelCoreData = abi.encodeCall(
             NovelCore.initialize, (deployer, address(votingProxy), address(prizeProxy), address(rulesProxy))
         );
         ERC1967Proxy novelCoreProxy = new ERC1967Proxy(address(novelCoreImpl), novelCoreData);
 
-        // 6. Deploy BountyBoard proxy
         bytes memory bountyData =
             abi.encodeCall(BountyBoard.initialize, (deployer, address(novelCoreProxy), address(prizeProxy)));
         ERC1967Proxy bountyProxy = new ERC1967Proxy(address(bountyBoardImpl), bountyData);
 
-        // 7. Wire NovelCore address to modules
-        VotingEngine(payable(address(votingProxy))).setNovelCore(address(novelCoreProxy));
-        PrizePool(payable(address(prizeProxy))).setNovelCore(address(novelCoreProxy));
-        RulesEngine(address(rulesProxy)).setNovelCore(address(novelCoreProxy));
+        bytes memory roundData = abi.encodeCall(
+            RoundManager.initialize,
+            (deployer, address(novelCoreProxy), address(votingProxy), address(prizeProxy))
+        );
+        ERC1967Proxy roundProxy = new ERC1967Proxy(address(roundManagerImpl), roundData);
 
-        // 8. Set RulesEngine and BountyBoard on PrizePool (so they can deposit fees)
+        // 3. Wire addresses
+        VotingEngine(payable(address(votingProxy))).setRoundManager(address(roundProxy));
+        PrizePool(payable(address(prizeProxy))).setNovelCore(address(novelCoreProxy));
+        PrizePool(payable(address(prizeProxy))).setRoundManager(address(roundProxy));
         PrizePool(payable(address(prizeProxy))).setRulesEngine(address(rulesProxy));
         PrizePool(payable(address(prizeProxy))).setBountyBoard(address(bountyProxy));
+        RulesEngine(address(rulesProxy)).setNovelCore(address(novelCoreProxy));
+        NovelCore(payable(address(novelCoreProxy))).setRoundManager(address(roundProxy));
+
+        // 4. Standalone UserRegistry (no upgrade, no init args)
+        UserRegistry userRegistry = new UserRegistry();
 
         vm.stopBroadcast();
 
-        // 9. Log deployed addresses
         console.log("=== Proxy Addresses (use these) ===");
         console.log("NovelCore:", address(novelCoreProxy));
+        console.log("RoundManager:", address(roundProxy));
         console.log("VotingEngine:", address(votingProxy));
         console.log("PrizePool:", address(prizeProxy));
         console.log("RulesEngine:", address(rulesProxy));
         console.log("BountyBoard:", address(bountyProxy));
+        console.log("UserRegistry:", address(userRegistry));
     }
 }

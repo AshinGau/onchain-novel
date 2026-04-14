@@ -5,7 +5,14 @@ import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { toHex } from "viem";
-import { NOVEL_CORE_ADDRESS, novelCoreAbi, PRIZE_POOL_ADDRESS, prizePoolAbi } from "@/lib/contracts";
+import {
+  NOVEL_CORE_ADDRESS,
+  novelCoreAbi,
+  PRIZE_POOL_ADDRESS,
+  prizePoolAbi,
+  USER_REGISTRY_ADDRESS,
+  userRegistryAbi,
+} from "@/lib/contracts";
 import {
   fetchUserChapters, fetchUserVotes, fetchUserRewards,
   fetchNickname, fetchNovel, fetchChapter,
@@ -83,8 +90,8 @@ export default function DashboardPage() {
     const hex = toHex(padded) as `0x${string}`;
 
     nicknameTx.send({
-      address: NOVEL_CORE_ADDRESS,
-      abi: novelCoreAbi,
+      address: USER_REGISTRY_ADDRESS,
+      abi: userRegistryAbi,
       functionName: "setNickname",
       args: [hex],
     }, () => { setCurrentNickname(nickname.trim()); });

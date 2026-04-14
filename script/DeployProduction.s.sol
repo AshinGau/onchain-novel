@@ -10,6 +10,8 @@ import {VotingEngine} from "../src/core/VotingEngine.sol";
 import {PrizePool} from "../src/core/PrizePool.sol";
 import {RulesEngine} from "../src/core/RulesEngine.sol";
 import {BountyBoard} from "../src/core/BountyBoard.sol";
+import {RoundManager} from "../src/core/RoundManager.sol";
+import {UserRegistry} from "../src/core/UserRegistry.sol";
 
 /// @title DeployProduction
 /// @notice Production deployment with TimelockController for owner operations
@@ -36,7 +38,6 @@ contract DeployProduction is Script {
         proposers[0] = multisig;
         address[] memory executors = new address[](1);
         executors[0] = multisig;
-
         TimelockController timelock = new TimelockController(timelockDelay, proposers, executors, address(0));
         console.log("TimelockController:", address(timelock));
 
@@ -46,40 +47,50 @@ contract DeployProduction is Script {
         PrizePool prizePoolImpl = new PrizePool();
         RulesEngine rulesEngineImpl = new RulesEngine();
         BountyBoard bountyBoardImpl = new BountyBoard();
+        RoundManager roundManagerImpl = new RoundManager();
 
         // 3. Deploy proxies — initially owned by deployer (will transfer to Timelock)
         ERC1967Proxy votingProxy =
             new ERC1967Proxy(address(votingEngineImpl), abi.encodeCall(VotingEngine.initialize, (deployer, address(1))));
-
         ERC1967Proxy prizeProxy =
             new ERC1967Proxy(address(prizePoolImpl), abi.encodeCall(PrizePool.initialize, (deployer, address(1))));
-
         ERC1967Proxy rulesProxy = new ERC1967Proxy(
             address(rulesEngineImpl),
             abi.encodeCall(RulesEngine.initialize, (deployer, address(1), address(prizeProxy)))
         );
-
         ERC1967Proxy novelCoreProxy = new ERC1967Proxy(
             address(novelCoreImpl),
             abi.encodeCall(
                 NovelCore.initialize, (deployer, address(votingProxy), address(prizeProxy), address(rulesProxy))
             )
         );
-
         ERC1967Proxy bountyProxy = new ERC1967Proxy(
             address(bountyBoardImpl),
             abi.encodeCall(BountyBoard.initialize, (deployer, address(novelCoreProxy), address(prizeProxy)))
         );
+        ERC1967Proxy roundProxy = new ERC1967Proxy(
+            address(roundManagerImpl),
+            abi.encodeCall(
+                RoundManager.initialize,
+                (deployer, address(novelCoreProxy), address(votingProxy), address(prizeProxy))
+            )
+        );
 
-        // 4. Wire NovelCore address to modules
-        VotingEngine(payable(address(votingProxy))).setNovelCore(address(novelCoreProxy));
+        // 4. Wire addresses
+        VotingEngine(payable(address(votingProxy))).setRoundManager(address(roundProxy));
         PrizePool(payable(address(prizeProxy))).setNovelCore(address(novelCoreProxy));
-        RulesEngine(address(rulesProxy)).setNovelCore(address(novelCoreProxy));
+        PrizePool(payable(address(prizeProxy))).setRoundManager(address(roundProxy));
         PrizePool(payable(address(prizeProxy))).setRulesEngine(address(rulesProxy));
         PrizePool(payable(address(prizeProxy))).setBountyBoard(address(bountyProxy));
+        RulesEngine(address(rulesProxy)).setNovelCore(address(novelCoreProxy));
+        NovelCore(payable(address(novelCoreProxy))).setRoundManager(address(roundProxy));
 
-        // 5. Transfer ownership of all contracts to TimelockController
+        // 5. Standalone UserRegistry
+        UserRegistry userRegistry = new UserRegistry();
+
+        // 6. Transfer ownership of all upgradeable contracts to TimelockController
         NovelCore(payable(address(novelCoreProxy))).transferOwnership(address(timelock));
+        RoundManager(payable(address(roundProxy))).transferOwnership(address(timelock));
         VotingEngine(payable(address(votingProxy))).transferOwnership(address(timelock));
         PrizePool(payable(address(prizeProxy))).transferOwnership(address(timelock));
         RulesEngine(address(rulesProxy)).transferOwnership(address(timelock));
@@ -87,13 +98,14 @@ contract DeployProduction is Script {
 
         vm.stopBroadcast();
 
-        // 6. Log deployed addresses
         console.log("=== Proxy Addresses ===");
         console.log("NovelCore:", address(novelCoreProxy));
+        console.log("RoundManager:", address(roundProxy));
         console.log("VotingEngine:", address(votingProxy));
         console.log("PrizePool:", address(prizeProxy));
         console.log("RulesEngine:", address(rulesProxy));
         console.log("BountyBoard:", address(bountyProxy));
+        console.log("UserRegistry:", address(userRegistry));
         console.log("=== Governance ===");
         console.log("TimelockController:", address(timelock));
         console.log("Multi-sig (proposer/executor):", multisig);

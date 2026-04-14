@@ -61,10 +61,9 @@ interface IPrizePool {
 
     /// @notice Process a chapter tip: 50% to author, 50% to prize pool
     /// @dev If push to author fails, the failed portion also goes to prize pool
+    /// @dev Chapter author + novelId are looked up via NovelCore.
     /// @param chapterId The chapter ID being tipped
-    /// @param author The chapter author address
-    /// @param novelId The novel ID (for pool accounting)
-    function tipChapter(uint64 chapterId, address author, uint64 novelId) external payable;
+    function tipChapter(uint64 chapterId) external payable;
 
     /// @notice Pay keeper reward from a novel's prize pool
     /// @dev Credits amount to keeper's pendingRewards. Returns 0 if pool is insufficient.

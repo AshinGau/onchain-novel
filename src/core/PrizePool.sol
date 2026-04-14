@@ -8,6 +8,8 @@ import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/U
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
 import {IPrizePool} from "../interfaces/IPrizePool.sol";
+import {INovelCore} from "../interfaces/INovelCore.sol";
+import {DataTypes} from "../libraries/DataTypes.sol";
 
 /// @title PrizePool
 /// @notice Manages prize pools for all novels: deposits, tipping, per-round reward distribution, pull-based claims
@@ -34,8 +36,11 @@ contract PrizePool is
     //                         STORAGE
     // ============================================================
 
-    /// @notice Authorized NovelCore contract address
+    /// @notice Authorized NovelCore contract address (can deposit on novel/chapter creation)
     address public novelCore;
+
+    /// @notice Authorized RoundManager contract address (settles rounds, pays keepers)
+    address public roundManager;
 
     /// @notice Authorized RulesEngine contract address (can deposit rule fees)
     address public rulesEngine;
@@ -57,11 +62,13 @@ contract PrizePool is
     // ============================================================
 
     error OnlyNovelCore();
+    error OnlyRoundManager();
     error TipTooSmall(uint256 amount, uint256 minimum);
     error NoPendingReward();
     error TransferFailed();
     error NoAuthors();
     error ZeroAmount();
+    error ChapterNotFound(uint64 chapterId);
 
     // ============================================================
     //                        MODIFIERS
@@ -69,6 +76,11 @@ contract PrizePool is
 
     modifier onlyNovelCore() {
         if (msg.sender != novelCore) revert OnlyNovelCore();
+        _;
+    }
+
+    modifier onlyRoundManager() {
+        if (msg.sender != roundManager) revert OnlyRoundManager();
         _;
     }
 
@@ -92,6 +104,7 @@ contract PrizePool is
     // ============================================================
 
     event NovelCoreUpdated(address indexed oldAddr, address indexed newAddr);
+    event RoundManagerUpdated(address indexed oldAddr, address indexed newAddr);
     event RulesEngineUpdated(address indexed oldAddr, address indexed newAddr);
     event BountyBoardUpdated(address indexed oldAddr, address indexed newAddr);
     event KeeperRewardAmountUpdated(uint256 oldAmount, uint256 newAmount);
@@ -100,6 +113,12 @@ contract PrizePool is
         address old = novelCore;
         novelCore = newNovelCore;
         emit NovelCoreUpdated(old, newNovelCore);
+    }
+
+    function setRoundManager(address newRoundManager) external onlyOwner {
+        address old = roundManager;
+        roundManager = newRoundManager;
+        emit RoundManagerUpdated(old, newRoundManager);
     }
 
     function setRulesEngine(address newRulesEngine) external onlyOwner {
@@ -142,8 +161,13 @@ contract PrizePool is
     }
 
     /// @inheritdoc IPrizePool
-    function tipChapter(uint64 chapterId, address author, uint64 novelId) external payable whenNotPaused nonReentrant {
+    function tipChapter(uint64 chapterId) external payable whenNotPaused nonReentrant {
         if (msg.value < MIN_TIP_AMOUNT) revert TipTooSmall(msg.value, MIN_TIP_AMOUNT);
+
+        DataTypes.Chapter memory ch = INovelCore(novelCore).getChapter(chapterId);
+        if (ch.id == 0) revert ChapterNotFound(chapterId);
+        address author = ch.author;
+        uint64 novelId = ch.novelId;
 
         uint256 authorShare = msg.value / 2;
 
@@ -183,7 +207,10 @@ contract PrizePool is
 
     /// @inheritdoc IPrizePool
     function deposit(uint64 novelId, string calldata reason) external payable {
-        if (msg.sender != novelCore && msg.sender != rulesEngine && msg.sender != bountyBoard) revert OnlyNovelCore();
+        if (
+            msg.sender != novelCore && msg.sender != roundManager && msg.sender != rulesEngine
+                && msg.sender != bountyBoard
+        ) revert OnlyNovelCore();
         if (msg.value == 0) revert ZeroAmount();
 
         _poolBalances[novelId] += msg.value;
@@ -199,7 +226,7 @@ contract PrizePool is
         address[] calldata authors,
         uint16 releaseRate,
         uint16 voterRewardRate
-    ) external onlyNovelCore returns (uint256 voterRewards) {
+    ) external onlyRoundManager returns (uint256 voterRewards) {
         if (authors.length == 0) revert NoAuthors();
 
         uint256 poolBalance = _poolBalances[novelId];
@@ -250,7 +277,7 @@ contract PrizePool is
     }
 
     /// @inheritdoc IPrizePool
-    function payKeeperReward(uint64 novelId, address keeper) external onlyNovelCore returns (uint256 amount) {
+    function payKeeperReward(uint64 novelId, address keeper) external onlyRoundManager returns (uint256 amount) {
         amount = keeperRewardAmount;
         if (amount == 0 || _poolBalances[novelId] < amount) return 0;
 

@@ -33,7 +33,7 @@ export function registerVoteTools(server: McpServer): void {
       try {
         const wallet = getWalletClient();
         const pub = getPublicClient();
-        const hash = await startRound(wallet, BigInt(params.novelId), config.novelCore);
+        const hash = await startRound(wallet, BigInt(params.novelId), config.roundManager);
         const receipt = await pub.waitForTransactionReceipt({ hash });
         return ok(`Round started for Novel #${params.novelId}.\nTx: ${hash}\nBlock: ${receipt.blockNumber}`);
       } catch (error) {
@@ -72,7 +72,7 @@ export function registerVoteTools(server: McpServer): void {
           novelId: BigInt(params.novelId),
           commitHash: hash32,
           value: stake,
-          novelCore: config.novelCore,
+          roundManager: config.roundManager,
         });
         const receipt = await pub.waitForTransactionReceipt({ hash: txHash });
 
@@ -163,7 +163,7 @@ export function registerVoteTools(server: McpServer): void {
           novelId: BigInt(params.novelId),
           candidateId: BigInt(params.candidateId),
           salt: saltBytes,
-          novelCore: config.novelCore,
+          roundManager: config.roundManager,
         });
         const receipt = await pub.waitForTransactionReceipt({ hash: txHash });
         return ok(`Vote revealed.\nTx: ${txHash}\nBlock: ${receipt.blockNumber}`);
@@ -182,7 +182,7 @@ export function registerVoteTools(server: McpServer): void {
       try {
         const wallet = getWalletClient();
         const pub = getPublicClient();
-        const hash = await settleRound(wallet, BigInt(params.novelId), config.novelCore);
+        const hash = await settleRound(wallet, BigInt(params.novelId), config.roundManager);
         const receipt = await pub.waitForTransactionReceipt({ hash });
         return ok(`Round settled for Novel #${params.novelId}.\nTx: ${hash}\nBlock: ${receipt.blockNumber}`);
       } catch (error) {

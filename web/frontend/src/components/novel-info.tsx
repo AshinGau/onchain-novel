@@ -8,7 +8,7 @@ import type { Novel } from "@/lib/api";
 import { fetchNickname } from "@/lib/api";
 import { shortAddress, formatBalance, formatDuration } from "@/lib/format";
 import { phaseLabel, TOKEN_SYMBOL } from "@/lib/config";
-import { NOVEL_CORE_ADDRESS, novelCoreAbi } from "@/lib/contracts";
+import { PRIZE_POOL_ADDRESS, prizePoolAbi } from "@/lib/contracts";
 import { useTxAction } from "@/hooks/use-tx-action";
 
 function Tip({ text }: { text: string }) {
@@ -109,8 +109,8 @@ function TipNovelButton({ novelId }: { novelId: string }) {
     const value = parseEther(amount);
     await send(
       {
-        address: NOVEL_CORE_ADDRESS,
-        abi: novelCoreAbi,
+        address: PRIZE_POOL_ADDRESS,
+        abi: prizePoolAbi,
         functionName: "tipNovel",
         args: [BigInt(novelId)],
         value,

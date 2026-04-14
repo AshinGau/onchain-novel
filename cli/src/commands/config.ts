@@ -36,13 +36,17 @@ export function registerConfigCommand(program: Command): void {
     .action((key: string, value: string) => {
       const cfg = loadConfig() ?? {
         rpcUrl: "",
-        contracts: { novelCore: "0x" as `0x${string}` },
+        contracts: {
+          novelCore: "0x" as `0x${string}`,
+          roundManager: "0x" as `0x${string}`,
+          prizePool: "0x" as `0x${string}`,
+        },
       };
 
       if (key.startsWith("contracts.")) {
         const contractKey = key.split(".")[1] as keyof OnchainNovelConfig["contracts"];
         if (!cfg.contracts) {
-          (cfg as OnchainNovelConfig).contracts = { novelCore: "0x" as `0x${string}` };
+          (cfg as OnchainNovelConfig).contracts = { novelCore: "0x" as `0x${string}`, roundManager: "0x" as `0x${string}`, prizePool: "0x" as `0x${string}` };
         }
         (cfg.contracts as Record<string, string>)[contractKey] = value;
       } else if (key === "chainId") {
@@ -51,7 +55,9 @@ export function registerConfigCommand(program: Command): void {
         (cfg as unknown as Record<string, unknown>)[key] = value;
       } else {
         error(`Unknown config key: ${key}`);
-        console.log("Valid keys: rpcUrl, chainId, privateKey, apiUrl, contracts.novelCore, contracts.votingEngine, contracts.prizePool, contracts.bountyBoard, contracts.rulesEngine");
+        console.log(
+          "Valid keys: rpcUrl, chainId, privateKey, apiUrl, contracts.novelCore, contracts.roundManager, contracts.prizePool, contracts.votingEngine, contracts.bountyBoard, contracts.rulesEngine, contracts.userRegistry",
+        );
         process.exit(1);
       }
 

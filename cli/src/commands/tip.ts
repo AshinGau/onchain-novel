@@ -22,7 +22,7 @@ export function registerTipCommands(program: Command): void {
         const hash = await tipNovelTx(client, {
           id: BigInt(novelId),
           value: parseEther(opts.value),
-          novelCore: contracts.novelCore,
+          prizePool: contracts.prizePool,
         });
         txHash(hash);
         await waitForTx(hash);
@@ -44,7 +44,7 @@ export function registerTipCommands(program: Command): void {
         const hash = await tipChapterTx(client, {
           id: BigInt(chapterId),
           value: parseEther(opts.value),
-          novelCore: contracts.novelCore,
+          prizePool: contracts.prizePool,
         });
         txHash(hash);
         await waitForTx(hash);

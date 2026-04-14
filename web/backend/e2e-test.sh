@@ -173,8 +173,7 @@ pass "All dependencies found"
 
 # -- Start Anvil --
 info "Starting Anvil on port ${RPC_PORT}..."
-# code-size-limit raises the EVM contract size cap; NovelCore exceeds the default 24576.
-anvil --port "$RPC_PORT" --block-time 1 --code-size-limit 50000 --silent &
+anvil --port "$RPC_PORT" --block-time 1 --silent &
 ANVIL_PID=$!
 sleep 2
 cast block-number --rpc-url "$RPC" > /dev/null 2>&1 || { fail "Anvil not reachable"; exit 1; }
@@ -198,12 +197,10 @@ info "Phase 1: Deploy + Novel Creation + Indexing"
 info "========================================="
 
 # -- Deploy contracts --
-# NovelCore exceeds the EIP-170 24576 byte limit; use --disable-code-size-limit
-# (matching the anvil --code-size-limit flag above).
 info "Deploying contracts..."
 DEPLOY_LOG="/tmp/e2e-deploy-$(date +%s).log"
 PRIVATE_KEY="$PK_DEPLOYER" forge script script/Deploy.s.sol \
-    --rpc-url "$RPC" --broadcast --disable-code-size-limit > "$DEPLOY_LOG" 2>&1
+    --rpc-url "$RPC" --broadcast > "$DEPLOY_LOG" 2>&1
 
 BROADCAST_JSON="broadcast/Deploy.s.sol/31337/run-latest.json"
 if [ ! -f "$BROADCAST_JSON" ]; then
@@ -220,12 +217,14 @@ fi
 #  [8] NovelCore proxy, [9] BountyBoard proxy
 CREATES=$(jq -r '[.transactions[] | select(.transactionType == "CREATE") | .contractAddress] | .[]' "$BROADCAST_JSON")
 CREATES_ARR=($CREATES)
-VOTING_ENGINE="${CREATES_ARR[5]}"
-PRIZE_POOL="${CREATES_ARR[6]}"
-RULES_ENGINE="${CREATES_ARR[7]}"
-NOVEL_CORE="${CREATES_ARR[8]}"
-BOUNTY_BOARD="${CREATES_ARR[9]}"
-pass "Contracts deployed: NovelCore=$NOVEL_CORE, PrizePool=$PRIZE_POOL, BountyBoard=$BOUNTY_BOARD"
+VOTING_ENGINE="${CREATES_ARR[6]}"
+PRIZE_POOL="${CREATES_ARR[7]}"
+RULES_ENGINE="${CREATES_ARR[8]}"
+NOVEL_CORE="${CREATES_ARR[9]}"
+BOUNTY_BOARD="${CREATES_ARR[10]}"
+ROUND_MANAGER="${CREATES_ARR[11]}"
+USER_REGISTRY="${CREATES_ARR[12]}"
+pass "Contracts deployed: NovelCore=$NOVEL_CORE, RoundManager=$ROUND_MANAGER, PrizePool=$PRIZE_POOL, BountyBoard=$BOUNTY_BOARD"
 
 # Set keeper reward on PrizePool (NOT NovelCore!)
 STATUS=$(cast_send "$PK_DEPLOYER" "$PRIZE_POOL" "setKeeperRewardAmount(uint256)" "10000000000000")
@@ -237,10 +236,12 @@ cd "$BACKEND_DIR"
 DATABASE_URL="$DB_URL" \
 RPC_URL="$RPC" \
 NOVEL_CORE_ADDRESS="$NOVEL_CORE" \
+ROUND_MANAGER_ADDRESS="$ROUND_MANAGER" \
 VOTING_ENGINE_ADDRESS="$VOTING_ENGINE" \
 PRIZE_POOL_ADDRESS="$PRIZE_POOL" \
 BOUNTY_BOARD_ADDRESS="$BOUNTY_BOARD" \
 RULES_ENGINE_ADDRESS="$RULES_ENGINE" \
+USER_REGISTRY_ADDRESS="$USER_REGISTRY" \
 INDEXER_START_BLOCK=0 \
 INDEXER_BATCH_SIZE=100 \
 INDEXER_POLL_INTERVAL_MS=1000 \
@@ -380,7 +381,7 @@ info "========================================="
 advance_time 10
 
 # startRound: DFS finds deepest chain candidates
-STATUS=$(cast_send "$PK_DEPLOYER" "$NOVEL_CORE" "startRound(uint64)" 1)
+STATUS=$(cast_send "$PK_DEPLOYER" "$ROUND_MANAGER" "startRound(uint64)" 1)
 [ "$STATUS" = "0x1" ] && pass "startRound(1) -- round 1 started" || fail "startRound failed"
 
 wait_indexer 10
@@ -391,7 +392,7 @@ api_check "/api/novels/1" ".current_round" "1" "current_round=1"
 advance_time 10
 
 # closeNomination
-STATUS=$(cast_send "$PK_DEPLOYER" "$NOVEL_CORE" "closeNomination(uint64)" 1)
+STATUS=$(cast_send "$PK_DEPLOYER" "$ROUND_MANAGER" "closeNomination(uint64)" 1)
 [ "$STATUS" = "0x1" ] && pass "closeNomination" || fail "closeNomination failed"
 
 wait_indexer 10
@@ -407,14 +408,14 @@ CANDIDATE_B=3  # Writer B's branch
 # Commit hash = keccak256(abi.encodePacked(uint64 candidateId, bytes32 salt))
 SALT_A="0x0000000000000000000000000000000000000000000000000000000000000001"
 COMMIT_A=$(cast keccak256 $(cast abi-encode --packed "(uint64,bytes32)" "$CANDIDATE_A" "$SALT_A"))
-STATUS=$(cast_send "$PK_VOTER_A" "$NOVEL_CORE" \
+STATUS=$(cast_send "$PK_VOTER_A" "$ROUND_MANAGER" \
     "commitVote(uint64,bytes32)" 1 "$COMMIT_A" \
     --value 0.05ether)
 [ "$STATUS" = "0x1" ] && pass "Voter A committed (for candidate $CANDIDATE_A)" || fail "Voter A commitVote failed"
 
 SALT_B="0x0000000000000000000000000000000000000000000000000000000000000002"
 COMMIT_B=$(cast keccak256 $(cast abi-encode --packed "(uint64,bytes32)" "$CANDIDATE_B" "$SALT_B"))
-STATUS=$(cast_send "$PK_VOTER_B" "$NOVEL_CORE" \
+STATUS=$(cast_send "$PK_VOTER_B" "$ROUND_MANAGER" \
     "commitVote(uint64,bytes32)" 1 "$COMMIT_B" \
     --value 0.05ether)
 [ "$STATUS" = "0x1" ] && pass "Voter B committed (for candidate $CANDIDATE_B)" || fail "Voter B commitVote failed"
@@ -423,18 +424,18 @@ STATUS=$(cast_send "$PK_VOTER_B" "$NOVEL_CORE" \
 advance_time 10
 
 # closeCommit
-STATUS=$(cast_send "$PK_DEPLOYER" "$NOVEL_CORE" "closeCommit(uint64)" 1)
+STATUS=$(cast_send "$PK_DEPLOYER" "$ROUND_MANAGER" "closeCommit(uint64)" 1)
 [ "$STATUS" = "0x1" ] && pass "closeCommit" || fail "closeCommit failed"
 
 wait_indexer 10
 api_check "/api/novels/1" ".round_phase" "3" "Novel in Revealing phase (=3)"
 
 # Reveal votes through NovelCore (NOT VotingEngine!)
-STATUS=$(cast_send "$PK_VOTER_A" "$NOVEL_CORE" \
+STATUS=$(cast_send "$PK_VOTER_A" "$ROUND_MANAGER" \
     "revealVote(uint64,uint64,bytes32)" 1 "$CANDIDATE_A" "$SALT_A")
 [ "$STATUS" = "0x1" ] && pass "Voter A revealed" || fail "Voter A revealVote failed"
 
-STATUS=$(cast_send "$PK_VOTER_B" "$NOVEL_CORE" \
+STATUS=$(cast_send "$PK_VOTER_B" "$ROUND_MANAGER" \
     "revealVote(uint64,uint64,bytes32)" 1 "$CANDIDATE_B" "$SALT_B")
 [ "$STATUS" = "0x1" ] && pass "Voter B revealed" || fail "Voter B revealVote failed"
 
@@ -446,7 +447,7 @@ POOL_BEFORE=$(cast call --rpc-url "$RPC" "$PRIZE_POOL" "getPoolBalance(uint64)(u
 info "Pool balance before settleRound: $POOL_BEFORE"
 
 # settleRound
-STATUS=$(cast_send "$PK_DEPLOYER" "$NOVEL_CORE" "settleRound(uint64)" 1)
+STATUS=$(cast_send "$PK_DEPLOYER" "$ROUND_MANAGER" "settleRound(uint64)" 1)
 [ "$STATUS" = "0x1" ] && pass "settleRound -- round 1 settled" || fail "settleRound failed"
 
 wait_indexer 15
@@ -508,11 +509,11 @@ STATUS=$(cast_send "$PK_WRITER_B" "$NOVEL_CORE" \
 advance_time 10
 
 # Run round 2 lifecycle
-STATUS=$(cast_send "$PK_DEPLOYER" "$NOVEL_CORE" "startRound(uint64)" 1)
+STATUS=$(cast_send "$PK_DEPLOYER" "$ROUND_MANAGER" "startRound(uint64)" 1)
 [ "$STATUS" = "0x1" ] && pass "startRound -- round 2 started" || fail "startRound round 2 failed"
 
 advance_time 10
-STATUS=$(cast_send "$PK_DEPLOYER" "$NOVEL_CORE" "closeNomination(uint64)" 1)
+STATUS=$(cast_send "$PK_DEPLOYER" "$ROUND_MANAGER" "closeNomination(uint64)" 1)
 [ "$STATUS" = "0x1" ] && pass "closeNomination round 2" || fail "closeNomination round 2 failed"
 
 # Get the new candidates -- we need to figure out which chapter IDs were assigned
@@ -522,32 +523,32 @@ R2_CANDIDATE_B=6
 
 SALT_R2A="0x0000000000000000000000000000000000000000000000000000000000000011"
 COMMIT_R2A=$(cast keccak256 $(cast abi-encode --packed "(uint64,bytes32)" "$R2_CANDIDATE_A" "$SALT_R2A"))
-STATUS=$(cast_send "$PK_VOTER_A" "$NOVEL_CORE" \
+STATUS=$(cast_send "$PK_VOTER_A" "$ROUND_MANAGER" \
     "commitVote(uint64,bytes32)" 1 "$COMMIT_R2A" \
     --value 0.05ether)
 [ "$STATUS" = "0x1" ] && pass "Voter A committed round 2" || fail "Voter A round 2 commit failed"
 
 SALT_R2B="0x0000000000000000000000000000000000000000000000000000000000000012"
 COMMIT_R2B=$(cast keccak256 $(cast abi-encode --packed "(uint64,bytes32)" "$R2_CANDIDATE_B" "$SALT_R2B"))
-STATUS=$(cast_send "$PK_VOTER_B" "$NOVEL_CORE" \
+STATUS=$(cast_send "$PK_VOTER_B" "$ROUND_MANAGER" \
     "commitVote(uint64,bytes32)" 1 "$COMMIT_R2B" \
     --value 0.05ether)
 [ "$STATUS" = "0x1" ] && pass "Voter B committed round 2" || fail "Voter B round 2 commit failed"
 
 advance_time 10
-STATUS=$(cast_send "$PK_DEPLOYER" "$NOVEL_CORE" "closeCommit(uint64)" 1)
+STATUS=$(cast_send "$PK_DEPLOYER" "$ROUND_MANAGER" "closeCommit(uint64)" 1)
 [ "$STATUS" = "0x1" ] && pass "closeCommit round 2" || fail "closeCommit round 2 failed"
 
-STATUS=$(cast_send "$PK_VOTER_A" "$NOVEL_CORE" \
+STATUS=$(cast_send "$PK_VOTER_A" "$ROUND_MANAGER" \
     "revealVote(uint64,uint64,bytes32)" 1 "$R2_CANDIDATE_A" "$SALT_R2A")
 [ "$STATUS" = "0x1" ] && pass "Voter A revealed round 2" || fail "Voter A round 2 reveal failed"
 
-STATUS=$(cast_send "$PK_VOTER_B" "$NOVEL_CORE" \
+STATUS=$(cast_send "$PK_VOTER_B" "$ROUND_MANAGER" \
     "revealVote(uint64,uint64,bytes32)" 1 "$R2_CANDIDATE_B" "$SALT_R2B")
 [ "$STATUS" = "0x1" ] && pass "Voter B revealed round 2" || fail "Voter B round 2 reveal failed"
 
 advance_time 10
-STATUS=$(cast_send "$PK_DEPLOYER" "$NOVEL_CORE" "settleRound(uint64)" 1)
+STATUS=$(cast_send "$PK_DEPLOYER" "$ROUND_MANAGER" "settleRound(uint64)" 1)
 [ "$STATUS" = "0x1" ] && pass "settleRound -- round 2 settled" || fail "settleRound round 2 failed"
 
 wait_indexer 15
@@ -566,11 +567,11 @@ info "Phase 5: Tips"
 info "========================================="
 
 # tipNovel through NovelCore
-STATUS=$(cast_send "$PK_TIPPER" "$NOVEL_CORE" "tipNovel(uint64)" 1 --value 0.05ether)
+STATUS=$(cast_send "$PK_TIPPER" "$PRIZE_POOL" "tipNovel(uint64)" 1 --value 0.05ether)
 [ "$STATUS" = "0x1" ] && pass "tipNovel(1) -- 0.05 ETH" || fail "tipNovel failed"
 
 # tipChapter through NovelCore (chapterId=2)
-STATUS=$(cast_send "$PK_TIPPER" "$NOVEL_CORE" "tipChapter(uint64)" 2 --value 0.01ether)
+STATUS=$(cast_send "$PK_TIPPER" "$PRIZE_POOL" "tipChapter(uint64)" 2 --value 0.01ether)
 [ "$STATUS" = "0x1" ] && pass "tipChapter(2) -- 0.01 ETH" || fail "tipChapter failed"
 
 # Verify pool balance increased
@@ -722,11 +723,11 @@ STATUS=$(cast_send "$PK_CREATOR" "$NOVEL_CORE" "claimReward(uint64)" 1)
 [ "$STATUS" = "0x1" ] && pass "Creator claimed prize pool reward" || fail "Creator claimReward failed"
 
 # Voter A claims voting reward for round 1 through NovelCore
-STATUS=$(cast_send "$PK_VOTER_A" "$NOVEL_CORE" "claimVotingReward(uint64,uint32)" 1 1)
+STATUS=$(cast_send "$PK_VOTER_A" "$ROUND_MANAGER" "claimVotingReward(uint64,uint32)" 1 1)
 [ "$STATUS" = "0x1" ] && pass "Voter A claimed voting reward for round 1" || fail "Voter A claimVotingReward failed"
 
 # Voter B claims voting reward for round 1
-STATUS=$(cast_send "$PK_VOTER_B" "$NOVEL_CORE" "claimVotingReward(uint64,uint32)" 1 1)
+STATUS=$(cast_send "$PK_VOTER_B" "$ROUND_MANAGER" "claimVotingReward(uint64,uint32)" 1 1)
 [ "$STATUS" = "0x1" ] && pass "Voter B claimed voting reward for round 1" || fail "Voter B claimVotingReward failed"
 
 wait_indexer 10
@@ -743,7 +744,7 @@ info "Phase 10: Complete novel"
 info "========================================="
 
 # Complete the forked novel (creator can complete anytime when Idle)
-STATUS=$(cast_send "$PK_FORKER" "$NOVEL_CORE" "completeNovel(uint64)" 2)
+STATUS=$(cast_send "$PK_FORKER" "$ROUND_MANAGER" "completeNovel(uint64)" 2)
 [ "$STATUS" = "0x1" ] && pass "Forked novel completed" || fail "completeNovel failed"
 
 wait_indexer 10

@@ -5,6 +5,7 @@
 # Usage:
 #   ./script/local-node.sh start             — Dev mode (hot reload)
 #   ./script/local-node.sh start --release   — Production build
+#   ./script/local-node.sh start --keeper    — Enable backend auto-keeper
 #   ./script/local-node.sh stop              — Stop all services
 #   ./script/local-node.sh reset             — Clear all data and restart
 #   ./script/local-node.sh status            — Show running services
@@ -34,6 +35,7 @@ fi
 API_PORT=3001
 FRONTEND_PORT=3000
 RELEASE_MODE=false
+KEEPER_ENABLED=false
 
 # Anvil default mnemonic
 ANVIL_MNEMONIC="test test test test test test test test test test test junk"
@@ -144,10 +146,12 @@ start_frontend() {
         NEXT_PUBLIC_RPC_URL="$RPC"
         NEXT_PUBLIC_CHAIN=foundry
         NEXT_PUBLIC_NOVEL_CORE_ADDRESS="$NOVEL_CORE_ADDRESS"
+        NEXT_PUBLIC_ROUND_MANAGER_ADDRESS="$ROUND_MANAGER_ADDRESS"
         NEXT_PUBLIC_VOTING_ENGINE_ADDRESS="$VOTING_ENGINE_ADDRESS"
         NEXT_PUBLIC_PRIZE_POOL_ADDRESS="$PRIZE_POOL_ADDRESS"
         NEXT_PUBLIC_RULES_ENGINE_ADDRESS="$RULES_ENGINE_ADDRESS"
         NEXT_PUBLIC_BOUNTY_BOARD_ADDRESS="$BOUNTY_BOARD_ADDRESS"
+        NEXT_PUBLIC_USER_REGISTRY_ADDRESS="$USER_REGISTRY_ADDRESS"
     )
 
     cd "$FRONTEND_DIR"
@@ -212,15 +216,13 @@ do_start() {
     done
 
     # ── Start Anvil ──
-    # --code-size-limit 50000 lets the chain accept NovelCore, which currently
-    # exceeds the EIP-170 24576-byte limit (~29KB).
     info "Starting Anvil..."
     if [ -f "$ANVIL_STATE" ]; then
         info "Loading saved state from $ANVIL_STATE"
     else
         info "Fresh Anvil instance"
     fi
-    anvil --host 0.0.0.0 --block-time 1 --code-size-limit 50000 \
+    anvil --host 0.0.0.0 --block-time 1 \
         --state "$ANVIL_STATE" > "$DATA_DIR/anvil.log" 2>&1 &
     local anvil_pid=$!
     save_pid "anvil" "$anvil_pid"
@@ -256,15 +258,9 @@ do_start() {
         cd "$ROOT_DIR"
 
         PK_DEPLOYER="0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
-        # NovelCore exceeds the EIP-170 24576-byte limit; --disable-code-size-limit
-        # tells forge to broadcast anyway (the chain accepts it because anvil was
-        # started with --code-size-limit 50000).
-        # forge may still exit non-zero on the post-deploy size warning even after
-        # successfully writing the broadcast file, so we tolerate non-zero and rely
-        # on the broadcast JSON's existence as the source of truth.
         DEPLOY_LOG="$DATA_DIR/deploy.log"
         PRIVATE_KEY="$PK_DEPLOYER" forge script script/Deploy.s.sol \
-            --rpc-url "$RPC" --broadcast --disable-code-size-limit > "$DEPLOY_LOG" 2>&1 || true
+            --rpc-url "$RPC" --broadcast > "$DEPLOY_LOG" 2>&1
 
         BROADCAST_JSON="broadcast/Deploy.s.sol/31337/run-latest.json"
         if [ ! -f "$BROADCAST_JSON" ]; then
@@ -274,17 +270,20 @@ do_start() {
         fi
 
         # Deploy.s.sol creation order:
-        #   [0] NovelCore impl  [1] VotingEngine impl  [2] PrizePool impl
-        #   [3] RulesEngine impl  [4] BountyBoard impl
-        #   [5] VotingEngine proxy  [6] PrizePool proxy  [7] RulesEngine proxy
-        #   [8] NovelCore proxy  [9] BountyBoard proxy
+        #   [0] NovelCore impl    [1] VotingEngine impl [2] PrizePool impl
+        #   [3] RulesEngine impl  [4] BountyBoard impl  [5] RoundManager impl
+        #   [6] VotingEngine proxy [7] PrizePool proxy  [8] RulesEngine proxy
+        #   [9] NovelCore proxy   [10] BountyBoard proxy [11] RoundManager proxy
+        #   [12] UserRegistry
         CREATES=$(jq -r '[.transactions[] | select(.transactionType == "CREATE") | .contractAddress] | .[]' "$BROADCAST_JSON")
         CREATES_ARR=($CREATES)
-        VOTING_ENGINE="${CREATES_ARR[5]}"
-        PRIZE_POOL="${CREATES_ARR[6]}"
-        RULES_ENGINE="${CREATES_ARR[7]}"
-        NOVEL_CORE="${CREATES_ARR[8]}"
-        BOUNTY_BOARD="${CREATES_ARR[9]}"
+        VOTING_ENGINE="${CREATES_ARR[6]}"
+        PRIZE_POOL="${CREATES_ARR[7]}"
+        RULES_ENGINE="${CREATES_ARR[8]}"
+        NOVEL_CORE="${CREATES_ARR[9]}"
+        BOUNTY_BOARD="${CREATES_ARR[10]}"
+        ROUND_MANAGER="${CREATES_ARR[11]}"
+        USER_REGISTRY="${CREATES_ARR[12]}"
 
         # Set keeper reward on PrizePool (the owner-only call lives there, NOT on NovelCore)
         cast send --rpc-url "$RPC" --private-key "$PK_DEPLOYER" "$PRIZE_POOL" \
@@ -293,10 +292,12 @@ do_start() {
         # Save addresses
         cat > "$ENV_FILE" <<EOF
 NOVEL_CORE_ADDRESS=$NOVEL_CORE
+ROUND_MANAGER_ADDRESS=$ROUND_MANAGER
 VOTING_ENGINE_ADDRESS=$VOTING_ENGINE
 PRIZE_POOL_ADDRESS=$PRIZE_POOL
 RULES_ENGINE_ADDRESS=$RULES_ENGINE
 BOUNTY_BOARD_ADDRESS=$BOUNTY_BOARD
+USER_REGISTRY_ADDRESS=$USER_REGISTRY
 EOF
         touch "$DEPLOY_FLAG"
         ok "Contracts deployed"
@@ -318,10 +319,12 @@ EOF
       "env": {
         "RPC_URL": "$RPC",
         "NOVEL_CORE_ADDRESS": "$NOVEL_CORE_ADDRESS",
+        "ROUND_MANAGER_ADDRESS": "$ROUND_MANAGER_ADDRESS",
         "VOTING_ENGINE_ADDRESS": "$VOTING_ENGINE_ADDRESS",
         "PRIZE_POOL_ADDRESS": "$PRIZE_POOL_ADDRESS",
         "BOUNTY_BOARD_ADDRESS": "$BOUNTY_BOARD_ADDRESS",
         "RULES_ENGINE_ADDRESS": "$RULES_ENGINE_ADDRESS",
+        "USER_REGISTRY_ADDRESS": "$USER_REGISTRY_ADDRESS",
         "PRIVATE_KEY": "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d",
         "API_BASE_URL": "http://localhost:$API_PORT"
       }
@@ -336,15 +339,19 @@ MCPEOF
         DATABASE_URL="$DB_URL"
         RPC_URL="$RPC"
         NOVEL_CORE_ADDRESS="$NOVEL_CORE_ADDRESS"
+        ROUND_MANAGER_ADDRESS="$ROUND_MANAGER_ADDRESS"
         VOTING_ENGINE_ADDRESS="$VOTING_ENGINE_ADDRESS"
         PRIZE_POOL_ADDRESS="$PRIZE_POOL_ADDRESS"
         BOUNTY_BOARD_ADDRESS="$BOUNTY_BOARD_ADDRESS"
         RULES_ENGINE_ADDRESS="$RULES_ENGINE_ADDRESS"
+        USER_REGISTRY_ADDRESS="$USER_REGISTRY_ADDRESS"
         INDEXER_START_BLOCK=0
         INDEXER_BATCH_SIZE=100
         INDEXER_POLL_INTERVAL_MS=2000
         INDEXER_CONFIRMATION_BLOCKS=0
-        KEEPER_PRIVATE_KEY="0x92db14e403b83dfe3df233f83dfa3a0d7096f21ca9b0d6d6b8d88b2b4ec1564e"
+        $([ "$KEEPER_ENABLED" = true ] \
+            && echo KEEPER_PRIVATE_KEY=0x92db14e403b83dfe3df233f83dfa3a0d7096f21ca9b0d6d6b8d88b2b4ec1564e \
+            || echo KEEPER_PRIVATE_KEY=)
         KEEPER_POLL_INTERVAL_MS=30000
         VOTE_ENCRYPTION_KEY="0000000000000000000000000000000000000000000000000000000000000001"
         PORT=$API_PORT
@@ -404,10 +411,12 @@ MCPEOF
     echo ""
     echo -e "  ${GREEN}Contracts:${NC}"
     echo "    NovelCore:     $NOVEL_CORE_ADDRESS"
+    echo "    RoundManager:  $ROUND_MANAGER_ADDRESS"
     echo "    VotingEngine:  $VOTING_ENGINE_ADDRESS"
     echo "    PrizePool:     $PRIZE_POOL_ADDRESS"
     echo "    RulesEngine:   $RULES_ENGINE_ADDRESS"
     echo "    BountyBoard:   $BOUNTY_BOARD_ADDRESS"
+    echo "    UserRegistry:  $USER_REGISTRY_ADDRESS"
     echo ""
     echo -e "${CYAN}──────────────────────────────────────────────────────────────${NC}"
     echo -e "${CYAN}  MetaMask Setup${NC}"
@@ -486,11 +495,12 @@ do_timewarp() {
     ok "Warped ${seconds}s forward ($(date -r $before '+%H:%M:%S') → $(date -r $after '+%H:%M:%S'))"
 }
 
-# Parse --release flag from any position
+# Parse --release / --keeper flags from any position
 ARGS=()
 for arg in "$@"; do
     case "$arg" in
         --release) RELEASE_MODE=true ;;
+        --keeper)  KEEPER_ENABLED=true ;;
         *)         ARGS+=("$arg") ;;
     esac
 done
@@ -506,7 +516,7 @@ case "${1:-}" in
     stop-frontend)    stop_frontend ;;
     restart-frontend) stop_frontend; sleep 1; start_frontend ;;
     *)
-        echo "Usage: $0 <command> [--release]"
+        echo "Usage: $0 <command> [--release] [--keeper]"
         echo ""
         echo "  start             Start all (Anvil + contracts + backend + frontend)"
         echo "  stop              Stop all services (preserves data)"
@@ -518,6 +528,7 @@ case "${1:-}" in
         echo "  restart-frontend  Restart frontend (useful after code changes)"
         echo ""
         echo "  --release         Use production build (default: dev mode with hot reload)"
+        echo "  --keeper          Enable auto-keeper in the backend (default: disabled)"
         exit 1
         ;;
 esac

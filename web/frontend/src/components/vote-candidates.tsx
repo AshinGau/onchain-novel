@@ -8,7 +8,7 @@ import type { ChapterSummary, RoundCandidate } from "@/lib/api";
 import { useNicknames } from "@/hooks/use-nickname";
 import { timeAgo, formatEth } from "@/lib/format";
 import { useTxAction } from "@/hooks/use-tx-action";
-import { NOVEL_CORE_ADDRESS, novelCoreAbi } from "@/lib/contracts";
+import { ROUND_MANAGER_ADDRESS, roundManagerAbi } from "@/lib/contracts";
 import {
   saveVote, loadVote, clearVote,
   generateSalt, computeCommitHash,
@@ -86,8 +86,8 @@ export function VoteCandidates({ novelId, round, phase, voteStake, candidates, c
 
     await send(
       {
-        address: NOVEL_CORE_ADDRESS,
-        abi: novelCoreAbi,
+        address: ROUND_MANAGER_ADDRESS,
+        abi: roundManagerAbi,
         functionName: "commitVote",
         args: [BigInt(novelId), commitHash],
         value: BigInt(voteStake),
@@ -278,8 +278,8 @@ function RevealAction({
   async function handleReveal() {
     await send(
       {
-        address: NOVEL_CORE_ADDRESS,
-        abi: novelCoreAbi,
+        address: ROUND_MANAGER_ADDRESS,
+        abi: roundManagerAbi,
         functionName: "revealVote",
         args: [BigInt(novelId), BigInt(stored.candidateId), stored.salt],
       },

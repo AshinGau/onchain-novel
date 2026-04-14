@@ -77,8 +77,13 @@ async function getNovelState(novelId: bigint): Promise<NovelState | null> {
 
 async function sendKeeperTx(functionName: string, novelId: bigint): Promise<boolean> {
   try {
+    const target = env.ROUND_MANAGER_ADDRESS;
+    if (!target) {
+      console.warn(`[Keeper] ROUND_MANAGER_ADDRESS not configured; skipping ${functionName}(${novelId})`);
+      return false;
+    }
     const { request } = await publicClient.simulateContract({
-      address: env.NOVEL_CORE_ADDRESS,
+      address: target,
       abi: keeperAbi,
       functionName: functionName as any,
       args: [novelId],

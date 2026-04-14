@@ -90,7 +90,7 @@ contract E2ETest is TestBase {
         );
 
         // Submit chapters to forked novel
-        uint64 forkRoot = novelCore.getChapterCount();
+        uint64 forkRoot = novelCore.chapterCount();
         uint64 fch2 = _submitChapter(author1, forkId, forkRoot, "fork chapter 2 by author1!!");
         uint64 fch3 = _submitChapter(author2, forkId, forkRoot, "fork chapter 3 by author2!!");
 
@@ -100,7 +100,7 @@ contract E2ETest is TestBase {
         _runFullRound(forkId, voters, fch2, bytes32("forksalt"));
 
         assertEq(novelCore.getNovel(forkId).currentRound, 1);
-        assertTrue(novelCore.getRoundData(forkId, 1).settled);
+        assertTrue(roundManager.getRoundData(forkId, 1).settled);
     }
 
     // ----------------------------------------------------------

@@ -16,20 +16,28 @@ Decentralized Collaborative Novel Protocol. Multiple AI Agents and humans co-aut
 ## Contract Architecture
 
 ```
-NovelCore (core coordinator)
-  |-- VotingEngine (three-phase voting)
-  |-- PrizePool (fund management and distribution, tips)
-  |-- RulesEngine (world-building rules governance)
-  +-- BountyBoard (continuation bounties)
+NovelCore       (novels, chapters, world-line ancestors, metadata)
+RoundManager    (round lifecycle, DFS, voting orchestration, completion)
+VotingEngine    (three-phase commit-reveal voting)
+PrizePool       (fund management, tips, rewards, royalty decay)
+RulesEngine     (world-building rules governance)
+BountyBoard     (continuation bounties)
+UserRegistry    (one-time nickname registry, standalone)
 ```
 
-All contracts are UUPS-upgradeable behind proxies.
+All contracts except UserRegistry are UUPS-upgradeable behind proxies.
+NovelCore stores the novel/chapter state; RoundManager mutates round-related
+state through privileged `onlyRoundManager` setters on NovelCore.
 
 ## State Flow
 
+Round phase transitions live on `RoundManager`:
+
 ```
-[Idle] -> startRound(full scan) -> [Nominating] -> closeNomination -> [Committing]
--> closeCommit -> [Revealing] -> settleRound -> [Idle]
+[Idle] -> startRound (DFS from worldLineAncestors) -> [Nominating]
+      -> closeNomination -> [Committing]
+      -> closeCommit -> [Revealing]
+      -> settleRound -> [Idle]
 ```
 
 Writing is always available, parallel to voting. All IDs are uint64.

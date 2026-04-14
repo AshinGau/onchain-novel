@@ -44,31 +44,31 @@ contract RulesTest is TestBase {
 
         // Start a round
         vm.prank(keeper);
-        novelCore.startRound(novelId);
+        roundManager.startRound(novelId);
 
         // Complete the round
         vm.warp(block.timestamp + NOMINATE_DURATION + 1);
         vm.prank(keeper);
-        novelCore.closeNomination(novelId);
+        roundManager.closeNomination(novelId);
 
-        DataTypes.RoundData memory rd = novelCore.getRoundData(novelId, 1);
+        DataTypes.RoundData memory rd = roundManager.getRoundData(novelId, 1);
         uint64 target = rd.candidates[0];
         bytes32 salt = bytes32("rsalt");
         bytes32 commitHash = keccak256(abi.encodePacked(target, salt));
 
         vm.prank(voter1);
-        novelCore.commitVote{value: VOTE_STAKE}(novelId, commitHash);
+        roundManager.commitVote{value: VOTE_STAKE}(novelId, commitHash);
 
         vm.warp(block.timestamp + COMMIT_DURATION + 1);
         vm.prank(keeper);
-        novelCore.closeCommit(novelId);
+        roundManager.closeCommit(novelId);
 
         vm.prank(voter1);
-        novelCore.revealVote(novelId, target, salt);
+        roundManager.revealVote(novelId, target, salt);
 
         vm.warp(block.timestamp + REVEAL_DURATION + 1);
         vm.prank(keeper);
-        novelCore.settleRound(novelId);
+        roundManager.settleRound(novelId);
 
         // Now try to set rules — should revert
         string[] memory names = new string[](1);

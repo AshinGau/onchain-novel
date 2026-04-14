@@ -2,7 +2,15 @@ import { createPublicClient, http, type Log, type PublicClient } from "viem";
 import { foundry } from "viem/chains";
 import { getClient, query } from "../db/index.js";
 import { env } from "../utils/env.js";
-import { handleNovelCoreEvent, handleVotingEvent, handlePrizePoolEvent, handleBountyBoardEvent, handleRulesEvent } from "./handlers.js";
+import {
+  handleNovelCoreEvent,
+  handleRoundManagerEvent,
+  handleVotingEvent,
+  handlePrizePoolEvent,
+  handleBountyBoardEvent,
+  handleRulesEvent,
+  handleUserRegistryEvent,
+} from "./handlers.js";
 import { KeeperSignalBuffer } from "../keeper/index.js";
 
 let currentRpcIndex = 0;
@@ -155,6 +163,8 @@ async function processLog(log: Log, dbClient: pg.PoolClient, rpcClient: PublicCl
 
   if (address === env.NOVEL_CORE_ADDRESS.toLowerCase()) {
     await handleNovelCoreEvent(log, dbClient, rpcClient, keeperBuf);
+  } else if (env.ROUND_MANAGER_ADDRESS && address === env.ROUND_MANAGER_ADDRESS.toLowerCase()) {
+    await handleRoundManagerEvent(log, dbClient, rpcClient, keeperBuf);
   } else if (env.VOTING_ENGINE_ADDRESS && address === env.VOTING_ENGINE_ADDRESS.toLowerCase()) {
     await handleVotingEvent(log, dbClient);
   } else if (env.PRIZE_POOL_ADDRESS && address === env.PRIZE_POOL_ADDRESS.toLowerCase()) {
@@ -163,6 +173,8 @@ async function processLog(log: Log, dbClient: pg.PoolClient, rpcClient: PublicCl
     await handleBountyBoardEvent(log, dbClient);
   } else if (env.RULES_ENGINE_ADDRESS && address === env.RULES_ENGINE_ADDRESS.toLowerCase()) {
     await handleRulesEvent(log, dbClient, rpcClient);
+  } else if (env.USER_REGISTRY_ADDRESS && address === env.USER_REGISTRY_ADDRESS.toLowerCase()) {
+    await handleUserRegistryEvent(log, dbClient);
   }
 }
 
@@ -173,10 +185,12 @@ export async function startIndexer() {
   let client = createClient();
 
   const addresses: `0x${string}`[] = [env.NOVEL_CORE_ADDRESS];
+  if (env.ROUND_MANAGER_ADDRESS) addresses.push(env.ROUND_MANAGER_ADDRESS);
   if (env.VOTING_ENGINE_ADDRESS) addresses.push(env.VOTING_ENGINE_ADDRESS);
   if (env.PRIZE_POOL_ADDRESS) addresses.push(env.PRIZE_POOL_ADDRESS);
   if (env.BOUNTY_BOARD_ADDRESS) addresses.push(env.BOUNTY_BOARD_ADDRESS);
   if (env.RULES_ENGINE_ADDRESS) addresses.push(env.RULES_ENGINE_ADDRESS);
+  if (env.USER_REGISTRY_ADDRESS) addresses.push(env.USER_REGISTRY_ADDRESS);
 
   // Main loop
   while (true) {

@@ -40,6 +40,16 @@ export function registerSetupCommand(program: Command): void {
           "  NovelCore contract address",
           existing?.contracts?.novelCore ?? "",
         );
+        const roundManager = await prompt(
+          rl,
+          "  RoundManager contract address",
+          existing?.contracts?.roundManager ?? "",
+        );
+        const prizePool = await prompt(
+          rl,
+          "  PrizePool contract address",
+          existing?.contracts?.prizePool ?? "",
+        );
         const bountyBoard = await prompt(
           rl,
           "  BountyBoard contract address (optional)",
@@ -50,6 +60,11 @@ export function registerSetupCommand(program: Command): void {
           "  RulesEngine contract address (optional)",
           existing?.contracts?.rulesEngine ?? "",
         );
+        const userRegistry = await prompt(
+          rl,
+          "  UserRegistry contract address (optional)",
+          existing?.contracts?.userRegistry ?? "",
+        );
 
         const chainId = parseInt(chainIdStr) || 31337;
         const config: OnchainNovelConfig = {
@@ -59,8 +74,11 @@ export function registerSetupCommand(program: Command): void {
           apiUrl,
           contracts: {
             novelCore: novelCore as `0x${string}`,
+            roundManager: roundManager as `0x${string}`,
+            prizePool: prizePool as `0x${string}`,
             ...(bountyBoard ? { bountyBoard: bountyBoard as `0x${string}` } : {}),
             ...(rulesEngine ? { rulesEngine: rulesEngine as `0x${string}` } : {}),
+            ...(userRegistry ? { userRegistry: userRegistry as `0x${string}` } : {}),
           },
         };
 

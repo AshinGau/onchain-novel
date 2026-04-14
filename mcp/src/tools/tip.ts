@@ -23,7 +23,7 @@ export function registerTipTools(server: McpServer): void {
         const hash = await tipNovel(wallet, {
           id: BigInt(params.novelId),
           value: amount,
-          novelCore: config.novelCore,
+          prizePool: config.prizePool,
         });
         const receipt = await pub.waitForTransactionReceipt({ hash });
         return ok(`Tipped Novel #${params.novelId} with ${formatEther(amount)} ETH.\nTx: ${hash}\nBlock: ${receipt.blockNumber}`);
@@ -49,7 +49,7 @@ export function registerTipTools(server: McpServer): void {
         const hash = await tipChapter(wallet, {
           id: BigInt(params.chapterId),
           value: amount,
-          novelCore: config.novelCore,
+          prizePool: config.prizePool,
         });
         const receipt = await pub.waitForTransactionReceipt({ hash });
         return ok(`Tipped Chapter #${params.chapterId} with ${formatEther(amount)} ETH.\nTx: ${hash}\nBlock: ${receipt.blockNumber}`);
