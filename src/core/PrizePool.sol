@@ -48,6 +48,9 @@ contract PrizePool is
     /// @notice Authorized BountyBoard contract address (can deposit bounty pool share)
     address public bountyBoard;
 
+    /// @notice VotingEngine contract address (receives voter rewards directly on round settlement)
+    address public votingEngine;
+
     /// @notice Keeper reward amount per state-transition call
     uint256 public keeperRewardAmount;
 
@@ -69,6 +72,8 @@ contract PrizePool is
     error NoAuthors();
     error ZeroAmount();
     error ChapterNotFound(uint64 chapterId);
+    error VotingEngineNotSet();
+    error ZeroAddress();
 
     // ============================================================
     //                        MODIFIERS
@@ -107,6 +112,7 @@ contract PrizePool is
     event RoundManagerUpdated(address indexed oldAddr, address indexed newAddr);
     event RulesEngineUpdated(address indexed oldAddr, address indexed newAddr);
     event BountyBoardUpdated(address indexed oldAddr, address indexed newAddr);
+    event VotingEngineUpdated(address indexed oldAddr, address indexed newAddr);
     event KeeperRewardAmountUpdated(uint256 oldAmount, uint256 newAmount);
 
     function setNovelCore(address newNovelCore) external onlyOwner {
@@ -131,6 +137,13 @@ contract PrizePool is
         address old = bountyBoard;
         bountyBoard = newBountyBoard;
         emit BountyBoardUpdated(old, newBountyBoard);
+    }
+
+    function setVotingEngine(address newVotingEngine) external onlyOwner {
+        if (newVotingEngine == address(0)) revert ZeroAddress();
+        address old = votingEngine;
+        votingEngine = newVotingEngine;
+        emit VotingEngineUpdated(old, newVotingEngine);
     }
 
     function setKeeperRewardAmount(uint256 amount) external onlyOwner {
@@ -260,9 +273,11 @@ contract PrizePool is
         // Deduct release from pool
         _poolBalances[novelId] -= releaseAmount;
 
-        // Transfer voterRewards ETH to caller (NovelCore) for forwarding to VotingEngine
+        // Transfer voterRewards ETH directly to VotingEngine (RoundManager will then call settleVoterRewards)
         if (voterRewards > 0) {
-            (bool success,) = msg.sender.call{value: voterRewards}("");
+            address ve = votingEngine;
+            if (ve == address(0)) revert VotingEngineNotSet();
+            (bool success,) = ve.call{value: voterRewards}("");
             if (!success) revert TransferFailed();
         }
 

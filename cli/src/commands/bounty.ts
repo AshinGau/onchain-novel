@@ -86,6 +86,7 @@ export function registerBountyCommands(program: Command): void {
         for (const b of data.bounties) {
           kv(`Bounty #${b.id}`, `Chapter #${b.chapter_id} (${b.novel_title})`);
           kv("  Locked", eth(BigInt(String(b.locked_amount ?? "0"))));
+          if (b.create_time) kv("  Created", new Date(Number(b.create_time) * 1000).toISOString());
           kv("  Deadline", new Date(Number(b.deadline) * 1000).toISOString());
           if (Number(b.designated_chapter_id) > 0) {
             kv("  Designated", `Chapter #${b.designated_chapter_id}`);

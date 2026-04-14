@@ -181,9 +181,10 @@ Full amount goes to prize pool.
 
 ### 4.3 Continuation Bounty
 
-- Create: 20% immediately to prize pool, 80% locked
-- Has continuations: 80% split among authors who submitted before deadline
-- No continuations: 80% refunded to reader
+- Create: 20% immediately to prize pool, 80% locked; `createTime` is recorded on-chain
+- Qualifying continuations are **direct child chapters whose timestamp falls within `[createTime, deadline]`** — pre-existing children written before the bounty was posted do not qualify. One share per author regardless of how many qualifying children they submitted.
+- Has qualifying continuations: 80% split equally among qualifying authors (or full amount to the designated chapter's author if the tipper designated one before deadline)
+- No qualifying continuations: 80% refundable to reader after the deadline
 
 ---
 

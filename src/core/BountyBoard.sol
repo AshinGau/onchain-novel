@@ -147,10 +147,12 @@ contract BountyBoard is
 
         // Store bounty
         bountyId = bountyCount++;
+        uint64 createTime = uint64(block.timestamp);
         _bounties[bountyId] = DataTypes.Bounty({
             chapterId: chapterId,
             tipper: msg.sender,
             lockedAmount: lockedAmount,
+            createTime: createTime,
             deadline: deadline,
             designatedChapterId: 0,
             claimed: false
@@ -158,7 +160,7 @@ contract BountyBoard is
 
         _chapterBounties[chapterId].push(bountyId);
 
-        emit BountyCreated(bountyId, chapterId, msg.sender, lockedAmount, deadline);
+        emit BountyCreated(bountyId, chapterId, msg.sender, lockedAmount, createTime, deadline);
     }
 
     /// @inheritdoc IBountyBoard
@@ -322,7 +324,9 @@ contract BountyBoard is
 
         for (uint256 i = 0; i < children.length; i++) {
             DataTypes.Chapter memory child = novelCore.getChapter(children[i]);
-            if (child.timestamp <= bounty.deadline) {
+            // Only chapters submitted within [createTime, deadline] qualify.
+            // Pre-existing children (written before the bounty was posted) are excluded.
+            if (child.timestamp >= bounty.createTime && child.timestamp <= bounty.deadline) {
                 raw[rawCount++] = child.author;
             }
         }

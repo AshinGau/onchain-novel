@@ -59,6 +59,7 @@ contract RoundManager is
     error NotKeeperYet();
     error NotAllowedToComplete();
     error NovelAlreadyCompleted(uint64 novelId);
+    error NovelHasNoRound();
     error ZeroAddress();
 
     // ─────── Initializer ───────
@@ -94,6 +95,7 @@ contract RoundManager is
     }
 
     function setKeeper(address newKeeper) external onlyOwner {
+        if (newKeeper == address(0)) revert ZeroAddress();
         emit KeeperUpdated(keeper, newKeeper);
         keeper = newKeeper;
     }
@@ -251,19 +253,20 @@ contract RoundManager is
             );
         }
 
-        // Forward voter rewards + stakes to VotingEngine
+        // Forward committed stakes to VotingEngine (voterRewards were already sent by PrizePool directly).
+        // Then settleVoterRewards will distribute; any excess returns to us and is redeposited to the pool.
         uint256 totalCommitted = _roundCommittedStakes[novelId][round];
         if (totalCommitted > 0) {
-            uint256 totalToVotingEngine = voterRewards + totalCommitted;
-            if (totalToVotingEngine > 0) {
-                (bool sent,) = address(votingEngine).call{value: totalToVotingEngine}("");
-                if (!sent) revert TransferFailed();
-            }
+            (bool sent,) = address(votingEngine).call{value: totalCommitted}("");
+            if (!sent) revert TransferFailed();
             uint256 excess =
                 votingEngine.settleVoterRewards(novelId, round, voterRewards, novel.config.voteStake);
             if (excess > 0) prizePool.deposit{value: excess}(novelId, "voterRewardExcess");
         } else if (voterRewards > 0) {
-            prizePool.deposit{value: voterRewards}(novelId, "noVoters");
+            // No voters — pull the voterRewards back from VotingEngine and redeposit to the pool
+            uint256 excess =
+                votingEngine.settleVoterRewards(novelId, round, voterRewards, novel.config.voteStake);
+            if (excess > 0) prizePool.deposit{value: excess}(novelId, "noVoters");
         }
 
         // Replace world line ancestors with winners
@@ -280,14 +283,14 @@ contract RoundManager is
         uint64[][] calldata winnerPaths,
         uint64[] memory prevAncestors
     ) internal view returns (address[] memory) {
-        // First pass: count total authors needed (sum of (path.length - 1) over non-empty paths)
-        uint256 total = 0;
+        // Worst-case buffer size (sum of path.length-1 over non-empty paths)
+        uint256 maxTotal = 0;
         for (uint256 i = 0; i < winnerPaths.length; i++) {
             if (winnerPaths[i].length == 0) continue;
-            total += winnerPaths[i].length - 1;
+            maxTotal += winnerPaths[i].length - 1;
         }
-        address[] memory out = new address[](total);
-        uint256 idx = 0;
+        uint64[] memory uniqueIds = new uint64[](maxTotal);
+        uint256 uniqueCount = 0;
 
         for (uint256 i = 0; i < winnerPaths.length; i++) {
             uint64[] calldata path = winnerPaths[i];
@@ -309,12 +312,24 @@ contract RoundManager is
             // Verify parent chain
             novelCore.verifyChapterPath(novelId, path);
 
-            // Collect authors of all chapters except the anchor (already counted in prior rounds)
+            // Collect chapter IDs (except the anchor, already counted in prior rounds), dedup across paths
             for (uint256 k = 0; k + 1 < path.length; k++) {
-                out[idx++] = novelCore.getChapter(path[k]).author;
+                uint64 id = path[k];
+                bool dup = false;
+                for (uint256 u = 0; u < uniqueCount; u++) {
+                    if (uniqueIds[u] == id) {
+                        dup = true;
+                        break;
+                    }
+                }
+                if (!dup) uniqueIds[uniqueCount++] = id;
             }
         }
 
+        address[] memory out = new address[](uniqueCount);
+        for (uint256 i = 0; i < uniqueCount; i++) {
+            out[i] = novelCore.getChapter(uniqueIds[i]).author;
+        }
         return out;
     }
 
@@ -396,6 +411,8 @@ contract RoundManager is
         if (novel.roundPhase != DataTypes.RoundPhase.Idle) {
             revert WrongRoundPhase(DataTypes.RoundPhase.Idle, novel.roundPhase);
         }
+        // Must have completed at least one settled round (creator cannot drain the pool on a fresh novel)
+        if (novel.currentRound < 1) revert NovelHasNoRound();
 
         // Permission: creator || keeper || owner || (anyone after inactivity timeout)
         if (msg.sender != novel.creator && msg.sender != keeper && msg.sender != owner()) {
@@ -419,7 +436,7 @@ contract RoundManager is
         if (finalAuthors.length > 0) {
             uint256 dust = prizePool.distributeRoundRewards(
                 novelId,
-                novel.currentRound > 0 ? novel.currentRound : 1,
+                novel.currentRound,
                 novel.creator,
                 finalAuthors,
                 10000, // release entire pool

@@ -67,10 +67,12 @@ contract Deploy is Script {
 
         // 3. Wire addresses
         VotingEngine(payable(address(votingProxy))).setRoundManager(address(roundProxy));
+        VotingEngine(payable(address(votingProxy))).setPrizePool(address(prizeProxy));
         PrizePool(payable(address(prizeProxy))).setNovelCore(address(novelCoreProxy));
         PrizePool(payable(address(prizeProxy))).setRoundManager(address(roundProxy));
         PrizePool(payable(address(prizeProxy))).setRulesEngine(address(rulesProxy));
         PrizePool(payable(address(prizeProxy))).setBountyBoard(address(bountyProxy));
+        PrizePool(payable(address(prizeProxy))).setVotingEngine(address(votingProxy));
         RulesEngine(address(rulesProxy)).setNovelCore(address(novelCoreProxy));
         NovelCore(payable(address(novelCoreProxy))).setRoundManager(address(roundProxy));
         // Initial keeper = deployer; owner should rotate via setKeeper post-deploy.
