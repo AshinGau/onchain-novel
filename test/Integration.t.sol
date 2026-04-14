@@ -9,6 +9,8 @@ import {VotingEngine} from "../src/core/VotingEngine.sol";
 import {PrizePool} from "../src/core/PrizePool.sol";
 import {RulesEngine} from "../src/core/RulesEngine.sol";
 import {BountyBoard} from "../src/core/BountyBoard.sol";
+import {RoundManager} from "../src/core/RoundManager.sol";
+import {UserRegistry} from "../src/core/UserRegistry.sol";
 import {DataTypes} from "../src/libraries/DataTypes.sol";
 
 /// @title TestBase
@@ -19,6 +21,8 @@ abstract contract TestBase is Test {
     PrizePool public prizePool;
     RulesEngine public rulesEngine;
     BountyBoard public bountyBoard;
+    RoundManager public roundManager;
+    UserRegistry public userRegistry;
 
     address public deployer = address(0xD);
     address public creator = address(0x1);
@@ -86,11 +90,25 @@ abstract contract TestBase is Test {
         ERC1967Proxy bountyProxy = new ERC1967Proxy(address(bountyBoardImpl), bountyData);
         bountyBoard = BountyBoard(payable(address(bountyProxy)));
 
-        votingEngine.setNovelCore(address(novelCoreProxy));
+        // RoundManager
+        RoundManager roundManagerImpl = new RoundManager();
+        bytes memory roundData = abi.encodeCall(
+            RoundManager.initialize, (deployer, address(novelCoreProxy), address(votingProxy), address(prizeProxy))
+        );
+        ERC1967Proxy roundProxy = new ERC1967Proxy(address(roundManagerImpl), roundData);
+        roundManager = RoundManager(payable(address(roundProxy)));
+
+        // Wire addresses
+        votingEngine.setRoundManager(address(roundProxy));
         prizePool.setNovelCore(address(novelCoreProxy));
-        rulesEngine.setNovelCore(address(novelCoreProxy));
+        prizePool.setRoundManager(address(roundProxy));
         prizePool.setRulesEngine(address(rulesProxy));
         prizePool.setBountyBoard(address(bountyProxy));
+        rulesEngine.setNovelCore(address(novelCoreProxy));
+        novelCore.setRoundManager(address(roundProxy));
+
+        // UserRegistry standalone
+        userRegistry = new UserRegistry();
 
         vm.stopPrank();
     }
@@ -147,7 +165,7 @@ abstract contract TestBase is Test {
         internal
         returns (uint64)
     {
-        uint64 countBefore = novelCore.getChapterCount();
+        uint64 countBefore = novelCore.chapterCount();
         vm.prank(who);
         novelCore.submitChapter{value: SUBMISSION_FEE}(novelId, parentId, _makeContent(text));
         return countBefore + 1;
@@ -155,30 +173,30 @@ abstract contract TestBase is Test {
 
     function _runFullRound(uint64 novelId, address[] memory voters, uint64 targetCandidate, bytes32 salt) internal {
         vm.prank(keeper);
-        novelCore.startRound(novelId);
+        roundManager.startRound(novelId);
 
         vm.warp(block.timestamp + NOMINATE_DURATION + 1);
         vm.prank(keeper);
-        novelCore.closeNomination(novelId);
+        roundManager.closeNomination(novelId);
 
         bytes32 commitHash = keccak256(abi.encodePacked(targetCandidate, salt));
         for (uint256 i = 0; i < voters.length; i++) {
             vm.prank(voters[i]);
-            novelCore.commitVote{value: VOTE_STAKE}(novelId, commitHash);
+            roundManager.commitVote{value: VOTE_STAKE}(novelId, commitHash);
         }
 
         vm.warp(block.timestamp + COMMIT_DURATION + 1);
         vm.prank(keeper);
-        novelCore.closeCommit(novelId);
+        roundManager.closeCommit(novelId);
 
         for (uint256 i = 0; i < voters.length; i++) {
             vm.prank(voters[i]);
-            novelCore.revealVote(novelId, targetCandidate, salt);
+            roundManager.revealVote(novelId, targetCandidate, salt);
         }
 
         vm.warp(block.timestamp + REVEAL_DURATION + 1);
         vm.prank(keeper);
-        novelCore.settleRound(novelId);
+        roundManager.settleRound(novelId);
     }
 }
 
@@ -220,7 +238,7 @@ contract IntegrationTest is TestBase {
         uint64 originalId = _createNovel();
 
         vm.prank(voter1);
-        novelCore.tipNovel{value: 5 ether}(originalId);
+        prizePool.tipNovel{value: 5 ether}(originalId);
 
         uint256 sourcePool = prizePool.getPoolBalance(originalId);
         uint256 forkFee = sourcePool * 100 / 10000; // FORK_FEE_RATE = 100 bps
@@ -241,7 +259,7 @@ contract IntegrationTest is TestBase {
 
         assertEq(forkId, 2);
 
-        DataTypes.Chapter memory forkRoot = novelCore.getChapter(novelCore.getChapterCount());
+        DataTypes.Chapter memory forkRoot = novelCore.getChapter(novelCore.chapterCount());
         assertEq(forkRoot.parentId, 1);
         assertEq(forkRoot.depth, 1);
     }
@@ -287,40 +305,40 @@ contract IntegrationTest is TestBase {
         uint64 ch4 = _submitChapter(author1, novelId, ch2, "branch A chapter 4!!");
 
         vm.prank(keeper);
-        novelCore.startRound(novelId);
+        roundManager.startRound(novelId);
 
         DataTypes.Novel memory novel = novelCore.getNovel(novelId);
         assertEq(novel.currentRound, 1);
         assertEq(uint8(novel.roundPhase), uint8(DataTypes.RoundPhase.Nominating));
 
-        DataTypes.RoundData memory rd = novelCore.getRoundData(novelId, 1);
+        DataTypes.RoundData memory rd = roundManager.getRoundData(novelId, 1);
         assertTrue(rd.candidates.length >= 2);
 
         vm.warp(block.timestamp + NOMINATE_DURATION + 1);
         vm.prank(keeper);
-        novelCore.closeNomination(novelId);
+        roundManager.closeNomination(novelId);
 
         uint64 targetCandidate = ch4;
         bytes32 salt = bytes32("mysalt");
         bytes32 commitHash = keccak256(abi.encodePacked(targetCandidate, salt));
 
         vm.prank(voter1);
-        novelCore.commitVote{value: VOTE_STAKE}(novelId, commitHash);
+        roundManager.commitVote{value: VOTE_STAKE}(novelId, commitHash);
         vm.prank(voter2);
-        novelCore.commitVote{value: VOTE_STAKE}(novelId, commitHash);
+        roundManager.commitVote{value: VOTE_STAKE}(novelId, commitHash);
 
         vm.warp(block.timestamp + COMMIT_DURATION + 1);
         vm.prank(keeper);
-        novelCore.closeCommit(novelId);
+        roundManager.closeCommit(novelId);
 
         vm.prank(voter1);
-        novelCore.revealVote(novelId, targetCandidate, salt);
+        roundManager.revealVote(novelId, targetCandidate, salt);
         vm.prank(voter2);
-        novelCore.revealVote(novelId, targetCandidate, salt);
+        roundManager.revealVote(novelId, targetCandidate, salt);
 
         vm.warp(block.timestamp + REVEAL_DURATION + 1);
         vm.prank(keeper);
-        novelCore.settleRound(novelId);
+        roundManager.settleRound(novelId);
 
         novel = novelCore.getNovel(novelId);
         assertEq(uint8(novel.roundPhase), uint8(DataTypes.RoundPhase.Idle));
@@ -329,7 +347,7 @@ contract IntegrationTest is TestBase {
         uint64[] memory wl = novelCore.getWorldLineAncestors(novelId);
         assertTrue(wl.length > 0);
 
-        rd = novelCore.getRoundData(novelId, 1);
+        rd = roundManager.getRoundData(novelId, 1);
         assertTrue(rd.settled);
     }
 
@@ -391,12 +409,12 @@ contract IntegrationTest is TestBase {
         uint64 ch5 = _submitChapter(author2, novelId, ch3, "non-world-line branch ch5!");
 
         vm.prank(keeper);
-        novelCore.startRound(novelId);
+        roundManager.startRound(novelId);
 
         vm.prank(author2);
-        novelCore.nominateCandidate{value: NOMINATION_FEE}(novelId, ch5);
+        roundManager.nominateCandidate{value: NOMINATION_FEE}(novelId, ch5);
 
-        DataTypes.RoundData memory rd = novelCore.getRoundData(novelId, 2);
+        DataTypes.RoundData memory rd = roundManager.getRoundData(novelId, 2);
         uint256 ch5Idx = type(uint256).max;
         for (uint256 i = 0; i < rd.candidates.length; i++) {
             if (rd.candidates[i] == ch5) {
@@ -468,7 +486,7 @@ contract IntegrationTest is TestBase {
         uint256 poolBefore = prizePool.getPoolBalance(novelId);
 
         vm.prank(voter1);
-        novelCore.tipNovel{value: 1 ether}(novelId);
+        prizePool.tipNovel{value: 1 ether}(novelId);
 
         assertEq(prizePool.getPoolBalance(novelId) - poolBefore, 1 ether);
     }
@@ -482,7 +500,7 @@ contract IntegrationTest is TestBase {
         uint256 poolBefore = prizePool.getPoolBalance(novelId);
 
         vm.prank(voter1);
-        novelCore.tipChapter{value: 1 ether}(ch2);
+        prizePool.tipChapter{value: 1 ether}(ch2);
 
         assertEq(author1.balance - authorBalBefore, 0.5 ether);
         assertEq(prizePool.getPoolBalance(novelId) - poolBefore, 0.5 ether);
@@ -519,7 +537,7 @@ contract IntegrationTest is TestBase {
         _submitChapter(author1, novelId, rootId, "chapter for complete test!");
 
         vm.prank(creator);
-        novelCore.completeNovel(novelId);
+        roundManager.completeNovel(novelId);
 
         DataTypes.Novel memory novel = novelCore.getNovel(novelId);
         assertFalse(novel.active, "novel should be inactive after completion");
@@ -536,33 +554,33 @@ contract IntegrationTest is TestBase {
         uint64 ch3 = _submitChapter(author2, novelId, rootId, "branch B for voter accuracy");
 
         vm.prank(keeper);
-        novelCore.startRound(novelId);
+        roundManager.startRound(novelId);
 
         vm.warp(block.timestamp + NOMINATE_DURATION + 1);
         vm.prank(keeper);
-        novelCore.closeNomination(novelId);
+        roundManager.closeNomination(novelId);
 
         bytes32 salt = bytes32("votersalt");
         bytes32 commitHash2 = keccak256(abi.encodePacked(ch2, salt));
         bytes32 commitHash3 = keccak256(abi.encodePacked(ch3, salt));
 
         vm.prank(voter1);
-        novelCore.commitVote{value: VOTE_STAKE}(novelId, commitHash2);
+        roundManager.commitVote{value: VOTE_STAKE}(novelId, commitHash2);
         vm.prank(voter2);
-        novelCore.commitVote{value: VOTE_STAKE}(novelId, commitHash3);
+        roundManager.commitVote{value: VOTE_STAKE}(novelId, commitHash3);
 
         vm.warp(block.timestamp + COMMIT_DURATION + 1);
         vm.prank(keeper);
-        novelCore.closeCommit(novelId);
+        roundManager.closeCommit(novelId);
 
         vm.prank(voter1);
-        novelCore.revealVote(novelId, ch2, salt);
+        roundManager.revealVote(novelId, ch2, salt);
         vm.prank(voter2);
-        novelCore.revealVote(novelId, ch3, salt);
+        roundManager.revealVote(novelId, ch3, salt);
 
         vm.warp(block.timestamp + REVEAL_DURATION + 1);
         vm.prank(keeper);
-        novelCore.settleRound(novelId);
+        roundManager.settleRound(novelId);
 
         DataTypes.Novel memory novel = novelCore.getNovel(novelId);
         uint32 round = novel.currentRound;
@@ -570,12 +588,12 @@ contract IntegrationTest is TestBase {
         // Both voters can claim voting rewards through NovelCore
         uint256 voter1BalBefore = voter1.balance;
         vm.prank(voter1);
-        novelCore.claimVotingReward(novelId, round);
+        roundManager.claimVotingReward(novelId, round);
         uint256 voter1Reward = voter1.balance - voter1BalBefore;
 
         uint256 voter2BalBefore = voter2.balance;
         vm.prank(voter2);
-        novelCore.claimVotingReward(novelId, round);
+        roundManager.claimVotingReward(novelId, round);
         uint256 voter2Reward = voter2.balance - voter2BalBefore;
 
         assertTrue(voter1Reward >= VOTE_STAKE, "voter1 should get at least stake back");
@@ -593,7 +611,7 @@ contract IntegrationTest is TestBase {
         _submitChapter(author2, novelId, rootId, "pre-round branch B chapter!");
 
         vm.prank(keeper);
-        novelCore.startRound(novelId);
+        roundManager.startRound(novelId);
 
         // Submit during nominating phase
         uint64 ch3 = _submitChapter(author2, novelId, rootId, "during nominating phase!!!");
@@ -601,7 +619,7 @@ contract IntegrationTest is TestBase {
 
         vm.warp(block.timestamp + NOMINATE_DURATION + 1);
         vm.prank(keeper);
-        novelCore.closeNomination(novelId);
+        roundManager.closeNomination(novelId);
 
         // Submit during committing phase
         uint64 ch4 = _submitChapter(author1, novelId, ch2, "during committing phase!!!");
@@ -638,7 +656,7 @@ contract IntegrationTest is TestBase {
         // Voter claim: payout = stake refund + capped reward
         uint256 balBefore = voter1.balance;
         vm.prank(voter1);
-        novelCore.claimVotingReward(novelId, 1);
+        roundManager.claimVotingReward(novelId, 1);
         assertEq(voter1.balance - balBefore, VOTE_STAKE + cap, "payout should be stake + protocol cap");
 
         // Excess returned to pool
@@ -658,29 +676,29 @@ contract IntegrationTest is TestBase {
         uint64 ch2 = _submitChapter(author1, novelId, rootId, "branch for unreveal test!!");
 
         vm.prank(keeper);
-        novelCore.startRound(novelId);
+        roundManager.startRound(novelId);
         vm.warp(block.timestamp + NOMINATE_DURATION + 1);
         vm.prank(keeper);
-        novelCore.closeNomination(novelId);
+        roundManager.closeNomination(novelId);
 
         bytes32 salt = bytes32("unrevealsalt");
         bytes32 commitHash = keccak256(abi.encodePacked(ch2, salt));
 
         vm.prank(voter1);
-        novelCore.commitVote{value: VOTE_STAKE}(novelId, commitHash);
+        roundManager.commitVote{value: VOTE_STAKE}(novelId, commitHash);
         vm.prank(voter2);
-        novelCore.commitVote{value: VOTE_STAKE}(novelId, commitHash);
+        roundManager.commitVote{value: VOTE_STAKE}(novelId, commitHash);
 
         vm.warp(block.timestamp + COMMIT_DURATION + 1);
         vm.prank(keeper);
-        novelCore.closeCommit(novelId);
+        roundManager.closeCommit(novelId);
 
         vm.prank(voter1);
-        novelCore.revealVote(novelId, ch2, salt);
+        roundManager.revealVote(novelId, ch2, salt);
 
         vm.warp(block.timestamp + REVEAL_DURATION + 1);
         vm.prank(keeper);
-        novelCore.settleRound(novelId);
+        roundManager.settleRound(novelId);
 
         // voter2 (unrevealed) should get stake - 50%
         uint256 expectedPenalty = (VOTE_STAKE * votingEngine.UNREVEAL_PENALTY_RATE_BP()) / 10000;
@@ -688,13 +706,13 @@ contract IntegrationTest is TestBase {
 
         uint256 v2Before = voter2.balance;
         vm.prank(voter2);
-        novelCore.claimVotingReward(novelId, 1);
+        roundManager.claimVotingReward(novelId, 1);
         assertEq(voter2.balance - v2Before, VOTE_STAKE - expectedPenalty, "unrevealed voter gets stake - 50%");
 
         // voter1 (revealed) gets stake + reward (reward includes the penalty collected from voter2)
         uint256 v1Before = voter1.balance;
         vm.prank(voter1);
-        novelCore.claimVotingReward(novelId, 1);
+        roundManager.claimVotingReward(novelId, 1);
         assertGt(voter1.balance - v1Before, VOTE_STAKE, "revealed voter gets stake + nonzero reward");
     }
 
@@ -739,10 +757,10 @@ contract IntegrationTest is TestBase {
         }
 
         vm.prank(keeper);
-        novelCore.startRound(novelId);
+        roundManager.startRound(novelId);
 
         // Auto candidates take some slots; nominate the rest until we hit the cap.
-        DataTypes.RoundData memory rd = novelCore.getRoundData(novelId, 1);
+        DataTypes.RoundData memory rd = roundManager.getRoundData(novelId, 1);
         uint256 used = rd.candidates.length;
         uint256 slotsLeft = 64 - used; // MAX_CANDIDATES_PER_ROUND = 64
 
@@ -758,14 +776,14 @@ contract IntegrationTest is TestBase {
             }
             if (already) continue;
             vm.prank(author2);
-            novelCore.nominateCandidate{value: 0.0001 ether}(novelId, children[i]);
+            roundManager.nominateCandidate{value: 0.0001 ether}(novelId, children[i]);
             nominated++;
         }
 
         // One more nomination must hit the cap and revert.
         for (uint256 i = 0; i < 70; i++) {
             bool already = false;
-            DataTypes.RoundData memory rd2 = novelCore.getRoundData(novelId, 1);
+            DataTypes.RoundData memory rd2 = roundManager.getRoundData(novelId, 1);
             for (uint256 j = 0; j < rd2.candidates.length; j++) {
                 if (rd2.candidates[j] == children[i]) {
                     already = true;
@@ -775,7 +793,7 @@ contract IntegrationTest is TestBase {
             if (already) continue;
             vm.prank(author2);
             vm.expectRevert(); // TooManyCandidates
-            novelCore.nominateCandidate{value: 0.0001 ether}(novelId, children[i]);
+            roundManager.nominateCandidate{value: 0.0001 ether}(novelId, children[i]);
             return;
         }
         revert("expected cap-revert path not exercised");

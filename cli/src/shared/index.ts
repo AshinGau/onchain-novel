@@ -1,9 +1,11 @@
 export {
   novelCoreAbi,
+  roundManagerAbi,
   votingEngineAbi,
   prizePoolAbi,
   bountyBoardAbi,
   rulesEngineAbi,
+  userRegistryAbi,
 } from "./abi.js";
 
 export {
@@ -51,6 +53,7 @@ export {
   setCreatorRules,
   proposeRule,
   voteOnRuleProposal,
+  setNickname,
 
   // Read operations
   getNovel,
@@ -62,6 +65,7 @@ export {
   getRuleNames,
   getRule,
   getRuleProposal,
+  getNickname,
 } from "./contracts.js";
 
 export type { OnchainNovelConfig } from "./config.js";

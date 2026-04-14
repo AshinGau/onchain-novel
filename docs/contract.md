@@ -96,8 +96,14 @@ Nominating -> Committing -> Revealing -> Settlement
 ### 2.4 State Flow
 
 ```
-[Idle] -> startRound(full scan) -> [Nominating] -> closeNomination -> [Committing]
--> closeCommit -> [Revealing] -> settleRound -> [Idle]
+[Idle] -> RoundManager.startRound(DFS) -> [Nominating]
+      -> closeNomination -> [Committing]
+      -> closeCommit -> [Revealing]
+      -> settleRound -> [Idle]
+
+All phase-transition and voting calls live on `RoundManager`. `NovelCore` only
+stores the persistent state (novels, chapters, worldLineAncestors, isWorldLineAuthor)
+and exposes privileged setters gated by `onlyRoundManager`.
 ```
 
 Writing and voting run in parallel, never blocking each other.

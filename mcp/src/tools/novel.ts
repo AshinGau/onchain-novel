@@ -275,7 +275,7 @@ export function registerNovelTools(server: McpServer): void {
       try {
         const wallet = getWalletClient();
         const pub = getPublicClient();
-        const hash = await completeNovel(wallet, BigInt(params.novelId), config.novelCore);
+        const hash = await completeNovel(wallet, BigInt(params.novelId), config.roundManager);
         const receipt = await pub.waitForTransactionReceipt({ hash });
         return ok(`Novel #${params.novelId} completed.\nTx: ${hash}\nBlock: ${receipt.blockNumber}`);
       } catch (error) {

@@ -105,14 +105,17 @@ BROADCAST_JSON="broadcast/Deploy.s.sol/31337/run-latest.json"
 CREATES=$(jq -r '[.transactions[] | select(.transactionType == "CREATE") | .contractAddress] | .[]' "$BROADCAST_JSON")
 CREATES_ARR=($CREATES)
 
-# 5 impls + 5 proxies = 10 CREATE transactions
-# Impls: [0] NovelCore, [1] VotingEngine, [2] PrizePool, [3] RulesEngine, [4] BountyBoard
-# Proxies: [5] VotingEngine, [6] PrizePool, [7] RulesEngine, [8] NovelCore, [9] BountyBoard
-VOTING_ENGINE="${CREATES_ARR[5]}"
-PRIZE_POOL="${CREATES_ARR[6]}"
-RULES_ENGINE="${CREATES_ARR[7]}"
-NOVEL_CORE="${CREATES_ARR[8]}"
-BOUNTY_BOARD="${CREATES_ARR[9]}"
+# 6 impls + 6 proxies + 1 standalone = 13 CREATE transactions
+# Impls: [0] NovelCore, [1] VotingEngine, [2] PrizePool, [3] RulesEngine, [4] BountyBoard, [5] RoundManager
+# Proxies: [6] VotingEngine, [7] PrizePool, [8] RulesEngine, [9] NovelCore, [10] BountyBoard, [11] RoundManager
+# Standalone: [12] UserRegistry
+VOTING_ENGINE="${CREATES_ARR[6]}"
+PRIZE_POOL="${CREATES_ARR[7]}"
+RULES_ENGINE="${CREATES_ARR[8]}"
+NOVEL_CORE="${CREATES_ARR[9]}"
+BOUNTY_BOARD="${CREATES_ARR[10]}"
+ROUND_MANAGER="${CREATES_ARR[11]}"
+USER_REGISTRY="${CREATES_ARR[12]}"
 
 [ -n "$NOVEL_CORE" ] || fail "Failed to extract NovelCore address"
 pass "Contracts deployed: NovelCore=$NOVEL_CORE VotingEngine=$VOTING_ENGINE PrizePool=$PRIZE_POOL BountyBoard=$BOUNTY_BOARD"
@@ -161,7 +164,7 @@ NOVEL_ID=1
 pass "Novel #$NOVEL_ID created with 0.1 ETH genesis fund"
 
 # Verify novel count
-NOVEL_COUNT=$(cast_call "$NOVEL_CORE" "getNovelCount()(uint64)")
+NOVEL_COUNT=$(cast_call "$NOVEL_CORE" "novelCount()(uint64)")
 [ "$(echo "$NOVEL_COUNT" | tr -d ' ')" = "1" ] || fail "Novel count should be 1, got $NOVEL_COUNT"
 pass "Novel state verified (count=1)"
 
@@ -211,7 +214,7 @@ cast_send "$PK_WRITER_A" "$NOVEL_CORE" \
 pass "Writer A submitted chapter 4 (child of chapter 2, extending chain)"
 
 # Verify chapter count
-CHAPTER_COUNT=$(cast_call "$NOVEL_CORE" "getChapterCount()(uint64)")
+CHAPTER_COUNT=$(cast_call "$NOVEL_CORE" "chapterCount()(uint64)")
 info "Total chapters: $CHAPTER_COUNT"
 
 # ═══════════════════════════════════════════════════════════════
@@ -226,17 +229,17 @@ sleep 2
 
 # STEP 4: Keeper starts round 1 (DFS finds branches from root)
 info "Keeper: startRound..."
-cast_send "$PK_KEEPER" "$NOVEL_CORE" "startRound(uint64)" "$NOVEL_ID" > /dev/null
+cast_send "$PK_KEEPER" "$ROUND_MANAGER" "startRound(uint64)" "$NOVEL_ID" > /dev/null
 pass "Keeper: startRound (round 1)"
 
 # Check candidates
-ROUND_DATA=$(cast_call "$NOVEL_CORE" "getRoundData(uint64,uint32)((uint64[],bool[],uint64[],uint64,uint64,uint64,bool))" "$NOVEL_ID" "1")
+ROUND_DATA=$(cast_call "$ROUND_MANAGER" "getRoundData(uint64,uint32)((uint64[],bool[],uint64[],uint64,uint64,uint64,bool))" "$NOVEL_ID" "1")
 info "Round 1 data: $ROUND_DATA"
 
 # STEP 5: Wait for nominateDuration (2s), then closeNomination
 info "Waiting for nominate duration..."
 advance_time 3
-cast_send "$PK_KEEPER" "$NOVEL_CORE" "closeNomination(uint64)" "$NOVEL_ID" > /dev/null
+cast_send "$PK_KEEPER" "$ROUND_MANAGER" "closeNomination(uint64)" "$NOVEL_ID" > /dev/null
 pass "Keeper: closeNomination"
 
 # STEP 6: Voters commit votes
@@ -246,7 +249,7 @@ info "Committing votes..."
 # commitHash = keccak256(abi.encodePacked(uint64 candidateId, bytes32 salt))
 SALT_A="0x0000000000000000000000000000000000000000000000000000000000000001"
 COMMIT_A=$(cast keccak256 $(cast abi-encode --packed "(uint64,bytes32)" 4 "$SALT_A"))
-cast_send "$PK_VOTER_A" "$NOVEL_CORE" \
+cast_send "$PK_VOTER_A" "$ROUND_MANAGER" \
     "commitVote(uint64,bytes32)" "$NOVEL_ID" "$COMMIT_A" \
     --value 0.01ether > /dev/null
 pass "Voter A committed (for chapter 4)"
@@ -254,13 +257,13 @@ pass "Voter A committed (for chapter 4)"
 # Voter B votes for chapter 3 (Writer B's chain)
 SALT_B="0x0000000000000000000000000000000000000000000000000000000000000002"
 COMMIT_B=$(cast keccak256 $(cast abi-encode --packed "(uint64,bytes32)" 3 "$SALT_B"))
-cast_send "$PK_VOTER_B" "$NOVEL_CORE" \
+cast_send "$PK_VOTER_B" "$ROUND_MANAGER" \
     "commitVote(uint64,bytes32)" "$NOVEL_ID" "$COMMIT_B" \
     --value 0.01ether > /dev/null
 pass "Voter B committed (for chapter 3)"
 
 # Verify: reveal before closeCommit should fail
-if cast send --rpc-url "$RPC" --private-key "$PK_VOTER_A" "$NOVEL_CORE" \
+if cast send --rpc-url "$RPC" --private-key "$PK_VOTER_A" "$ROUND_MANAGER" \
     "revealVote(uint64,uint64,bytes32)" "$NOVEL_ID" 4 "$SALT_A" \
     > /dev/null 2>&1; then
     fail "Reveal should have been rejected before closeCommit"
@@ -271,11 +274,11 @@ fi
 # STEP 7: Keeper closes commit phase
 info "Waiting for commit duration..."
 advance_time 3
-cast_send "$PK_KEEPER" "$NOVEL_CORE" "closeCommit(uint64)" "$NOVEL_ID" > /dev/null
+cast_send "$PK_KEEPER" "$ROUND_MANAGER" "closeCommit(uint64)" "$NOVEL_ID" > /dev/null
 pass "Keeper: closeCommit"
 
 # Verify: late commit should fail
-if cast send --rpc-url "$RPC" --private-key "$PK_VOTER_A" "$NOVEL_CORE" \
+if cast send --rpc-url "$RPC" --private-key "$PK_VOTER_A" "$ROUND_MANAGER" \
     "commitVote(uint64,bytes32)" "$NOVEL_ID" \
     "0x0000000000000000000000000000000000000000000000000000000000000099" \
     --value 0.01ether > /dev/null 2>&1; then
@@ -286,18 +289,18 @@ fi
 
 # STEP 8: Voters reveal
 info "Revealing votes..."
-cast_send "$PK_VOTER_A" "$NOVEL_CORE" \
+cast_send "$PK_VOTER_A" "$ROUND_MANAGER" \
     "revealVote(uint64,uint64,bytes32)" "$NOVEL_ID" 4 "$SALT_A" > /dev/null
 pass "Voter A revealed (voted for chapter 4)"
 
-cast_send "$PK_VOTER_B" "$NOVEL_CORE" \
+cast_send "$PK_VOTER_B" "$ROUND_MANAGER" \
     "revealVote(uint64,uint64,bytes32)" "$NOVEL_ID" 3 "$SALT_B" > /dev/null
 pass "Voter B revealed (voted for chapter 3)"
 
 # STEP 9: Keeper settles round 1
 info "Waiting for reveal duration..."
 advance_time 3
-cast_send "$PK_KEEPER" "$NOVEL_CORE" "settleRound(uint64)" "$NOVEL_ID" > /dev/null
+cast_send "$PK_KEEPER" "$ROUND_MANAGER" "settleRound(uint64)" "$NOVEL_ID" > /dev/null
 pass "Keeper: settleRound (round 1 settled)"
 
 # STEP 10: Verify round 1 results
@@ -322,15 +325,15 @@ cast_send "$PK_CREATOR" "$NOVEL_CORE" "claimReward(uint64)" "$NOVEL_ID" > /dev/n
 pass "Creator claimed rewards"
 
 # Voter A claims voting reward (round 1)
-cast_send "$PK_VOTER_A" "$NOVEL_CORE" "claimVotingReward(uint64,uint32)" "$NOVEL_ID" 1 > /dev/null
+cast_send "$PK_VOTER_A" "$ROUND_MANAGER" "claimVotingReward(uint64,uint32)" "$NOVEL_ID" 1 > /dev/null
 pass "Voter A claimed voting reward (round 1)"
 
 # Voter B claims voting reward (round 1)
-cast_send "$PK_VOTER_B" "$NOVEL_CORE" "claimVotingReward(uint64,uint32)" "$NOVEL_ID" 1 > /dev/null
+cast_send "$PK_VOTER_B" "$ROUND_MANAGER" "claimVotingReward(uint64,uint32)" "$NOVEL_ID" 1 > /dev/null
 pass "Voter B claimed voting reward (round 1)"
 
 # Round 1 data should be settled
-ROUND1_SETTLED=$(cast_call "$NOVEL_CORE" "getRoundData(uint64,uint32)((uint64[],bool[],uint64[],uint64,uint64,uint64,bool))" "$NOVEL_ID" "1")
+ROUND1_SETTLED=$(cast_call "$ROUND_MANAGER" "getRoundData(uint64,uint32)((uint64[],bool[],uint64[],uint64,uint64,uint64,bool))" "$NOVEL_ID" "1")
 info "Round 1 settled data: $ROUND1_SETTLED"
 
 # ═══════════════════════════════════════════════════════════════
@@ -383,49 +386,49 @@ pass "Writer B submitted chapter 7 on non-world-line branch (child of root)"
 advance_time 3
 
 # Keeper starts round 2 (DFS from round 1 worldLineAncestors)
-cast_send "$PK_KEEPER" "$NOVEL_CORE" "startRound(uint64)" "$NOVEL_ID" > /dev/null
+cast_send "$PK_KEEPER" "$ROUND_MANAGER" "startRound(uint64)" "$NOVEL_ID" > /dev/null
 pass "Keeper: startRound (round 2)"
 
-ROUND2_DATA=$(cast_call "$NOVEL_CORE" "getRoundData(uint64,uint32)((uint64[],bool[],uint64[],uint64,uint64,uint64,bool))" "$NOVEL_ID" "2")
+ROUND2_DATA=$(cast_call "$ROUND_MANAGER" "getRoundData(uint64,uint32)((uint64[],bool[],uint64[],uint64,uint64,uint64,bool))" "$NOVEL_ID" "2")
 info "Round 2 candidates: $ROUND2_DATA"
 
 # closeNomination
 advance_time 3
-cast_send "$PK_KEEPER" "$NOVEL_CORE" "closeNomination(uint64)" "$NOVEL_ID" > /dev/null
+cast_send "$PK_KEEPER" "$ROUND_MANAGER" "closeNomination(uint64)" "$NOVEL_ID" > /dev/null
 pass "Keeper: closeNomination (round 2)"
 
 # Commit votes -- both vote for chapter 5 (Writer A's extended chain)
 SALT_R2_A="0x0000000000000000000000000000000000000000000000000000000000000003"
 COMMIT_R2_A=$(cast keccak256 $(cast abi-encode --packed "(uint64,bytes32)" 5 "$SALT_R2_A"))
-cast_send "$PK_VOTER_A" "$NOVEL_CORE" \
+cast_send "$PK_VOTER_A" "$ROUND_MANAGER" \
     "commitVote(uint64,bytes32)" "$NOVEL_ID" "$COMMIT_R2_A" \
     --value 0.01ether > /dev/null
 pass "Voter A committed (round 2, for chapter 5)"
 
 SALT_R2_B="0x0000000000000000000000000000000000000000000000000000000000000004"
 COMMIT_R2_B=$(cast keccak256 $(cast abi-encode --packed "(uint64,bytes32)" 6 "$SALT_R2_B"))
-cast_send "$PK_VOTER_B" "$NOVEL_CORE" \
+cast_send "$PK_VOTER_B" "$ROUND_MANAGER" \
     "commitVote(uint64,bytes32)" "$NOVEL_ID" "$COMMIT_R2_B" \
     --value 0.01ether > /dev/null
 pass "Voter B committed (round 2, for chapter 6)"
 
 # closeCommit
 advance_time 3
-cast_send "$PK_KEEPER" "$NOVEL_CORE" "closeCommit(uint64)" "$NOVEL_ID" > /dev/null
+cast_send "$PK_KEEPER" "$ROUND_MANAGER" "closeCommit(uint64)" "$NOVEL_ID" > /dev/null
 pass "Keeper: closeCommit (round 2)"
 
 # Reveal
-cast_send "$PK_VOTER_A" "$NOVEL_CORE" \
+cast_send "$PK_VOTER_A" "$ROUND_MANAGER" \
     "revealVote(uint64,uint64,bytes32)" "$NOVEL_ID" 5 "$SALT_R2_A" > /dev/null
 pass "Voter A revealed (round 2)"
 
-cast_send "$PK_VOTER_B" "$NOVEL_CORE" \
+cast_send "$PK_VOTER_B" "$ROUND_MANAGER" \
     "revealVote(uint64,uint64,bytes32)" "$NOVEL_ID" 6 "$SALT_R2_B" > /dev/null
 pass "Voter B revealed (round 2)"
 
 # Settle round 2
 advance_time 3
-cast_send "$PK_KEEPER" "$NOVEL_CORE" "settleRound(uint64)" "$NOVEL_ID" > /dev/null
+cast_send "$PK_KEEPER" "$ROUND_MANAGER" "settleRound(uint64)" "$NOVEL_ID" > /dev/null
 pass "Keeper: settleRound (round 2 settled)"
 
 # Verify world lines evolved
@@ -452,7 +455,19 @@ cast_send "$PK_WRITER_A" "$NOVEL_CORE" \
     --value 0.01ether > /dev/null
 pass "Writer A submitted chapter 8 (extends world line, child of 5)"
 
-# Submit a chapter extending the non-world-line branch (chapter 7)
+# Extend world line 6 too so startRound finds >= worldLineCount candidates (DFS needs a leaf per line)
+CONTENT_WL6="Parallel branch continues as the guild seeks the lost scroll. Each artifact reveals fragments of the prophecy hidden since the first fork."
+CONTENT_WL6_HEX="0x$(echo -n "$CONTENT_WL6" | xxd -p | tr -d '\n')"
+CONTENT_WL6_HASH=$(cast keccak256 "$CONTENT_WL6_HEX")
+CONTENT_WL6_LEN=$(echo -n "$CONTENT_WL6" | wc -c | tr -d ' ')
+
+cast_send "$PK_WRITER_A" "$NOVEL_CORE" \
+    "submitChapter(uint64,uint64,(bytes32,uint64,bytes))" "$NOVEL_ID" "6" \
+    "($CONTENT_WL6_HASH,$CONTENT_WL6_LEN,$CONTENT_WL6_HEX)" \
+    --value 0.01ether > /dev/null
+pass "Writer A submitted chapter 9 (extends world line, child of 6)"
+
+# Submit a chapter extending the non-world-line branch (chapter 7) for nomination test
 CONTENT_NWL="The rogue timeline deepens. Characters from the alternate reality discover echoes of the main timeline. This branch won't be in DFS candidates but can be nominated. A parallel universe of creative possibilities unfolds."
 CONTENT_NWL_HEX="0x$(echo -n "$CONTENT_NWL" | xxd -p | tr -d '\n')"
 CONTENT_NWL_HASH=$(cast keccak256 "$CONTENT_NWL_HEX")
@@ -462,62 +477,62 @@ cast_send "$PK_WRITER_B" "$NOVEL_CORE" \
     "submitChapter(uint64,uint64,(bytes32,uint64,bytes))" "$NOVEL_ID" "7" \
     "($CONTENT_NWL_HASH,$CONTENT_NWL_LEN,$CONTENT_NWL_HEX)" \
     --value 0.01ether > /dev/null
-pass "Writer B submitted chapter 9 (extends non-world-line branch, child of 7)"
+pass "Writer B submitted chapter 10 (extends non-world-line branch, child of 7)"
 
 # Wait for minRoundGap
 advance_time 3
 
 # Start round 3
-cast_send "$PK_KEEPER" "$NOVEL_CORE" "startRound(uint64)" "$NOVEL_ID" > /dev/null
+cast_send "$PK_KEEPER" "$ROUND_MANAGER" "startRound(uint64)" "$NOVEL_ID" > /dev/null
 pass "Keeper: startRound (round 3)"
 
-# During Nominating phase, nominate the non-world-line chapter 9
-cast_send "$PK_USER" "$NOVEL_CORE" \
-    "nominateCandidate(uint64,uint64)" "$NOVEL_ID" "9" \
+# During Nominating phase, nominate the non-world-line chapter 10
+cast_send "$PK_USER" "$ROUND_MANAGER" \
+    "nominateCandidate(uint64,uint64)" "$NOVEL_ID" "10" \
     --value 0.02ether > /dev/null
-pass "User nominated chapter 9 (non-world-line descendant, paid nominationFee)"
+pass "User nominated chapter 10 (non-world-line descendant, paid nominationFee)"
 
 # Verify nomination was recorded
-R3_DATA=$(cast_call "$NOVEL_CORE" "getRoundData(uint64,uint32)((uint64[],bool[],uint64[],uint64,uint64,uint64,bool))" "$NOVEL_ID" "3")
+R3_DATA=$(cast_call "$ROUND_MANAGER" "getRoundData(uint64,uint32)((uint64[],bool[],uint64[],uint64,uint64,uint64,bool))" "$NOVEL_ID" "3")
 info "Round 3 data (after nomination): $R3_DATA"
 
 # closeNomination
 advance_time 3
-cast_send "$PK_KEEPER" "$NOVEL_CORE" "closeNomination(uint64)" "$NOVEL_ID" > /dev/null
+cast_send "$PK_KEEPER" "$ROUND_MANAGER" "closeNomination(uint64)" "$NOVEL_ID" > /dev/null
 pass "Keeper: closeNomination (round 3)"
 
 # Commit -- Voter A votes for the nominated chapter 9
 SALT_R3_A="0x0000000000000000000000000000000000000000000000000000000000000005"
-COMMIT_R3_A=$(cast keccak256 $(cast abi-encode --packed "(uint64,bytes32)" 9 "$SALT_R3_A"))
-cast_send "$PK_VOTER_A" "$NOVEL_CORE" \
+COMMIT_R3_A=$(cast keccak256 $(cast abi-encode --packed "(uint64,bytes32)" 10 "$SALT_R3_A"))
+cast_send "$PK_VOTER_A" "$ROUND_MANAGER" \
     "commitVote(uint64,bytes32)" "$NOVEL_ID" "$COMMIT_R3_A" \
     --value 0.01ether > /dev/null
-pass "Voter A committed (round 3, for nominated chapter 9)"
+pass "Voter A committed (round 3, for nominated chapter 10)"
 
 SALT_R3_B="0x0000000000000000000000000000000000000000000000000000000000000006"
 COMMIT_R3_B=$(cast keccak256 $(cast abi-encode --packed "(uint64,bytes32)" 8 "$SALT_R3_B"))
-cast_send "$PK_VOTER_B" "$NOVEL_CORE" \
+cast_send "$PK_VOTER_B" "$ROUND_MANAGER" \
     "commitVote(uint64,bytes32)" "$NOVEL_ID" "$COMMIT_R3_B" \
     --value 0.01ether > /dev/null
 pass "Voter B committed (round 3, for chapter 8)"
 
 # closeCommit
 advance_time 3
-cast_send "$PK_KEEPER" "$NOVEL_CORE" "closeCommit(uint64)" "$NOVEL_ID" > /dev/null
+cast_send "$PK_KEEPER" "$ROUND_MANAGER" "closeCommit(uint64)" "$NOVEL_ID" > /dev/null
 pass "Keeper: closeCommit (round 3)"
 
 # Reveal
-cast_send "$PK_VOTER_A" "$NOVEL_CORE" \
-    "revealVote(uint64,uint64,bytes32)" "$NOVEL_ID" 9 "$SALT_R3_A" > /dev/null
+cast_send "$PK_VOTER_A" "$ROUND_MANAGER" \
+    "revealVote(uint64,uint64,bytes32)" "$NOVEL_ID" 10 "$SALT_R3_A" > /dev/null
 pass "Voter A revealed (round 3)"
 
-cast_send "$PK_VOTER_B" "$NOVEL_CORE" \
+cast_send "$PK_VOTER_B" "$ROUND_MANAGER" \
     "revealVote(uint64,uint64,bytes32)" "$NOVEL_ID" 8 "$SALT_R3_B" > /dev/null
 pass "Voter B revealed (round 3)"
 
 # Settle
 advance_time 3
-cast_send "$PK_KEEPER" "$NOVEL_CORE" "settleRound(uint64)" "$NOVEL_ID" > /dev/null
+cast_send "$PK_KEEPER" "$ROUND_MANAGER" "settleRound(uint64)" "$NOVEL_ID" > /dev/null
 pass "Keeper: settleRound (round 3 settled, nomination worked)"
 
 R3_WORLD_LINES=$(cast_call "$NOVEL_CORE" "getWorldLineAncestors(uint64)(uint64[])" "$NOVEL_ID")
@@ -531,13 +546,13 @@ info "Tips & BountyBoard"
 info "========================================"
 
 # Tip novel (through NovelCore)
-cast_send "$PK_VOTER_B" "$NOVEL_CORE" "tipNovel(uint64)" "$NOVEL_ID" --value 0.05ether > /dev/null
+cast_send "$PK_VOTER_B" "$PRIZE_POOL" "tipNovel(uint64)" "$NOVEL_ID" --value 0.05ether > /dev/null
 POOL_AFTER_TIP=$(cast_call "$PRIZE_POOL" "getPoolBalance(uint64)(uint256)" "$NOVEL_ID")
 pass "Tipped novel 0.05 ETH (pool balance: $POOL_AFTER_TIP)"
 
 # Tip chapter (through NovelCore -- 50% to author, 50% to pool)
 WRITER_A_BAL_BEFORE=$(cast balance --rpc-url "$RPC" "$ADDR_WRITER_A")
-cast_send "$PK_USER" "$NOVEL_CORE" "tipChapter(uint64)" "2" --value 0.02ether > /dev/null
+cast_send "$PK_USER" "$PRIZE_POOL" "tipChapter(uint64)" "2" --value 0.02ether > /dev/null
 WRITER_A_BAL_AFTER=$(cast balance --rpc-url "$RPC" "$ADDR_WRITER_A")
 pass "Tipped chapter 2 (Writer A) 0.02 ETH (50/50 split)"
 info "Writer A balance change: $WRITER_A_BAL_BEFORE -> $WRITER_A_BAL_AFTER"
@@ -555,7 +570,7 @@ cast_send "$PK_USER" "$BOUNTY_BOARD" \
     --value 0.01ether > /dev/null
 pass "Bounty #0 created on chapter 6 (deadline=$BOUNTY_DEADLINE)"
 
-# Submit a continuation of chapter 6 (before deadline) -> chapter 10
+# Submit an additional continuation of chapter 6 (before deadline) -> chapter 11
 CONTENT_BOUNTY="Continuation written to claim the bounty. The alliance formed in chapter 6 faces its first real test as an ancient threat emerges from the depths of the blockchain. Only by working together can they hope to survive this challenge."
 CONTENT_BOUNTY_HEX="0x$(echo -n "$CONTENT_BOUNTY" | xxd -p | tr -d '\n')"
 CONTENT_BOUNTY_HASH=$(cast keccak256 "$CONTENT_BOUNTY_HEX")
@@ -565,7 +580,7 @@ cast_send "$PK_WRITER_A" "$NOVEL_CORE" \
     "submitChapter(uint64,uint64,(bytes32,uint64,bytes))" "$NOVEL_ID" "6" \
     "($CONTENT_BOUNTY_HASH,$CONTENT_BOUNTY_LEN,$CONTENT_BOUNTY_HEX)" \
     --value 0.01ether > /dev/null
-pass "Writer A submitted chapter 10 (continuation of bounty target chapter 6)"
+pass "Writer A submitted chapter 11 (continuation of bounty target chapter 6)"
 
 # Wait for bounty deadline to pass
 advance_time 61
@@ -630,7 +645,7 @@ FORK_NOVEL_ID=2
 pass "Novel #$FORK_NOVEL_ID forked from chapter 3"
 
 # Verify fork novel exists
-FORK_NOVEL_COUNT=$(cast_call "$NOVEL_CORE" "getNovelCount()(uint64)")
+FORK_NOVEL_COUNT=$(cast_call "$NOVEL_CORE" "novelCount()(uint64)")
 [ "$(echo "$FORK_NOVEL_COUNT" | tr -d ' ')" = "2" ] || fail "Novel count should be 2"
 pass "Fork verified (novel count=2)"
 
@@ -651,7 +666,7 @@ info "========================================"
 
 # Complete the forked novel (creator = ADDR_USER can call anytime)
 # Novel must be in Idle phase (which it is since no rounds started)
-cast_send "$PK_USER" "$NOVEL_CORE" "completeNovel(uint64)" "$FORK_NOVEL_ID" > /dev/null
+cast_send "$PK_USER" "$ROUND_MANAGER" "completeNovel(uint64)" "$FORK_NOVEL_ID" > /dev/null
 pass "Forked novel #$FORK_NOVEL_ID completed"
 
 # Verify novel is no longer active
@@ -677,8 +692,8 @@ pass "Fork creator claimed final distribution"
 #  FINAL SUMMARY
 # ═══════════════════════════════════════════════════════════════
 FINAL_POOL=$(cast_call "$PRIZE_POOL" "getPoolBalance(uint64)(uint256)" "$NOVEL_ID")
-FINAL_CHAPTERS=$(cast_call "$NOVEL_CORE" "getChapterCount()(uint64)")
-FINAL_NOVELS=$(cast_call "$NOVEL_CORE" "getNovelCount()(uint64)")
+FINAL_CHAPTERS=$(cast_call "$NOVEL_CORE" "chapterCount()(uint64)")
+FINAL_NOVELS=$(cast_call "$NOVEL_CORE" "novelCount()(uint64)")
 
 info "Final state: novels=$FINAL_NOVELS, chapters=$FINAL_CHAPTERS, novel1 pool=$FINAL_POOL wei"
 

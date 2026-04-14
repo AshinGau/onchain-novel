@@ -12,7 +12,7 @@ import {DataTypes} from "../libraries/DataTypes.sol";
 /// @title VotingEngine
 /// @notice Commit-Reveal voting engine using Stake-to-Vote
 /// @dev Manages voting rounds identified by (novelId, round) pairs.
-///      NovelCore handles phase enforcement; this contract manages vote data and rewards.
+///      RoundManager handles phase enforcement; this contract manages vote data and rewards.
 contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuard, UUPSUpgradeable, IVotingEngine {
     // ============================================================
     //                        CONSTANTS
@@ -29,8 +29,8 @@ contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuard, UUP
     //                         STORAGE
     // ============================================================
 
-    /// @notice Authorized NovelCore contract address
-    address public novelCore;
+    /// @notice Authorized RoundManager contract address
+    address public roundManager;
 
     /// @dev Per-round voting state, keyed by keccak256(novelId, round)
     struct VotingRoundData {
@@ -69,7 +69,7 @@ contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuard, UUP
     //                         ERRORS
     // ============================================================
 
-    error OnlyNovelCore();
+    error OnlyRoundManager();
     error VotingNotInitialized();
     error VotingAlreadyInitialized();
     error AlreadyCommitted();
@@ -90,8 +90,8 @@ contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuard, UUP
     //                        MODIFIERS
     // ============================================================
 
-    modifier onlyNovelCore() {
-        if (msg.sender != novelCore) revert OnlyNovelCore();
+    modifier onlyRoundManager() {
+        if (msg.sender != roundManager) revert OnlyRoundManager();
         _;
     }
 
@@ -104,21 +104,21 @@ contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuard, UUP
         _disableInitializers();
     }
 
-    function initialize(address owner_, address novelCore_) external initializer {
+    function initialize(address owner_, address roundManager_) external initializer {
         __Ownable_init(owner_);
-        novelCore = novelCore_;
+        roundManager = roundManager_;
     }
 
     // ============================================================
     //                     ADMIN FUNCTIONS
     // ============================================================
 
-    event NovelCoreUpdated(address indexed oldAddr, address indexed newAddr);
+    event RoundManagerUpdated(address indexed oldAddr, address indexed newAddr);
 
-    function setNovelCore(address newNovelCore) external onlyOwner {
-        address old = novelCore;
-        novelCore = newNovelCore;
-        emit NovelCoreUpdated(old, newNovelCore);
+    function setRoundManager(address newRoundManager) external onlyOwner {
+        address old = roundManager;
+        roundManager = newRoundManager;
+        emit RoundManagerUpdated(old, newRoundManager);
     }
 
     // ============================================================
@@ -126,7 +126,7 @@ contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuard, UUP
     // ============================================================
 
     /// @inheritdoc IVotingEngine
-    function initializeVoting(uint64 novelId, uint32 round, uint64[] calldata candidates) external onlyNovelCore {
+    function initializeVoting(uint64 novelId, uint32 round, uint64[] calldata candidates) external onlyRoundManager {
         if (candidates.length == 0) revert NoCandidates();
 
         bytes32 roundKey = _roundKey(novelId, round);
@@ -143,7 +143,7 @@ contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuard, UUP
     }
 
     /// @inheritdoc IVotingEngine
-    function addCandidate(uint64 novelId, uint32 round, uint64 candidateId) external onlyNovelCore {
+    function addCandidate(uint64 novelId, uint32 round, uint64 candidateId) external onlyRoundManager {
         bytes32 roundKey = _roundKey(novelId, round);
         VotingRoundData storage rd = _votingRounds[roundKey];
         if (!rd.initialized) revert VotingNotInitialized();
@@ -155,7 +155,7 @@ contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuard, UUP
     /// @inheritdoc IVotingEngine
     function commitVote(uint64 novelId, uint32 round, address voter, bytes32 commitHash, uint256 stakeAmount)
         external
-        onlyNovelCore
+        onlyRoundManager
     {
         bytes32 roundKey = _roundKey(novelId, round);
         VotingRoundData storage rd = _votingRounds[roundKey];
@@ -179,7 +179,7 @@ contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuard, UUP
     /// @inheritdoc IVotingEngine
     function revealVote(uint64 novelId, uint32 round, address voter, uint64 candidateId, bytes32 salt)
         external
-        onlyNovelCore
+        onlyRoundManager
     {
         bytes32 roundKey = _roundKey(novelId, round);
         VotingRoundData storage rd = _votingRounds[roundKey];
@@ -210,7 +210,7 @@ contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuard, UUP
     /// @inheritdoc IVotingEngine
     function tallyVotes(uint64 novelId, uint32 round, uint32 winnerCount)
         external
-        onlyNovelCore
+        onlyRoundManager
         returns (uint64[] memory winners)
     {
         bytes32 roundKey = _roundKey(novelId, round);
@@ -272,7 +272,7 @@ contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuard, UUP
     /// @inheritdoc IVotingEngine
     function settleVoterRewards(uint64 novelId, uint32 round, uint256 voterRewardPool, uint256 voteStake)
         external
-        onlyNovelCore
+        onlyRoundManager
         returns (uint256 excessReturn)
     {
         bytes32 roundKey = _roundKey(novelId, round);
@@ -325,7 +325,7 @@ contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuard, UUP
             }
         }
 
-        // ---- Excess (cap savings + undistributed pool) returns to caller (NovelCore) ----
+        // ---- Excess (cap savings + undistributed pool) returns to caller (RoundManager) ----
         excessReturn = totalRewardPool > totalDistributed ? totalRewardPool - totalDistributed : 0;
         if (excessReturn > 0) {
             (bool sent,) = msg.sender.call{value: excessReturn}("");
@@ -338,7 +338,7 @@ contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuard, UUP
     /// @inheritdoc IVotingEngine
     function claimVotingReward(uint64 novelId, uint32 round, address voter)
         external
-        onlyNovelCore
+        onlyRoundManager
         nonReentrant
         returns (uint256 amount)
     {
@@ -364,10 +364,10 @@ contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuard, UUP
         return (voteStake * UNREVEAL_PENALTY_RATE_BP) / 10000;
     }
 
-    /// @notice Accept ETH transfers from NovelCore (stake deposits + voter rewards)
+    /// @notice Accept ETH transfers from RoundManager (stake deposits + voter rewards)
     /// @dev Whitelisted to prevent stray ETH from accumulating
     receive() external payable {
-        if (msg.sender != novelCore) revert OnlyNovelCore();
+        if (msg.sender != roundManager) revert OnlyRoundManager();
     }
 
     // ============================================================

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useAccount } from "wagmi";
 import { parseEther } from "viem";
 import { useTxAction } from "@/hooks/use-tx-action";
-import { NOVEL_CORE_ADDRESS, novelCoreAbi } from "@/lib/contracts";
+import { PRIZE_POOL_ADDRESS, prizePoolAbi } from "@/lib/contracts";
 import { TxStatusLabel, txButtonLabel } from "@/components/tx-status";
 
 export function TipButton({ chapterId }: { chapterId: string }) {
@@ -19,8 +19,8 @@ export function TipButton({ chapterId }: { chapterId: string }) {
     const value = parseEther(amount);
     await send(
       {
-        address: NOVEL_CORE_ADDRESS,
-        abi: novelCoreAbi,
+        address: PRIZE_POOL_ADDRESS,
+        abi: prizePoolAbi,
         functionName: "tipChapter",
         args: [BigInt(chapterId)],
         value,

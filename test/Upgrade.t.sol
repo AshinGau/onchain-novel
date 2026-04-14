@@ -83,7 +83,7 @@ contract UpgradeTest is TestBase {
 
         DataTypes.Novel memory novel = novelCore.getNovel(novelId);
         assertEq(novel.currentRound, 1);
-        assertTrue(novelCore.getRoundData(novelId, 1).settled);
+        assertTrue(roundManager.getRoundData(novelId, 1).settled);
     }
 
     // ----------------------------------------------------------

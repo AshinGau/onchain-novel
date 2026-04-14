@@ -65,12 +65,12 @@ advance() {
 }
 
 chapter_count() {
-    cast call --rpc-url "$RPC" "$NOVEL_CORE_ADDRESS" "getChapterCount()(uint64)" 2>/dev/null \
+    cast call --rpc-url "$RPC" "$NOVEL_CORE_ADDRESS" "chapterCount()(uint64)" 2>/dev/null \
         | awk '{print $1}'
 }
 
 novel_count() {
-    cast call --rpc-url "$RPC" "$NOVEL_CORE_ADDRESS" "getNovelCount()(uint64)" 2>/dev/null \
+    cast call --rpc-url "$RPC" "$NOVEL_CORE_ADDRESS" "novelCount()(uint64)" 2>/dev/null \
         | awk '{print $1}'
 }
 
@@ -99,9 +99,9 @@ submit_chapter() {
 run_round() {
     local novel_id="$1" cand_a="$2" cand_b="$3" seed="$4"
 
-    cast_send "$PK_KEEPER" "$NOVEL_CORE_ADDRESS" "startRound(uint64)" "$novel_id"
+    cast_send "$PK_KEEPER" "$ROUND_MANAGER_ADDRESS" "startRound(uint64)" "$novel_id"
     advance 6
-    cast_send "$PK_KEEPER" "$NOVEL_CORE_ADDRESS" "closeNomination(uint64)" "$novel_id"
+    cast_send "$PK_KEEPER" "$ROUND_MANAGER_ADDRESS" "closeNomination(uint64)" "$novel_id"
 
     local salt_a salt_b commit_a commit_b
     salt_a=$(printf '0x%064x' $(( seed * 2 + 1 )))
@@ -109,21 +109,21 @@ run_round() {
     commit_a=$(cast keccak256 "$(cast abi-encode --packed "(uint64,bytes32)" "$cand_a" "$salt_a")")
     commit_b=$(cast keccak256 "$(cast abi-encode --packed "(uint64,bytes32)" "$cand_b" "$salt_b")")
 
-    cast_send_value "$PK_VOTER_A" "0.001ether" "$NOVEL_CORE_ADDRESS" \
+    cast_send_value "$PK_VOTER_A" "0.001ether" "$ROUND_MANAGER_ADDRESS" \
         "commitVote(uint64,bytes32)" "$novel_id" "$commit_a"
-    cast_send_value "$PK_VOTER_B" "0.001ether" "$NOVEL_CORE_ADDRESS" \
+    cast_send_value "$PK_VOTER_B" "0.001ether" "$ROUND_MANAGER_ADDRESS" \
         "commitVote(uint64,bytes32)" "$novel_id" "$commit_b"
 
     advance 6
-    cast_send "$PK_KEEPER" "$NOVEL_CORE_ADDRESS" "closeCommit(uint64)" "$novel_id"
+    cast_send "$PK_KEEPER" "$ROUND_MANAGER_ADDRESS" "closeCommit(uint64)" "$novel_id"
 
-    cast_send "$PK_VOTER_A" "$NOVEL_CORE_ADDRESS" \
+    cast_send "$PK_VOTER_A" "$ROUND_MANAGER_ADDRESS" \
         "revealVote(uint64,uint64,bytes32)" "$novel_id" "$cand_a" "$salt_a"
-    cast_send "$PK_VOTER_B" "$NOVEL_CORE_ADDRESS" \
+    cast_send "$PK_VOTER_B" "$ROUND_MANAGER_ADDRESS" \
         "revealVote(uint64,uint64,bytes32)" "$novel_id" "$cand_b" "$salt_b"
 
     advance 6
-    cast_send "$PK_KEEPER" "$NOVEL_CORE_ADDRESS" "settleRound(uint64)" "$novel_id"
+    cast_send "$PK_KEEPER" "$ROUND_MANAGER_ADDRESS" "settleRound(uint64)" "$novel_id"
     advance 6   # minRoundGap
 }
 
@@ -496,7 +496,7 @@ set_nickname() {
     hex="0x$(printf '%s' "$name" | xxd -p | tr -d '\n')"
     # Right-pad to 64 hex chars (32 bytes)
     while [ ${#hex} -lt 66 ]; do hex="${hex}0"; done
-    cast_send "$pk" "$NOVEL_CORE_ADDRESS" "setNickname(bytes32)" "$hex"
+    cast_send "$pk" "$USER_REGISTRY_ADDRESS" "setNickname(bytes32)" "$hex"
 }
 
 set_nickname "$PK_CREATOR" "StoryCreator"

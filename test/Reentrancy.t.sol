@@ -135,42 +135,42 @@ contract ReentrancyTest is TestBase {
 
         // Run a full round so voter can claim
         vm.prank(keeper);
-        novelCore.startRound(novelId);
+        roundManager.startRound(novelId);
 
         vm.warp(block.timestamp + NOMINATE_DURATION + 1);
         vm.prank(keeper);
-        novelCore.closeNomination(novelId);
+        roundManager.closeNomination(novelId);
 
-        DataTypes.RoundData memory rd = novelCore.getRoundData(novelId, 1);
+        DataTypes.RoundData memory rd = roundManager.getRoundData(novelId, 1);
         uint64 target = rd.candidates[0];
         bytes32 salt = bytes32("vrsalt");
         bytes32 commitHash = keccak256(abi.encodePacked(target, salt));
 
         vm.prank(voter1);
-        novelCore.commitVote{value: VOTE_STAKE}(novelId, commitHash);
+        roundManager.commitVote{value: VOTE_STAKE}(novelId, commitHash);
 
         vm.warp(block.timestamp + COMMIT_DURATION + 1);
         vm.prank(keeper);
-        novelCore.closeCommit(novelId);
+        roundManager.closeCommit(novelId);
 
         vm.prank(voter1);
-        novelCore.revealVote(novelId, target, salt);
+        roundManager.revealVote(novelId, target, salt);
 
         vm.warp(block.timestamp + REVEAL_DURATION + 1);
         vm.prank(keeper);
-        novelCore.settleRound(novelId);
+        roundManager.settleRound(novelId);
 
         // Claim voting reward through NovelCore
         uint256 balBefore = voter1.balance;
         vm.prank(voter1);
-        novelCore.claimVotingReward(novelId, 1);
+        roundManager.claimVotingReward(novelId, 1);
         uint256 amount = voter1.balance - balBefore;
         assertTrue(amount >= VOTE_STAKE, "should get at least stake back");
 
         // Second claim should revert (already claimed)
         vm.prank(voter1);
         vm.expectRevert();
-        novelCore.claimVotingReward(novelId, 1);
+        roundManager.claimVotingReward(novelId, 1);
     }
 
     // ----------------------------------------------------------

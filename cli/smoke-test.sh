@@ -113,7 +113,7 @@ pass "CLI built"
 
 # -- Start anvil --
 info "Starting anvil on port ${RPC_PORT}..."
-anvil --port "$RPC_PORT" --block-time 1 --code-size-limit 50000 --silent &
+anvil --port "$RPC_PORT" --block-time 1 --silent &
 ANVIL_PID=$!
 sleep 2
 cast block-number --rpc-url "$RPC" > /dev/null 2>&1 || { fail "Anvil not reachable"; exit 1; }
@@ -132,7 +132,7 @@ pass "DB ready"
 info "Deploying contracts..."
 DEPLOY_LOG="/tmp/cli-smoke-deploy-$(date +%s).log"
 PRIVATE_KEY="$PK_DEPLOYER" forge script script/Deploy.s.sol \
-  --rpc-url "$RPC" --broadcast --disable-code-size-limit > "$DEPLOY_LOG" 2>&1
+  --rpc-url "$RPC" --broadcast > "$DEPLOY_LOG" 2>&1
 BROADCAST_JSON="broadcast/Deploy.s.sol/31337/run-latest.json"
 [ -f "$BROADCAST_JSON" ] || { fail "Broadcast file missing"; tail -20 "$DEPLOY_LOG"; exit 1; }
 

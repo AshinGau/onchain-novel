@@ -22,38 +22,8 @@ interface INovelCore {
         uint64 indexed novelId, uint64 indexed chapterId, address indexed author, uint64 parentId, uint32 depth
     );
 
-    /// @notice Emitted when a new voting round starts (DFS candidates generated)
-    event RoundStarted(uint64 indexed novelId, uint32 round, uint64[] candidates);
-
-    /// @notice Emitted when the nomination phase closes and commit phase begins
-    event NominationClosed(uint64 indexed novelId, uint32 round);
-
-    /// @notice Emitted when the commit phase closes and reveal phase begins
-    event CommitClosed(uint64 indexed novelId, uint32 round);
-
-    /// @notice Emitted when a round is settled and world lines are updated
-    event RoundSettled(uint64 indexed novelId, uint32 round, uint64[] worldLines);
-
-    /// @notice Emitted when a vote is committed
-    event VoteCommitted(uint64 indexed novelId, uint32 round, address indexed voter);
-
-    /// @notice Emitted when a vote is revealed
-    event VoteRevealed(uint64 indexed novelId, uint32 round, address indexed voter, uint64 candidateId);
-
-    /// @notice Emitted when a user claims accumulated rewards
+    /// @notice Emitted when a user claims prize pool rewards
     event RewardClaimed(uint64 indexed novelId, address indexed recipient, uint256 amount);
-
-    /// @notice Emitted when a novel is permanently completed
-    event NovelCompleted(uint64 indexed novelId);
-
-    /// @notice Emitted when a novel or chapter receives a tip
-    event Tipped(uint64 indexed novelId, uint64 indexed chapterId, address indexed tipper, uint256 amount);
-
-    /// @notice Emitted when a candidate is nominated during Nominating phase
-    event CandidateNominated(uint64 indexed novelId, uint32 round, uint64 chapterId, address nominator);
-
-    /// @notice Emitted when a keeper receives a reward for state transition
-    event KeeperRewarded(uint64 indexed novelId, address indexed keeper, uint256 amount);
 
     /// @notice Emitted when novel metadata is updated
     event NovelMetadataUpdated(uint64 indexed novelId, string title, string description, string coverUri);
@@ -100,81 +70,46 @@ interface INovelCore {
         payable;
 
     // ============================================================
-    //                  ROUND STATE TRANSITIONS
+    //                     REWARDS
     // ============================================================
 
-    /// @notice Start a new voting round (keeper-driven)
-    /// @dev Performs DFS from worldLineAncestors to generate candidate set.
-    ///      Requires: minRoundGap elapsed since last settle, DFS finds >= 1 candidate.
-    /// @param novelId The novel to start a round for
-    function startRound(uint64 novelId) external;
-
-    /// @notice Close nomination phase and enter commit phase
-    /// @dev Requires: nominateDuration has elapsed
-    /// @param novelId The novel
-    function closeNomination(uint64 novelId) external;
-
-    /// @notice Close commit phase and enter reveal phase
-    /// @dev Requires: commitDuration has elapsed
-    /// @param novelId The novel
-    function closeCommit(uint64 novelId) external;
-
-    /// @notice Settle the round: tally votes, select world lines, distribute rewards
-    /// @dev Requires: revealDuration has elapsed. Returns to Idle phase.
-    /// @param novelId The novel
-    function settleRound(uint64 novelId) external;
-
-    // ============================================================
-    //                   NOMINATION & VOTING
-    // ============================================================
-
-    /// @notice Nominate an additional candidate chain during Nominating phase
-    /// @dev Requires msg.value >= nominationFee. Fee goes to prize pool.
-    /// @param novelId The novel
-    /// @param chapterId The chapter ID representing the chain to nominate
-    function nominateCandidate(uint64 novelId, uint64 chapterId) external payable;
-
-    /// @notice Submit an encrypted vote commitment during Committing phase
-    /// @dev commitHash = keccak256(abi.encodePacked(candidateId, salt)).
-    ///      Requires msg.value >= voteStake. One vote per address per round.
-    /// @param novelId The novel
-    /// @param commitHash The encrypted vote hash
-    function commitVote(uint64 novelId, bytes32 commitHash) external payable;
-
-    /// @notice Reveal a previously committed vote during Revealing phase
-    /// @param novelId The novel
-    /// @param candidateId The chapter ID voted for
-    /// @param salt The salt used in the commit hash
-    function revealVote(uint64 novelId, uint64 candidateId, bytes32 salt) external;
-
-    // ============================================================
-    //                     REWARDS & TIPS
-    // ============================================================
-
-    /// @notice Claim accumulated rewards (creator royalty, author rewards, keeper rewards)
+    /// @notice Claim accumulated prize pool rewards (creator royalty, author rewards)
     /// @param novelId The novel to claim rewards from
     function claimReward(uint64 novelId) external;
-
-    /// @notice Tip a novel (full amount goes to prize pool)
-    /// @param novelId The novel to tip
-    function tipNovel(uint64 novelId) external payable;
-
-    /// @notice Tip a specific chapter (50% to author, 50% to prize pool)
-    /// @param chapterId The chapter to tip
-    function tipChapter(uint64 chapterId) external payable;
 
     // ============================================================
     //                      MANAGEMENT
     // ============================================================
 
-    /// @notice Permanently complete a novel (creator anytime, anyone after inactivity timeout)
-    /// @param novelId The novel to complete
-    function completeNovel(uint64 novelId) external;
-
     /// @notice Update novel metadata (only callable by novel creator)
     /// @param novelId The novel
     /// @param metadata New metadata values
     function updateNovelMetadata(uint64 novelId, DataTypes.NovelMetadata calldata metadata) external;
+
+    // ============================================================
+    //         PRIVILEGED SETTERS (callable by RoundManager only)
+    // ============================================================
+
+    /// @notice Increment currentRound and set the new round phase. Returns the new round number.
+    function advanceRound(uint64 novelId, DataTypes.RoundPhase phase, uint64 phaseStartTime)
+        external
+        returns (uint32 newRound);
+
+    /// @notice Set the round phase and phase start time without changing round number.
+    function setNovelPhase(uint64 novelId, DataTypes.RoundPhase phase, uint64 phaseStartTime) external;
+
+    /// @notice Apply round settlement: replace world line ancestors, refresh world-line author flags,
+    ///         set lastSettleTime, and reset roundPhase.
+    function applyWorldLineSettlement(
+        uint64 novelId,
+        uint64[] calldata newAncestors,
+        uint64[] calldata prevAncestors,
+        DataTypes.RoundPhase newPhase,
+        uint64 settleTime
+    ) external;
+
+    /// @notice Mark a novel as inactive (called by completeNovel).
+    function setNovelInactive(uint64 novelId) external;
 
     // ============================================================
     //                        QUERIES
@@ -189,35 +124,20 @@ interface INovelCore {
     /// @notice Get current world line ancestor chapter IDs for a novel
     function getWorldLineAncestors(uint64 novelId) external view returns (uint64[] memory);
 
-    /// @notice Get round data for a specific round
-    function getRoundData(uint64 novelId, uint32 round) external view returns (DataTypes.RoundData memory);
-
     /// @notice Get direct child chapter IDs for a chapter
     function getChapterChildren(uint64 chapterId) external view returns (uint64[] memory);
 
     /// @notice Check if an address is an author on the current world lines
-    /// @dev Used by RulesEngine for rule proposal voting eligibility
+    /// @dev Used by RulesEngine for rule proposal voting eligibility (auto-generated public mapping getter)
     function isWorldLineAuthor(uint64 novelId, address author) external view returns (bool);
 
-    /// @notice Get the total number of novels created
-    function getNovelCount() external view returns (uint64);
+    /// @notice Total number of novels created (auto-generated public counter getter)
+    function novelCount() external view returns (uint64);
 
-    /// @notice Get the total number of chapters across all novels
-    function getChapterCount() external view returns (uint64);
+    /// @notice Total number of chapters across all novels (auto-generated public counter getter)
+    function chapterCount() external view returns (uint64);
 
     /// @notice Get novel metadata
     function getNovelMetadata(uint64 novelId) external view returns (DataTypes.NovelMetadata memory);
 
-    // ============================================================
-    //                       NICKNAME
-    // ============================================================
-
-    /// @notice Set a display nickname for the caller (max 32 bytes UTF-8)
-    /// @param nickname The nickname encoded as bytes32
-    function setNickname(bytes32 nickname) external;
-
-    /// @notice Get the nickname for an address
-    /// @param user The address to look up
-    /// @return The nickname as bytes32 (bytes32(0) if not set)
-    function getNickname(address user) external view returns (bytes32);
 }

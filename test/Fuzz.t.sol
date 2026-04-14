@@ -130,7 +130,7 @@ contract FuzzTest is TestBase {
         poolFund = bound(poolFund, 0.01 ether, 50 ether);
 
         uint64 novelId = _createNovelWith(creator, _defaultConfig(), poolFund);
-        uint64 rootId = novelCore.getChapterCount();
+        uint64 rootId = novelCore.chapterCount();
 
         uint64 ch2 = _submitChapter(author1, novelId, rootId, "fuzz reward test chapter!!");
         _submitChapter(author2, novelId, rootId, "fuzz reward branch B chapter!");

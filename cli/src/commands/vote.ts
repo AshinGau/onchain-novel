@@ -34,7 +34,7 @@ export function registerVoteCommands(program: Command): void {
       try {
         const client = getWalletClient();
         const contracts = getContracts();
-        const hash = await startRoundTx(client, BigInt(novelId), contracts.novelCore);
+        const hash = await startRoundTx(client, BigInt(novelId), contracts.roundManager);
         txHash(hash);
         await waitForTx(hash);
         success("Round started");
@@ -51,7 +51,7 @@ export function registerVoteCommands(program: Command): void {
       try {
         const client = getWalletClient();
         const contracts = getContracts();
-        const hash = await closeNominationTx(client, BigInt(novelId), contracts.novelCore);
+        const hash = await closeNominationTx(client, BigInt(novelId), contracts.roundManager);
         txHash(hash);
         await waitForTx(hash);
         success("Nomination closed");
@@ -68,7 +68,7 @@ export function registerVoteCommands(program: Command): void {
       try {
         const client = getWalletClient();
         const contracts = getContracts();
-        const hash = await closeCommitTx(client, BigInt(novelId), contracts.novelCore);
+        const hash = await closeCommitTx(client, BigInt(novelId), contracts.roundManager);
         txHash(hash);
         await waitForTx(hash);
         success("Commit phase closed");
@@ -105,7 +105,7 @@ export function registerVoteCommands(program: Command): void {
           novelId: BigInt(novelId),
           chapterId: BigInt(chapterId),
           value,
-          novelCore: contracts.novelCore,
+          roundManager: contracts.roundManager,
         });
         txHash(hash);
         await waitForTx(hash);
@@ -157,7 +157,7 @@ export function registerVoteCommands(program: Command): void {
           novelId: BigInt(novelId),
           commitHash,
           value,
-          novelCore: contracts.novelCore,
+          roundManager: contracts.roundManager,
         });
         txHash(hash);
         await waitForTx(hash);
@@ -246,7 +246,7 @@ export function registerVoteCommands(program: Command): void {
           novelId: BigInt(novelId),
           candidateId: BigInt(candidateId),
           salt: saltBytes32,
-          novelCore: contracts.novelCore,
+          roundManager: contracts.roundManager,
         });
         txHash(hash);
         await waitForTx(hash);
@@ -264,7 +264,7 @@ export function registerVoteCommands(program: Command): void {
       try {
         const client = getWalletClient();
         const contracts = getContracts();
-        const hash = await settleRoundTx(client, BigInt(novelId), contracts.novelCore);
+        const hash = await settleRoundTx(client, BigInt(novelId), contracts.roundManager);
         txHash(hash);
         await waitForTx(hash);
         success("Round settled");
@@ -285,7 +285,7 @@ export function registerVoteCommands(program: Command): void {
           client,
           BigInt(novelId),
           parseInt(round),
-          contracts.novelCore,
+          contracts.roundManager,
         );
         txHash(hash);
         await waitForTx(hash);

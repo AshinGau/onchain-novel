@@ -55,7 +55,7 @@ contract GasProfileTest is TestBase {
 
         vm.prank(keeper);
         uint256 gasBefore = gasleft();
-        novelCore.startRound(novelId);
+        roundManager.startRound(novelId);
         uint256 gasUsed = gasBefore - gasleft();
 
         emit log_named_uint("Gas: startRound (5 chapters)", gasUsed);
@@ -91,7 +91,7 @@ contract GasProfileTest is TestBase {
 
         vm.prank(keeper);
         uint256 gasBefore = gasleft();
-        novelCore.startRound(novelId);
+        roundManager.startRound(novelId);
         uint256 gasUsed = gasBefore - gasleft();
 
         emit log_named_uint("Gas: startRound (20 chapters)", gasUsed);
@@ -107,13 +107,13 @@ contract GasProfileTest is TestBase {
         _submitChapter(author2, novelId, rootId, "voting gas benchmark branch B");
 
         vm.prank(keeper);
-        novelCore.startRound(novelId);
+        roundManager.startRound(novelId);
 
         vm.warp(block.timestamp + NOMINATE_DURATION + 1);
         vm.prank(keeper);
-        novelCore.closeNomination(novelId);
+        roundManager.closeNomination(novelId);
 
-        DataTypes.RoundData memory rd = novelCore.getRoundData(novelId, 1);
+        DataTypes.RoundData memory rd = roundManager.getRoundData(novelId, 1);
         uint64 target = rd.candidates[0];
         bytes32 salt = bytes32("gassalt");
         bytes32 commitHash = keccak256(abi.encodePacked(target, salt));
@@ -121,19 +121,19 @@ contract GasProfileTest is TestBase {
         // Commit gas
         vm.prank(voter1);
         uint256 gasBefore = gasleft();
-        novelCore.commitVote{value: VOTE_STAKE}(novelId, commitHash);
+        roundManager.commitVote{value: VOTE_STAKE}(novelId, commitHash);
         uint256 commitGas = gasBefore - gasleft();
 
         emit log_named_uint("Gas: commitVote", commitGas);
 
         vm.warp(block.timestamp + COMMIT_DURATION + 1);
         vm.prank(keeper);
-        novelCore.closeCommit(novelId);
+        roundManager.closeCommit(novelId);
 
         // Reveal gas
         vm.prank(voter1);
         gasBefore = gasleft();
-        novelCore.revealVote(novelId, target, salt);
+        roundManager.revealVote(novelId, target, salt);
         uint256 revealGas = gasBefore - gasleft();
 
         emit log_named_uint("Gas: revealVote", revealGas);
@@ -149,32 +149,32 @@ contract GasProfileTest is TestBase {
         uint64 ch3 = _submitChapter(author2, novelId, rootId, "settle gas second branch!!");
 
         vm.prank(keeper);
-        novelCore.startRound(novelId);
+        roundManager.startRound(novelId);
 
         vm.warp(block.timestamp + NOMINATE_DURATION + 1);
         vm.prank(keeper);
-        novelCore.closeNomination(novelId);
+        roundManager.closeNomination(novelId);
 
-        DataTypes.RoundData memory rd = novelCore.getRoundData(novelId, 1);
+        DataTypes.RoundData memory rd = roundManager.getRoundData(novelId, 1);
         uint64 target = rd.candidates[0];
         bytes32 salt = bytes32("settlegas");
         bytes32 commitHash = keccak256(abi.encodePacked(target, salt));
 
         vm.prank(voter1);
-        novelCore.commitVote{value: VOTE_STAKE}(novelId, commitHash);
+        roundManager.commitVote{value: VOTE_STAKE}(novelId, commitHash);
 
         vm.warp(block.timestamp + COMMIT_DURATION + 1);
         vm.prank(keeper);
-        novelCore.closeCommit(novelId);
+        roundManager.closeCommit(novelId);
 
         vm.prank(voter1);
-        novelCore.revealVote(novelId, target, salt);
+        roundManager.revealVote(novelId, target, salt);
 
         vm.warp(block.timestamp + REVEAL_DURATION + 1);
 
         vm.prank(keeper);
         uint256 gasBefore = gasleft();
-        novelCore.settleRound(novelId);
+        roundManager.settleRound(novelId);
         uint256 gasUsed = gasBefore - gasleft();
 
         emit log_named_uint("Gas: settleRound", gasUsed);
