@@ -27,13 +27,21 @@ export function registerVoteTools(server: McpServer): void {
   // ── vote_start ──
   server.tool(
     "vote_start",
-    "Start a new voting round (keeper action). DFS generates candidate set automatically. Requires every current world line to have at least one continuation chapter (N >= worldLineCount). Reverts with InsufficientCandidates otherwise.",
-    { novelId: z.number().describe("Novel ID") },
+    "Start a new voting round (keeper / owner only). Caller must supply `leaves`: leaf chapter IDs " +
+      "(one per current world line, deepest leaves preferred). Each must have no children.",
+    {
+      novelId: z.number().describe("Novel ID"),
+      leaves: z.array(z.number()).describe("Leaf chapter IDs (>= worldLineCount entries, true tree leaves)"),
+    },
     async (params) => {
       try {
         const wallet = getWalletClient();
         const pub = getPublicClient();
-        const hash = await startRound(wallet, BigInt(params.novelId), config.roundManager);
+        const hash = await startRound(wallet, {
+          novelId: BigInt(params.novelId),
+          leaves: params.leaves.map((x) => BigInt(x)),
+          roundManager: config.roundManager,
+        });
         const receipt = await pub.waitForTransactionReceipt({ hash });
         return ok(`Round started for Novel #${params.novelId}.\nTx: ${hash}\nBlock: ${receipt.blockNumber}`);
       } catch (error) {
@@ -176,13 +184,21 @@ export function registerVoteTools(server: McpServer): void {
   // ── vote_settle ──
   server.tool(
     "vote_settle",
-    "Settle the current voting round (keeper action). Determines winners and distributes rewards.",
-    { novelId: z.number().describe("Novel ID") },
+    "Settle the current voting round (keeper / owner only). Caller supplies winnerPaths: " +
+      "winnerPaths[i] = [winners[i], parent, ..., prevWorldLineAncestor]. Empty path = no rewards.",
+    {
+      novelId: z.number().describe("Novel ID"),
+      winnerPaths: z.array(z.array(z.number())).describe("Per-winner parent chain to a prev worldLineAncestor"),
+    },
     async (params) => {
       try {
         const wallet = getWalletClient();
         const pub = getPublicClient();
-        const hash = await settleRound(wallet, BigInt(params.novelId), config.roundManager);
+        const hash = await settleRound(wallet, {
+          novelId: BigInt(params.novelId),
+          winnerPaths: params.winnerPaths.map((p) => p.map((x) => BigInt(x))),
+          roundManager: config.roundManager,
+        });
         const receipt = await pub.waitForTransactionReceipt({ hash });
         return ok(`Round settled for Novel #${params.novelId}.\nTx: ${hash}\nBlock: ${receipt.blockNumber}`);
       } catch (error) {

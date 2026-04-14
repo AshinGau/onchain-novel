@@ -95,11 +95,56 @@ submit_chapter() {
     CHAPTER_ID=$(chapter_count)
 }
 
+# Walk parentId chain from `from` until hitting any element of `anchors_csv`.
+# Returns space-separated path: "from parent ... anchor".
+walk_to_anchor() {
+    local from="$1" anchors_csv="$2"
+    local cur="$from"
+    local path=""
+    local steps=0
+    while true; do
+        path="$path $cur"
+        # Check if cur is in anchors_csv
+        for a in $(echo "$anchors_csv" | tr ',' ' '); do
+            if [ "$a" = "$cur" ]; then
+                echo "${path# }"
+                return 0
+            fi
+        done
+        local pid
+        pid=$(cast call --rpc-url "$RPC" "$NOVEL_CORE_ADDRESS" \
+            "getChapter(uint64)((uint64,uint64,uint64,address,bytes32,uint64,uint32,uint64,uint64[]))" \
+            "$cur" 2>/dev/null | sed -E 's/[(),]/ /g' | awk '{print $3}')
+        # Stop if at root (depth=1, parentId=0)
+        if [ -z "$pid" ] || [ "$pid" = "0" ]; then
+            break
+        fi
+        cur="$pid"
+        steps=$((steps + 1))
+        if [ "$steps" -gt 100 ]; then break; fi
+    done
+    echo ""  # not found
+    return 1
+}
+
+# Comma-join space-separated list (e.g. "1 2 3" -> "1,2,3")
+csv() { echo "$1" | tr ' ' ','; }
+
 # run_round <novel_id> <cand_for_voter_a> <cand_for_voter_b> <salt_seed>
+# cand_a and cand_b must both be true tree leaves and descendants of current worldLineAncestors.
 run_round() {
     local novel_id="$1" cand_a="$2" cand_b="$3" seed="$4"
 
-    cast_send "$PK_KEEPER" "$ROUND_MANAGER_ADDRESS" "startRound(uint64)" "$novel_id"
+    # Snapshot prev worldLineAncestors as comma list
+    local prev_raw
+    prev_raw=$(cast call --rpc-url "$RPC" "$NOVEL_CORE_ADDRESS" \
+        "getWorldLineAncestors(uint64)(uint64[])" "$novel_id" 2>/dev/null)
+    # Strip [, ], and spaces, leaving "1,2,3"
+    local prev_csv
+    prev_csv=$(echo "$prev_raw" | tr -d '[] ' )
+
+    local leaves="[$cand_a,$cand_b]"
+    cast_send "$PK_KEEPER" "$ROUND_MANAGER_ADDRESS" "startRound(uint64,uint64[])" "$novel_id" "$leaves"
     advance 6
     cast_send "$PK_KEEPER" "$ROUND_MANAGER_ADDRESS" "closeNomination(uint64)" "$novel_id"
 
@@ -123,7 +168,12 @@ run_round() {
         "revealVote(uint64,uint64,bytes32)" "$novel_id" "$cand_b" "$salt_b"
 
     advance 6
-    cast_send "$PK_KEEPER" "$ROUND_MANAGER_ADDRESS" "settleRound(uint64)" "$novel_id"
+    # Build winnerPaths for [cand_a, cand_b] (tally insertion sort preserves candidate order on weight tie).
+    local path_a path_b
+    path_a=$(csv "$(walk_to_anchor "$cand_a" "$prev_csv")")
+    path_b=$(csv "$(walk_to_anchor "$cand_b" "$prev_csv")")
+    local winnerPaths="[[$path_a],[$path_b]]"
+    cast_send "$PK_KEEPER" "$ROUND_MANAGER_ADDRESS" "settleRound(uint64,uint64[][])" "$novel_id" "$winnerPaths"
     advance 6   # minRoundGap
 }
 

@@ -20,7 +20,7 @@ struct Chapter {
 
 **uint64 IDs**: 2^64 covers all chapter/novel needs; struct packing significantly reduces storage slot consumption.
 
-**Bidirectional index**: parentId traverses up, children traverses down. Downward DFS from world line ancestors at `startRound` finds the N deepest chains, without maintaining a separate candidate pool at submission time.
+**Bidirectional index**: parentId traverses up, children traverses down. Downward traversal lets keeper / indexer pick leaves off-chain; on-chain `startRound` only verifies each provided leaf is a true tree leaf (children empty) belonging to the novel.
 
 ### 1.2 Submission Rules
 
@@ -75,7 +75,7 @@ Example: two story lines `C1<-C2<-C3` and `C1<-A1<-A2`. Three votes: C2(weight 1
 
 ### 2.2 Candidate Generation -- Full Scan from World Line Ancestors
 
-Using the children bidirectional index, `startRound` does a full DFS from each worldLineAncestor, scanning all (strict) descendants to find the N deepest chains (N = `worldLineCount`, set by creator). Seeded ancestors themselves are never candidates — they must have at least one descendant to contribute a chain. This guarantees rounds only proceed when the story has progressed on every world line.
+`startRound` is **keeper-only** (with anyone-after-`KEEPER_INACTIVITY_TIMEOUT` fallback). The keeper computes the N deepest leaves off-chain (one per world line) and supplies them as `leaves[]`. On-chain validation: each leaf must belong to the novel and have `children.length == 0`. Off-chain DFS is the keeper / indexer's responsibility; on-chain cost is O(leaves.length) only.
 
 **Gas cost**: full traversal of all chapters derived from N ancestors between two rounds. submissionFee naturally limits chapter count.
 
@@ -96,7 +96,7 @@ Nominating -> Committing -> Revealing -> Settlement
 ### 2.4 State Flow
 
 ```
-[Idle] -> RoundManager.startRound(DFS) -> [Nominating]
+[Idle] -> RoundManager.startRound(leaves[]) -> [Nominating]
       -> closeNomination -> [Committing]
       -> closeCommit -> [Revealing]
       -> settleRound -> [Idle]
@@ -104,7 +104,7 @@ Nominating -> Committing -> Revealing -> Settlement
 All phase-transition and voting calls live on `RoundManager`. `NovelCore` only
 stores the persistent state (novels, chapters, worldLineAncestors) and exposes
 privileged setters gated by `onlyRoundManager`. Rule-proposal voting eligibility
-is proven on-demand via `verifyWorldLineAuthor(novelId, expectedAuthor, chapterId, path)`
+is proven on-demand via `verifyWorldLineAuthor(novelId, expectedAuthor, path)`
 — no flag mapping is maintained.
 ```
 
@@ -190,7 +190,7 @@ Full amount goes to prize pool.
 ## 5. Security
 
 - **Keeper trustlessness**: candidates come from full descendant scan, deterministic algorithm. Nomination as fallback.
-- **DFS gas safety**: submissionFee naturally limits chapter count between rounds, bounding traversal cost.
+- **Off-chain DFS, on-chain verification**: keeper computes leaves / paths off-chain; on-chain cost is O(leaves) leaf-check + O(path) parent-link walk per proof. submissionFee bounds tree size.
 - **Voting game theory**: fixed `voteStake` (every voter stakes the same amount), linear weight inside a protocol-level cap of `20 × voteStake`, commit-reveal prevents following, 3× accuracy incentive. Keeper-assisted reveal reduces user friction without compromising commit-reveal security (Keeper cannot alter committed votes).
 - **Chapter spam**: submissionFee + minChapterLength + N candidate slots + Nomination rescue.
 - **Protocol fee**: removed; can be added via upgrade.

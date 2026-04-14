@@ -122,6 +122,8 @@ pass "Contracts deployed: NovelCore=$NOVEL_CORE VotingEngine=$VOTING_ENGINE Priz
 
 # Set keeper reward on PrizePool (owner function)
 cast_send "$PK_DEPLOYER" "$PRIZE_POOL" "setKeeperRewardAmount(uint256)" "10000000000000" > /dev/null
+# Authorize the dedicated keeper account (Deploy.s.sol already set deployer as keeper).
+cast_send "$PK_DEPLOYER" "$ROUND_MANAGER" "setKeeper(address)" "$ADDR_KEEPER" > /dev/null
 pass "Keeper reward set on PrizePool"
 
 # ═══════════════════════════════════════════════════════════════
@@ -227,13 +229,13 @@ info "========================================"
 # Wait for minRoundGap (2s) -- since first round, no gap needed, but wait for block
 sleep 2
 
-# STEP 4: Keeper starts round 1 (DFS finds branches from root)
-info "Keeper: startRound..."
-cast_send "$PK_KEEPER" "$ROUND_MANAGER" "startRound(uint64)" "$NOVEL_ID" > /dev/null
+# STEP 4: Keeper starts round 1 with leaves [4,3] (ch4 depth-3 leaf, ch3 depth-2 leaf)
+info "Keeper: startRound (leaves [4,3])..."
+cast_send "$PK_KEEPER" "$ROUND_MANAGER" "startRound(uint64,uint64[])" "$NOVEL_ID" "[4,3]" > /dev/null
 pass "Keeper: startRound (round 1)"
 
 # Check candidates
-ROUND_DATA=$(cast_call "$ROUND_MANAGER" "getRoundData(uint64,uint32)((uint64[],bool[],uint64[],uint64,uint64,uint64,bool))" "$NOVEL_ID" "1")
+ROUND_DATA=$(cast_call "$ROUND_MANAGER" "getRoundData(uint64,uint32)((uint64[],uint64,uint64,uint64,bool))" "$NOVEL_ID" "1")
 info "Round 1 data: $ROUND_DATA"
 
 # STEP 5: Wait for nominateDuration (2s), then closeNomination
@@ -298,9 +300,10 @@ cast_send "$PK_VOTER_B" "$ROUND_MANAGER" \
 pass "Voter B revealed (voted for chapter 3)"
 
 # STEP 9: Keeper settles round 1
+# winnerPaths: ch4 wins, path = [4,2,1]; ch3 also winner with [3,1]. Both anchors in prev=[1].
 info "Waiting for reveal duration..."
 advance_time 3
-cast_send "$PK_KEEPER" "$ROUND_MANAGER" "settleRound(uint64)" "$NOVEL_ID" > /dev/null
+cast_send "$PK_KEEPER" "$ROUND_MANAGER" "settleRound(uint64,uint64[][])" "$NOVEL_ID" "[[4,2,1],[3,1]]" > /dev/null
 pass "Keeper: settleRound (round 1 settled)"
 
 # STEP 10: Verify round 1 results
@@ -333,7 +336,7 @@ cast_send "$PK_VOTER_B" "$ROUND_MANAGER" "claimVotingReward(uint64,uint32)" "$NO
 pass "Voter B claimed voting reward (round 1)"
 
 # Round 1 data should be settled
-ROUND1_SETTLED=$(cast_call "$ROUND_MANAGER" "getRoundData(uint64,uint32)((uint64[],bool[],uint64[],uint64,uint64,uint64,bool))" "$NOVEL_ID" "1")
+ROUND1_SETTLED=$(cast_call "$ROUND_MANAGER" "getRoundData(uint64,uint32)((uint64[],uint64,uint64,uint64,bool))" "$NOVEL_ID" "1")
 info "Round 1 settled data: $ROUND1_SETTLED"
 
 # ═══════════════════════════════════════════════════════════════
@@ -385,11 +388,11 @@ pass "Writer B submitted chapter 7 on non-world-line branch (child of root)"
 # Wait for minRoundGap
 advance_time 3
 
-# Keeper starts round 2 (DFS from round 1 worldLineAncestors)
-cast_send "$PK_KEEPER" "$ROUND_MANAGER" "startRound(uint64)" "$NOVEL_ID" > /dev/null
+# Keeper starts round 2; current world lines = [4,3]; new leaves are 5 (under 4) and 6 (under 3)
+cast_send "$PK_KEEPER" "$ROUND_MANAGER" "startRound(uint64,uint64[])" "$NOVEL_ID" "[5,6]" > /dev/null
 pass "Keeper: startRound (round 2)"
 
-ROUND2_DATA=$(cast_call "$ROUND_MANAGER" "getRoundData(uint64,uint32)((uint64[],bool[],uint64[],uint64,uint64,uint64,bool))" "$NOVEL_ID" "2")
+ROUND2_DATA=$(cast_call "$ROUND_MANAGER" "getRoundData(uint64,uint32)((uint64[],uint64,uint64,uint64,bool))" "$NOVEL_ID" "2")
 info "Round 2 candidates: $ROUND2_DATA"
 
 # closeNomination
@@ -426,9 +429,9 @@ cast_send "$PK_VOTER_B" "$ROUND_MANAGER" \
     "revealVote(uint64,uint64,bytes32)" "$NOVEL_ID" 6 "$SALT_R2_B" > /dev/null
 pass "Voter B revealed (round 2)"
 
-# Settle round 2
+# Settle round 2: winnerPaths = [[5,4], [6,3]] (each new leaf to its prev ancestor)
 advance_time 3
-cast_send "$PK_KEEPER" "$ROUND_MANAGER" "settleRound(uint64)" "$NOVEL_ID" > /dev/null
+cast_send "$PK_KEEPER" "$ROUND_MANAGER" "settleRound(uint64,uint64[][])" "$NOVEL_ID" "[[5,4],[6,3]]" > /dev/null
 pass "Keeper: settleRound (round 2 settled)"
 
 # Verify world lines evolved
@@ -467,33 +470,34 @@ cast_send "$PK_WRITER_A" "$NOVEL_CORE" \
     --value 0.01ether > /dev/null
 pass "Writer A submitted chapter 9 (extends world line, child of 6)"
 
-# Submit a chapter extending the non-world-line branch (chapter 7) for nomination test
-CONTENT_NWL="The rogue timeline deepens. Characters from the alternate reality discover echoes of the main timeline. This branch won't be in DFS candidates but can be nominated. A parallel universe of creative possibilities unfolds."
+# Submit a sibling chapter under ch5 — keeper will skip this one; user nominates it as alternative
+CONTENT_NWL="An alternative continuation under chapter 5 — same world line, different direction. The keeper picks chapter 8 as the primary leaf, leaving this as a candidate the user must nominate."
 CONTENT_NWL_HEX="0x$(echo -n "$CONTENT_NWL" | xxd -p | tr -d '\n')"
 CONTENT_NWL_HASH=$(cast keccak256 "$CONTENT_NWL_HEX")
 CONTENT_NWL_LEN=$(echo -n "$CONTENT_NWL" | wc -c | tr -d ' ')
 
 cast_send "$PK_WRITER_B" "$NOVEL_CORE" \
-    "submitChapter(uint64,uint64,(bytes32,uint64,bytes))" "$NOVEL_ID" "7" \
+    "submitChapter(uint64,uint64,(bytes32,uint64,bytes))" "$NOVEL_ID" "5" \
     "($CONTENT_NWL_HASH,$CONTENT_NWL_LEN,$CONTENT_NWL_HEX)" \
     --value 0.01ether > /dev/null
-pass "Writer B submitted chapter 10 (extends non-world-line branch, child of 7)"
+pass "Writer B submitted chapter 10 (alternative leaf under chapter 5)"
 
 # Wait for minRoundGap
 advance_time 3
 
-# Start round 3
-cast_send "$PK_KEEPER" "$ROUND_MANAGER" "startRound(uint64)" "$NOVEL_ID" > /dev/null
+# Start round 3 — keeper picks ch8 (under 5) and ch9 (under 6) as the leaves
+cast_send "$PK_KEEPER" "$ROUND_MANAGER" "startRound(uint64,uint64[])" "$NOVEL_ID" "[8,9]" > /dev/null
 pass "Keeper: startRound (round 3)"
 
-# During Nominating phase, nominate the non-world-line chapter 10
+# During Nominating phase, user nominates ch10 (alternative leaf under ch5).
+# Path = [10, 5] proves ch10 is descendant of current worldLineAncestor ch5.
 cast_send "$PK_USER" "$ROUND_MANAGER" \
-    "nominateCandidate(uint64,uint64)" "$NOVEL_ID" "10" \
+    "nominateCandidate(uint64,uint64[])" "$NOVEL_ID" "[10,5]" \
     --value 0.02ether > /dev/null
-pass "User nominated chapter 10 (non-world-line descendant, paid nominationFee)"
+pass "User nominated chapter 10 (alternative leaf, with path proof)"
 
 # Verify nomination was recorded
-R3_DATA=$(cast_call "$ROUND_MANAGER" "getRoundData(uint64,uint32)((uint64[],bool[],uint64[],uint64,uint64,uint64,bool))" "$NOVEL_ID" "3")
+R3_DATA=$(cast_call "$ROUND_MANAGER" "getRoundData(uint64,uint32)((uint64[],uint64,uint64,uint64,bool))" "$NOVEL_ID" "3")
 info "Round 3 data (after nomination): $R3_DATA"
 
 # closeNomination
@@ -530,9 +534,12 @@ cast_send "$PK_VOTER_B" "$ROUND_MANAGER" \
     "revealVote(uint64,uint64,bytes32)" "$NOVEL_ID" 8 "$SALT_R3_B" > /dev/null
 pass "Voter B revealed (round 3)"
 
-# Settle
+# Settle round 3.
+# Candidates added in order: [8 (auto), 9 (auto), 10 (nominated)]. Votes: ch10=1, ch8=1, ch9=0.
+# Tally insertion sort (stable on ties): final order [8, 10, 9]. Top 2 winners: [8, 10].
+# winnerPaths matched in tally order: [[8,5], [10,5]].
 advance_time 3
-cast_send "$PK_KEEPER" "$ROUND_MANAGER" "settleRound(uint64)" "$NOVEL_ID" > /dev/null
+cast_send "$PK_KEEPER" "$ROUND_MANAGER" "settleRound(uint64,uint64[][])" "$NOVEL_ID" "[[8,5],[10,5]]" > /dev/null
 pass "Keeper: settleRound (round 3 settled, nomination worked)"
 
 R3_WORLD_LINES=$(cast_call "$NOVEL_CORE" "getWorldLineAncestors(uint64)(uint64[])" "$NOVEL_ID")
@@ -649,11 +656,11 @@ FORK_NOVEL_COUNT=$(cast_call "$NOVEL_CORE" "novelCount()(uint64)")
 [ "$(echo "$FORK_NOVEL_COUNT" | tr -d ' ')" = "2" ] || fail "Novel count should be 2"
 pass "Fork verified (novel count=2)"
 
-# Verify fork root's parentId points to source chapter 3
-# The fork root chapter is the next chapter ID after all previous chapters
-# Chapter IDs so far: 1(root), 2, 3, 4, 5, 6, 7, 8, 9, 10 = 10 chapters
-# Fork root = chapter 11
-FORK_ROOT_CH=$(cast_call "$NOVEL_CORE" "getChapter(uint64)((uint64,uint64,uint64,address,bytes32,uint64,uint32,uint64,uint64[]))" "11")
+# Verify fork root's parentId points to source chapter 3.
+# Chapter IDs before fork: 1(root), 2..10 (story), 11 (bounty continuation under ch6).
+# Fork creates the next chapter id = 12 as the fork root in novel #2.
+FORK_ROOT_ID=12
+FORK_ROOT_CH=$(cast_call "$NOVEL_CORE" "getChapter(uint64)((uint64,uint64,uint64,address,bytes32,uint64,uint32,uint64,uint64[]))" "$FORK_ROOT_ID")
 info "Fork root chapter: $FORK_ROOT_CH"
 pass "Fork root chapter readable (parentId should reference source chapter 3)"
 
@@ -664,9 +671,8 @@ info "========================================"
 info "Complete Novel"
 info "========================================"
 
-# Complete the forked novel (creator = ADDR_USER can call anytime)
-# Novel must be in Idle phase (which it is since no rounds started)
-cast_send "$PK_USER" "$ROUND_MANAGER" "completeNovel(uint64)" "$FORK_NOVEL_ID" > /dev/null
+# Complete the forked novel (creator = ADDR_USER can call anytime). Fork root = ch$FORK_ROOT_ID.
+cast_send "$PK_USER" "$ROUND_MANAGER" "completeNovel(uint64,uint64[][])" "$FORK_NOVEL_ID" "[[$FORK_ROOT_ID]]" > /dev/null
 pass "Forked novel #$FORK_NOVEL_ID completed"
 
 # Verify novel is no longer active

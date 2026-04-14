@@ -107,7 +107,6 @@ export function registerRuleTools(server: McpServer): void {
           proposalType: params.proposalType,
           ruleName: params.ruleName,
           ruleContent: params.ruleContent,
-          chapterId: BigInt(params.chapterId),
           path,
           value,
           rulesEngine: config.rulesEngine,
@@ -146,7 +145,6 @@ export function registerRuleTools(server: McpServer): void {
 
         const hash = await voteOnRuleProposal(wallet, {
           proposalId: BigInt(params.proposalId),
-          chapterId: BigInt(params.chapterId),
           path,
           rulesEngine: config.rulesEngine,
         });

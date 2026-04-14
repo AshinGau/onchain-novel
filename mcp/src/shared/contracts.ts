@@ -83,7 +83,8 @@ export interface RevealVoteParams {
 
 export interface NominateCandidateParams {
   novelId: bigint;
-  chapterId: bigint;
+  /** Path proof: [nominatedChapterId, ..., currentWorldLineAncestor] via parentId chain. */
+  path: bigint[];
   value?: bigint;
   roundManager: `0x${string}`;
 }
@@ -115,9 +116,7 @@ export interface ProposeRuleParams {
   proposalType: number; // 0 = Add, 1 = Delete
   ruleName: string;
   ruleContent: string;
-  /** Caller-authored chapter used as eligibility credential (must be on a current world line). */
-  chapterId: bigint;
-  /** Path proof: [worldLineAncestor, ..., chapterId] via parentId chain. */
+  /** Path proof: [worldLineAncestor, ..., callerChapterId] via parentId chain. */
   path: bigint[];
   value?: bigint;
   rulesEngine: `0x${string}`;
@@ -125,11 +124,30 @@ export interface ProposeRuleParams {
 
 export interface VoteOnRuleProposalParams {
   proposalId: bigint;
-  /** Voter-authored chapter used as eligibility credential. */
-  chapterId: bigint;
-  /** Path proof: [worldLineAncestor, ..., chapterId] via parentId chain. */
+  /** Path proof: [worldLineAncestor, ..., callerChapterId] via parentId chain. */
   path: bigint[];
   rulesEngine: `0x${string}`;
+}
+
+export interface StartRoundParams {
+  novelId: bigint;
+  /** Leaf chapters (true tree leaves on each current world line). Must be ≥ worldLineCount. */
+  leaves: bigint[];
+  roundManager: `0x${string}`;
+}
+
+export interface SettleRoundParams {
+  novelId: bigint;
+  /** winnerPaths[i] = [winners[i], ..., prevWorldLineAncestor]. Empty array = no rewards for that winner. */
+  winnerPaths: bigint[][];
+  roundManager: `0x${string}`;
+}
+
+export interface CompleteNovelParams {
+  novelId: bigint;
+  /** finalPaths[i] = [worldLineAncestors[i], ..., rootChapter]. */
+  finalPaths: bigint[][];
+  roundManager: `0x${string}`;
 }
 
 export interface SetCreatorRulesParams {
@@ -158,13 +176,44 @@ export function toBytes32Salt(salt: string): `0x${string}` {
 }
 
 /**
- * Build a world-line proof path from a chapter to one of the current worldLineAncestors.
+ * Walk parentId chain from `from` upward, stopping when it hits any of `anchors`.
+ * Returns `[from, parent, ..., anchor]` or `null` if no anchor is reachable.
  *
- * Returns `[ancestorId, ..., chapterId]` (parent chain, ancestor at head). Returns `null`
- * if the chapter is not on any current world line. Used to prove eligibility for
- * RulesEngine.proposeRule / voteOnRuleProposal.
+ * Generic primitive used by both `buildWorldLineProof` (RulesEngine, anchor = current
+ * worldLineAncestor) and `buildPathToAnchor` (settleRound winners → prev ancestor;
+ * nominateCandidate → current ancestor; completeNovel → root).
+ */
+export async function buildPathToAnchor(
+  client: PublicClient,
+  novelCore: `0x${string}`,
+  novelId: bigint,
+  from: bigint,
+  anchors: readonly bigint[],
+): Promise<bigint[] | null> {
+  void novelId; // novelId is implicit via chapter storage; kept for API symmetry
+  const path: bigint[] = [];
+  let cur = from;
+  while (cur !== 0n) {
+    path.push(cur);
+    if (anchors.includes(cur)) return path;
+    const ch = (await client.readContract({
+      address: novelCore,
+      abi: novelCoreAbi,
+      functionName: "getChapter",
+      args: [cur],
+    })) as { parentId: bigint; depth: number };
+    if (ch.depth <= 1) break;
+    cur = ch.parentId;
+  }
+  return null;
+}
+
+/**
+ * Build a world-line proof for RulesEngine: returns `[ancestor, ..., chapterId]` where
+ * `ancestor` is one of the current worldLineAncestors and `chapterId` is on the parent
+ * chain from `ancestor` toward root.
  *
- * This is a read-only off-chain computation (one EXTCALL per chapter on the path).
+ * Returns null if `chapterId` is not on any current world line.
  */
 export async function buildWorldLineProof(
   client: PublicClient,
@@ -289,12 +338,12 @@ export async function revealVote(client: WalletClient, params: RevealVoteParams)
   });
 }
 
-export async function startRound(client: WalletClient, novelId: bigint, roundManager: `0x${string}`): Promise<Hash> {
+export async function startRound(client: WalletClient, params: StartRoundParams): Promise<Hash> {
   return client.writeContract({
-    address: roundManager,
+    address: params.roundManager,
     abi: roundManagerAbi,
     functionName: "startRound",
-    args: [novelId],
+    args: [params.novelId, params.leaves],
     chain: client.chain,
     account: client.account!,
   });
@@ -326,12 +375,12 @@ export async function closeCommit(client: WalletClient, novelId: bigint, roundMa
   });
 }
 
-export async function settleRound(client: WalletClient, novelId: bigint, roundManager: `0x${string}`): Promise<Hash> {
+export async function settleRound(client: WalletClient, params: SettleRoundParams): Promise<Hash> {
   return client.writeContract({
-    address: roundManager,
+    address: params.roundManager,
     abi: roundManagerAbi,
     functionName: "settleRound",
-    args: [novelId],
+    args: [params.novelId, params.winnerPaths],
     chain: client.chain,
     account: client.account!,
   });
@@ -342,7 +391,7 @@ export async function nominateCandidate(client: WalletClient, params: NominateCa
     address: params.roundManager,
     abi: roundManagerAbi,
     functionName: "nominateCandidate",
-    args: [params.novelId, params.chapterId],
+    args: [params.novelId, params.path],
     value: params.value ?? 0n,
     chain: client.chain,
     account: client.account!,
@@ -365,16 +414,12 @@ export async function claimVotingReward(
   });
 }
 
-export async function completeNovel(
-  client: WalletClient,
-  novelId: bigint,
-  roundManager: `0x${string}`,
-): Promise<Hash> {
+export async function completeNovel(client: WalletClient, params: CompleteNovelParams): Promise<Hash> {
   return client.writeContract({
-    address: roundManager,
+    address: params.roundManager,
     abi: roundManagerAbi,
     functionName: "completeNovel",
-    args: [novelId],
+    args: [params.novelId, params.finalPaths],
     chain: client.chain,
     account: client.account!,
   });
@@ -502,14 +547,7 @@ export async function proposeRule(client: WalletClient, params: ProposeRuleParam
     address: params.rulesEngine,
     abi: rulesEngineAbi,
     functionName: "proposeRule",
-    args: [
-      params.novelId,
-      params.proposalType,
-      params.ruleName,
-      params.ruleContent,
-      params.chapterId,
-      params.path,
-    ],
+    args: [params.novelId, params.proposalType, params.ruleName, params.ruleContent, params.path],
     value: params.value ?? 0n,
     chain: client.chain,
     account: client.account!,
@@ -521,7 +559,7 @@ export async function voteOnRuleProposal(client: WalletClient, params: VoteOnRul
     address: params.rulesEngine,
     abi: rulesEngineAbi,
     functionName: "voteOnRuleProposal",
-    args: [params.proposalId, params.chapterId, params.path],
+    args: [params.proposalId, params.path],
     chain: client.chain,
     account: client.account!,
   });

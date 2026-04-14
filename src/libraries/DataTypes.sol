@@ -91,10 +91,11 @@ library DataTypes {
     }
 
     /// @notice Per-round voting data
+    /// @dev Eligibility / per-chapter-author derivation moved off-chain. settleRound takes
+    ///      caller-supplied per-winner paths whose chapters are validated against `_chapters`
+    ///      storage; no per-candidate eligibility flag or prevWorldLines snapshot is stored.
     struct RoundData {
-        uint64[] candidates; // Candidate chain chapter IDs (DFS auto-generated + user-nominated)
-        bool[] candidateIsEligible; // Whether each candidate is a world-line descendant (affects author rewards)
-        uint64[] prevWorldLines; // Previous round's worldLineAncestors (for computing new chapters)
+        uint64[] candidates; // Candidate chain chapter IDs (keeper-provided leaves + user nominations)
         uint64 nominateEndTime; // End of nomination phase
         uint64 commitEndTime; // End of commit phase
         uint64 revealEndTime; // End of reveal phase
@@ -118,15 +119,15 @@ library DataTypes {
 
     /// @notice A proposal to add or delete a world-building rule
     struct RuleProposal {
-        uint256 id; // Global unique proposal ID
+        uint64 id; // Global unique proposal ID
         uint64 novelId; // Novel this proposal targets
+        uint64 createdAt; // block.timestamp when proposed
         address proposer; // Address that created the proposal
         RuleProposalType proposalType; // Add or Delete
-        string ruleName; // Rule identifier
-        string ruleContent; // Rule content (empty for Delete proposals)
-        uint256 createdAt; // block.timestamp when proposed
         uint32 voteCount; // Number of qualifying votes received
         bool executed; // Whether the proposal has been executed
+        string ruleName; // Rule identifier
+        string ruleContent; // Rule content (empty for Delete proposals)
     }
 
     /// @notice Mutable metadata for display purposes (separate from immutable NovelConfig)

@@ -349,52 +349,49 @@ contract NovelCore is
         return _novelMetadata[novelId];
     }
 
-    /// @notice Verify (chapterId, path) is a valid proof that `chapterId` is on a current world line
-    ///         and authored by `expectedAuthor`. Reverts on failure.
-    /// @dev World-line ancestors are the deepest chapter on each world line. A chapter X is "on a
-    ///      world line" iff some current ancestor has X as one of its parent-chain ancestors (or is X).
-    ///      Therefore the proof walks DOWN from a world-line ancestor toward X via parentId links:
-    ///        path[0]   = a current worldLineAncestor
-    ///        path[k]   = chapterId (the credential)
-    ///        path[i].parentId == path[i+1]   for each consecutive pair
-    ///      Single-element path is allowed when chapterId itself is a worldLineAncestor.
-    function verifyWorldLineAuthor(
-        uint64 novelId,
-        address expectedAuthor,
-        uint64 chapterId,
-        uint64[] calldata path
-    ) external view {
+    /// @notice Verify `path` is a valid parent chain in this novel.
+    /// @dev path[0] is the deeper end (e.g., chapterId / winner / ancestor). Each subsequent element
+    ///      must equal `_chapters[path[i]].parentId`. All chapters must belong to `novelId`.
+    ///      Anchor checks (e.g. "path[last] is a worldLineAncestor") are performed by callers.
+    function verifyChapterPath(uint64 novelId, uint64[] calldata path) external view {
+        _verifyChapterPath(novelId, path);
+    }
+
+    function _verifyChapterPath(uint64 novelId, uint64[] calldata path) private view {
         if (path.length == 0) revert InvalidPath(1);
         if (path.length > MAX_PROOF_PATH_LENGTH) revert PathTooLong();
-        if (path[path.length - 1] != chapterId) revert InvalidPath(2);
+        for (uint256 i = 0; i < path.length; i++) {
+            DataTypes.Chapter storage ch = _chapters[path[i]];
+            if (ch.id == 0 || ch.novelId != novelId) revert InvalidPath(3);
+            if (i + 1 < path.length && ch.parentId != path[i + 1]) revert InvalidPath(4);
+        }
+    }
 
-        // Author check on the credential chapter
-        DataTypes.Chapter storage tail = _chapters[chapterId];
-        if (tail.id == 0 || tail.novelId != novelId) revert InvalidPath(3);
-        if (tail.author != expectedAuthor) revert AuthorMismatch(expectedAuthor, tail.author);
+    /// @notice True iff `chapterId` is currently in worldLineAncestors[novelId].
+    function isCurrentWorldLineAncestor(uint64 novelId, uint64 chapterId) external view returns (bool) {
+        uint64[] storage ancestors = _worldLineAncestors[novelId];
+        for (uint256 i = 0; i < ancestors.length; i++) {
+            if (ancestors[i] == chapterId) return true;
+        }
+        return false;
+    }
 
-        // Head must be a current world-line ancestor
+    /// @notice One-shot helper for callers that want author + path + current-world-line check at once.
+    /// @dev Convention: path[0] = a current worldLineAncestor, path[last] = caller's authored chapter.
+    function verifyWorldLineAuthor(uint64 novelId, address expectedAuthor, uint64[] calldata path) external view {
+        _verifyChapterPath(novelId, path);
         uint64 head = path[0];
-        DataTypes.Chapter storage headCh = _chapters[head];
-        if (headCh.id == 0 || headCh.novelId != novelId) revert InvalidPath(3);
-        {
-            uint64[] storage ancestors = _worldLineAncestors[novelId];
-            bool found;
-            for (uint256 i = 0; i < ancestors.length; i++) {
-                if (ancestors[i] == head) {
-                    found = true;
-                    break;
-                }
+        uint64[] storage ancestors = _worldLineAncestors[novelId];
+        bool found;
+        for (uint256 i = 0; i < ancestors.length; i++) {
+            if (ancestors[i] == head) {
+                found = true;
+                break;
             }
-            if (!found) revert InvalidPath(5);
         }
-
-        // Walk parent chain: each path[i].parentId must equal path[i+1]
-        for (uint256 i = 0; i + 1 < path.length; i++) {
-            DataTypes.Chapter storage step = _chapters[path[i]];
-            if (step.id == 0 || step.novelId != novelId) revert InvalidPath(3);
-            if (step.parentId != path[i + 1]) revert InvalidPath(4);
-        }
+        if (!found) revert InvalidPath(5);
+        address author = _chapters[path[path.length - 1]].author;
+        if (author != expectedAuthor) revert AuthorMismatch(expectedAuthor, author);
     }
 
     // ════════════════════════════════════════════════════

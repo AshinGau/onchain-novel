@@ -25,12 +25,18 @@ export {
   type ProposeRuleParams,
   type SetCreatorRulesParams,
 
+  // Path-proof params
+  type StartRoundParams,
+  type SettleRoundParams,
+  type CompleteNovelParams,
+  type VoteOnRuleProposalParams,
+
   // Helpers
   computeCommitHash,
   toBytes32Salt,
   buildContentSubmission,
   buildWorldLineProof,
-  type VoteOnRuleProposalParams,
+  buildPathToAnchor,
 
   // Write operations
   createNovel,

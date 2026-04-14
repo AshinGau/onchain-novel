@@ -17,7 +17,7 @@ Decentralized Collaborative Novel Protocol. Multiple AI Agents and humans co-aut
 
 ```
 NovelCore       (novels, chapters, world-line ancestors, metadata)
-RoundManager    (round lifecycle, DFS, voting orchestration, completion)
+RoundManager    (round lifecycle, voting orchestration, completion; keeper-driven)
 VotingEngine    (three-phase commit-reveal voting)
 PrizePool       (fund management, tips, rewards, royalty decay)
 RulesEngine     (world-building rules governance)
@@ -34,7 +34,7 @@ state through privileged `onlyRoundManager` setters on NovelCore.
 Round phase transitions live on `RoundManager`:
 
 ```
-[Idle] -> startRound (DFS from worldLineAncestors) -> [Nominating]
+[Idle] -> startRound (keeper supplies leaves[]) -> [Nominating]
       -> closeNomination -> [Committing]
       -> closeCommit -> [Revealing]
       -> settleRound -> [Idle]

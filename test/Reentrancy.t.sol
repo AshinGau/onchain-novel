@@ -64,14 +64,14 @@ contract MaliciousVotingReceiver {
 
 contract MaliciousBountyReceiver {
     BountyBoard public board;
-    uint256 public bountyId;
+    uint64 public bountyId;
     bool public attacking;
 
     constructor(address _board) {
         board = BountyBoard(payable(_board));
     }
 
-    function setBountyId(uint256 _bountyId) external {
+    function setBountyId(uint64 _bountyId) external {
         bountyId = _bountyId;
     }
 
@@ -131,18 +131,21 @@ contract ReentrancyTest is TestBase {
         uint64 novelId = _createNovel();
         uint64 rootId = 1;
         uint64 ch2 = _submitChapter(author1, novelId, rootId, "voting reentrancy chapter!");
-        _submitChapter(author2, novelId, rootId, "voting reentrancy branch B!!");
+        uint64 ch3 = _submitChapter(author2, novelId, rootId, "voting reentrancy branch B!!");
 
-        // Run a full round so voter can claim
+        uint64[] memory leaves = new uint64[](2);
+        leaves[0] = ch2;
+        leaves[1] = ch3;
+        uint64[] memory prevAncestors = novelCore.getWorldLineAncestors(novelId);
+
         vm.prank(keeper);
-        roundManager.startRound(novelId);
+        roundManager.startRound(novelId, leaves);
 
         vm.warp(block.timestamp + NOMINATE_DURATION + 1);
         vm.prank(keeper);
         roundManager.closeNomination(novelId);
 
-        DataTypes.RoundData memory rd = roundManager.getRoundData(novelId, 1);
-        uint64 target = rd.candidates[0];
+        uint64 target = ch2;
         bytes32 salt = bytes32("vrsalt");
         bytes32 commitHash = keccak256(abi.encodePacked(target, salt));
 
@@ -157,8 +160,13 @@ contract ReentrancyTest is TestBase {
         roundManager.revealVote(novelId, target, salt);
 
         vm.warp(block.timestamp + REVEAL_DURATION + 1);
+
+        uint64[][] memory winnerPaths = new uint64[][](2);
+        winnerPaths[0] = _pathToAnyAnchor(ch2, prevAncestors);
+        winnerPaths[1] = _pathToAnyAnchor(ch3, prevAncestors);
+
         vm.prank(keeper);
-        roundManager.settleRound(novelId);
+        roundManager.settleRound(novelId, winnerPaths);
 
         // Claim voting reward through NovelCore
         uint256 balBefore = voter1.balance;
@@ -182,7 +190,7 @@ contract ReentrancyTest is TestBase {
 
         uint64 deadline = uint64(block.timestamp + 7 days);
         vm.prank(voter1);
-        uint256 bountyId = bountyBoard.createBounty{value: 1 ether}(rootId, deadline);
+        uint64 bountyId = bountyBoard.createBounty{value: 1 ether}(rootId, deadline);
 
         // Submit a continuation
         _submitChapter(author1, novelId, rootId, "bounty continuation chapter!");
