@@ -224,10 +224,10 @@ contract RoundManager is
             prizePool.deposit{value: voterRewards}(novelId, "noVoters");
         }
 
-        // Update world line ancestors and authorship flags via NovelCore privileged calls
+        // Update world line ancestors via NovelCore (no more author flag walking needed)
         uint64[] memory newAncestors = winners; // winners.length == selectCount
         novelCore.applyWorldLineSettlement(
-            novelId, newAncestors, rd.prevWorldLines, DataTypes.RoundPhase.Idle, uint64(block.timestamp)
+            novelId, newAncestors, DataTypes.RoundPhase.Idle, uint64(block.timestamp)
         );
 
         rd.settled = true;

@@ -49,8 +49,8 @@ onchain-novel-cli bounty refund <bounty-id>
 # Rules
 onchain-novel-cli rule list <novel-id>
 onchain-novel-cli rule set <novel-id> <name> <content>
-onchain-novel-cli rule propose <novel-id> add|delete <name> [content]
-onchain-novel-cli rule vote <proposal-id>
+onchain-novel-cli rule propose <novel-id> add|delete <name> <chapter-id> [content]
+onchain-novel-cli rule vote <proposal-id> <chapter-id>
 
 # Workflow guides
 onchain-novel-cli guide author|voter|creator|reader

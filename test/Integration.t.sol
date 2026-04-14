@@ -502,8 +502,16 @@ contract IntegrationTest is TestBase {
         vm.prank(voter1);
         prizePool.tipChapter{value: 1 ether}(ch2);
 
-        assertEq(author1.balance - authorBalBefore, 0.5 ether);
-        assertEq(prizePool.getPoolBalance(novelId) - poolBefore, 0.5 ether);
+        // Pull-only: author share accrues to pendingRewards, no immediate transfer.
+        assertEq(author1.balance, authorBalBefore, "tip should not push to author");
+        assertEq(prizePool.getPoolBalance(novelId) - poolBefore, 0.5 ether, "pool should get 50%");
+        assertEq(prizePool.getPendingReward(novelId, author1), 0.5 ether, "author pending should be 50%");
+
+        // Author claims their share
+        vm.prank(author1);
+        novelCore.claimReward(novelId);
+        assertEq(author1.balance - authorBalBefore, 0.5 ether, "author received tip after claim");
+        assertEq(prizePool.getPendingReward(novelId, author1), 0, "pending cleared after claim");
     }
 
     // ----------------------------------------------------------

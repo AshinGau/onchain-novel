@@ -102,8 +102,10 @@ Nominating -> Committing -> Revealing -> Settlement
       -> settleRound -> [Idle]
 
 All phase-transition and voting calls live on `RoundManager`. `NovelCore` only
-stores the persistent state (novels, chapters, worldLineAncestors, isWorldLineAuthor)
-and exposes privileged setters gated by `onlyRoundManager`.
+stores the persistent state (novels, chapters, worldLineAncestors) and exposes
+privileged setters gated by `onlyRoundManager`. Rule-proposal voting eligibility
+is proven on-demand via `verifyWorldLineAuthor(novelId, expectedAuthor, chapterId, path)`
+— no flag mapping is maintained.
 ```
 
 Writing and voting run in parallel, never blocking each other.

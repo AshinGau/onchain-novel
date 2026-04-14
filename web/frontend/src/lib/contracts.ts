@@ -48,7 +48,7 @@ export const novelCoreAbi = parseAbi([
   "function getChapter(uint64 chapterId) external view returns ((uint64 id, uint64 novelId, uint64 parentId, address author, bytes32 contentHash, uint64 declaredLength, uint32 depth, uint64 timestamp, uint64[] children))",
   "function getChapterChildren(uint64 chapterId) external view returns (uint64[])",
   "function getWorldLineAncestors(uint64 novelId) external view returns (uint64[])",
-  "function isWorldLineAuthor(uint64 novelId, address author) external view returns (bool)",
+  "function verifyWorldLineAuthor(uint64 novelId, address expectedAuthor, uint64 chapterId, uint64[] path) external view",
   "function novelCount() external view returns (uint64)",
   "function chapterCount() external view returns (uint64)",
 ]);

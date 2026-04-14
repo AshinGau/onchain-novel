@@ -4,6 +4,7 @@ import {
   setCreatorRules as setCreatorRulesTx,
   proposeRule as proposeRuleTx,
   voteOnRuleProposal as voteOnRuleProposalTx,
+  buildWorldLineProof,
   getRuleNames,
   getRule,
   getRuleProposal,
@@ -76,10 +77,14 @@ export function registerRuleCommands(program: Command): void {
     });
 
   rule
-    .command("propose <novel-id> <action> <name> [content]")
-    .description("Propose adding or deleting a rule (action: add|delete)")
+    .command("propose <novel-id> <action> <name> <chapter-id> [content]")
+    .description(
+      "Propose adding or deleting a rule (action: add|delete). " +
+        "<chapter-id> is one of your authored chapters that's currently on a world line — " +
+        "the path proof is computed automatically.",
+    )
     .option("--value <eth>", "rule proposal fee in ETH")
-    .action(async (novelId, action, name, content, opts) => {
+    .action(async (novelId, action, name, chapterId, content, opts) => {
       try {
         if (action !== "add" && action !== "delete") {
           error("Action must be 'add' or 'delete'");
@@ -90,8 +95,10 @@ export function registerRuleCommands(program: Command): void {
           return process.exit(1);
         }
 
-        const client = getWalletClient();
-        const rulesEngine = requireRulesEngine(getContracts());
+        const wallet = getWalletClient();
+        const pub = getPublicClient();
+        const contracts = getContracts();
+        const rulesEngine = requireRulesEngine(contracts);
 
         let value: bigint;
         if (opts.value) {
@@ -107,12 +114,20 @@ export function registerRuleCommands(program: Command): void {
           }
         }
 
+        const path = await buildWorldLineProof(pub, contracts.novelCore, BigInt(novelId), BigInt(chapterId));
+        if (!path) {
+          error(`Chapter #${chapterId} is not currently on any world line of novel #${novelId}.`);
+          return process.exit(1);
+        }
+
         const proposalType = action === "add" ? 0 : 1;
-        const hash = await proposeRuleTx(client, {
+        const hash = await proposeRuleTx(wallet, {
           novelId: BigInt(novelId),
           proposalType,
           ruleName: name,
           ruleContent: content ?? "",
+          chapterId: BigInt(chapterId),
+          path,
           value,
           rulesEngine,
         });
@@ -126,13 +141,32 @@ export function registerRuleCommands(program: Command): void {
     });
 
   rule
-    .command("vote <proposal-id>")
-    .description("Vote on a rule proposal (world-line authors only)")
-    .action(async (proposalId) => {
+    .command("vote <proposal-id> <chapter-id>")
+    .description(
+      "Vote on a rule proposal. <chapter-id> is one of your authored chapters that's currently " +
+        "on a world line — the path proof is computed automatically.",
+    )
+    .action(async (proposalId, chapterId) => {
       try {
-        const client = getWalletClient();
-        const rulesEngine = requireRulesEngine(getContracts());
-        const hash = await voteOnRuleProposalTx(client, BigInt(proposalId), rulesEngine);
+        const wallet = getWalletClient();
+        const pub = getPublicClient();
+        const contracts = getContracts();
+        const rulesEngine = requireRulesEngine(contracts);
+
+        // Derive the novelId from the proposal so we can build the path
+        const proposal = await getRuleProposal(pub, BigInt(proposalId), rulesEngine);
+        const path = await buildWorldLineProof(pub, contracts.novelCore, proposal.novelId, BigInt(chapterId));
+        if (!path) {
+          error(`Chapter #${chapterId} is not currently on any world line of novel #${proposal.novelId}.`);
+          return process.exit(1);
+        }
+
+        const hash = await voteOnRuleProposalTx(wallet, {
+          proposalId: BigInt(proposalId),
+          chapterId: BigInt(chapterId),
+          path,
+          rulesEngine,
+        });
         txHash(hash);
         await waitForTx(hash);
         success("Voted on rule proposal");

@@ -98,12 +98,12 @@ interface INovelCore {
     /// @notice Set the round phase and phase start time without changing round number.
     function setNovelPhase(uint64 novelId, DataTypes.RoundPhase phase, uint64 phaseStartTime) external;
 
-    /// @notice Apply round settlement: replace world line ancestors, refresh world-line author flags,
-    ///         set lastSettleTime, and reset roundPhase.
+    /// @notice Apply round settlement: replace world line ancestors, set lastSettleTime, reset roundPhase.
+    /// @dev World-line authorship is no longer tracked as a flag — RulesEngine validates eligibility
+    ///      via on-demand chapter+path proofs, so settlement no longer walks chapter trees.
     function applyWorldLineSettlement(
         uint64 novelId,
         uint64[] calldata newAncestors,
-        uint64[] calldata prevAncestors,
         DataTypes.RoundPhase newPhase,
         uint64 settleTime
     ) external;
@@ -127,9 +127,15 @@ interface INovelCore {
     /// @notice Get direct child chapter IDs for a chapter
     function getChapterChildren(uint64 chapterId) external view returns (uint64[] memory);
 
-    /// @notice Check if an address is an author on the current world lines
-    /// @dev Used by RulesEngine for rule proposal voting eligibility (auto-generated public mapping getter)
-    function isWorldLineAuthor(uint64 novelId, address author) external view returns (bool);
+    /// @notice Verify (chapterId, path) is a valid proof that `chapterId` is on a current world line
+    ///         and authored by `expectedAuthor`. Reverts with InvalidPath / PathTooLong / AuthorMismatch on failure.
+    /// @dev Used by RulesEngine to gate proposeRule / voteOnRuleProposal.
+    function verifyWorldLineAuthor(
+        uint64 novelId,
+        address expectedAuthor,
+        uint64 chapterId,
+        uint64[] calldata path
+    ) external view;
 
     /// @notice Total number of novels created (auto-generated public counter getter)
     function novelCount() external view returns (uint64);

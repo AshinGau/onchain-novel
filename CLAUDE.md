@@ -63,11 +63,11 @@ npm run build            # Compile TypeScript
 ### Smart Contracts (`src/`)
 Six UUPS-upgradeable contracts + one standalone:
 - **NovelCore** — Chapter tree (parentId + children[]), novel/chapter CRUD, metadata, worldLineAncestors storage. Writing always available. Round state is mutated only by RoundManager via privileged setters.
-- **RoundManager** — Round lifecycle (start/close/settle/nominate), DFS candidate generation, commit-reveal vote forwarding, final completion, world-line author flag maintenance.
+- **RoundManager** — Round lifecycle (start/close/settle/nominate), DFS candidate generation, commit-reveal vote forwarding, final completion.
 - **VotingEngine** — Commit-reveal voting. 3x accuracy weight. One vote per address per round. Privileged calls gated by RoundManager.
 - **PrizePool** — Per-round distribution: creator royalty `D/(D+round)` decay, author/voter rewards. Tips (public `tipNovel` / `tipChapter`). Keeper rewards.
 - **BountyBoard** — Reader bounties for direct-child continuations. 20% to pool, 80% to authors or refund.
-- **RulesEngine** — World-building rules: creator rules (before first round) + proposal-based changes (world-line authors vote).
+- **RulesEngine** — World-building rules: creator rules (before first round) + proposal-based changes. Eligibility for proposing & voting is proven on-demand via `(chapterId, path)` — caller authored chapter that's currently on a world line.
 - **UserRegistry** — One-time immutable nickname registry (standalone, non-upgradeable).
 
 State flow (on RoundManager): `Idle → startRound(DFS) → Nominating → closeNomination → Committing → closeCommit → Revealing → settleRound → Idle`
