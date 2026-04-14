@@ -187,6 +187,7 @@ export interface Bounty {
   novel_id: string;
   tipper: string;
   locked_amount: string;
+  create_time: string;
   deadline: string;
   designated_chapter_id: number;
   claimed: boolean;

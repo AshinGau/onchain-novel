@@ -8,7 +8,8 @@ import {DataTypes} from "../libraries/DataTypes.sol";
 /// @dev Readers place bounties on chapters to incentivize continuations.
 ///      20% of bounty goes to prize pool immediately; 80% locked for qualifying authors.
 ///      Qualifying authors = authors of **direct child chapters** of the target whose timestamp
-///      is on or before the deadline (deeper descendants are not counted).
+///      falls within [createTime, deadline] (deeper descendants are not counted).
+///      Pre-existing children (written before the bounty was posted) are excluded.
 ///      If no qualifying continuations by the deadline, the locked amount is refundable to the tipper.
 interface IBountyBoard {
     // ============================================================
@@ -21,6 +22,7 @@ interface IBountyBoard {
         uint64 indexed chapterId,
         address indexed tipper,
         uint256 lockedAmount,
+        uint64 createTime,
         uint64 deadline
     );
 

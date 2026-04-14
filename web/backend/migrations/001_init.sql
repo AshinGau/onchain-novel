@@ -131,6 +131,7 @@ CREATE TABLE bounties (
   novel_id              BIGINT NOT NULL,
   tipper                TEXT NOT NULL,
   locked_amount         NUMERIC NOT NULL,
+  create_time           BIGINT NOT NULL,
   deadline              BIGINT NOT NULL,
   designated_chapter_id BIGINT DEFAULT 0,
   claimed               BOOLEAN NOT NULL DEFAULT FALSE,

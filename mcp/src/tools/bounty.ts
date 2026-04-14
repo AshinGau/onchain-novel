@@ -78,8 +78,9 @@ export function registerBountyTools(server: McpServer): void {
         const data = await res.json() as { bounties: Array<Record<string, unknown>> };
         if (data.bounties.length === 0) return ok("No active bounties found.");
         const lines = data.bounties.map((b: any) => {
+          const createDate = b.create_time ? new Date(Number(b.create_time) * 1000).toISOString() : "?";
           const deadlineDate = new Date(Number(b.deadline) * 1000).toISOString();
-          return `Bounty #${b.id} | Chapter #${b.chapter_id} (${b.novel_title}) | ${formatEther(BigInt(b.locked_amount))} ETH locked | Deadline: ${deadlineDate}${b.designated_chapter_id > 0 ? ` | Designated: Chapter #${b.designated_chapter_id}` : ""}`;
+          return `Bounty #${b.id} | Chapter #${b.chapter_id} (${b.novel_title}) | ${formatEther(BigInt(b.locked_amount))} ETH locked | Window: ${createDate} → ${deadlineDate}${b.designated_chapter_id > 0 ? ` | Designated: Chapter #${b.designated_chapter_id}` : ""}`;
         });
         return ok(`Active bounties (${data.bounties.length}):\n${lines.join("\n")}`);
       } catch (error) {

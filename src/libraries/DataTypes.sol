@@ -142,6 +142,7 @@ library DataTypes {
         uint64 chapterId; // Target chapter to continue from
         address tipper; // Reader who created the bounty
         uint256 lockedAmount; // Locked amount (80% of total; 20% already sent to prize pool)
+        uint64 createTime; // Bounty creation time; only children with timestamp >= createTime qualify
         uint64 deadline; // Submission deadline for qualifying continuations
         uint64 designatedChapterId; // Tipper-designated chapter (0 = none, split equally)
         bool claimed; // Whether the bounty has been distributed or refunded

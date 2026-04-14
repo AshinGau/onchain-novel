@@ -100,10 +100,12 @@ abstract contract TestBase is Test {
 
         // Wire addresses
         votingEngine.setRoundManager(address(roundProxy));
+        votingEngine.setPrizePool(address(prizeProxy));
         prizePool.setNovelCore(address(novelCoreProxy));
         prizePool.setRoundManager(address(roundProxy));
         prizePool.setRulesEngine(address(rulesProxy));
         prizePool.setBountyBoard(address(bountyProxy));
+        prizePool.setVotingEngine(address(votingProxy));
         rulesEngine.setNovelCore(address(novelCoreProxy));
         novelCore.setRoundManager(address(roundProxy));
         // Configure the test `keeper` address as RoundManager's keeper so vm.prank(keeper) works.
@@ -711,21 +713,26 @@ contract IntegrationTest is TestBase {
     // ----------------------------------------------------------
     //  Complete novel by creator
     // ----------------------------------------------------------
-    function test_completeNovel() public {
+    function test_setKeeper_revertsOnZeroAddress() public {
+        vm.prank(deployer);
+        vm.expectRevert(RoundManager.ZeroAddress.selector);
+        roundManager.setKeeper(address(0));
+    }
+
+    function test_completeNovel_revertsOnFreshNovel() public {
+        // Fresh novel with no settled round cannot be completed (B-2 guard).
         uint64 novelId = _createNovel();
         uint64 rootId = 1;
         _submitChapter(author1, novelId, rootId, "chapter for complete test!");
 
-        // Current world line ancestor is just root; pass [[root]] as finalPaths
         uint64[][] memory finalPaths = new uint64[][](1);
         finalPaths[0] = _singleHop(rootId);
 
         vm.prank(creator);
+        vm.expectRevert(RoundManager.NovelHasNoRound.selector);
         roundManager.completeNovel(novelId, finalPaths);
-
-        DataTypes.Novel memory novel = novelCore.getNovel(novelId);
-        assertFalse(novel.active, "novel should be inactive after completion");
     }
+
 
     // ----------------------------------------------------------
     //  Voter rewards: accurate voters get 3x weight

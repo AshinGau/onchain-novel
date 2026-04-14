@@ -289,6 +289,15 @@ do_start() {
         cast send --rpc-url "$RPC" --private-key "$PK_DEPLOYER" "$PRIZE_POOL" \
             "setKeeperRewardAmount(uint256)" "10000000000000" --json > /dev/null 2>&1
 
+        # Rotate RoundManager.keeper to the backend keeper address when --keeper is enabled.
+        # Deploy.s.sol initially sets keeper = deployer; without this, backend keeper calls
+        # would revert with NotKeeperYet until the 1-day inactivity timeout elapses.
+        if [ "$KEEPER_ENABLED" = true ]; then
+            KEEPER_ADDR=$(cast wallet address --private-key 0x92db14e403b83dfe3df233f83dfa3a0d7096f21ca9b0d6d6b8d88b2b4ec1564e)
+            cast send --rpc-url "$RPC" --private-key "$PK_DEPLOYER" "$ROUND_MANAGER" \
+                "setKeeper(address)" "$KEEPER_ADDR" --json > /dev/null 2>&1
+        fi
+
         # Save addresses
         cat > "$ENV_FILE" <<EOF
 NOVEL_CORE_ADDRESS=$NOVEL_CORE

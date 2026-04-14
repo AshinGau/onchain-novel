@@ -32,6 +32,9 @@ contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuard, UUP
     /// @notice Authorized RoundManager contract address
     address public roundManager;
 
+    /// @notice PrizePool contract address (allowed to send voter rewards via receive())
+    address public prizePool;
+
     /// @dev Per-round voting state, keyed by keccak256(novelId, round)
     struct VotingRoundData {
         uint64[] candidateIds;
@@ -70,6 +73,8 @@ contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuard, UUP
     // ============================================================
 
     error OnlyRoundManager();
+    error Unauthorized();
+    error ZeroAddress();
     error VotingNotInitialized();
     error VotingAlreadyInitialized();
     error AlreadyCommitted();
@@ -114,11 +119,19 @@ contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuard, UUP
     // ============================================================
 
     event RoundManagerUpdated(address indexed oldAddr, address indexed newAddr);
+    event PrizePoolUpdated(address indexed oldAddr, address indexed newAddr);
 
     function setRoundManager(address newRoundManager) external onlyOwner {
         address old = roundManager;
         roundManager = newRoundManager;
         emit RoundManagerUpdated(old, newRoundManager);
+    }
+
+    function setPrizePool(address newPrizePool) external onlyOwner {
+        if (newPrizePool == address(0)) revert ZeroAddress();
+        address old = prizePool;
+        prizePool = newPrizePool;
+        emit PrizePoolUpdated(old, newPrizePool);
     }
 
     // ============================================================
@@ -364,10 +377,10 @@ contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuard, UUP
         return (voteStake * UNREVEAL_PENALTY_RATE_BP) / 10000;
     }
 
-    /// @notice Accept ETH transfers from RoundManager (stake deposits + voter rewards)
-    /// @dev Whitelisted to prevent stray ETH from accumulating
+    /// @notice Accept ETH from RoundManager (committed stakes) and PrizePool (voter rewards).
+    /// @dev Whitelisted to prevent stray ETH from accumulating.
     receive() external payable {
-        if (msg.sender != roundManager) revert OnlyRoundManager();
+        if (msg.sender != roundManager && msg.sender != prizePool) revert Unauthorized();
     }
 
     // ============================================================

@@ -408,12 +408,12 @@ export async function handleBountyBoardEvent(log: Log, db: Client) {
 
   switch (decoded.eventName) {
     case "BountyCreated": {
-      const { bountyId, chapterId, tipper, lockedAmount, deadline } = decoded.args;
+      const { bountyId, chapterId, tipper, lockedAmount, createTime, deadline } = decoded.args;
       const chapterRes = await db.query("SELECT novel_id FROM chapters WHERE id = $1", [chapterId.toString()]);
       const novelId = chapterRes.rows[0]?.novel_id ?? "0";
       await db.query(
-        `INSERT INTO bounties (id, chapter_id, novel_id, tipper, locked_amount, deadline, block_number)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
+        `INSERT INTO bounties (id, chapter_id, novel_id, tipper, locked_amount, create_time, deadline, block_number)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          ON CONFLICT (id) DO NOTHING`,
         [
           bountyId.toString(),
@@ -421,6 +421,7 @@ export async function handleBountyBoardEvent(log: Log, db: Client) {
           novelId,
           tipper,
           lockedAmount.toString(),
+          createTime.toString(),
           deadline.toString(),
           blockNumber,
         ],

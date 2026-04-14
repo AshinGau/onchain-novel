@@ -106,7 +106,7 @@ export const prizePoolAbi = parseAbi([
 // ============================================================
 
 export const bountyBoardAbi = parseAbi([
-  "event BountyCreated(uint64 indexed bountyId, uint64 indexed chapterId, address indexed tipper, uint256 lockedAmount, uint64 deadline)",
+  "event BountyCreated(uint64 indexed bountyId, uint64 indexed chapterId, address indexed tipper, uint256 lockedAmount, uint64 createTime, uint64 deadline)",
   "event BountyDesignated(uint64 indexed bountyId, uint64 indexed chapterId)",
   "event BountyClaimed(uint64 indexed bountyId, address indexed author, uint256 amount)",
   "event BountyRefunded(uint64 indexed bountyId, address indexed tipper, uint256 amount)",
