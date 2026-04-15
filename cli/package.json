@@ -1,15 +1,47 @@
 {
   "name": "onchain-novel-cli",
   "version": "0.1.0",
+  "description": "CLI for the Onchain Novel protocol — create novels, submit chapters, vote, tip, and manage bounties from the terminal.",
   "type": "module",
   "bin": {
     "onchain-novel-cli": "./dist/bin/onchain-novel-cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "onchain",
+    "novel",
+    "ethereum",
+    "cli",
+    "web3",
+    "collaborative-writing"
+  ],
+  "author": "ashingau",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AshinGau/onchain-novel.git",
+    "directory": "cli"
+  },
+  "homepage": "https://github.com/AshinGau/onchain-novel#readme",
+  "bugs": {
+    "url": "https://github.com/AshinGau/onchain-novel/issues"
+  },
+  "engines": {
+    "node": ">=20"
   },
   "scripts": {
     "build": "tsc && rm -rf dist/guides && cp -r src/guides dist/guides",
     "dev": "tsc --watch",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "prepublishOnly": "npm run build"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "dependencies": {
     "chalk": "^5.3.0",
