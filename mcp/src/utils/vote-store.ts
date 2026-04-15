@@ -29,8 +29,8 @@ function load(): Store {
 }
 
 function persist(store: Store): void {
-  if (!existsSync(STORE_DIR)) mkdirSync(STORE_DIR, { recursive: true });
-  writeFileSync(STORE_FILE, JSON.stringify(store, null, 2) + "\n");
+  if (!existsSync(STORE_DIR)) mkdirSync(STORE_DIR, { recursive: true, mode: 0o700 });
+  writeFileSync(STORE_FILE, JSON.stringify(store, null, 2) + "\n", { mode: 0o600 });
 }
 
 function makeKey(novelId: bigint, round: number, voter: string): string {

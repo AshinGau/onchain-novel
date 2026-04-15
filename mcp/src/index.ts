@@ -5,6 +5,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { registerBountyTools } from "./tools/bounty.js";
 import { registerChapterTools } from "./tools/chapter.js";
 import { registerNovelTools } from "./tools/novel.js";
+import { registerRewardTools } from "./tools/reward.js";
 import { registerRuleTools } from "./tools/rule.js";
 import { registerTipTools } from "./tools/tip.js";
 import { registerVoteTools } from "./tools/vote.js";
@@ -21,6 +22,7 @@ async function main() {
   registerTipTools(server);
   registerBountyTools(server);
   registerRuleTools(server);
+  registerRewardTools(server);
 
   const transport = new StdioServerTransport();
   await server.connect(transport);

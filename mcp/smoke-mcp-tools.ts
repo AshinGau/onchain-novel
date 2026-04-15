@@ -25,6 +25,7 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 
 const RPC_URL = process.env.RPC_URL!;
 const NOVEL_CORE = process.env.NOVEL_CORE_ADDRESS!;
+const ROUND_MANAGER = process.env.ROUND_MANAGER_ADDRESS!;
 const VOTING_ENGINE = process.env.VOTING_ENGINE_ADDRESS!;
 const PRIZE_POOL = process.env.PRIZE_POOL_ADDRESS!;
 const BOUNTY_BOARD = process.env.BOUNTY_BOARD_ADDRESS!;
@@ -63,6 +64,7 @@ function envFor(pk: string): Record<string, string> {
   return {
     RPC_URL,
     NOVEL_CORE_ADDRESS: NOVEL_CORE,
+    ROUND_MANAGER_ADDRESS: ROUND_MANAGER,
     VOTING_ENGINE_ADDRESS: VOTING_ENGINE,
     PRIZE_POOL_ADDRESS: PRIZE_POOL,
     BOUNTY_BOARD_ADDRESS: BOUNTY_BOARD,
@@ -229,7 +231,10 @@ async function main() {
   await withClient(PK_KEEPER, async (client) => {
     // The MCP exposes vote_start; closeNomination/closeCommit are not in tools
     // (per design they are keeper-only; we drive them via cast for the test).
-    const res = await client.callTool({ name: "vote_start", arguments: { novelId: 1 } });
+    const res = await client.callTool({
+      name: "vote_start",
+      arguments: { novelId: 1, leaves: [2, 3] },
+    });
     const text = callText(res);
     if (text.includes("Round started")) pass("vote_start");
     else fail(`vote_start: ${text}`);
@@ -238,7 +243,7 @@ async function main() {
   advanceTime(10);
   // closeNomination via cast (no MCP tool for this)
   execSync(
-    `cast send --rpc-url ${RPC_URL} --private-key ${PK_KEEPER} ${NOVEL_CORE} "closeNomination(uint64)" 1`,
+    `cast send --rpc-url ${RPC_URL} --private-key ${PK_KEEPER} ${ROUND_MANAGER} "closeNomination(uint64)" 1`,
     { stdio: "ignore" },
   );
   pass("closeNomination via cast");
@@ -271,7 +276,7 @@ async function main() {
 
   advanceTime(10);
   execSync(
-    `cast send --rpc-url ${RPC_URL} --private-key ${PK_KEEPER} ${NOVEL_CORE} "closeCommit(uint64)" 1`,
+    `cast send --rpc-url ${RPC_URL} --private-key ${PK_KEEPER} ${ROUND_MANAGER} "closeCommit(uint64)" 1`,
     { stdio: "ignore" },
   );
   pass("closeCommit via cast");

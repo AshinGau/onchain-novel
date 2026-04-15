@@ -4,8 +4,9 @@ import { z } from "zod";
 
 import { config } from "../config.js";
 import { claimBounty, createBounty, designateBounty, refundBounty } from "../shared/index.js";
+import { apiGet, hasApi } from "../utils/api.js";
 import { getPublicClient, getWalletClient } from "../utils/client.js";
-import { fail, ok } from "../utils/response.js";
+import { fail, inlineSafe, ok, sanitizeError } from "../utils/response.js";
 
 export function registerBountyTools(server: McpServer): void {
   // ── bounty_create ──
@@ -34,7 +35,7 @@ export function registerBountyTools(server: McpServer): void {
           `Bounty created for Chapter #${params.chapterId}.\nAmount: ${formatEther(amount)} ETH\nTx: ${hash}\nBlock: ${receipt.blockNumber}`,
         );
       } catch (error) {
-        return fail(`Failed: ${error instanceof Error ? error.message : String(error)}`);
+        return fail(`Failed: ${sanitizeError(error)}`);
       }
     },
   );
@@ -62,7 +63,7 @@ export function registerBountyTools(server: McpServer): void {
           `Bounty #${params.bountyId} designated Chapter #${params.chapterId}.\nTx: ${hash}\nBlock: ${receipt.blockNumber}`,
         );
       } catch (error) {
-        return fail(`Failed: ${error instanceof Error ? error.message : String(error)}`);
+        return fail(`Failed: ${sanitizeError(error)}`);
       }
     },
   );
@@ -76,22 +77,22 @@ export function registerBountyTools(server: McpServer): void {
     },
     async (params) => {
       try {
-        const url = new URL(`${config.apiBaseUrl}/api/bounties/active`);
-        if (params.novelId) url.searchParams.set("novelId", String(params.novelId));
-        const res = await fetch(url.toString());
-        if (!res.ok) return fail(`API error: ${res.status}`);
-        const data = (await res.json()) as { bounties: Array<Record<string, unknown>> };
+        if (!hasApi()) return fail("bounty_active requires API_BASE_URL.");
+        const qs = params.novelId ? `?novelId=${params.novelId}` : "";
+        const data = await apiGet<{ bounties: Array<Record<string, unknown>> }>(
+          `/api/bounties/active${qs}`,
+        );
         if (data.bounties.length === 0) return ok("No active bounties found.");
         const lines = data.bounties.map((b: any) => {
           const createDate = b.create_time
             ? new Date(Number(b.create_time) * 1000).toISOString()
             : "?";
           const deadlineDate = new Date(Number(b.deadline) * 1000).toISOString();
-          return `Bounty #${b.id} | Chapter #${b.chapter_id} (${b.novel_title}) | ${formatEther(BigInt(b.locked_amount))} ETH locked | Window: ${createDate} → ${deadlineDate}${b.designated_chapter_id > 0 ? ` | Designated: Chapter #${b.designated_chapter_id}` : ""}`;
+          return `Bounty #${b.id} | Chapter #${b.chapter_id} (${inlineSafe(String(b.novel_title ?? ""), 60)}) | ${formatEther(BigInt(b.locked_amount))} ETH locked | Window: ${createDate} → ${deadlineDate}${b.designated_chapter_id > 0 ? ` | Designated: Chapter #${b.designated_chapter_id}` : ""}`;
         });
         return ok(`Active bounties (${data.bounties.length}):\n${lines.join("\n")}`);
       } catch (error) {
-        return fail(`Failed: ${error instanceof Error ? error.message : String(error)}`);
+        return fail(`Failed: ${sanitizeError(error)}`);
       }
     },
   );
@@ -112,7 +113,7 @@ export function registerBountyTools(server: McpServer): void {
           `Bounty #${params.bountyId} claimed.\nTx: ${hash}\nBlock: ${receipt.blockNumber}`,
         );
       } catch (error) {
-        return fail(`Failed: ${error instanceof Error ? error.message : String(error)}`);
+        return fail(`Failed: ${sanitizeError(error)}`);
       }
     },
   );
@@ -133,7 +134,7 @@ export function registerBountyTools(server: McpServer): void {
           `Bounty #${params.bountyId} refunded.\nTx: ${hash}\nBlock: ${receipt.blockNumber}`,
         );
       } catch (error) {
-        return fail(`Failed: ${error instanceof Error ? error.message : String(error)}`);
+        return fail(`Failed: ${sanitizeError(error)}`);
       }
     },
   );
