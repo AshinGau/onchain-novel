@@ -25,7 +25,8 @@ export function registerSetupCommand(program: Command): void {
   program
     .command("setup")
     .description("Interactive setup: configure CLI and generate project files")
-    .action(async () => {
+    .option("--mcp", "also generate .mcp.json for MCP-capable agents (off by default)")
+    .action(async (opts) => {
       const rl = createInterface({ input: process.stdin, output: process.stdout });
 
       try {
@@ -90,20 +91,25 @@ export function registerSetupCommand(program: Command): void {
         saveConfig(config);
         success("Configuration saved to ~/.onchain-novel/config.json");
 
-        // Generate .mcp.json in current directory. Never embed secrets — the MCP
-        // process inherits PRIVATE_KEY from its parent shell (the Claude Code host).
-        const mcpConfig = {
-          mcpServers: {
-            "onchain-novel": {
-              command: "onchain-novel-mcp",
-              env: {
-                RPC_URL: rpcUrl,
+        // .mcp.json is opt-in via --mcp. Never embed secrets — the MCP process
+        // inherits PRIVATE_KEY from its parent shell (the Claude Code host).
+        if (opts.mcp) {
+          const mcpConfig = {
+            mcpServers: {
+              "onchain-novel": {
+                command: "onchain-novel-mcp",
+                env: {
+                  RPC_URL: rpcUrl,
+                },
               },
             },
-          },
-        };
-        writeFileSync(join(process.cwd(), ".mcp.json"), JSON.stringify(mcpConfig, null, 2) + "\n");
-        success("Generated .mcp.json (no secrets inside)");
+          };
+          writeFileSync(
+            join(process.cwd(), ".mcp.json"),
+            JSON.stringify(mcpConfig, null, 2) + "\n",
+          );
+          success("Generated .mcp.json (no secrets inside)");
+        }
 
         // Generate .claude/commands/ skill files
         const skillsDir = join(process.cwd(), ".claude", "commands");
