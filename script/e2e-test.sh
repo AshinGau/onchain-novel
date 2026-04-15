@@ -248,9 +248,9 @@ pass "Keeper: closeNomination"
 info "Committing votes..."
 
 # Both voters vote for chapter 4 (Writer A's deeper chain, depth=3)
-# commitHash = keccak256(abi.encodePacked(uint64 candidateId, bytes32 salt))
+# commitHash = keccak256(abi.encodePacked(address voter, uint64 candidateId, bytes32 salt))
 SALT_A="0x0000000000000000000000000000000000000000000000000000000000000001"
-COMMIT_A=$(cast keccak256 $(cast abi-encode --packed "(uint64,bytes32)" 4 "$SALT_A"))
+COMMIT_A=$(cast keccak256 $(cast abi-encode --packed "(address,uint64,bytes32)" "$ADDR_VOTER_A" 4 "$SALT_A"))
 cast_send "$PK_VOTER_A" "$ROUND_MANAGER" \
     "commitVote(uint64,bytes32)" "$NOVEL_ID" "$COMMIT_A" \
     --value 0.01ether > /dev/null
@@ -258,7 +258,7 @@ pass "Voter A committed (for chapter 4)"
 
 # Voter B votes for chapter 3 (Writer B's chain)
 SALT_B="0x0000000000000000000000000000000000000000000000000000000000000002"
-COMMIT_B=$(cast keccak256 $(cast abi-encode --packed "(uint64,bytes32)" 3 "$SALT_B"))
+COMMIT_B=$(cast keccak256 $(cast abi-encode --packed "(address,uint64,bytes32)" "$ADDR_VOTER_B" 3 "$SALT_B"))
 cast_send "$PK_VOTER_B" "$ROUND_MANAGER" \
     "commitVote(uint64,bytes32)" "$NOVEL_ID" "$COMMIT_B" \
     --value 0.01ether > /dev/null
@@ -266,7 +266,7 @@ pass "Voter B committed (for chapter 3)"
 
 # Verify: reveal before closeCommit should fail
 if cast send --rpc-url "$RPC" --private-key "$PK_VOTER_A" "$ROUND_MANAGER" \
-    "revealVote(uint64,uint64,bytes32)" "$NOVEL_ID" 4 "$SALT_A" \
+    "revealVote(uint64,address,uint64,bytes32)" "$NOVEL_ID" "$ADDR_VOTER_A" 4 "$SALT_A" \
     > /dev/null 2>&1; then
     fail "Reveal should have been rejected before closeCommit"
 else
@@ -292,11 +292,11 @@ fi
 # STEP 8: Voters reveal
 info "Revealing votes..."
 cast_send "$PK_VOTER_A" "$ROUND_MANAGER" \
-    "revealVote(uint64,uint64,bytes32)" "$NOVEL_ID" 4 "$SALT_A" > /dev/null
+    "revealVote(uint64,address,uint64,bytes32)" "$NOVEL_ID" "$ADDR_VOTER_A" 4 "$SALT_A" > /dev/null
 pass "Voter A revealed (voted for chapter 4)"
 
 cast_send "$PK_VOTER_B" "$ROUND_MANAGER" \
-    "revealVote(uint64,uint64,bytes32)" "$NOVEL_ID" 3 "$SALT_B" > /dev/null
+    "revealVote(uint64,address,uint64,bytes32)" "$NOVEL_ID" "$ADDR_VOTER_B" 3 "$SALT_B" > /dev/null
 pass "Voter B revealed (voted for chapter 3)"
 
 # STEP 9: Keeper settles round 1 — reward authors derived on-chain by walking parentId to prev ancestor
@@ -401,14 +401,14 @@ pass "Keeper: closeNomination (round 2)"
 
 # Commit votes -- both vote for chapter 5 (Writer A's extended chain)
 SALT_R2_A="0x0000000000000000000000000000000000000000000000000000000000000003"
-COMMIT_R2_A=$(cast keccak256 $(cast abi-encode --packed "(uint64,bytes32)" 5 "$SALT_R2_A"))
+COMMIT_R2_A=$(cast keccak256 $(cast abi-encode --packed "(address,uint64,bytes32)" "$ADDR_VOTER_A" 5 "$SALT_R2_A"))
 cast_send "$PK_VOTER_A" "$ROUND_MANAGER" \
     "commitVote(uint64,bytes32)" "$NOVEL_ID" "$COMMIT_R2_A" \
     --value 0.01ether > /dev/null
 pass "Voter A committed (round 2, for chapter 5)"
 
 SALT_R2_B="0x0000000000000000000000000000000000000000000000000000000000000004"
-COMMIT_R2_B=$(cast keccak256 $(cast abi-encode --packed "(uint64,bytes32)" 6 "$SALT_R2_B"))
+COMMIT_R2_B=$(cast keccak256 $(cast abi-encode --packed "(address,uint64,bytes32)" "$ADDR_VOTER_B" 6 "$SALT_R2_B"))
 cast_send "$PK_VOTER_B" "$ROUND_MANAGER" \
     "commitVote(uint64,bytes32)" "$NOVEL_ID" "$COMMIT_R2_B" \
     --value 0.01ether > /dev/null
@@ -421,11 +421,11 @@ pass "Keeper: closeCommit (round 2)"
 
 # Reveal
 cast_send "$PK_VOTER_A" "$ROUND_MANAGER" \
-    "revealVote(uint64,uint64,bytes32)" "$NOVEL_ID" 5 "$SALT_R2_A" > /dev/null
+    "revealVote(uint64,address,uint64,bytes32)" "$NOVEL_ID" "$ADDR_VOTER_A" 5 "$SALT_R2_A" > /dev/null
 pass "Voter A revealed (round 2)"
 
 cast_send "$PK_VOTER_B" "$ROUND_MANAGER" \
-    "revealVote(uint64,uint64,bytes32)" "$NOVEL_ID" 6 "$SALT_R2_B" > /dev/null
+    "revealVote(uint64,address,uint64,bytes32)" "$NOVEL_ID" "$ADDR_VOTER_B" 6 "$SALT_R2_B" > /dev/null
 pass "Voter B revealed (round 2)"
 
 # Settle round 2 — reward authors derived on-chain
@@ -506,14 +506,14 @@ pass "Keeper: closeNomination (round 3)"
 
 # Commit -- Voter A votes for the nominated chapter 9
 SALT_R3_A="0x0000000000000000000000000000000000000000000000000000000000000005"
-COMMIT_R3_A=$(cast keccak256 $(cast abi-encode --packed "(uint64,bytes32)" 10 "$SALT_R3_A"))
+COMMIT_R3_A=$(cast keccak256 $(cast abi-encode --packed "(address,uint64,bytes32)" "$ADDR_VOTER_A" 10 "$SALT_R3_A"))
 cast_send "$PK_VOTER_A" "$ROUND_MANAGER" \
     "commitVote(uint64,bytes32)" "$NOVEL_ID" "$COMMIT_R3_A" \
     --value 0.01ether > /dev/null
 pass "Voter A committed (round 3, for nominated chapter 10)"
 
 SALT_R3_B="0x0000000000000000000000000000000000000000000000000000000000000006"
-COMMIT_R3_B=$(cast keccak256 $(cast abi-encode --packed "(uint64,bytes32)" 8 "$SALT_R3_B"))
+COMMIT_R3_B=$(cast keccak256 $(cast abi-encode --packed "(address,uint64,bytes32)" "$ADDR_VOTER_B" 8 "$SALT_R3_B"))
 cast_send "$PK_VOTER_B" "$ROUND_MANAGER" \
     "commitVote(uint64,bytes32)" "$NOVEL_ID" "$COMMIT_R3_B" \
     --value 0.01ether > /dev/null
@@ -526,11 +526,11 @@ pass "Keeper: closeCommit (round 3)"
 
 # Reveal
 cast_send "$PK_VOTER_A" "$ROUND_MANAGER" \
-    "revealVote(uint64,uint64,bytes32)" "$NOVEL_ID" 10 "$SALT_R3_A" > /dev/null
+    "revealVote(uint64,address,uint64,bytes32)" "$NOVEL_ID" "$ADDR_VOTER_A" 10 "$SALT_R3_A" > /dev/null
 pass "Voter A revealed (round 3)"
 
 cast_send "$PK_VOTER_B" "$ROUND_MANAGER" \
-    "revealVote(uint64,uint64,bytes32)" "$NOVEL_ID" 8 "$SALT_R3_B" > /dev/null
+    "revealVote(uint64,address,uint64,bytes32)" "$NOVEL_ID" "$ADDR_VOTER_B" 8 "$SALT_R3_B" > /dev/null
 pass "Voter B revealed (round 3)"
 
 # Settle round 3.

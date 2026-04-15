@@ -405,16 +405,16 @@ CANDIDATE_A=4  # deeper chain (Writer A's path)
 CANDIDATE_B=3  # Writer B's branch
 
 # Commit votes through NovelCore (NOT VotingEngine!)
-# Commit hash = keccak256(abi.encodePacked(uint64 candidateId, bytes32 salt))
+# Commit hash = keccak256(abi.encodePacked(address voter, uint64 candidateId, bytes32 salt))
 SALT_A="0x0000000000000000000000000000000000000000000000000000000000000001"
-COMMIT_A=$(cast keccak256 $(cast abi-encode --packed "(uint64,bytes32)" "$CANDIDATE_A" "$SALT_A"))
+COMMIT_A=$(cast keccak256 $(cast abi-encode --packed "(address,uint64,bytes32)" "$ADDR_VOTER_A" "$CANDIDATE_A" "$SALT_A"))
 STATUS=$(cast_send "$PK_VOTER_A" "$ROUND_MANAGER" \
     "commitVote(uint64,bytes32)" 1 "$COMMIT_A" \
     --value 0.05ether)
 [ "$STATUS" = "0x1" ] && pass "Voter A committed (for candidate $CANDIDATE_A)" || fail "Voter A commitVote failed"
 
 SALT_B="0x0000000000000000000000000000000000000000000000000000000000000002"
-COMMIT_B=$(cast keccak256 $(cast abi-encode --packed "(uint64,bytes32)" "$CANDIDATE_B" "$SALT_B"))
+COMMIT_B=$(cast keccak256 $(cast abi-encode --packed "(address,uint64,bytes32)" "$ADDR_VOTER_B" "$CANDIDATE_B" "$SALT_B"))
 STATUS=$(cast_send "$PK_VOTER_B" "$ROUND_MANAGER" \
     "commitVote(uint64,bytes32)" 1 "$COMMIT_B" \
     --value 0.05ether)
@@ -432,11 +432,11 @@ api_check "/api/novels/1" ".round_phase" "3" "Novel in Revealing phase (=3)"
 
 # Reveal votes through NovelCore (NOT VotingEngine!)
 STATUS=$(cast_send "$PK_VOTER_A" "$ROUND_MANAGER" \
-    "revealVote(uint64,uint64,bytes32)" 1 "$CANDIDATE_A" "$SALT_A")
+    "revealVote(uint64,address,uint64,bytes32)" 1 "$ADDR_VOTER_A" "$CANDIDATE_A" "$SALT_A")
 [ "$STATUS" = "0x1" ] && pass "Voter A revealed" || fail "Voter A revealVote failed"
 
 STATUS=$(cast_send "$PK_VOTER_B" "$ROUND_MANAGER" \
-    "revealVote(uint64,uint64,bytes32)" 1 "$CANDIDATE_B" "$SALT_B")
+    "revealVote(uint64,address,uint64,bytes32)" 1 "$ADDR_VOTER_B" "$CANDIDATE_B" "$SALT_B")
 [ "$STATUS" = "0x1" ] && pass "Voter B revealed" || fail "Voter B revealVote failed"
 
 # Advance time past revealDuration (5s)
@@ -522,14 +522,14 @@ R2_CANDIDATE_A=5
 R2_CANDIDATE_B=6
 
 SALT_R2A="0x0000000000000000000000000000000000000000000000000000000000000011"
-COMMIT_R2A=$(cast keccak256 $(cast abi-encode --packed "(uint64,bytes32)" "$R2_CANDIDATE_A" "$SALT_R2A"))
+COMMIT_R2A=$(cast keccak256 $(cast abi-encode --packed "(address,uint64,bytes32)" "$ADDR_VOTER_A" "$R2_CANDIDATE_A" "$SALT_R2A"))
 STATUS=$(cast_send "$PK_VOTER_A" "$ROUND_MANAGER" \
     "commitVote(uint64,bytes32)" 1 "$COMMIT_R2A" \
     --value 0.05ether)
 [ "$STATUS" = "0x1" ] && pass "Voter A committed round 2" || fail "Voter A round 2 commit failed"
 
 SALT_R2B="0x0000000000000000000000000000000000000000000000000000000000000012"
-COMMIT_R2B=$(cast keccak256 $(cast abi-encode --packed "(uint64,bytes32)" "$R2_CANDIDATE_B" "$SALT_R2B"))
+COMMIT_R2B=$(cast keccak256 $(cast abi-encode --packed "(address,uint64,bytes32)" "$ADDR_VOTER_B" "$R2_CANDIDATE_B" "$SALT_R2B"))
 STATUS=$(cast_send "$PK_VOTER_B" "$ROUND_MANAGER" \
     "commitVote(uint64,bytes32)" 1 "$COMMIT_R2B" \
     --value 0.05ether)
@@ -540,11 +540,11 @@ STATUS=$(cast_send "$PK_DEPLOYER" "$ROUND_MANAGER" "closeCommit(uint64)" 1)
 [ "$STATUS" = "0x1" ] && pass "closeCommit round 2" || fail "closeCommit round 2 failed"
 
 STATUS=$(cast_send "$PK_VOTER_A" "$ROUND_MANAGER" \
-    "revealVote(uint64,uint64,bytes32)" 1 "$R2_CANDIDATE_A" "$SALT_R2A")
+    "revealVote(uint64,address,uint64,bytes32)" 1 "$ADDR_VOTER_A" "$R2_CANDIDATE_A" "$SALT_R2A")
 [ "$STATUS" = "0x1" ] && pass "Voter A revealed round 2" || fail "Voter A round 2 reveal failed"
 
 STATUS=$(cast_send "$PK_VOTER_B" "$ROUND_MANAGER" \
-    "revealVote(uint64,uint64,bytes32)" 1 "$R2_CANDIDATE_B" "$SALT_R2B")
+    "revealVote(uint64,address,uint64,bytes32)" 1 "$ADDR_VOTER_B" "$R2_CANDIDATE_B" "$SALT_R2B")
 [ "$STATUS" = "0x1" ] && pass "Voter B revealed round 2" || fail "Voter B round 2 reveal failed"
 
 advance_time 10

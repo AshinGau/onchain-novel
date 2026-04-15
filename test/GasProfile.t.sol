@@ -127,7 +127,7 @@ contract GasProfileTest is TestBase {
 
         uint64 target = ch2;
         bytes32 salt = bytes32("gassalt");
-        bytes32 commitHash = keccak256(abi.encodePacked(target, salt));
+        bytes32 commitHash = keccak256(abi.encodePacked(voter1, target, salt));
 
         // Commit gas
         vm.prank(voter1);
@@ -141,10 +141,9 @@ contract GasProfileTest is TestBase {
         vm.prank(keeper);
         roundManager.closeCommit(novelId);
 
-        // Reveal gas
-        vm.prank(voter1);
+        // Reveal gas (permissionless — anyone can submit; no prank needed)
         gasBefore = gasleft();
-        roundManager.revealVote(novelId, target, salt);
+        roundManager.revealVote(novelId, voter1, target, salt);
         uint256 revealGas = gasBefore - gasleft();
 
         emit log_named_uint("Gas: revealVote", revealGas);
@@ -172,7 +171,7 @@ contract GasProfileTest is TestBase {
 
         uint64 target = ch2;
         bytes32 salt = bytes32("settlegas");
-        bytes32 commitHash = keccak256(abi.encodePacked(target, salt));
+        bytes32 commitHash = keccak256(abi.encodePacked(voter1, target, salt));
 
         vm.prank(voter1);
         roundManager.commitVote{value: VOTE_STAKE}(novelId, commitHash);
@@ -181,8 +180,7 @@ contract GasProfileTest is TestBase {
         vm.prank(keeper);
         roundManager.closeCommit(novelId);
 
-        vm.prank(voter1);
-        roundManager.revealVote(novelId, target, salt);
+        roundManager.revealVote(novelId, voter1, target, salt);
 
         vm.warp(block.timestamp + REVEAL_DURATION + 1);
 

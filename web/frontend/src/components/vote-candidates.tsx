@@ -82,7 +82,7 @@ export function VoteCandidates({ novelId, round, phase, voteStake, candidates, c
     if (!selectedId || !address) return;
     setSubmitNote(null);
     const salt = generateSalt();
-    const commitHash = computeCommitHash(BigInt(selectedId), salt);
+    const commitHash = computeCommitHash(address, BigInt(selectedId), salt);
 
     await send(
       {
@@ -253,10 +253,11 @@ salt:      ${rescueSalt.salt}`}
         </div>
       )}
 
-      {revealing && stored && (
+      {revealing && stored && address && (
         <RevealAction
           novelId={novelId}
           round={round}
+          voter={address}
           stored={stored}
           onRevealed={() => { clearVote(novelId, round); setStored(null); }}
         />
@@ -271,8 +272,8 @@ salt:      ${rescueSalt.salt}`}
 }
 
 function RevealAction({
-  novelId, round, stored, onRevealed,
-}: { novelId: string; round: number; stored: StoredVote; onRevealed: () => void }) {
+  novelId, round, voter, stored, onRevealed,
+}: { novelId: string; round: number; voter: `0x${string}`; stored: StoredVote; onRevealed: () => void }) {
   const { send, status, error } = useTxAction();
 
   async function handleReveal() {
@@ -281,7 +282,7 @@ function RevealAction({
         address: ROUND_MANAGER_ADDRESS,
         abi: roundManagerAbi,
         functionName: "revealVote",
-        args: [BigInt(novelId), BigInt(stored.candidateId), stored.salt],
+        args: [BigInt(novelId), voter, BigInt(stored.candidateId), stored.salt],
       },
       onRevealed,
     );

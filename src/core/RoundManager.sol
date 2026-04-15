@@ -2,7 +2,7 @@
 pragma solidity ^0.8.28;
 
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
@@ -34,11 +34,16 @@ import {DataTypes} from "../libraries/DataTypes.sol";
 contract RoundManager is
     Initializable,
     OwnableUpgradeable,
-    ReentrancyGuard,
+    ReentrancyGuardTransient,
     PausableUpgradeable,
     UUPSUpgradeable,
     IRoundManager
 {
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
     // ─────── Constants ───────
     uint64 internal constant INACTIVITY_TIMEOUT = 30 days; // completeNovel public-call window
     uint64 internal constant KEEPER_INACTIVITY_TIMEOUT = 1 days; // round-fn public-call grace after phase deadline
@@ -355,7 +360,14 @@ contract RoundManager is
         emit VoteCommitted(novelId, round, msg.sender);
     }
 
-    function revealVote(uint64 novelId, uint64 candidateId, bytes32 salt) external whenNotPaused {
+    /// @notice Reveal `voter`'s commit. **Permissionless** — anyone can submit the reveal for any
+    ///         voter as long as `(voter, candidateId, salt)` matches the stored commitHash.
+    /// @dev The commitHash is voter-bound (`keccak(voter, candidateId, salt)`), so leaking the
+    ///      preimage cannot be exploited: a third party can only complete the reveal *as the
+    ///      voter intended*. Stake and reward bookkeeping is keyed by `voter`, not msg.sender.
+    ///      This makes keeper-assisted reveal trustless (any helper, not just the keeper) and
+    ///      means voters who lose their wallet but kept the salt elsewhere can still be revealed.
+    function revealVote(uint64 novelId, address voter, uint64 candidateId, bytes32 salt) external whenNotPaused {
         DataTypes.Novel memory novel = novelCore.getNovel(novelId);
         if (novel.id == 0) revert NovelNotFound(novelId);
         if (novel.roundPhase != DataTypes.RoundPhase.Revealing) {
@@ -363,9 +375,9 @@ contract RoundManager is
         }
 
         uint32 round = novel.currentRound;
-        votingEngine.revealVote(novelId, round, msg.sender, candidateId, salt);
+        votingEngine.revealVote(novelId, round, voter, candidateId, salt);
 
-        emit VoteRevealed(novelId, round, msg.sender, candidateId);
+        emit VoteRevealed(novelId, round, voter, candidateId);
     }
 
     function claimVotingReward(uint64 novelId, uint32 round) external nonReentrant whenNotPaused {

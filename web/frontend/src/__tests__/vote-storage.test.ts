@@ -25,18 +25,23 @@ describe("generateSalt", () => {
 });
 
 describe("computeCommitHash", () => {
-  it("is deterministic for the same (candidateId, salt) pair", () => {
+  const voterA = "0x1111111111111111111111111111111111111111" as const;
+  const voterB = "0x2222222222222222222222222222222222222222" as const;
+
+  it("is deterministic for the same (voter, candidateId, salt) triple", () => {
     const salt = "0x0000000000000000000000000000000000000000000000000000000000000001" as const;
-    const a = computeCommitHash(42n, salt);
-    const b = computeCommitHash(42n, salt);
+    const a = computeCommitHash(voterA, 42n, salt);
+    const b = computeCommitHash(voterA, 42n, salt);
     expect(a).toEqual(b);
   });
 
-  it("differs when candidateId or salt changes", () => {
+  it("differs when voter, candidateId or salt changes", () => {
     const s1 = "0x0000000000000000000000000000000000000000000000000000000000000001" as const;
     const s2 = "0x0000000000000000000000000000000000000000000000000000000000000002" as const;
-    expect(computeCommitHash(1n, s1)).not.toEqual(computeCommitHash(2n, s1));
-    expect(computeCommitHash(1n, s1)).not.toEqual(computeCommitHash(1n, s2));
+    expect(computeCommitHash(voterA, 1n, s1)).not.toEqual(computeCommitHash(voterA, 2n, s1));
+    expect(computeCommitHash(voterA, 1n, s1)).not.toEqual(computeCommitHash(voterA, 1n, s2));
+    // Voter binding: same (candidate, salt) under different voter must produce different hash
+    expect(computeCommitHash(voterA, 1n, s1)).not.toEqual(computeCommitHash(voterB, 1n, s1));
   });
 });
 

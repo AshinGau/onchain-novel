@@ -50,7 +50,7 @@ interface IVotingEngine {
     /// @param novelId The novel ID
     /// @param round The round number
     /// @param voter The voter address
-    /// @param commitHash keccak256(abi.encodePacked(candidateId, salt))
+    /// @param commitHash keccak256(abi.encodePacked(voter, candidateId, salt))
     /// @param stakeAmount The amount of ETH staked with this vote
     function commitVote(uint64 novelId, uint32 round, address voter, bytes32 commitHash, uint256 stakeAmount)
         external;

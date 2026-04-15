@@ -48,20 +48,21 @@ export function StoryTree({ chapters, novelId, hasMore, maxDepth, loading, onLoa
   useEffect(() => { setReadSet(getReadSet()); }, []);
 
   useEffect(() => {
-    function onFsChange() {
-      setIsFullscreen(!!document.fullscreenElement);
+    if (!isFullscreen) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setIsFullscreen(false);
     }
-    document.addEventListener("fullscreenchange", onFsChange);
-    return () => document.removeEventListener("fullscreenchange", onFsChange);
-  }, []);
+    document.addEventListener("keydown", onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [isFullscreen]);
 
   const toggleFullscreen = useCallback(() => {
-    if (!containerRef.current) return;
-    if (document.fullscreenElement) {
-      document.exitFullscreen();
-    } else {
-      containerRef.current.requestFullscreen();
-    }
+    setIsFullscreen((v) => !v);
   }, []);
 
   const { root, totalWidth, totalHeight } = useMemo(() => {
@@ -204,7 +205,7 @@ export function StoryTree({ chapters, novelId, hasMore, maxDepth, loading, onLoa
   return (
     <div
       ref={containerRef}
-      className="story-tree-container"
+      className={`story-tree-container${isFullscreen ? " is-page-fullscreen" : ""}`}
       onWheel={handleWheel}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
@@ -343,7 +344,7 @@ function renderEdges(node: TreeNode): React.ReactNode[] {
         key={`edge-${node.id}-${child.id}`}
         d={`M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`}
         fill="none"
-        stroke="var(--color-border)"
+        stroke="var(--color-text-muted)"
         strokeWidth={2}
         opacity={0.6}
       />
@@ -376,7 +377,7 @@ function renderNodes(
       ? "var(--color-primary)"
       : isWl || isRead
         ? "var(--color-primary)"
-        : "var(--color-border)";
+        : "var(--color-text-muted)";
   const strokeWidth = isSelected ? 3 : isWl ? 2.5 : isRead ? 2 : 1.5;
   const shadowOpacity = isHovered || isSelected ? 0.15 : 0;
 

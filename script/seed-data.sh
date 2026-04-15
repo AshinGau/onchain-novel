@@ -36,6 +36,8 @@ PK_WRITER_B="0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6"
 PK_WRITER_C="0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a"
 PK_VOTER_A="0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a"
 PK_VOTER_B="0x8b3a350cf5c34c9194ca85829a2df0ec3153be0318b5e2d3348e872092edffba"
+ADDR_VOTER_A="0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65"
+ADDR_VOTER_B="0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc"
 PK_KEEPER="0x92db14e403b83dfe3df233f83dfa3a0d7096f21ca9b0d6d6b8d88b2b4ec1564e"
 
 # ── Helpers ──
@@ -108,8 +110,8 @@ run_round() {
     local salt_a salt_b commit_a commit_b
     salt_a=$(printf '0x%064x' $(( seed * 2 + 1 )))
     salt_b=$(printf '0x%064x' $(( seed * 2 + 2 )))
-    commit_a=$(cast keccak256 "$(cast abi-encode --packed "(uint64,bytes32)" "$cand_a" "$salt_a")")
-    commit_b=$(cast keccak256 "$(cast abi-encode --packed "(uint64,bytes32)" "$cand_b" "$salt_b")")
+    commit_a=$(cast keccak256 "$(cast abi-encode --packed "(address,uint64,bytes32)" "$ADDR_VOTER_A" "$cand_a" "$salt_a")")
+    commit_b=$(cast keccak256 "$(cast abi-encode --packed "(address,uint64,bytes32)" "$ADDR_VOTER_B" "$cand_b" "$salt_b")")
 
     cast_send_value "$PK_VOTER_A" "0.001ether" "$ROUND_MANAGER_ADDRESS" \
         "commitVote(uint64,bytes32)" "$novel_id" "$commit_a"
@@ -120,9 +122,9 @@ run_round() {
     cast_send "$PK_KEEPER" "$ROUND_MANAGER_ADDRESS" "closeCommit(uint64)" "$novel_id"
 
     cast_send "$PK_VOTER_A" "$ROUND_MANAGER_ADDRESS" \
-        "revealVote(uint64,uint64,bytes32)" "$novel_id" "$cand_a" "$salt_a"
+        "revealVote(uint64,address,uint64,bytes32)" "$novel_id" "$ADDR_VOTER_A" "$cand_a" "$salt_a"
     cast_send "$PK_VOTER_B" "$ROUND_MANAGER_ADDRESS" \
-        "revealVote(uint64,uint64,bytes32)" "$novel_id" "$cand_b" "$salt_b"
+        "revealVote(uint64,address,uint64,bytes32)" "$novel_id" "$ADDR_VOTER_B" "$cand_b" "$salt_b"
 
     advance 6
     # Reward authors derived on-chain via parentId walk; no winnerPaths needed.

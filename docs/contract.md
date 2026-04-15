@@ -103,7 +103,7 @@ Duration: `nominateDuration`.
 
 **Committing**: `commitVote(novelId, commitHash)`, requires staking `voteStake`. One vote per address per round. Duration: `commitDuration`.
 
-**Revealing**: `revealVote(novelId, candidateId, salt)`, vote weight = staked amount. Duration: `revealDuration`. Keeper can call `revealVote` on behalf of users who submitted their plaintext vote to the backend at commit time (see §2.5 Keeper-Assisted Reveal).
+**Revealing**: `revealVote(novelId, voter, candidateId, salt)`, vote weight = staked amount. Duration: `revealDuration`. The call is permissionless — anyone (keeper, voter, third party) may submit the reveal for a given voter; the voter binding in `commitHash` prevents vote redirection (see §2.5 Keeper-Assisted Reveal).
 
 **Settlement**: Keeper calls `settleRound(novelId)` — no path arguments. `VotingEngine.tallyVotes` selects top N (stable insertion sort; fewer than N if insufficient candidates). For each winner, `NovelCore.collectPathAuthors` walks `parentId` up to any previous world line ancestor (anchor excluded — already rewarded); if no anchor reached (orphan winner from a forfeit nomination), that winner contributes zero authors. Rewards distributed, unrevealed stakes processed (see §3.5), worldLineAncestors replaced, return to Idle.
 
@@ -126,16 +126,18 @@ Writing and voting run in parallel, never blocking each other.
 
 ### 2.5 Keeper-Assisted Reveal
 
-To reduce user friction, the backend Keeper can reveal votes on behalf of users:
+`revealVote(novelId, voter, candidateId, salt)` is **permissionless** — anyone (the keeper, the voter themselves, or a third party) can submit a reveal for any voter. The voter binding inside `commitHash = keccak256(abi.encodePacked(voter, candidateId, salt))` does all the security work: only a `(voter, c, s)` triple matching the previously-committed hash will pass. A third party who learns the salt can only **complete the reveal as the voter intended** — they cannot redirect the vote to a different candidate, nor steal the stake/reward (both flow to the committed `voter`).
+
+This makes keeper-assisted reveal fully **trustless**:
 
 1. At commit time, user sends plaintext `(candidateId, salt)` to the backend API alongside the on-chain `commitVote` transaction
 2. Backend stores `(novelId, round, voter, candidateId, salt)` encrypted at rest
-3. When reveal phase begins, Keeper batch-calls `revealVote` for all stored votes
+3. When reveal phase begins, the Keeper batch-calls `revealVote(novelId, voter, candidateId, salt)` for all stored votes using its own gas
 4. User only needs **one on-chain interaction** (commit); reveal is automatic
 
-**Trust model**: Keeper sees the plaintext vote but cannot alter it -- the commit hash is already on-chain. The worst Keeper can do is fail to reveal, which is equivalent to the user forgetting. Users who don't trust the Keeper can still reveal manually.
+**Trust model**: The Keeper (or any helper) cannot forge or alter a vote — commit hash + voter binding already fix it on-chain. The worst any party can do is fail to reveal, which is equivalent to the voter forgetting. Voters who lose their wallet but kept the salt elsewhere can still have their vote revealed by any helper.
 
-**Fallback**: Users can always self-reveal during the reveal window. Keeper-assisted reveal is opt-in.
+**Fallback**: Users can always self-reveal during the reveal window.
 
 ---
 

@@ -148,12 +148,14 @@ interface INovelCore {
     ///      nominee that won voting without proving descent from a previous world line).
     ///      Authors are deduplicated across all walks. All chapters must belong to `novelId`.
     ///      Walk length per startNode is bounded by MAX_PROOF_PATH_LENGTH.
+    /// @dev NOT a view function: uses transient storage (TSTORE) for O(n) author dedup.
+    ///      eth_call simulators that disallow state-modifying opcodes will fail to simulate.
     function collectPathAuthors(
         uint64 novelId,
         uint64[] calldata startNodes,
         uint64[] calldata stopAnchors,
         bool requireAnchorHit
-    ) external view returns (address[] memory authors);
+    ) external returns (address[] memory authors);
 
     /// @notice Total number of novels created (auto-generated public counter getter)
     function novelCount() external view returns (uint64);

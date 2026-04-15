@@ -5,7 +5,7 @@ import { decryptVoteSalt } from "../utils/crypto.js";
 import { env } from "../utils/env.js";
 
 const revealAbi = parseAbi([
-  "function revealVote(uint64 novelId, uint64 candidateId, bytes32 salt) external",
+  "function revealVote(uint64 novelId, address voter, uint64 candidateId, bytes32 salt) external",
 ]);
 
 interface PendingVote {
@@ -73,7 +73,7 @@ export async function batchReveal(
         address: env.ROUND_MANAGER_ADDRESS,
         abi: revealAbi,
         functionName: "revealVote",
-        args: [vote.novelId, vote.candidateId, salt],
+        args: [vote.novelId, vote.voter as `0x${string}`, vote.candidateId, salt],
         account: keeperAddress,
       });
       const hash = await walletClient.writeContract(request as any);

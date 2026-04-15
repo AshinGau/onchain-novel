@@ -2,7 +2,7 @@
 pragma solidity ^0.8.28;
 
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
@@ -13,7 +13,7 @@ import {DataTypes} from "../libraries/DataTypes.sol";
 /// @notice Commit-Reveal voting engine using Stake-to-Vote
 /// @dev Manages voting rounds identified by (novelId, round) pairs.
 ///      RoundManager handles phase enforcement; this contract manages vote data and rewards.
-contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuard, UUPSUpgradeable, IVotingEngine {
+contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuardTransient, UUPSUpgradeable, IVotingEngine {
     // ============================================================
     //                        CONSTANTS
     // ============================================================
@@ -24,6 +24,10 @@ contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuard, UUP
 
     /// @notice Penalty rate for unrevealed votes in basis points (5000 = 50%)
     uint256 public constant UNREVEAL_PENALTY_RATE_BP = 5000;
+
+    /// @notice Hard cap on voters per round. Bounds gas of settleVoterRewards/tallyVotes loops so
+    ///         a griefer spamming cheap commits cannot push settleRound past the block gas limit.
+    uint256 public constant MAX_VOTERS_PER_ROUND = 500;
 
     // ============================================================
     //                         STORAGE
@@ -90,6 +94,7 @@ contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuard, UUP
     error TransferFailed();
     error NoRewardToClaim();
     error InvalidCommitHash();
+    error TooManyVoters();
 
     // ============================================================
     //                        MODIFIERS
@@ -176,6 +181,7 @@ contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuard, UUP
         if (!rd.initialized) revert VotingNotInitialized();
         if (commitHash == bytes32(0)) revert InvalidCommitHash();
         if (_voteCommits[roundKey][voter].commitHash != bytes32(0)) revert AlreadyCommitted();
+        if (_voters[roundKey].length >= MAX_VOTERS_PER_ROUND) revert TooManyVoters();
 
         _voteCommits[roundKey][voter] = DataTypes.VoteCommit({
             commitHash: commitHash,
@@ -203,8 +209,12 @@ contract VotingEngine is Initializable, OwnableUpgradeable, ReentrancyGuard, UUP
         if (commit.commitHash == bytes32(0)) revert NotCommitted();
         if (commit.revealed) revert AlreadyRevealed();
 
-        // Verify the reveal matches the commit
-        bytes32 expectedHash = keccak256(abi.encodePacked(candidateId, salt));
+        // Verify the reveal matches the commit. Voter is bound into the hash so that a second
+        // address cannot copy another's commitHash and ride along on their reveal — without the
+        // voter binding, Bob observes Alice's commitHash H, re-submits H under his own address,
+        // and reveals using Alice's (candidateId, salt) once Alice reveals, trivially earning
+        // the 3× accuracy multiplier.
+        bytes32 expectedHash = keccak256(abi.encodePacked(voter, candidateId, salt));
         if (expectedHash != commit.commitHash) revert InvalidReveal();
 
         // Verify candidate is valid

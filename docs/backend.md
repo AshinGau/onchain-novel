@@ -28,7 +28,7 @@ Transaction failure (already executed by another keeper) silently skipped. Witho
 When reveal phase begins, Keeper batch-reveals all stored plaintext votes before calling `settleRound`:
 
 1. Query `pending_votes` table for `(novelId, round)` where status = `committed`
-2. For each vote, call `revealVote(novelId, candidateId, salt)` on-chain using Keeper wallet
+2. For each vote, call `revealVote(novelId, voter, candidateId, salt)` on-chain using Keeper wallet (permissionless — anyone can submit on behalf of the voter; keeper pays gas)
 3. Mark vote as `revealed` in DB; on tx failure mark `failed` (vote was likely already self-revealed)
 4. After all reveals processed, proceed to `settleRound` when reveal duration expires
 

@@ -2,7 +2,7 @@
 pragma solidity ^0.8.28;
 
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
@@ -20,7 +20,7 @@ import {DataTypes} from "../libraries/DataTypes.sol";
 contract BountyBoard is
     Initializable,
     OwnableUpgradeable,
-    ReentrancyGuard,
+    ReentrancyGuardTransient,
     PausableUpgradeable,
     UUPSUpgradeable,
     IBountyBoard
@@ -169,10 +169,13 @@ contract BountyBoard is
         if (msg.sender != bounty.tipper) revert NotTipper();
         if (block.timestamp > bounty.deadline) revert DeadlineReached();
 
-        // Verify chapterId is a direct child of the bounty target
+        // Verify chapterId is a direct child of the bounty target AND was submitted within
+        // the bounty window — same eligibility rule as _getQualifyingAuthors, so designated
+        // path cannot reward pre-existing children the bounty never incentivized.
         DataTypes.Chapter memory child = novelCore.getChapter(chapterId);
         if (child.id == 0) revert ChapterNotFound();
         if (child.parentId != bounty.chapterId) revert NotDirectChild();
+        if (child.timestamp < bounty.createTime || child.timestamp > bounty.deadline) revert NotDirectChild();
 
         bounty.designatedChapterId = chapterId;
 

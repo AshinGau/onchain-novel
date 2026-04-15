@@ -104,7 +104,7 @@ library DataTypes {
 
     /// @notice A vote commitment in the commit-reveal scheme
     struct VoteCommit {
-        bytes32 commitHash; // keccak256(abi.encodePacked(candidateId, salt))
+        bytes32 commitHash; // keccak256(abi.encodePacked(voter, candidateId, salt))
         uint256 stakeAmount; // ETH staked with this vote
         bool revealed; // Whether the vote has been revealed
         uint64 revealedCandidateId; // The candidate voted for (set after reveal)

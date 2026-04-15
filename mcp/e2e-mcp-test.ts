@@ -432,7 +432,7 @@ async function phase4VotingRound() {
 
   // Voter A commits vote
   const saltA = toBytes32Salt("secret-salt-voter-a");
-  const commitHashA = computeCommitHash(targetCandidate, saltA);
+  const commitHashA = computeCommitHash(voterA.wallet.account!.address, targetCandidate, saltA);
 
   hash = await voterA.wallet.writeContract({
     address: NOVEL_CORE,
@@ -448,7 +448,7 @@ async function phase4VotingRound() {
 
   // Voter B commits vote (same candidate)
   const saltB = toBytes32Salt("secret-salt-voter-b");
-  const commitHashB = computeCommitHash(targetCandidate, saltB);
+  const commitHashB = computeCommitHash(voterB.wallet.account!.address, targetCandidate, saltB);
 
   hash = await voterB.wallet.writeContract({
     address: NOVEL_CORE,
@@ -493,7 +493,7 @@ async function phase4VotingRound() {
     address: NOVEL_CORE,
     abi: novelCoreAbi,
     functionName: "revealVote",
-    args: [novelId, targetCandidate, saltA],
+    args: [novelId, voterA.wallet.account!.address, targetCandidate, saltA],
     chain: foundry,
     account: voterA.wallet.account!,
   });
@@ -505,7 +505,7 @@ async function phase4VotingRound() {
     address: NOVEL_CORE,
     abi: novelCoreAbi,
     functionName: "revealVote",
-    args: [novelId, targetCandidate, saltB],
+    args: [novelId, voterB.wallet.account!.address, targetCandidate, saltB],
     chain: foundry,
     account: voterB.wallet.account!,
   });

@@ -2,7 +2,7 @@
 pragma solidity ^0.8.28;
 
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
@@ -17,7 +17,7 @@ import {DataTypes} from "../libraries/DataTypes.sol";
 contract PrizePool is
     Initializable,
     OwnableUpgradeable,
-    ReentrancyGuard,
+    ReentrancyGuardTransient,
     PausableUpgradeable,
     UUPSUpgradeable,
     IPrizePool
@@ -89,6 +89,11 @@ contract PrizePool is
         _;
     }
 
+    modifier nonZero(address addr) {
+        if (addr == address(0)) revert ZeroAddress();
+        _;
+    }
+
     // ============================================================
     //                      INITIALIZER
     // ============================================================
@@ -115,32 +120,31 @@ contract PrizePool is
     event VotingEngineUpdated(address indexed oldAddr, address indexed newAddr);
     event KeeperRewardAmountUpdated(uint256 oldAmount, uint256 newAmount);
 
-    function setNovelCore(address newNovelCore) external onlyOwner {
+    function setNovelCore(address newNovelCore) external onlyOwner nonZero(newNovelCore) {
         address old = novelCore;
         novelCore = newNovelCore;
         emit NovelCoreUpdated(old, newNovelCore);
     }
 
-    function setRoundManager(address newRoundManager) external onlyOwner {
+    function setRoundManager(address newRoundManager) external onlyOwner nonZero(newRoundManager) {
         address old = roundManager;
         roundManager = newRoundManager;
         emit RoundManagerUpdated(old, newRoundManager);
     }
 
-    function setRulesEngine(address newRulesEngine) external onlyOwner {
+    function setRulesEngine(address newRulesEngine) external onlyOwner nonZero(newRulesEngine) {
         address old = rulesEngine;
         rulesEngine = newRulesEngine;
         emit RulesEngineUpdated(old, newRulesEngine);
     }
 
-    function setBountyBoard(address newBountyBoard) external onlyOwner {
+    function setBountyBoard(address newBountyBoard) external onlyOwner nonZero(newBountyBoard) {
         address old = bountyBoard;
         bountyBoard = newBountyBoard;
         emit BountyBoardUpdated(old, newBountyBoard);
     }
 
-    function setVotingEngine(address newVotingEngine) external onlyOwner {
-        if (newVotingEngine == address(0)) revert ZeroAddress();
+    function setVotingEngine(address newVotingEngine) external onlyOwner nonZero(newVotingEngine) {
         address old = votingEngine;
         votingEngine = newVotingEngine;
         emit VotingEngineUpdated(old, newVotingEngine);
