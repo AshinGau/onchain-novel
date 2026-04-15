@@ -2,7 +2,7 @@
 pragma solidity ^0.8.28;
 
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
@@ -20,12 +20,16 @@ import {DataTypes} from "../libraries/DataTypes.sol";
 contract NovelCore is
     Initializable,
     OwnableUpgradeable,
-    ReentrancyGuard,
+    ReentrancyGuardTransient,
     PausableUpgradeable,
     UUPSUpgradeable,
     INovelCore
 {
-    // (UUPS / OZ initializers wired below)
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
     // ─────── Constants ───────
     uint16 internal constant FORK_FEE_RATE = 100; // 1% of source pool, in bps
     uint256 internal constant MIN_SUBMISSION_FEE = 0.0001 ether;
@@ -394,6 +398,11 @@ contract NovelCore is
         if (author != expectedAuthor) revert AuthorMismatch(expectedAuthor, author);
     }
 
+    /// @dev Persistent counter rolled into transient-storage slot derivation so two calls to
+    ///      `collectPathAuthors` in the same transaction (e.g. inside a forge test) cannot pollute
+    ///      each other's dedup state. One warm SSTORE per call after the first; gas is trivial.
+    uint256 private _collectPathCallId;
+
     /// @notice Walk parent chains from each startNode, collect deduplicated authors.
     /// @dev Trust model: the protocol's single off-chain trust assumption is which N candidate
     ///      leaves the keeper feeds into `startRound`. Everything downstream — winner selection,
@@ -408,29 +417,34 @@ contract NovelCore is
     ///      walk contributes zero authors (intentional author-forfeit semantics — e.g. an orphan
     ///      nominee that won voting without descent from any previous world line).
     ///      Authors are deduplicated across all walks. Per-walk length bounded by MAX_PROOF_PATH_LENGTH.
+    ///
+    ///      Dedup uses transient storage (EIP-1153, Cancun) keyed by (callId, author) so the
+    ///      complexity is O(total_authors) rather than O(total_authors²) — fixes the worst-case
+    ///      `completeNovel` gas blow-up on long-running novels with deep world lines.
+    ///      NOT a `view` function: TSTORE is state-modifying. eth_call simulators cannot use it.
     function collectPathAuthors(
         uint64 novelId,
         uint64[] calldata startNodes,
         uint64[] calldata stopAnchors,
         bool requireAnchorHit
-    ) external view returns (address[] memory authors) {
-        // Upper bound for dedup buffer: all walks could go MAX steps and produce unique authors.
+    ) external returns (address[] memory authors) {
+        uint256 callId = ++_collectPathCallId;
+        // Upper bound for output buffer: all walks could go MAX steps and produce unique authors.
         uint256 maxAuthors = startNodes.length * MAX_PROOF_PATH_LENGTH;
         address[] memory buf = new address[](maxAuthors);
         uint256 count = 0;
 
         for (uint256 i = 0; i < startNodes.length; i++) {
             uint64 cur = startNodes[i];
-            // Walk, collecting chapter authors into a scratch per-walk buffer first so we can
-            // discard it wholesale if requireAnchorHit && anchor not hit.
+            // Per-walk buffer so we can discard wholesale if requireAnchorHit && anchor not hit.
             address[] memory walkAuthors = new address[](MAX_PROOF_PATH_LENGTH);
             uint256 walkCount = 0;
             bool anchorHit = false;
 
             for (uint256 step = 0; step < MAX_PROOF_PATH_LENGTH; step++) {
-                if (cur == 0) break; // walked past root (shouldn't happen — root has parentId=0 and is emitted first)
+                if (cur == 0) break; // walked past root (shouldn't happen — root has parentId=0)
 
-                // Check anchor match — if so, stop WITHOUT including this chapter
+                // Anchor check — anchor is EXCLUDED from author collection
                 bool isAnchor = false;
                 for (uint256 a = 0; a < stopAnchors.length; a++) {
                     if (stopAnchors[a] == cur) {
@@ -452,19 +466,22 @@ contract NovelCore is
                 cur = ch.parentId;
             }
 
-            if (requireAnchorHit && !anchorHit) continue; // forfeit
+            if (requireAnchorHit && !anchorHit) continue; // forfeit — drop this walk's authors
 
-            // Merge walkAuthors into `buf` with dedup
+            // O(n) dedup via transient storage keyed by (callId, author).
             for (uint256 k = 0; k < walkCount; k++) {
                 address a = walkAuthors[k];
-                bool dup = false;
-                for (uint256 u = 0; u < count; u++) {
-                    if (buf[u] == a) {
-                        dup = true;
-                        break;
-                    }
+                bytes32 slot = keccak256(abi.encode(callId, a));
+                uint256 seen;
+                assembly {
+                    seen := tload(slot)
                 }
-                if (!dup) buf[count++] = a;
+                if (seen == 0) {
+                    assembly {
+                        tstore(slot, 1)
+                    }
+                    buf[count++] = a;
+                }
             }
         }
 
@@ -539,5 +556,5 @@ contract NovelCore is
     function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 
     // ─────── Storage gap ───────
-    uint256[42] private __gap;
+    uint256[41] private __gap;
 }

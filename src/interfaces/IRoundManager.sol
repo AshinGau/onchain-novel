@@ -61,7 +61,11 @@ interface IRoundManager {
     function nominateCandidate(uint64 novelId, uint64 chapterId, uint64[] calldata path) external payable;
 
     function commitVote(uint64 novelId, bytes32 commitHash) external payable;
-    function revealVote(uint64 novelId, uint64 candidateId, bytes32 salt) external;
+    /// @notice Permissionless reveal — anyone can call on behalf of any voter. The voter binding
+    ///         in the commitHash (`keccak(voter, candidateId, salt)`) means only the correct
+    ///         `(voter, c, s)` triple satisfies the hash check; a third party with the salt can
+    ///         only complete the reveal as the voter intended.
+    function revealVote(uint64 novelId, address voter, uint64 candidateId, bytes32 salt) external;
     function claimVotingReward(uint64 novelId, uint32 round) external;
 
     // ─────── Novel completion ───────

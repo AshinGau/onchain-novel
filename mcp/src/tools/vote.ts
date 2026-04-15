@@ -71,7 +71,7 @@ export function registerVoteTools(server: McpServer): void {
 
         // Auto-generate fresh random salt when not provided
         const saltBytes: `0x${string}` = params.salt ? toBytes32Salt(params.salt) : generateSalt();
-        const hash32 = computeCommitHash(BigInt(params.candidateId), saltBytes);
+        const hash32 = computeCommitHash(voter, BigInt(params.candidateId), saltBytes);
 
         // Get vote stake + current round from novel config
         const novel = (await getNovel(pub, BigInt(params.novelId), config.novelCore)) as any;
@@ -144,17 +144,21 @@ export function registerVoteTools(server: McpServer): void {
   // ── vote_reveal ──
   server.tool(
     "vote_reveal",
-    "Reveal a previously committed vote. If `salt` is omitted, falls back to the local backup saved by vote_commit.",
+    "Reveal a previously committed vote. Anyone can call revealVote on behalf of a voter — " +
+      "only the matching voter address whose commit hash equals keccak(voter, c, s) will succeed. " +
+      "If `voter` is omitted, defaults to the connected wallet. If `salt` is omitted, falls back " +
+      "to the local backup saved by vote_commit.",
     {
       novelId: z.number().describe("Novel ID"),
       candidateId: z.number().describe("Candidate chapter ID you voted for"),
       salt: z.string().optional().describe("Optional salt — falls back to local store"),
+      voter: z.string().optional().describe("Voter address (defaults to connected wallet)"),
     },
     async (params) => {
       try {
         const wallet = getWalletClient();
         const pub = getPublicClient();
-        const voter = wallet.account!.address;
+        const voter = (params.voter as `0x${string}` | undefined) ?? wallet.account!.address;
 
         let saltBytes: `0x${string}`;
         if (params.salt) {
@@ -171,6 +175,7 @@ export function registerVoteTools(server: McpServer): void {
 
         const txHash = await revealVote(wallet, {
           novelId: BigInt(params.novelId),
+          voter,
           candidateId: BigInt(params.candidateId),
           salt: saltBytes,
           roundManager: config.roundManager,

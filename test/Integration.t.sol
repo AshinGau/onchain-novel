@@ -315,8 +315,8 @@ abstract contract TestBase is Test {
         vm.prank(keeper);
         roundManager.closeNomination(novelId);
 
-        bytes32 commitHash = keccak256(abi.encodePacked(target, salt));
         for (uint256 i = 0; i < voters.length; i++) {
+            bytes32 commitHash = keccak256(abi.encodePacked(voters[i], target, salt));
             vm.prank(voters[i]);
             roundManager.commitVote{value: VOTE_STAKE}(novelId, commitHash);
         }
@@ -326,8 +326,7 @@ abstract contract TestBase is Test {
         roundManager.closeCommit(novelId);
 
         for (uint256 i = 0; i < voters.length; i++) {
-            vm.prank(voters[i]);
-            roundManager.revealVote(novelId, target, salt);
+            roundManager.revealVote(novelId, voters[i], target, salt);
         }
 
         vm.warp(block.timestamp + REVEAL_DURATION + 1);
@@ -462,21 +461,18 @@ contract IntegrationTest is TestBase {
 
         uint64 targetCandidate = ch4;
         bytes32 salt = bytes32("mysalt");
-        bytes32 commitHash = keccak256(abi.encodePacked(targetCandidate, salt));
 
         vm.prank(voter1);
-        roundManager.commitVote{value: VOTE_STAKE}(novelId, commitHash);
+        roundManager.commitVote{value: VOTE_STAKE}(novelId, keccak256(abi.encodePacked(voter1, targetCandidate, salt)));
         vm.prank(voter2);
-        roundManager.commitVote{value: VOTE_STAKE}(novelId, commitHash);
+        roundManager.commitVote{value: VOTE_STAKE}(novelId, keccak256(abi.encodePacked(voter2, targetCandidate, salt)));
 
         vm.warp(block.timestamp + COMMIT_DURATION + 1);
         vm.prank(keeper);
         roundManager.closeCommit(novelId);
 
-        vm.prank(voter1);
-        roundManager.revealVote(novelId, targetCandidate, salt);
-        vm.prank(voter2);
-        roundManager.revealVote(novelId, targetCandidate, salt);
+        roundManager.revealVote(novelId, voter1, targetCandidate, salt);
+        roundManager.revealVote(novelId, voter2, targetCandidate, salt);
 
         vm.warp(block.timestamp + REVEAL_DURATION + 1);
 
@@ -492,6 +488,52 @@ contract IntegrationTest is TestBase {
 
         rd = roundManager.getRoundData(novelId, 1);
         assertTrue(rd.settled);
+    }
+
+    // ----------------------------------------------------------
+    //  Audit HIGH-1 fix: commit-reveal copy attack must be blocked.
+    //  Bob copies Alice's commitHash; once Alice reveals (candidateId, salt),
+    //  Bob tries to reveal the same. With voter binding in the hash, Bob's
+    //  reveal must revert with InvalidReveal because keccak(bob, c, s) != hash.
+    // ----------------------------------------------------------
+    function test_commitRevealCopyAttackBlocked() public {
+        uint64 novelId = _createNovel();
+        uint64 rootId = 1;
+        uint64 ch2 = _submitChapter(author1, novelId, rootId, "branch A chapter 2!!");
+        uint64 ch3 = _submitChapter(author2, novelId, rootId, "branch B chapter 3!!");
+
+        uint64[] memory leaves = new uint64[](2);
+        leaves[0] = ch2;
+        leaves[1] = ch3;
+        vm.prank(keeper);
+        roundManager.startRound(novelId, leaves);
+        vm.warp(block.timestamp + NOMINATE_DURATION + 1);
+        vm.prank(keeper);
+        roundManager.closeNomination(novelId);
+
+        bytes32 salt = bytes32("alice_secret");
+        uint64 target = ch2;
+        bytes32 aliceHash = keccak256(abi.encodePacked(voter1, target, salt));
+
+        vm.prank(voter1);
+        roundManager.commitVote{value: VOTE_STAKE}(novelId, aliceHash);
+
+        // Bob copies Alice's commitHash. The contract permits this (per-voter dedup),
+        // but reveal must fail because the hash is voter-bound.
+        vm.prank(voter2);
+        roundManager.commitVote{value: VOTE_STAKE}(novelId, aliceHash);
+
+        vm.warp(block.timestamp + COMMIT_DURATION + 1);
+        vm.prank(keeper);
+        roundManager.closeCommit(novelId);
+
+        // Alice's reveal succeeds (anyone can submit; hash matches her commit).
+        roundManager.revealVote(novelId, voter1, target, salt);
+
+        // Bob tries to reveal his own commit using the leaked (target, salt) — must revert because
+        // his stored commitHash = keccak(voter1, target, salt) ≠ keccak(voter2, target, salt).
+        vm.expectRevert();
+        roundManager.revealVote(novelId, voter2, target, salt);
     }
 
     // ----------------------------------------------------------
@@ -736,22 +778,18 @@ contract IntegrationTest is TestBase {
         roundManager.closeNomination(novelId);
 
         bytes32 salt = bytes32("votersalt");
-        bytes32 commitHash2 = keccak256(abi.encodePacked(ch2, salt));
-        bytes32 commitHash3 = keccak256(abi.encodePacked(ch3, salt));
 
         vm.prank(voter1);
-        roundManager.commitVote{value: VOTE_STAKE}(novelId, commitHash2);
+        roundManager.commitVote{value: VOTE_STAKE}(novelId, keccak256(abi.encodePacked(voter1, ch2, salt)));
         vm.prank(voter2);
-        roundManager.commitVote{value: VOTE_STAKE}(novelId, commitHash3);
+        roundManager.commitVote{value: VOTE_STAKE}(novelId, keccak256(abi.encodePacked(voter2, ch3, salt)));
 
         vm.warp(block.timestamp + COMMIT_DURATION + 1);
         vm.prank(keeper);
         roundManager.closeCommit(novelId);
 
-        vm.prank(voter1);
-        roundManager.revealVote(novelId, ch2, salt);
-        vm.prank(voter2);
-        roundManager.revealVote(novelId, ch3, salt);
+        roundManager.revealVote(novelId, voter1, ch2, salt);
+        roundManager.revealVote(novelId, voter2, ch3, salt);
 
         vm.warp(block.timestamp + REVEAL_DURATION + 1);
 
@@ -865,19 +903,17 @@ contract IntegrationTest is TestBase {
         roundManager.closeNomination(novelId);
 
         bytes32 salt = bytes32("unrevealsalt");
-        bytes32 commitHash = keccak256(abi.encodePacked(ch2, salt));
 
         vm.prank(voter1);
-        roundManager.commitVote{value: VOTE_STAKE}(novelId, commitHash);
+        roundManager.commitVote{value: VOTE_STAKE}(novelId, keccak256(abi.encodePacked(voter1, ch2, salt)));
         vm.prank(voter2);
-        roundManager.commitVote{value: VOTE_STAKE}(novelId, commitHash);
+        roundManager.commitVote{value: VOTE_STAKE}(novelId, keccak256(abi.encodePacked(voter2, ch2, salt)));
 
         vm.warp(block.timestamp + COMMIT_DURATION + 1);
         vm.prank(keeper);
         roundManager.closeCommit(novelId);
 
-        vm.prank(voter1);
-        roundManager.revealVote(novelId, ch2, salt);
+        roundManager.revealVote(novelId, voter1, ch2, salt);
 
         vm.warp(block.timestamp + REVEAL_DURATION + 1);
 

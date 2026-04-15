@@ -70,7 +70,7 @@ export const roundManagerAbi = parseAbi([
   "function settleRound(uint64 novelId) external",
   "function nominateCandidate(uint64 novelId, uint64 chapterId, uint64[] path) external payable",
   "function commitVote(uint64 novelId, bytes32 commitHash) external payable",
-  "function revealVote(uint64 novelId, uint64 candidateId, bytes32 salt) external",
+  "function revealVote(uint64 novelId, address voter, uint64 candidateId, bytes32 salt) external",
   "function claimVotingReward(uint64 novelId, uint32 round) external",
   "function completeNovel(uint64 novelId) external",
 

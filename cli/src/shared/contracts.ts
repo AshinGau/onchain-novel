@@ -76,6 +76,7 @@ export interface CommitVoteParams {
 
 export interface RevealVoteParams {
   novelId: bigint;
+  voter: `0x${string}`;
   candidateId: bigint;
   salt: `0x${string}`;
   roundManager: `0x${string}`;
@@ -162,9 +163,15 @@ export interface SetCreatorRulesParams {
 // Helpers
 // ============================================================
 
-/** Compute vote commit hash: keccak256(abi.encodePacked(uint64(candidateId), bytes32(salt))) */
-export function computeCommitHash(candidateId: bigint, salt: `0x${string}`): `0x${string}` {
-  return keccak256(encodePacked(["uint64", "bytes32"], [candidateId, salt]));
+/** Compute vote commit hash: keccak256(abi.encodePacked(address(voter), uint64(candidateId), bytes32(salt))).
+ *  The voter binding prevents commit-copy attacks where Bob copies Alice's hash and reveals after she does.
+ */
+export function computeCommitHash(
+  voter: `0x${string}`,
+  candidateId: bigint,
+  salt: `0x${string}`
+): `0x${string}` {
+  return keccak256(encodePacked(["address", "uint64", "bytes32"], [voter, candidateId, salt]));
 }
 
 /** Convert a user-friendly salt string to bytes32 */
@@ -333,7 +340,7 @@ export async function revealVote(client: WalletClient, params: RevealVoteParams)
     address: params.roundManager,
     abi: roundManagerAbi,
     functionName: "revealVote",
-    args: [params.novelId, params.candidateId, params.salt],
+    args: [params.novelId, params.voter, params.candidateId, params.salt],
     chain: client.chain,
     account: client.account!,
   });

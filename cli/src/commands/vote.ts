@@ -176,7 +176,7 @@ export function registerVoteCommands(program: Command): void {
 
         // Auto-generate a fresh random salt when not provided.
         const saltBytes32: `0x${string}` = saltArg ? toBytes32Salt(saltArg) : generateSalt();
-        const commitHash = computeCommitHash(BigInt(candidateId), saltBytes32);
+        const commitHash = computeCommitHash(voter, BigInt(candidateId), saltBytes32);
 
         console.log(chalk.gray(`  Salt (bytes32): ${saltBytes32}`));
         console.log(chalk.gray(`  Commit hash:    ${commitHash}`));
@@ -262,7 +262,8 @@ export function registerVoteCommands(program: Command): void {
     .command("reveal <novel-id> <candidate-id> [salt]")
     .description(
       "Reveal a previously committed vote. If salt is omitted, falls back to the local backup " +
-        "saved by `vote commit`.",
+        "saved by `vote commit`. Anyone can call revealVote on behalf of a voter — only the " +
+        "matching voter address whose commit hash equals keccak(voter, c, s) will succeed.",
     )
     .action(async (novelId, candidateId, saltArg) => {
       try {
@@ -288,6 +289,7 @@ export function registerVoteCommands(program: Command): void {
 
         const hash = await revealVoteTx(client, {
           novelId: BigInt(novelId),
+          voter,
           candidateId: BigInt(candidateId),
           salt: saltBytes32,
           roundManager: contracts.roundManager,

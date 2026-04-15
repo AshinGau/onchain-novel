@@ -64,11 +64,13 @@ export function generateSalt(): `0x${string}` {
 }
 
 /**
- * Compute commitHash = keccak256(abi.encodePacked(uint64(candidateId), bytes32(salt)))
+ * Compute commitHash = keccak256(abi.encodePacked(address(voter), uint64(candidateId), bytes32(salt))).
+ * Voter binding blocks commit-copy attacks (Bob copies Alice's hash and reveals after she does).
  */
 export function computeCommitHash(
+  voter: `0x${string}`,
   candidateId: bigint,
   salt: `0x${string}`,
 ): `0x${string}` {
-  return keccak256(encodePacked(["uint64", "bytes32"], [candidateId, salt]));
+  return keccak256(encodePacked(["address", "uint64", "bytes32"], [voter, candidateId, salt]));
 }

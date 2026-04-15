@@ -146,7 +146,7 @@ contract ReentrancyTest is TestBase {
 
         uint64 target = ch2;
         bytes32 salt = bytes32("vrsalt");
-        bytes32 commitHash = keccak256(abi.encodePacked(target, salt));
+        bytes32 commitHash = keccak256(abi.encodePacked(voter1, target, salt));
 
         vm.prank(voter1);
         roundManager.commitVote{value: VOTE_STAKE}(novelId, commitHash);
@@ -155,8 +155,7 @@ contract ReentrancyTest is TestBase {
         vm.prank(keeper);
         roundManager.closeCommit(novelId);
 
-        vm.prank(voter1);
-        roundManager.revealVote(novelId, target, salt);
+        roundManager.revealVote(novelId, voter1, target, salt);
 
         vm.warp(block.timestamp + REVEAL_DURATION + 1);
 
