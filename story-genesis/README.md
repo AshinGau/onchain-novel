@@ -45,15 +45,23 @@ This will:
 
 All novels use the default config defined in `create-novels.mjs`:
 
-| Parameter | Value |
-|---|---|
-| Content Storage | Onchain |
-| Stake Amount | 0.01 ETH |
-| Round Duration | 1 day |
-| Commit Duration | 3 days |
-| Reveal Duration | 2 days |
-| World Lines | 2 |
-| Min Submissions | 3 |
+| Parameter          | Value                        |
+| ------------------ | ---------------------------- |
+| Content storage    | Onchain                      |
+| submissionFee      | 0.005 ETH                    |
+| voteStake          | 0.001 ETH (≤ submissionFee)  |
+| nominationFee      | 0.01 ETH                     |
+| nominateDuration   | 1 day                        |
+| commitDuration     | 3 days                       |
+| revealDuration     | 2 days                       |
+| minRoundGap        | 2 days                       |
+| worldLineCount     | 2                            |
+| prizeReleaseRate   | 20% (2000 bps)               |
+| voterRewardRate    | 15% (1500 bps)               |
+| ruleFee            | 0.001 ETH                    |
+| ruleVoteDuration   | 3 days                       |
+| ruleQuorum         | 7                            |
+| Initial prize pool | Random 1–10 ETH per novel    |
 
 ## Genre Coverage
 
