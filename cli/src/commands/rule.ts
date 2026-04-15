@@ -11,7 +11,7 @@ import {
   setCreatorRules as setCreatorRulesTx,
   voteOnRuleProposal as voteOnRuleProposalTx,
 } from "../shared/index.js";
-import { apiGet } from "../utils/api.js";
+import { fetchNovelConfig } from "../utils/api.js";
 import { getContracts, getPublicClient, getWalletClient, waitForTx } from "../utils/client.js";
 import { error, header, kv, success, txHash } from "../utils/format.js";
 
@@ -107,16 +107,8 @@ export function registerRuleCommands(program: Command): void {
         if (opts.value) {
           value = parseEther(opts.value);
         } else {
-          try {
-            const novel = await apiGet<Record<string, unknown>>(`/api/novels/${novelId}`);
-            const config = novel.config as Record<string, string>;
-            value = BigInt(config.ruleFee ?? "0");
-          } catch {
-            value = parseEther("0.001");
-            console.log(
-              chalk.yellow(`  Could not fetch novel config. Using default fee: 0.001 ETH`),
-            );
-          }
+          const { config } = await fetchNovelConfig(novelId);
+          value = BigInt(config.ruleFee ?? "0");
         }
 
         const path = await buildWorldLineProof(

@@ -18,21 +18,31 @@ export function registerConfigCommand(program: Command): void {
     kv("Path", getConfigPath());
     kv("rpcUrl", cfg.rpcUrl);
     kv("chainId", cfg.chainId ?? 31337);
-    kv("privateKey", cfg.privateKey ? cfg.privateKey.slice(0, 10) + "..." : "(not set)");
+    kv("PRIVATE_KEY env", process.env.PRIVATE_KEY ? "(set)" : "(not set)");
     kv("apiUrl", cfg.apiUrl ?? "(not set)");
     kv("contracts.novelCore", cfg.contracts?.novelCore ?? "(not set)");
+    kv("contracts.roundManager", cfg.contracts?.roundManager ?? "(not set)");
     kv("contracts.votingEngine", cfg.contracts?.votingEngine ?? "(not set)");
     kv("contracts.prizePool", cfg.contracts?.prizePool ?? "(not set)");
     kv("contracts.bountyBoard", cfg.contracts?.bountyBoard ?? "(not set)");
     kv("contracts.rulesEngine", cfg.contracts?.rulesEngine ?? "(not set)");
+    kv("contracts.userRegistry", cfg.contracts?.userRegistry ?? "(not set)");
     console.log();
   });
 
   // Set a config value
   config
     .command("set <key> <value>")
-    .description("Set a configuration value (e.g., rpcUrl, privateKey, contracts.novelCore)")
+    .description("Set a configuration value (e.g., rpcUrl, contracts.novelCore). Note: secrets are NOT stored in config — export PRIVATE_KEY in your shell instead.")
     .action((key: string, value: string) => {
+      if (key === "privateKey") {
+        error(
+          "privateKey is no longer stored in config. Export it in your shell:\n" +
+            "  export PRIVATE_KEY=0x...",
+        );
+        process.exit(1);
+      }
+
       const cfg = loadConfig() ?? {
         rpcUrl: "",
         contracts: {
@@ -54,17 +64,17 @@ export function registerConfigCommand(program: Command): void {
         (cfg.contracts as Record<string, string>)[contractKey] = value;
       } else if (key === "chainId") {
         (cfg as unknown as Record<string, unknown>)[key] = parseInt(value);
-      } else if (key === "rpcUrl" || key === "privateKey" || key === "apiUrl") {
+      } else if (key === "rpcUrl" || key === "apiUrl") {
         (cfg as unknown as Record<string, unknown>)[key] = value;
       } else {
         error(`Unknown config key: ${key}`);
         console.log(
-          "Valid keys: rpcUrl, chainId, privateKey, apiUrl, contracts.novelCore, contracts.roundManager, contracts.prizePool, contracts.votingEngine, contracts.bountyBoard, contracts.rulesEngine, contracts.userRegistry",
+          "Valid keys: rpcUrl, chainId, apiUrl, contracts.novelCore, contracts.roundManager, contracts.prizePool, contracts.votingEngine, contracts.bountyBoard, contracts.rulesEngine, contracts.userRegistry",
         );
         process.exit(1);
       }
 
       saveConfig(cfg as OnchainNovelConfig);
-      success(`Set ${key} = ${key === "privateKey" ? value.slice(0, 10) + "..." : value}`);
+      success(`Set ${key} = ${value}`);
     });
 }

@@ -9,6 +9,7 @@ import { registerNovelCommands } from "../commands/novel.js";
 import { registerRuleCommands } from "../commands/rule.js";
 import { registerSetupCommand } from "../commands/setup.js";
 import { registerTipCommands } from "../commands/tip.js";
+import { registerUserCommands } from "../commands/user.js";
 import { registerVoteCommands } from "../commands/vote.js";
 
 program
@@ -26,6 +27,7 @@ registerVoteCommands(program);
 registerTipCommands(program);
 registerBountyCommands(program);
 registerRuleCommands(program);
+registerUserCommands(program);
 registerGuideCommands(program);
 
 program.parse();

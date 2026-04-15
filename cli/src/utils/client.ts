@@ -2,7 +2,7 @@ import { createPublicClient, createWalletClient, defineChain, http, type Hash } 
 import { privateKeyToAccount } from "viem/accounts";
 import { foundry } from "viem/chains";
 
-import { requireConfig } from "./config.js";
+import { getPrivateKey, requireConfig } from "./config.js";
 
 function getChain() {
   const config = requireConfig();
@@ -25,11 +25,16 @@ export function getPublicClient() {
 
 export function getWalletClient() {
   const config = requireConfig();
-  if (!config.privateKey) {
-    console.error("No privateKey in config. Run 'onchain-novel-cli config set privateKey <key>'.");
+  const pk = getPrivateKey();
+  if (!pk) {
+    console.error(
+      "PRIVATE_KEY env var not set. The CLI never persists secrets; export it in your shell:\n" +
+        "  export PRIVATE_KEY=0x...\n" +
+        "Or inject it with a secret manager (direnv, 1Password CLI, etc).",
+    );
     process.exit(1);
   }
-  const account = privateKeyToAccount(config.privateKey as `0x${string}`);
+  const account = privateKeyToAccount(pk);
   return createWalletClient({
     account,
     chain: getChain(),

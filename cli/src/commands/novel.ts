@@ -6,11 +6,13 @@ import {
   completeNovel as completeNovelTx,
   createNovel as createNovelTx,
   forkNovel as forkNovelTx,
+  updateNovelMetadata as updateNovelMetadataTx,
   type NovelConfig,
   type NovelMetadata,
 } from "../shared/index.js";
 import { apiGet } from "../utils/api.js";
 import { getContracts, getWalletClient, waitForTx } from "../utils/client.js";
+import { resolveContent, warnIfOutOfRange } from "../utils/content.js";
 import { error, eth, header, kv, roundPhaseName, success, table, txHash } from "../utils/format.js";
 
 function buildNovelConfig(opts: Record<string, string>): NovelConfig {
@@ -69,7 +71,8 @@ export function registerNovelCommands(program: Command): void {
     .option("--rule-fee <eth>", "rule proposal fee in ETH", "0.01")
     .option("--rule-vote-duration <s>", "rule vote duration in seconds", "86400")
     .option("--rule-quorum <n>", "rule quorum", "3")
-    .requiredOption("--content <text>", "root chapter content")
+    .option("--content <text>", "root chapter content (mutually exclusive with --file)")
+    .option("--file <path>", "read root chapter content from a UTF-8 text file")
     .option("--value <eth>", "genesis fund in ETH", "0")
     .action(async (opts) => {
       try {
@@ -77,7 +80,12 @@ export function registerNovelCommands(program: Command): void {
         const contracts = getContracts();
         const config = buildNovelConfig(opts);
         const metadata = buildMetadata(opts);
-        const submission = buildContentSubmission(opts.content);
+        const content = resolveContent(opts);
+        warnIfOutOfRange(content, {
+          minChapterLength: config.minChapterLength.toString(),
+          maxChapterLength: config.maxChapterLength.toString(),
+        });
+        const submission = buildContentSubmission(content);
         const submissionFee = config.submissionFee;
         const extraValue = parseEther(opts.value ?? "0");
         const totalValue = submissionFee + extraValue;
@@ -190,7 +198,8 @@ export function registerNovelCommands(program: Command): void {
     .option("--rule-fee <eth>", "rule proposal fee in ETH", "0.01")
     .option("--rule-vote-duration <s>", "rule vote duration in seconds", "86400")
     .option("--rule-quorum <n>", "rule quorum", "3")
-    .requiredOption("--content <text>", "fork root chapter content")
+    .option("--content <text>", "fork root chapter content (mutually exclusive with --file)")
+    .option("--file <path>", "read fork root chapter content from a UTF-8 text file")
     .option("--value <eth>", "genesis fund in ETH", "0")
     .action(async (chapterId, opts) => {
       try {
@@ -198,7 +207,12 @@ export function registerNovelCommands(program: Command): void {
         const contracts = getContracts();
         const config = buildNovelConfig(opts);
         const metadata = buildMetadata(opts);
-        const submission = buildContentSubmission(opts.content);
+        const content = resolveContent(opts);
+        warnIfOutOfRange(content, {
+          minChapterLength: config.minChapterLength.toString(),
+          maxChapterLength: config.maxChapterLength.toString(),
+        });
+        const submission = buildContentSubmission(content);
         const extraValue = parseEther(opts.value ?? "0");
         const totalValue = config.submissionFee + extraValue;
 
@@ -214,6 +228,42 @@ export function registerNovelCommands(program: Command): void {
         txHash(hash);
         await waitForTx(hash);
         success("Novel forked successfully");
+      } catch (err) {
+        error(String(err));
+        process.exit(1);
+      }
+    });
+
+  novel
+    .command("update-metadata <id>")
+    .description("Update novel title / description / coverUri (creator only)")
+    .option("--title <text>", "new title")
+    .option("--description <text>", "new description")
+    .option("--cover-uri <uri>", "new cover image URI")
+    .action(async (id, opts) => {
+      try {
+        if (!opts.title && !opts.description && opts.coverUri === undefined) {
+          error("Pass at least one of --title, --description, --cover-uri.");
+          return process.exit(1);
+        }
+        const client = getWalletClient();
+        const contracts = getContracts();
+        // Fetch current metadata so unset fields are preserved.
+        const current = (await apiGet(`/api/novels/${id}`)) as Record<string, unknown>;
+        const metadata: NovelMetadata = {
+          title: opts.title ?? String(current.title ?? ""),
+          description: opts.description ?? String(current.description ?? ""),
+          coverUri: opts.coverUri ?? String(current.cover_uri ?? ""),
+        };
+
+        const hash = await updateNovelMetadataTx(client, {
+          novelId: BigInt(id),
+          metadata,
+          novelCore: contracts.novelCore,
+        });
+        txHash(hash);
+        await waitForTx(hash);
+        success("Novel metadata updated");
       } catch (err) {
         error(String(err));
         process.exit(1);

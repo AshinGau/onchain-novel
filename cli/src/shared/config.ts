@@ -1,6 +1,5 @@
 export interface OnchainNovelConfig {
   rpcUrl: string;
-  privateKey?: string;
   apiUrl?: string;
   chainId?: number;
   contracts: {

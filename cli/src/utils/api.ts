@@ -35,6 +35,26 @@ export interface ApiPostResult<T> {
  * POST a JSON body. Returns status + parsed body. Does NOT throw on non-2xx —
  * the caller decides how to handle backend errors (e.g. 503 for disabled features).
  */
+/**
+ * Fetch a novel's on-chain config (fees, durations, etc.) from the backend.
+ * Throws a clear error if the backend is unreachable or returns no config —
+ * callers must not silently fall back to hardcoded defaults, since a stale
+ * default fee against a high-fee novel wastes gas on a guaranteed revert.
+ */
+export async function fetchNovelConfig(
+  novelId: string | bigint | number,
+): Promise<{ novel: Record<string, unknown>; config: Record<string, string> }> {
+  const novel = await apiGet<Record<string, unknown>>(`/api/novels/${novelId}`);
+  const config = novel.config as Record<string, string> | undefined;
+  if (!config) {
+    throw new Error(
+      `Novel #${novelId} has no config in backend response. ` +
+        `Pass the fee explicitly via --value to proceed.`,
+    );
+  }
+  return { novel, config };
+}
+
 export async function apiPost<T = unknown>(path: string, body: unknown): Promise<ApiPostResult<T>> {
   const base = apiBase();
   let res: Response;
