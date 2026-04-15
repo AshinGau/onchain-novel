@@ -62,6 +62,25 @@ export function formatDuration(seconds: number | string): string {
   return `${s}s`;
 }
 
+/** Parse a user-entered positive decimal (e.g. ETH amount).
+ *  Returns null when the input is empty, not a number, non-finite, or ≤ 0. */
+export function parsePositiveDecimal(input: string): number | null {
+  const s = input.trim();
+  if (!s) return null;
+  const n = Number(s);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return n;
+}
+
+/** Parse a user-entered positive integer (e.g. duration in days). */
+export function parsePositiveInt(input: string): number | null {
+  const s = input.trim();
+  if (!/^\d+$/.test(s)) return null;
+  const n = Number(s);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return n;
+}
+
 /** Truncate text with ellipsis */
 export function truncate(text: string, max: number): string {
   if (text.length <= max) return text;

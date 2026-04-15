@@ -7,17 +7,25 @@ import { useAccount } from "wagmi";
 import { txButtonLabel, TxStatusLabel } from "@/components/tx-status";
 import { useTxAction } from "@/hooks/use-tx-action";
 import { PRIZE_POOL_ADDRESS, prizePoolAbi } from "@/lib/contracts";
+import { parsePositiveDecimal } from "@/lib/format";
 
 export function TipButton({ chapterId }: { chapterId: string }) {
   const { isConnected } = useAccount();
   const [showInput, setShowInput] = useState(false);
   const [amount, setAmount] = useState("0.001");
+  const [inputError, setInputError] = useState<string | null>(null);
   const { send, isPending, status, error, reset } = useTxAction();
 
   if (!isConnected) return null;
 
   async function handleTip() {
-    const value = parseEther(amount);
+    const n = parsePositiveDecimal(amount);
+    if (n === null) {
+      setInputError("Amount must be a positive number");
+      return;
+    }
+    setInputError(null);
+    const value = parseEther(String(n));
     await send(
       {
         address: PRIZE_POOL_ADDRESS,
@@ -69,6 +77,7 @@ export function TipButton({ chapterId }: { chapterId: string }) {
           Cancel
         </button>
       )}
+      {inputError && <span className="text-tiny on-error">{inputError}</span>}
       <TxStatusLabel status={status} error={error} successText="Tip sent!" />
     </div>
   );

@@ -6,10 +6,9 @@ import { useState } from "react";
 import { createPublicClient, decodeEventLog, http, keccak256, toHex } from "viem";
 import { useAccount } from "wagmi";
 import { writeContract } from "wagmi/actions";
-import { base, foundry } from "wagmi/chains";
 
 import { NOVEL_CORE_ADDRESS, novelCoreAbi } from "@/lib/contracts";
-import { wagmiConfig } from "@/lib/wagmi-config";
+import { chain, rpcUrl, wagmiConfig } from "@/lib/wagmi-config";
 
 interface ChapterEditorProps {
   novelId: string;
@@ -63,11 +62,9 @@ export function ChapterEditor({
     setError(null);
 
     try {
-      const chain = process.env.NEXT_PUBLIC_CHAIN === "base" ? base : foundry;
-
       const publicClient = createPublicClient({
         chain,
-        transport: http(process.env.NEXT_PUBLIC_RPC_URL || "http://localhost:8545"),
+        transport: http(rpcUrl),
       });
 
       const hash = await writeContract(wagmiConfig, {

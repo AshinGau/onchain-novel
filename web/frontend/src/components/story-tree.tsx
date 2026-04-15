@@ -649,7 +649,8 @@ function layoutTree(chapters: ChapterSummary[]): {
 
   // Sort children by id for consistent layout
   function sortChildren(node: TreeNode) {
-    node.children.sort((a, b) => Number(a.id) - Number(b.id));
+    // uint64 chapter ids exceed 2^53 — use numeric-aware string compare
+    node.children.sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
     for (const child of node.children) sortChildren(child);
   }
   sortChildren(root);
