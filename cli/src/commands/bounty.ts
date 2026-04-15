@@ -1,14 +1,15 @@
 import { Command } from "commander";
 import { parseEther } from "viem";
+
 import {
+  claimBounty as claimBountyTx,
   createBounty as createBountyTx,
   designateBounty as designateBountyTx,
-  claimBounty as claimBountyTx,
   refundBounty as refundBountyTx,
 } from "../shared/index.js";
-import { getWalletClient, getContracts, waitForTx } from "../utils/client.js";
 import { apiGet } from "../utils/api.js";
-import { header, kv, success, error, txHash, eth, parseDuration } from "../utils/format.js";
+import { getContracts, getWalletClient, waitForTx } from "../utils/client.js";
+import { error, eth, header, kv, parseDuration, success, txHash } from "../utils/format.js";
 
 export function registerBountyCommands(program: Command): void {
   const bounty = program.command("bounty").description("Bounty commands");
@@ -23,7 +24,9 @@ export function registerBountyCommands(program: Command): void {
         const client = getWalletClient();
         const contracts = getContracts();
         if (!contracts.bountyBoard) {
-          error("BountyBoard contract address not configured. Run 'onchain-novel-cli config set contracts.bountyBoard <address>'.");
+          error(
+            "BountyBoard contract address not configured. Run 'onchain-novel-cli config set contracts.bountyBoard <address>'.",
+          );
           return process.exit(1);
         }
 
@@ -38,7 +41,9 @@ export function registerBountyCommands(program: Command): void {
         });
         txHash(hash);
         await waitForTx(hash);
-        success(`Bounty created for chapter #${chapterId} (${opts.value} ETH, deadline: ${opts.deadline})`);
+        success(
+          `Bounty created for chapter #${chapterId} (${opts.value} ETH, deadline: ${opts.deadline})`,
+        );
       } catch (err) {
         error(String(err));
         process.exit(1);
@@ -76,7 +81,9 @@ export function registerBountyCommands(program: Command): void {
     .option("--novel-id <id>", "Filter by novel ID")
     .action(async (opts) => {
       try {
-        const url = opts.novelId ? `/api/bounties/active?novelId=${opts.novelId}` : "/api/bounties/active";
+        const url = opts.novelId
+          ? `/api/bounties/active?novelId=${opts.novelId}`
+          : "/api/bounties/active";
         const data = await apiGet<{ bounties: Record<string, unknown>[] }>(url);
         if (data.bounties.length === 0) {
           console.log("No active bounties found.");

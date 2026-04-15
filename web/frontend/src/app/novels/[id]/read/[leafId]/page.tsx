@@ -1,4 +1,5 @@
 import { fetchChapterContext, fetchNovel } from "@/lib/api";
+
 import { ReadPageClient } from "./read-page-client";
 
 export default async function ReadPage({
@@ -11,10 +12,7 @@ export default async function ReadPage({
   const { id, leafId } = await params;
   const { depth } = await searchParams;
 
-  const [novel, contextData] = await Promise.all([
-    fetchNovel(id),
-    fetchChapterContext(leafId),
-  ]);
+  const [novel, contextData] = await Promise.all([fetchNovel(id), fetchChapterContext(leafId)]);
 
   return (
     <div className="on-container" style={{ paddingTop: "1.5rem", paddingBottom: "3rem" }}>

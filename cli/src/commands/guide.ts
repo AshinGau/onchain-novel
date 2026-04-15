@@ -1,7 +1,8 @@
-import { Command } from "commander";
 import { readFileSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { Command } from "commander";
+
 import { error } from "../utils/format.js";
 
 const VALID_ROLES = ["author", "voter", "creator", "reader"] as const;

@@ -9,13 +9,13 @@
  *
  * No on-chain transaction. The wallet only signs the message.
  */
-
+import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useEffect, useState } from "react";
 import { useAccount, useSignMessage } from "wagmi";
-import { ConnectButton } from "@rainbow-me/rainbowkit";
+
+import { useNicknames } from "@/hooks/use-nickname";
 import { fetchComments, postComment, type Comment } from "@/lib/api";
 import { timeAgo } from "@/lib/format";
-import { useNicknames } from "@/hooks/use-nickname";
 
 interface Props {
   chapterId: string;
@@ -98,7 +98,9 @@ export function CommentList({ chapterId }: Props) {
           <div className="on-row-between">
             <span className="text-muted">{content.length}/5000</span>
             <div className="on-row">
-              {submitting && <span className="text-tiny text-muted">Sign in your wallet — free, no gas</span>}
+              {submitting && (
+                <span className="text-tiny text-muted">Sign in your wallet — free, no gas</span>
+              )}
               <button
                 type="button"
                 className="on-btn on-btn-primary"

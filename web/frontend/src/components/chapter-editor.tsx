@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { createPublicClient, decodeEventLog, http, keccak256, toHex } from "viem";
 import { useAccount } from "wagmi";
 import { writeContract } from "wagmi/actions";
-import { toHex, keccak256, decodeEventLog, createPublicClient, http } from "viem";
-import { foundry, base } from "wagmi/chains";
-import { ConnectButton } from "@rainbow-me/rainbowkit";
+import { base, foundry } from "wagmi/chains";
+
 import { NOVEL_CORE_ADDRESS, novelCoreAbi } from "@/lib/contracts";
 import { wagmiConfig } from "@/lib/wagmi-config";
 
@@ -34,7 +35,9 @@ export function ChapterEditor({
   const router = useRouter();
   const [content, setContent] = useState("");
   const [blurred, setBlurred] = useState(false);
-  const [status, setStatus] = useState<"idle" | "confirming" | "waiting" | "success" | "error">("idle");
+  const [status, setStatus] = useState<"idle" | "confirming" | "waiting" | "success" | "error">(
+    "idle",
+  );
   const [error, setError] = useState<string | null>(null);
 
   const contentBytes = new TextEncoder().encode(content);
@@ -138,10 +141,15 @@ export function ChapterEditor({
 
   return (
     <div className="on-card on-stack" style={{ gap: "0.75rem" }}>
-      <h3 className="text-subheading" style={{ margin: 0 }}>Write Next Chapter</h3>
+      <h3 className="text-subheading" style={{ margin: 0 }}>
+        Write Next Chapter
+      </h3>
       <textarea
         value={content}
-        onChange={(e) => { setContent(e.target.value); setBlurred(false); }}
+        onChange={(e) => {
+          setContent(e.target.value);
+          setBlurred(false);
+        }}
         onBlur={() => setBlurred(true)}
         placeholder="Write your chapter here..."
         rows={10}
@@ -186,9 +194,7 @@ export function ChapterEditor({
         </p>
       )}
       {error && (
-        <p style={{ color: "var(--color-danger)", margin: 0, fontSize: "0.875rem" }}>
-          {error}
-        </p>
+        <p style={{ color: "var(--color-danger)", margin: 0, fontSize: "0.875rem" }}>{error}</p>
       )}
     </div>
   );

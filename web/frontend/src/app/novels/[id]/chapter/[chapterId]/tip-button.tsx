@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { useAccount } from "wagmi";
 import { parseEther } from "viem";
+import { useAccount } from "wagmi";
+
+import { txButtonLabel, TxStatusLabel } from "@/components/tx-status";
 import { useTxAction } from "@/hooks/use-tx-action";
 import { PRIZE_POOL_ADDRESS, prizePoolAbi } from "@/lib/contracts";
-import { TxStatusLabel, txButtonLabel } from "@/components/tx-status";
 
 export function TipButton({ chapterId }: { chapterId: string }) {
   const { isConnected } = useAccount();
@@ -26,18 +27,18 @@ export function TipButton({ chapterId }: { chapterId: string }) {
         value,
       },
       () => {
-        setTimeout(() => { setShowInput(false); setAmount("0.001"); reset(); }, 2000);
-      }
+        setTimeout(() => {
+          setShowInput(false);
+          setAmount("0.001");
+          reset();
+        }, 2000);
+      },
     );
   }
 
   if (!showInput) {
     return (
-      <button
-        type="button"
-        className="on-btn on-btn-secondary"
-        onClick={() => setShowInput(true)}
-      >
+      <button type="button" className="on-btn on-btn-secondary" onClick={() => setShowInput(true)}>
         Tip Author
       </button>
     );
@@ -64,11 +65,7 @@ export function TipButton({ chapterId }: { chapterId: string }) {
         </button>
       )}
       {!isPending && status !== "success" && (
-        <button
-          type="button"
-          className="on-btn on-btn-ghost"
-          onClick={() => setShowInput(false)}
-        >
+        <button type="button" className="on-btn on-btn-ghost" onClick={() => setShowInput(false)}>
           Cancel
         </button>
       )}

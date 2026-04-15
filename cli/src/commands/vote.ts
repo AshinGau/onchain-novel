@@ -1,19 +1,25 @@
+import { randomBytes } from "node:crypto";
+import chalk from "chalk";
 import { Command } from "commander";
 import { parseEther, toHex } from "viem";
-import { randomBytes } from "node:crypto";
+
 import {
-  startRound as startRoundTx,
-  closeNomination as closeNominationTx,
-  closeCommit as closeCommitTx,
-  settleRound as settleRoundTx,
-  nominateCandidate as nominateCandidateTx,
-  commitVote as commitVoteTx,
-  revealVote as revealVoteTx,
-  claimVotingReward as claimVotingRewardTx,
   buildPathToAnchor,
+  claimVotingReward as claimVotingRewardTx,
+  closeCommit as closeCommitTx,
+  closeNomination as closeNominationTx,
+  commitVote as commitVoteTx,
   computeCommitHash,
+  nominateCandidate as nominateCandidateTx,
+  revealVote as revealVoteTx,
+  settleRound as settleRoundTx,
+  startRound as startRoundTx,
   toBytes32Salt,
 } from "../shared/index.js";
+import { apiGet, apiPost } from "../utils/api.js";
+import { getContracts, getPublicClient, getWalletClient, waitForTx } from "../utils/client.js";
+import { error, header, kv, roundPhaseName, success, table, txHash } from "../utils/format.js";
+import { getStorePath, getVoteSalt, saveVoteSalt } from "../utils/vote-store.js";
 
 function parseIdList(raw: string): bigint[] {
   return raw
@@ -22,11 +28,6 @@ function parseIdList(raw: string): bigint[] {
     .filter((s) => s.length > 0)
     .map((s) => BigInt(s));
 }
-import { getWalletClient, getPublicClient, getContracts, waitForTx } from "../utils/client.js";
-import { apiGet, apiPost } from "../utils/api.js";
-import { saveVoteSalt, getVoteSalt, getStorePath } from "../utils/vote-store.js";
-import { header, kv, success, error, txHash, table, roundPhaseName } from "../utils/format.js";
-import chalk from "chalk";
 
 /** Generate a fresh 32-byte random salt as 0x-prefixed hex */
 function generateSalt(): `0x${string}` {
@@ -120,7 +121,9 @@ export function registerVoteCommands(program: Command): void {
             value = BigInt(config.nominationFee ?? "0");
           } catch {
             value = parseEther("0.001");
-            console.log(chalk.yellow(`  Could not fetch novel config. Using default fee: 0.001 ETH`));
+            console.log(
+              chalk.yellow(`  Could not fetch novel config. Using default fee: 0.001 ETH`),
+            );
           }
         }
 
@@ -133,7 +136,13 @@ export function registerVoteCommands(program: Command): void {
             functionName: "getWorldLineAncestors",
             args: [BigInt(novelId)],
           })) as readonly bigint[];
-          const proof = await buildPathToAnchor(pub, contracts.novelCore, BigInt(novelId), BigInt(chapterId), ancestors);
+          const proof = await buildPathToAnchor(
+            pub,
+            contracts.novelCore,
+            BigInt(novelId),
+            BigInt(chapterId),
+            ancestors,
+          );
           if (!proof || proof.length < 2) {
             error(
               `Chapter #${chapterId} is not a strict descendant of any current worldLineAncestor of novel #${novelId}. ` +
@@ -182,7 +191,9 @@ export function registerVoteCommands(program: Command): void {
         console.log(chalk.gray(`  Commit hash:    ${commitHash}`));
 
         // Resolve current round (needed for backend submission and local backup)
-        const novel = await apiGet<Record<string, unknown>>(`/api/novels/${novelId}`).catch(() => null);
+        const novel = await apiGet<Record<string, unknown>>(`/api/novels/${novelId}`).catch(
+          () => null,
+        );
         const currentRound = Number(novel?.current_round ?? 0);
 
         // Resolve voteStake from on-chain config (fallback to flag, fallback to default)
@@ -194,7 +205,9 @@ export function registerVoteCommands(program: Command): void {
           value = BigInt(config.voteStake ?? "0");
         } else {
           value = parseEther("0.005");
-          console.log(chalk.yellow(`  Could not fetch novel config. Using default stake: 0.005 ETH`));
+          console.log(
+            chalk.yellow(`  Could not fetch novel config. Using default stake: 0.005 ETH`),
+          );
         }
 
         const hash = await commitVoteTx(client, {
@@ -222,8 +235,7 @@ export function registerVoteCommands(program: Command): void {
         // The backend signs canonical message and we sign it with the wallet.
         if (opts.keeper !== false && currentRound > 0) {
           const ts = Math.floor(Date.now() / 1000);
-          const message =
-            `Submit vote on novel ${novelId} round ${currentRound} for candidate ${candidateId} at ${ts}`;
+          const message = `Submit vote on novel ${novelId} round ${currentRound} for candidate ${candidateId} at ${ts}`;
           const signature = await client.signMessage({ account: client.account!, message });
 
           const result = await apiPost("/api/votes/submit", {
@@ -240,7 +252,11 @@ export function registerVoteCommands(program: Command): void {
             success("Vote committed. Keeper will auto-reveal during the reveal phase.");
           } else if (result.status === 503) {
             success("Vote committed (keeper-assisted reveal disabled on backend).");
-            console.log(chalk.yellow("  You will need to reveal manually with: vote reveal <novel-id> <candidate-id> <salt>"));
+            console.log(
+              chalk.yellow(
+                "  You will need to reveal manually with: vote reveal <novel-id> <candidate-id> <salt>",
+              ),
+            );
           } else {
             success("Vote committed.");
             console.log(
@@ -380,7 +396,9 @@ export function registerVoteCommands(program: Command): void {
         if (wlData.worldlines.length > 0) {
           console.log(chalk.bold("\n  World Lines:"));
           for (const wl of wlData.worldlines) {
-            console.log(`    Chapter #${wl.id} (depth=${wl.depth}) by ${String(wl.author ?? "").slice(0, 10)}...`);
+            console.log(
+              `    Chapter #${wl.id} (depth=${wl.depth}) by ${String(wl.author ?? "").slice(0, 10)}...`,
+            );
           }
         }
 

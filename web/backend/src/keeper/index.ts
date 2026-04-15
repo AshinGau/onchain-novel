@@ -1,23 +1,21 @@
-import { createPublicClient, createWalletClient, http, type PublicClient, type WalletClient, type Chain } from "viem";
-import { privateKeyToAccount } from "viem/accounts";
-import { foundry } from "viem/chains";
-import { parseAbi } from "viem";
-import { env } from "../utils/env.js";
-import { query } from "../db/index.js";
-import { batchReveal } from "./reveal.js";
-import { KeeperQueue } from "./queue.js";
+import { parseAbi, type PublicClient, type WalletClient } from "viem";
 
-// Keeper needs phase transition functions plus chain reads for leaf computation
+import { query } from "../db/index.js";
+import { env } from "../utils/env.js";
+import { createLogger } from "../utils/logger.js";
+import { Mutex } from "../utils/mutex.js";
+import { createKeeperClients } from "../utils/viem-client.js";
+import { KeeperQueue } from "./queue.js";
+import { batchReveal } from "./reveal.js";
+
+const log = createLogger("keeper");
+
+// Keeper needs phase transition functions plus chain reads for leaf computation.
 const keeperAbi = parseAbi([
   "function startRound(uint64 novelId, uint64[] leaves) external",
   "function closeNomination(uint64 novelId) external",
   "function closeCommit(uint64 novelId) external",
   "function settleRound(uint64 novelId) external",
-]);
-
-const novelCoreReadAbi = parseAbi([
-  "function getWorldLineAncestors(uint64 novelId) external view returns (uint64[])",
-  "function getChapter(uint64 chapterId) external view returns ((uint64 id, uint64 novelId, uint64 parentId, address author, bytes32 contentHash, uint64 declaredLength, uint32 depth, uint64 timestamp, uint64[] children))",
 ]);
 
 // Phase enum matching the contract
@@ -41,13 +39,21 @@ let publicClient: PublicClient;
 let walletClient: WalletClient;
 let keeperAddress: `0x${string}`;
 
-function initClients() {
-  const chain: Chain = foundry;
-  const transport = http(env.RPC_URL);
-  publicClient = createPublicClient({ chain, transport });
-  const account = privateKeyToAccount(env.KEEPER_PRIVATE_KEY);
-  keeperAddress = account.address;
-  walletClient = createWalletClient({ chain, transport, account });
+/**
+ * Serializes all `walletClient.writeContract` calls so that viem's automatic
+ * nonce fetch (`eth_getTransactionCount(pending)`) cannot return the same nonce
+ * to two concurrent workers. Simulate calls remain parallel.
+ */
+const writeMutex = new Mutex();
+
+export async function keeperWrite(
+  request: Parameters<WalletClient["writeContract"]>[0],
+): Promise<`0x${string}`> {
+  return writeMutex.runExclusive(() => walletClient.writeContract(request) as Promise<`0x${string}`>);
+}
+
+export function getKeeperClients() {
+  return { publicClient, walletClient, keeperAddress };
 }
 
 function rowToNovelState(r: any): NovelState {
@@ -74,21 +80,21 @@ async function getActiveNovelIds(): Promise<bigint[]> {
 async function getNovelState(novelId: bigint): Promise<NovelState | null> {
   const { rows } = await query(
     "SELECT id, current_round, round_phase, phase_start_time, last_settle_time, config FROM novels WHERE id = $1 AND active = TRUE",
-    [novelId.toString()]
+    [novelId.toString()],
   );
   if (rows.length === 0) return null;
   return rowToNovelState(rows[0]);
 }
 
-async function sendKeeperTxWithArgs(
+async function sendKeeperTx(
   functionName: string,
   novelId: bigint,
-  extraArgs: unknown[],
+  extraArgs: unknown[] = [],
 ): Promise<boolean> {
   try {
     const target = env.ROUND_MANAGER_ADDRESS;
     if (!target) {
-      console.warn(`[Keeper] ROUND_MANAGER_ADDRESS not configured; skipping ${functionName}(${novelId})`);
+      log.warn({ functionName, novelId }, "ROUND_MANAGER_ADDRESS not configured; skipping");
       return false;
     }
     const { request } = await publicClient.simulateContract({
@@ -98,50 +104,64 @@ async function sendKeeperTxWithArgs(
       args: [novelId, ...extraArgs] as any,
       account: keeperAddress,
     });
-    const hash = await walletClient.writeContract(request as any);
-    console.log(`[Keeper] ${functionName}(${novelId}) tx: ${hash}`);
+    const hash = await keeperWrite(request as any);
+    log.info({ functionName, novelId, hash }, "keeper tx sent");
     return true;
   } catch (err: any) {
-    const msg = err?.shortMessage || err?.message || String(err);
-    if (msg.includes("revert")) {
+    const short = err?.shortMessage ?? "";
+    if (typeof short === "string" && short.toLowerCase().includes("revert")) {
       return false;
     }
-    console.error(`[Keeper] ${functionName}(${novelId}) error: ${msg}`);
+    log.error(
+      { functionName, novelId, name: err?.name ?? "Error", code: err?.code ?? "", err },
+      "keeper tx failed",
+    );
     return false;
   }
 }
 
-async function sendKeeperTx(functionName: string, novelId: bigint): Promise<boolean> {
-  return sendKeeperTxWithArgs(functionName, novelId, []);
-}
-
-/** Find the deepest leaf descendant of a given chapter via greedy first-child walk. */
-async function deepestLeafUnder(chapterId: bigint): Promise<bigint> {
-  let cur = chapterId;
-  while (true) {
-    const ch = (await publicClient.readContract({
-      address: env.NOVEL_CORE_ADDRESS,
-      abi: novelCoreReadAbi,
-      functionName: "getChapter",
-      args: [cur],
-    })) as { children: readonly bigint[] };
-    if (ch.children.length === 0) return cur;
-    // Greedy: walk into the deepest child by recursive deepestLeafUnder; keep simple by picking
-    // the child that yields the deepest subtree. For a first cut, just first child.
-    cur = ch.children[0];
-  }
-}
-
-/** Build leaves array for startRound: one deepest leaf per current worldLineAncestor. */
+/**
+ * Compute leaves for `startRound` from the indexed DB state.
+ * For each current world-line ancestor, find the deepest descendant with no children.
+ * A single SQL query scales to millions of chapters without extra RPC calls.
+ */
 async function buildStartRoundLeaves(novelId: bigint): Promise<bigint[]> {
-  const ancestors = (await publicClient.readContract({
-    address: env.NOVEL_CORE_ADDRESS,
-    abi: novelCoreReadAbi,
-    functionName: "getWorldLineAncestors",
-    args: [novelId],
-  })) as readonly bigint[];
+  // Ancestors (current world line heads) live in `chapters.is_world_line = TRUE`.
+  const ancestorsRes = await query(
+    `SELECT id FROM chapters WHERE novel_id = $1 AND is_world_line = TRUE ORDER BY id ASC`,
+    [novelId.toString()],
+  );
+  if (ancestorsRes.rows.length === 0) return [];
+
   const leaves: bigint[] = [];
-  for (const a of ancestors) leaves.push(await deepestLeafUnder(a));
+  for (const { id: ancestorId } of ancestorsRes.rows) {
+    // Walk descendants via a recursive CTE, pick the max-depth chapter under this ancestor
+    // that itself is a leaf (has no children of its own within the same novel).
+    const leafRes = await query(
+      `WITH RECURSIVE descendants AS (
+         SELECT id, parent_id, depth FROM chapters WHERE id = $1 AND novel_id = $2
+         UNION ALL
+         SELECT c.id, c.parent_id, c.depth FROM chapters c
+         INNER JOIN descendants d ON c.parent_id = d.id
+         WHERE c.novel_id = $2
+       )
+       SELECT d.id
+       FROM descendants d
+       WHERE NOT EXISTS (
+         SELECT 1 FROM chapters cc WHERE cc.parent_id = d.id AND cc.novel_id = $2
+       )
+       ORDER BY d.depth DESC, d.id ASC
+       LIMIT 1`,
+      [ancestorId, novelId.toString()],
+    );
+    if (leafRes.rows.length === 0) {
+      // Ancestor itself must be the leaf (shouldn't happen — it's present in `descendants`),
+      // but fall back gracefully.
+      leaves.push(BigInt(ancestorId));
+    } else {
+      leaves.push(BigInt(leafRes.rows[0].id));
+    }
+  }
   return leaves;
 }
 
@@ -159,9 +179,10 @@ async function checkNovel(novelId: bigint): Promise<void> {
       if (lastSettleTime + config.minRoundGap <= now) {
         try {
           const leaves = await buildStartRoundLeaves(id);
-          await sendKeeperTxWithArgs("startRound", id, [leaves]);
+          if (leaves.length === 0) return; // no world line → nothing to start
+          await sendKeeperTx("startRound", id, [leaves]);
         } catch (err) {
-          console.error(`[Keeper] startRound prep error for novel=${id}: ${err}`);
+          log.error({ err, novelId: id }, "startRound prep error");
         }
       }
       break;
@@ -182,12 +203,20 @@ async function checkNovel(novelId: bigint): Promise<void> {
       // First, batch-reveal any pending votes the user delegated to us.
       if (env.VOTE_ENCRYPTION_KEY) {
         try {
-          const result = await batchReveal(id, currentRound, publicClient, walletClient, keeperAddress);
+          const result = await batchReveal(id, currentRound, publicClient, keeperAddress);
           if (result.revealed > 0 || result.failed > 0) {
-            console.log(`[Keeper] batchReveal novel=${id} round=${currentRound} revealed=${result.revealed} failed=${result.failed}`);
+            log.info(
+              {
+                novelId: id,
+                round: currentRound,
+                revealed: result.revealed,
+                failed: result.failed,
+              },
+              "batchReveal summary",
+            );
           }
         } catch (err) {
-          console.error(`[Keeper] batchReveal error for novel=${id}: ${err}`);
+          log.error({ err, novelId: id }, "batchReveal error");
         }
       }
       if (phaseStartTime + config.revealDuration <= now) {
@@ -195,6 +224,13 @@ async function checkNovel(novelId: bigint): Promise<void> {
       }
       break;
   }
+
+  // Note: completeNovel is NOT auto-triggered by the keeper daemon.
+  // It is a lifecycle-end action that must be initiated by the novel creator,
+  // the contract owner, or any caller after INACTIVITY_TIMEOUT (30 days) has elapsed.
+  // The keeper's responsibility is limited to round-phase advancement. If/when a
+  // product decision to auto-complete is made, add a Phase.Idle branch here that
+  // checks `now >= max(phaseStartTime, latestAncestorTimestamp) + INACTIVITY_TIMEOUT`.
 }
 
 // Global queue instance (exported so indexer can enqueue on events)
@@ -230,12 +266,20 @@ export function signalKeeper(novelId: bigint, buffer: KeeperSignalBuffer | null 
 
 export function startKeeper() {
   if (!env.KEEPER_PRIVATE_KEY) {
-    console.log("[Keeper] No KEEPER_PRIVATE_KEY configured, skipping");
+    log.info("No KEEPER_PRIVATE_KEY configured, skipping");
     return;
   }
 
-  initClients();
-  console.log(`[Keeper] Started (address: ${keeperAddress}, poll: ${env.KEEPER_POLL_INTERVAL_MS}ms, concurrency: 5)`);
+  const clients = createKeeperClients();
+  publicClient = clients.publicClient;
+  walletClient = clients.walletClient;
+  keeperAddress = clients.account.address;
+
+  const maskedAddr = `${keeperAddress.slice(0, 6)}...`;
+  log.info(
+    { address: maskedAddr, pollMs: env.KEEPER_POLL_INTERVAL_MS, concurrency: 5 },
+    "Keeper started",
+  );
 
   keeperQueue = new KeeperQueue(checkNovel, 5);
   keeperQueue.start();
@@ -247,7 +291,7 @@ export function startKeeper() {
       const ids = await getActiveNovelIds();
       for (const id of ids) keeperQueue!.enqueue(id);
     } catch (err) {
-      console.error("[Keeper] poll error:", err);
+      log.error({ err }, "poll error");
     }
   };
 

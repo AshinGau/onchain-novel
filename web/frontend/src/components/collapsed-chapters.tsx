@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
+
 import type { ChapterSummary } from "@/lib/api";
+
 import { ChapterCardMini } from "./chapter-card-mini";
 
 interface CollapsedChaptersProps {
@@ -22,7 +24,9 @@ export function CollapsedChapters({ chapters, novelId, label }: CollapsedChapter
         onClick={() => setExpanded(true)}
         role="button"
         tabIndex={0}
-        onKeyDown={(e) => { if (e.key === "Enter") setExpanded(true); }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") setExpanded(true);
+        }}
       >
         {label ?? `... ${chapters.length} chapter${chapters.length !== 1 ? "s" : ""} ...`}
       </div>
@@ -36,7 +40,9 @@ export function CollapsedChapters({ chapters, novelId, label }: CollapsedChapter
         onClick={() => setExpanded(false)}
         role="button"
         tabIndex={0}
-        onKeyDown={(e) => { if (e.key === "Enter") setExpanded(false); }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") setExpanded(false);
+        }}
       >
         Collapse
       </div>

@@ -1,15 +1,18 @@
-import { Command } from "commander";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { createInterface } from "node:readline";
-import { writeFileSync, mkdirSync, existsSync } from "node:fs";
-import { join } from "node:path";
-import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { dirname } from "node:path";
-import { saveConfig, loadConfig } from "../utils/config.js";
-import type { OnchainNovelConfig } from "../shared/index.js";
-import { success, error, header, kv } from "../utils/format.js";
+import { Command } from "commander";
 
-function prompt(rl: ReturnType<typeof createInterface>, question: string, defaultVal?: string): Promise<string> {
+import type { OnchainNovelConfig } from "../shared/index.js";
+import { loadConfig, saveConfig } from "../utils/config.js";
+import { error, header, kv, success } from "../utils/format.js";
+
+function prompt(
+  rl: ReturnType<typeof createInterface>,
+  question: string,
+  defaultVal?: string,
+): Promise<string> {
   const suffix = defaultVal ? ` (${defaultVal})` : "";
   return new Promise((resolve) => {
     rl.question(`${question}${suffix}: `, (answer) => {
@@ -33,8 +36,16 @@ export function registerSetupCommand(program: Command): void {
 
         const rpcUrl = await prompt(rl, "  RPC URL", existing?.rpcUrl ?? "http://127.0.0.1:8545");
         const chainIdStr = await prompt(rl, "  Chain ID", String(existing?.chainId ?? "31337"));
-        const privateKey = await prompt(rl, "  Private key (hex, optional)", existing?.privateKey ?? "");
-        const apiUrl = await prompt(rl, "  Backend API URL", existing?.apiUrl ?? "http://localhost:3001");
+        const privateKey = await prompt(
+          rl,
+          "  Private key (hex, optional)",
+          existing?.privateKey ?? "",
+        );
+        const apiUrl = await prompt(
+          rl,
+          "  Backend API URL",
+          existing?.apiUrl ?? "http://localhost:3001",
+        );
         const novelCore = await prompt(
           rl,
           "  NovelCore contract address",
@@ -121,7 +132,9 @@ export function registerSetupCommand(program: Command): void {
         }
         success("Generated .claude/commands/novel-{author,voter,creator,reader}.md");
 
-        console.log("\nSetup complete. Run 'onchain-novel-cli --help' to see available commands.\n");
+        console.log(
+          "\nSetup complete. Run 'onchain-novel-cli --help' to see available commands.\n",
+        );
       } catch (err) {
         error(String(err));
         process.exit(1);

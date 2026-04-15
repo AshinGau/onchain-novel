@@ -52,7 +52,7 @@ CREATE TABLE chapters (
 
 CREATE INDEX idx_chapters_novel_id ON chapters(novel_id);
 CREATE INDEX idx_chapters_parent_id ON chapters(parent_id);
-CREATE INDEX idx_chapters_author ON chapters(LOWER(author));
+CREATE INDEX idx_chapters_author ON chapters(author);
 CREATE INDEX idx_chapters_world_line ON chapters(novel_id) WHERE is_world_line = TRUE;
 
 -- ============================================================
@@ -71,8 +71,8 @@ CREATE TABLE votes (
   reveal_block    BIGINT
 );
 
-CREATE UNIQUE INDEX idx_votes_unique_commit ON votes(novel_id, round, LOWER(voter));
-CREATE INDEX idx_votes_voter ON votes(LOWER(voter));
+CREATE UNIQUE INDEX idx_votes_unique_commit ON votes(novel_id, round, voter);
+CREATE INDEX idx_votes_voter ON votes(voter);
 
 -- ============================================================
 -- ROUND CANDIDATES (populated on RoundStarted event)
@@ -81,12 +81,47 @@ CREATE TABLE round_candidates (
   novel_id        BIGINT NOT NULL,
   round           INT NOT NULL,
   chapter_id      BIGINT NOT NULL,
-  position        INT NOT NULL,
+  position        INT NOT NULL,              -- insertion order (keeper leaves, then nominations)
+  nominator       TEXT,                      -- NULL = keeper-supplied leaf; lowercase address = user nomination
   block_number    BIGINT NOT NULL,
   PRIMARY KEY (novel_id, round, chapter_id)
 );
 
 CREATE INDEX idx_round_candidates_lookup ON round_candidates(novel_id, round);
+
+-- ============================================================
+-- ROUND REWARDS (per-round distribution breakdown from PrizePool.RoundRewardsDistributed)
+-- ============================================================
+
+CREATE TABLE round_rewards (
+  novel_id         BIGINT NOT NULL,
+  round            INT NOT NULL,
+  creator_royalty  NUMERIC NOT NULL DEFAULT 0,
+  author_rewards   NUMERIC NOT NULL DEFAULT 0,
+  voter_rewards    NUMERIC NOT NULL DEFAULT 0,
+  total_voter_pool NUMERIC NOT NULL DEFAULT 0,  -- filled by VotingEngine.VoterRewardsSettled
+  ranked_candidates BIGINT[] NOT NULL DEFAULT '{}', -- from VotingEngine.VotesTallied (ordered)
+  block_number     BIGINT NOT NULL,
+  PRIMARY KEY (novel_id, round)
+);
+
+CREATE INDEX idx_round_rewards_novel ON round_rewards(novel_id);
+
+-- ============================================================
+-- KEEPER REWARDS (per-call keeper reward paid from PrizePool.KeeperRewardPaid)
+-- ============================================================
+
+CREATE TABLE keeper_rewards (
+  id            SERIAL PRIMARY KEY,
+  novel_id      BIGINT NOT NULL,
+  keeper        TEXT NOT NULL,
+  amount        NUMERIC NOT NULL,
+  block_number  BIGINT NOT NULL,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_keeper_rewards_novel ON keeper_rewards(novel_id);
+CREATE INDEX idx_keeper_rewards_keeper ON keeper_rewards(keeper);
 
 -- ============================================================
 -- TIPS (novel-level)
@@ -134,13 +169,31 @@ CREATE TABLE bounties (
   create_time           BIGINT NOT NULL,
   deadline              BIGINT NOT NULL,
   designated_chapter_id BIGINT DEFAULT 0,
-  claimed               BOOLEAN NOT NULL DEFAULT FALSE,
+  claimed               BOOLEAN NOT NULL DEFAULT FALSE, -- true once first claim / full refund recorded
+  claimed_amount        NUMERIC NOT NULL DEFAULT 0,     -- total amount claimed out so far
+  refunded_amount       NUMERIC NOT NULL DEFAULT 0,     -- amount refunded (tipper or sweep)
   block_number          BIGINT NOT NULL,
   created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX idx_bounties_chapter ON bounties(chapter_id);
 CREATE INDEX idx_bounties_novel ON bounties(novel_id);
+
+-- ============================================================
+-- BOUNTY CLAIMS (individual claim rows from BountyBoard.BountyClaimed — author + amount)
+-- ============================================================
+
+CREATE TABLE bounty_claims (
+  id            SERIAL PRIMARY KEY,
+  bounty_id     BIGINT NOT NULL REFERENCES bounties(id),
+  author        TEXT NOT NULL,
+  amount        NUMERIC NOT NULL,
+  block_number  BIGINT NOT NULL,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_bounty_claims_bounty ON bounty_claims(bounty_id);
+CREATE INDEX idx_bounty_claims_author ON bounty_claims(author);
 
 -- ============================================================
 -- REWARD CLAIMS
@@ -157,7 +210,7 @@ CREATE TABLE reward_claims (
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_reward_claims_claimant ON reward_claims(LOWER(claimant));
+CREATE INDEX idx_reward_claims_claimant ON reward_claims(claimant);
 CREATE INDEX idx_reward_claims_novel ON reward_claims(novel_id);
 
 -- ============================================================
@@ -174,7 +227,7 @@ CREATE TABLE comments (
 );
 
 CREATE INDEX idx_comments_chapter ON comments(chapter_id, created_at DESC);
-CREATE INDEX idx_comments_author ON comments(LOWER(author));
+CREATE INDEX idx_comments_author ON comments(author);
 
 -- ============================================================
 -- PENDING VOTES (keeper-assisted reveal: encrypted plaintext votes)
@@ -212,11 +265,10 @@ CREATE TABLE rule_proposals (
   proposal_type   SMALLINT NOT NULL,   -- 0=Add, 1=Delete
   rule_name       TEXT NOT NULL,
   rule_content    TEXT NOT NULL DEFAULT '',
-  created_at_time BIGINT NOT NULL DEFAULT 0,
+  created_at      BIGINT NOT NULL DEFAULT 0,  -- chain timestamp (unix seconds)
   vote_count      INT NOT NULL DEFAULT 0,
   executed        BOOLEAN NOT NULL DEFAULT FALSE,
-  block_number    BIGINT NOT NULL,
-  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  block_number    BIGINT NOT NULL
 );
 
 CREATE INDEX idx_rule_proposals_novel ON rule_proposals(novel_id);
@@ -243,11 +295,12 @@ CREATE TABLE nicknames (
 -- ============================================================
 
 CREATE TABLE indexer_state (
-  id              INT PRIMARY KEY DEFAULT 1,
-  last_block      BIGINT NOT NULL DEFAULT 0,
-  last_block_hash TEXT,
-  batch_size      INT NOT NULL DEFAULT 500,
-  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  id                   INT PRIMARY KEY DEFAULT 1,
+  last_block           BIGINT NOT NULL DEFAULT 0,
+  last_block_hash      TEXT,
+  last_confirmed_block BIGINT NOT NULL DEFAULT 0,
+  batch_size           INT NOT NULL DEFAULT 500,
+  updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 INSERT INTO indexer_state (id, last_block) VALUES (1, 0) ON CONFLICT DO NOTHING;

@@ -1,26 +1,21 @@
-import { fetchNovel, fetchNovelTree, fetchWorldlines, fetchRound } from "@/lib/api";
 import { NovelInfo } from "@/components/novel-info";
 import { VoteCandidates } from "@/components/vote-candidates";
+import { fetchNovel, fetchNovelTree, fetchRound, fetchWorldlines } from "@/lib/api";
+
 import { NovelWorldlines } from "./novel-worldlines";
 
-export default async function NovelDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export default async function NovelDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
   // Fetch worldlines first to know how deep we need to load the tree.
-  const [novel, wlData] = await Promise.all([
-    fetchNovel(id),
-    fetchWorldlines(id),
-  ]);
+  const [novel, wlData] = await Promise.all([fetchNovel(id), fetchWorldlines(id)]);
 
   // Tree must include the world-line heads and a little buffer for fresh
   // descendants submitted after the last settle. Fall back to 10 when empty.
-  const maxDepth = wlData.worldlines.length === 0
-    ? 10
-    : Math.max(10, ...wlData.worldlines.map((w) => Number(w.depth) + 3));
+  const maxDepth =
+    wlData.worldlines.length === 0
+      ? 10
+      : Math.max(10, ...wlData.worldlines.map((w) => Number(w.depth) + 3));
   const treeData = await fetchNovelTree(id, maxDepth);
 
   // If a round is in progress (phase != Idle), fetch its candidates
@@ -38,10 +33,10 @@ export default async function NovelDetailPage({
   const worldLineCount = Number(novel.config?.worldLineCount ?? 0);
   const worldlineIds = new Set(wlData.worldlines.map((w) => w.id));
   const parentIdsWithChildren = new Set(
-    treeData.chapters.filter((c) => worldlineIds.has(c.parent_id)).map((c) => c.parent_id)
+    treeData.chapters.filter((c) => worldlineIds.has(c.parent_id)).map((c) => c.parent_id),
   );
   const worldlinesWithContinuations = wlData.worldlines.filter((w) =>
-    parentIdsWithChildren.has(w.id)
+    parentIdsWithChildren.has(w.id),
   ).length;
 
   return (
@@ -64,11 +59,7 @@ export default async function NovelDetailPage({
         />
       )}
 
-      <NovelWorldlines
-        novelId={id}
-        chapters={treeData.chapters}
-        worldlines={wlData.worldlines}
-      />
+      <NovelWorldlines novelId={id} chapters={treeData.chapters} worldlines={wlData.worldlines} />
     </div>
   );
 }

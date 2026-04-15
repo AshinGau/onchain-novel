@@ -1,6 +1,7 @@
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
+import { join } from "node:path";
+
 import type { OnchainNovelConfig } from "../shared/index.js";
 
 const CONFIG_DIR = join(homedir(), ".onchain-novel");
@@ -37,7 +38,9 @@ export function requireConfig(): OnchainNovelConfig {
     return process.exit(1);
   }
   if (!config.contracts?.novelCore) {
-    console.error("Missing contracts.novelCore in config. Run 'onchain-novel-cli config set contracts.novelCore <address>'.");
+    console.error(
+      "Missing contracts.novelCore in config. Run 'onchain-novel-cli config set contracts.novelCore <address>'.",
+    );
     return process.exit(1);
   }
   return config;

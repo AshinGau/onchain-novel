@@ -1,21 +1,25 @@
 "use client";
 
+import { ConnectButton } from "@rainbow-me/rainbowkit";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useAccount, useSignMessage } from "wagmi";
-import { ConnectButton } from "@rainbow-me/rainbowkit";
-import type { ChapterSummary, RoundCandidate } from "@/lib/api";
+
+import { txButtonLabel, TxStatusLabel } from "@/components/tx-status";
 import { useNicknames } from "@/hooks/use-nickname";
-import { timeAgo, formatEth } from "@/lib/format";
 import { useTxAction } from "@/hooks/use-tx-action";
+import type { ChapterSummary, RoundCandidate } from "@/lib/api";
+import { submitVotePlaintext } from "@/lib/api";
 import { ROUND_MANAGER_ADDRESS, roundManagerAbi } from "@/lib/contracts";
+import { formatEth, timeAgo } from "@/lib/format";
 import {
-  saveVote, loadVote, clearVote,
-  generateSalt, computeCommitHash,
+  clearVote,
+  computeCommitHash,
+  generateSalt,
+  loadVote,
+  saveVote,
   type StoredVote,
 } from "@/lib/vote-storage";
-import { submitVotePlaintext } from "@/lib/api";
-import { TxStatusLabel, txButtonLabel } from "@/components/tx-status";
 
 interface Props {
   novelId: string;
@@ -96,8 +100,7 @@ export function VoteCandidates({ novelId, round, phase, voteStake, candidates, c
         let keeperSubmitted = false;
         try {
           const ts = Math.floor(Date.now() / 1000);
-          const message =
-            `Submit vote on novel ${novelId} round ${round} for candidate ${selectedId} at ${ts}`;
+          const message = `Submit vote on novel ${novelId} round ${round} for candidate ${selectedId} at ${ts}`;
           const signature = await signMessageAsync({ message });
           const result = await submitVotePlaintext({
             address: address!,
@@ -131,7 +134,9 @@ export function VoteCandidates({ novelId, round, phase, voteStake, candidates, c
   return (
     <div className="on-card on-stack" style={{ gap: "0.5rem" }}>
       <div className="on-row-between">
-        <h3 className="text-subheading" style={{ margin: 0 }}>Candidates ({candidates.length})</h3>
+        <h3 className="text-subheading" style={{ margin: 0 }}>
+          Candidates ({candidates.length})
+        </h3>
         <span className="text-tiny text-muted">{phaseHint}</span>
       </div>
 
@@ -144,10 +149,11 @@ export function VoteCandidates({ novelId, round, phase, voteStake, candidates, c
           const isMyVote = stored?.candidateId === cand.chapter_id;
           const selectable = committing && !alreadyVoted;
 
-          const border =
-            isMyVote ? "2px solid var(--color-success)"
-              : isSelected ? "2px solid var(--color-primary)"
-                : "1px solid var(--color-border)";
+          const border = isMyVote
+            ? "2px solid var(--color-success)"
+            : isSelected
+              ? "2px solid var(--color-primary)"
+              : "1px solid var(--color-border)";
 
           return (
             <div
@@ -155,8 +161,10 @@ export function VoteCandidates({ novelId, round, phase, voteStake, candidates, c
               onClick={selectable ? () => setSelectedId(cand.chapter_id) : undefined}
               className="on-card-hover"
               style={{
-                padding: "0.5rem 0.75rem", borderRadius: "0.5rem",
-                border, background: "var(--color-bg)",
+                padding: "0.5rem 0.75rem",
+                borderRadius: "0.5rem",
+                border,
+                background: "var(--color-bg)",
                 cursor: selectable ? "pointer" : "default",
               }}
             >
@@ -164,10 +172,14 @@ export function VoteCandidates({ novelId, round, phase, voteStake, candidates, c
                 {ancestorId ? (
                   <>
                     <span className="on-badge badge-worldline">ID.{ancestorId}</span>
-                    <span className="text-muted" style={{ fontSize: "0.8125rem" }}>{midLabel}</span>
+                    <span className="text-muted" style={{ fontSize: "0.8125rem" }}>
+                      {midLabel}
+                    </span>
                   </>
                 ) : (
-                  <span className="text-muted" style={{ fontSize: "0.8125rem" }}>(root →)</span>
+                  <span className="text-muted" style={{ fontSize: "0.8125rem" }}>
+                    (root →)
+                  </span>
                 )}
                 <Link
                   href={`/novels/${novelId}/chapter/${cand.chapter_id}`}
@@ -180,7 +192,11 @@ export function VoteCandidates({ novelId, round, phase, voteStake, candidates, c
                 <span className="text-muted" style={{ fontSize: "0.8125rem" }}>
                   by {displayName(cand.author)} · {timeAgo(cand.timestamp)}
                 </span>
-                {isMyVote && <span className="on-badge badge-completed" style={{ marginLeft: "auto" }}>Your Vote</span>}
+                {isMyVote && (
+                  <span className="on-badge badge-completed" style={{ marginLeft: "auto" }}>
+                    Your Vote
+                  </span>
+                )}
               </div>
             </div>
           );
@@ -191,11 +207,15 @@ export function VoteCandidates({ novelId, round, phase, voteStake, candidates, c
       {committing && (
         <div className="on-stack" style={{ gap: "0.5rem", marginTop: "0.5rem" }}>
           {!isConnected ? (
-            <div className="on-row"><ConnectButton /></div>
+            <div className="on-row">
+              <ConnectButton />
+            </div>
           ) : alreadyVoted ? (
             <p className="text-success" style={{ margin: 0 }}>
               ✓ You voted ID.{stored!.candidateId} this round.{" "}
-              {stored!.keeperSubmitted ? "Keeper will auto-reveal." : "Reveal manually in the reveal phase."}
+              {stored!.keeperSubmitted
+                ? "Keeper will auto-reveal."
+                : "Reveal manually in the reveal phase."}
             </p>
           ) : (
             <>
@@ -212,29 +232,52 @@ export function VoteCandidates({ novelId, round, phase, voteStake, candidates, c
                 </button>
                 <TxStatusLabel status={status} error={error} successText="Vote committed!" />
                 {status === "error" && (
-                  <button type="button" className="on-btn on-btn-ghost" onClick={reset}>Retry</button>
+                  <button type="button" className="on-btn on-btn-ghost" onClick={reset}>
+                    Retry
+                  </button>
                 )}
               </div>
               <p className="text-tiny text-muted" style={{ margin: 0 }}>
-                Voting requires <strong>two signatures</strong>: (1) the commit transaction on-chain with your stake,
-                (2) an off-chain auth signature so the keeper can auto-reveal during the reveal phase.
-                If the keeper is unavailable, you'll receive your salt to reveal manually.
+                Voting requires <strong>two signatures</strong>: (1) the commit transaction on-chain
+                with your stake, (2) an off-chain auth signature so the keeper can auto-reveal
+                during the reveal phase. If the keeper is unavailable, you'll receive your salt to
+                reveal manually.
               </p>
-              {submitNote && <p className="text-caption text-muted" style={{ margin: 0 }}>{submitNote}</p>}
+              {submitNote && (
+                <p className="text-caption text-muted" style={{ margin: 0 }}>
+                  {submitNote}
+                </p>
+              )}
             </>
           )}
 
           {rescueSalt && (
-            <div className="on-card" style={{ borderColor: "var(--color-warning)", background: "color-mix(in srgb, var(--color-warning) 8%, transparent)" }}>
-              <p className="text-caption" style={{ margin: 0, fontWeight: 600, color: "var(--color-warning)" }}>
-                ⚠ Keeper did not accept your vote. Save these values so you can reveal manually during the reveal phase:
+            <div
+              className="on-card"
+              style={{
+                borderColor: "var(--color-warning)",
+                background: "color-mix(in srgb, var(--color-warning) 8%, transparent)",
+              }}
+            >
+              <p
+                className="text-caption"
+                style={{ margin: 0, fontWeight: 600, color: "var(--color-warning)" }}
+              >
+                ⚠ Keeper did not accept your vote. Save these values so you can reveal manually
+                during the reveal phase:
               </p>
-              <pre className="on-table-mono" style={{
-                margin: "0.5rem 0", padding: "0.5rem",
-                background: "var(--color-bg-secondary)", borderRadius: "0.375rem",
-                fontSize: "0.75rem", overflowX: "auto",
-              }}>
-{`novel:     ${novelId}
+              <pre
+                className="on-table-mono"
+                style={{
+                  margin: "0.5rem 0",
+                  padding: "0.5rem",
+                  background: "var(--color-bg-secondary)",
+                  borderRadius: "0.375rem",
+                  fontSize: "0.75rem",
+                  overflowX: "auto",
+                }}
+              >
+                {`novel:     ${novelId}
 round:     ${round}
 candidate: ${rescueSalt.candidateId}
 salt:      ${rescueSalt.salt}`}
@@ -244,10 +287,12 @@ salt:      ${rescueSalt.salt}`}
                 className="on-btn-soft"
                 onClick={() => {
                   navigator.clipboard.writeText(
-                    `novel=${novelId} round=${round} candidate=${rescueSalt.candidateId} salt=${rescueSalt.salt}`
+                    `novel=${novelId} round=${round} candidate=${rescueSalt.candidateId} salt=${rescueSalt.salt}`,
                   );
                 }}
-              >Copy rescue params</button>
+              >
+                Copy rescue params
+              </button>
             </div>
           )}
         </div>
@@ -259,7 +304,10 @@ salt:      ${rescueSalt.salt}`}
           round={round}
           voter={address}
           stored={stored}
-          onRevealed={() => { clearVote(novelId, round); setStored(null); }}
+          onRevealed={() => {
+            clearVote(novelId, round);
+            setStored(null);
+          }}
         />
       )}
       {revealing && !stored && (
@@ -272,8 +320,18 @@ salt:      ${rescueSalt.salt}`}
 }
 
 function RevealAction({
-  novelId, round, voter, stored, onRevealed,
-}: { novelId: string; round: number; voter: `0x${string}`; stored: StoredVote; onRevealed: () => void }) {
+  novelId,
+  round,
+  voter,
+  stored,
+  onRevealed,
+}: {
+  novelId: string;
+  round: number;
+  voter: `0x${string}`;
+  stored: StoredVote;
+  onRevealed: () => void;
+}) {
   const { send, status, error } = useTxAction();
 
   async function handleReveal() {
@@ -296,7 +354,8 @@ function RevealAction({
         </p>
       ) : (
         <p className="text-warning" style={{ margin: 0 }}>
-          Your vote was not submitted to the keeper. Reveal manually below before the reveal phase ends.
+          Your vote was not submitted to the keeper. Reveal manually below before the reveal phase
+          ends.
         </p>
       )}
       <div className="on-row" style={{ gap: "0.5rem", alignItems: "center" }}>

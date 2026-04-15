@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import type { ChapterContext } from "@/lib/api";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
 import { useNicknames } from "@/hooks/use-nickname";
+import type { ChapterContext } from "@/lib/api";
 import { timeAgo } from "@/lib/format";
-import { markRead, saveBookmark, getReadSet } from "@/lib/reading-storage";
+import { getReadSet, markRead, saveBookmark } from "@/lib/reading-storage";
 
 interface ChapterReaderProps {
   /** Ordered chain from root to leaf */
@@ -33,7 +34,11 @@ function computeResumeIndex(chapters: ChapterContext[]): number {
 }
 
 export function ChapterReader({
-  chapters, novelId, novelTitle, leafId, initialDepthParam,
+  chapters,
+  novelId,
+  novelTitle,
+  leafId,
+  initialDepthParam,
 }: ChapterReaderProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -101,7 +106,9 @@ export function ChapterReader({
       {/* Top bar */}
       <div className="on-stack" style={{ gap: "0.25rem" }}>
         <div className="on-row-between">
-          <span className="text-caption">Chapter {index + 1} of {total}</span>
+          <span className="text-caption">
+            Chapter {index + 1} of {total}
+          </span>
           <span className="text-caption" style={{ color: "var(--color-primary)" }}>
             🔖 Bookmarked
           </span>
@@ -122,21 +129,23 @@ export function ChapterReader({
           ID.{current.id}
         </Link>
         {formattedDate && (
-          <span className="text-caption text-muted">· {formattedDate} ({timeAgo(current.timestamp)})</span>
+          <span className="text-caption text-muted">
+            · {formattedDate} ({timeAgo(current.timestamp)})
+          </span>
         )}
-        {current.is_world_line && (
-          <span className="on-badge badge-worldline">World Line</span>
-        )}
+        {current.is_world_line && <span className="on-badge badge-worldline">World Line</span>}
       </div>
 
       {/* Content */}
       <div className="prose">
         {current.content_text ? (
-          current.content_text.split("\n").map((para, i) =>
-            para.trim() ? <p key={i}>{para}</p> : null
-          )
+          current.content_text
+            .split("\n")
+            .map((para, i) => (para.trim() ? <p key={i}>{para}</p> : null))
         ) : (
-          <p className="text-muted" style={{ fontStyle: "italic" }}>Content not available</p>
+          <p className="text-muted" style={{ fontStyle: "italic" }}>
+            Content not available
+          </p>
         )}
       </div>
 
@@ -169,7 +178,9 @@ export function ChapterReader({
             <button className="on-btn on-btn-primary">Continue this storyline</button>
           </Link>
         ) : (
-          <button className="on-btn on-btn-primary" onClick={goNext}>Next</button>
+          <button className="on-btn on-btn-primary" onClick={goNext}>
+            Next
+          </button>
         )}
       </div>
     </div>
@@ -177,7 +188,13 @@ export function ChapterReader({
 }
 
 function Pagination({
-  current, total, onGoto, open, setOpen, pageInput, setPageInput,
+  current,
+  total,
+  onGoto,
+  open,
+  setOpen,
+  pageInput,
+  setPageInput,
 }: {
   current: number;
   total: number;
@@ -202,7 +219,10 @@ function Pagination({
       <button
         type="button"
         className="on-btn on-btn-ghost"
-        onClick={() => { setPageInput(String(current)); setOpen(true); }}
+        onClick={() => {
+          setPageInput(String(current));
+          setOpen(true);
+        }}
       >
         Chapter {current} / {total}
       </button>

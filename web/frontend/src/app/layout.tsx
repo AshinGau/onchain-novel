@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+
 import "./globals.css";
+
 import { NavBar } from "@/components/nav-bar";
 import { Providers } from "@/components/providers";
 
@@ -19,13 +21,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Providers>
           <NavBar />
           <main style={{ flex: 1 }}>{children}</main>
-          <footer style={{
-            borderTop: "1px solid var(--color-border)",
-            padding: "1.5rem",
-            textAlign: "center",
-            fontSize: "0.875rem",
-            color: "var(--color-text-muted)",
-          }}>
+          <footer
+            style={{
+              borderTop: "1px solid var(--color-border)",
+              padding: "1.5rem",
+              textAlign: "center",
+              fontSize: "0.875rem",
+              color: "var(--color-text-muted)",
+            }}
+          >
             Onchain Novel Protocol
           </footer>
         </Providers>

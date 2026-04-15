@@ -8,7 +8,7 @@
  * Value:      JSON `{ candidateId: string, salt: 0x...64hex, keeperSubmitted: bool }`
  */
 
-import { keccak256, encodePacked, toHex } from "viem";
+import { encodePacked, keccak256, toHex } from "viem";
 
 const PREFIX = "vote";
 

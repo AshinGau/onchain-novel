@@ -16,12 +16,12 @@
  *   PK_CREATOR, PK_WRITER_A, PK_VOTER_A, PK_KEEPER
  */
 
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { execSync } from "node:child_process";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 
 const RPC_URL = process.env.RPC_URL!;
 const NOVEL_CORE = process.env.NOVEL_CORE_ADDRESS!;
@@ -40,11 +40,21 @@ const ADDR_VOTER_A = "0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65";
 
 let passed = 0;
 let failed = 0;
-const pass = (m: string) => { passed++; console.log(`  \x1b[32m[PASS]\x1b[0m ${m}`); };
-const fail = (m: string) => { failed++; console.log(`  \x1b[31m[FAIL]\x1b[0m ${m}`); };
+const pass = (m: string) => {
+  passed++;
+  console.log(`  \x1b[32m[PASS]\x1b[0m ${m}`);
+};
+const fail = (m: string) => {
+  failed++;
+  console.log(`  \x1b[31m[FAIL]\x1b[0m ${m}`);
+};
 const info = (m: string) => console.log(`  \x1b[33m[INFO]\x1b[0m ${m}`);
 
-const SERVER_BIN = join(import.meta.dirname ?? new URL(".", import.meta.url).pathname, "dist", "index.js");
+const SERVER_BIN = join(
+  import.meta.dirname ?? new URL(".", import.meta.url).pathname,
+  "dist",
+  "index.js",
+);
 
 // HOME isolation so we don't clobber the user's vote-salts.json
 const SMOKE_HOME = mkdtempSync(join(tmpdir(), "mcp-smoke-"));
@@ -88,10 +98,7 @@ function callText(result: any): string {
 }
 
 function advanceTime(seconds: number): void {
-  execSync(
-    `cast rpc evm_increaseTime ${seconds} --rpc-url ${RPC_URL}`,
-    { stdio: "ignore" },
-  );
+  execSync(`cast rpc evm_increaseTime ${seconds} --rpc-url ${RPC_URL}`, { stdio: "ignore" });
   execSync(`cast rpc evm_mine --rpc-url ${RPC_URL}`, { stdio: "ignore" });
 }
 
@@ -247,7 +254,8 @@ async function main() {
     else fail(`vote_commit: ${text}`);
     if (text.includes("Salt saved")) pass("vote_commit persisted local backup");
     else fail(`vote_commit local backup line missing: ${text}`);
-    if (text.includes("Keeper will auto-reveal")) pass("vote_commit submitted keeper-assisted reveal");
+    if (text.includes("Keeper will auto-reveal"))
+      pass("vote_commit submitted keeper-assisted reveal");
     else fail(`vote_commit keeper line missing: ${text}`);
   });
 
@@ -255,7 +263,9 @@ async function main() {
   const pgUrl = process.env.DATABASE_URL!;
   const pendingCount = execSync(
     `psql -t -A -d "${pgUrl}" -c "SELECT COUNT(*) FROM pending_votes WHERE novel_id = 1 AND round = 1 AND LOWER(voter) = LOWER('${ADDR_VOTER_A}') AND status = 'committed'"`,
-  ).toString().trim();
+  )
+    .toString()
+    .trim();
   if (pendingCount === "1") pass("pending_votes row created in DB");
   else fail(`pending_votes count expected 1, got ${pendingCount}`);
 

@@ -1,12 +1,11 @@
 import { Command } from "commander";
-import { loadConfig, saveConfig, getConfigPath } from "../utils/config.js";
-import { header, kv, success, error } from "../utils/format.js";
+
 import type { OnchainNovelConfig } from "../shared/index.js";
+import { getConfigPath, loadConfig, saveConfig } from "../utils/config.js";
+import { error, header, kv, success } from "../utils/format.js";
 
 export function registerConfigCommand(program: Command): void {
-  const config = program
-    .command("config")
-    .description("View or modify CLI configuration");
+  const config = program.command("config").description("View or modify CLI configuration");
 
   // Show current config
   config.action(() => {
@@ -46,7 +45,11 @@ export function registerConfigCommand(program: Command): void {
       if (key.startsWith("contracts.")) {
         const contractKey = key.split(".")[1] as keyof OnchainNovelConfig["contracts"];
         if (!cfg.contracts) {
-          (cfg as OnchainNovelConfig).contracts = { novelCore: "0x" as `0x${string}`, roundManager: "0x" as `0x${string}`, prizePool: "0x" as `0x${string}` };
+          (cfg as OnchainNovelConfig).contracts = {
+            novelCore: "0x" as `0x${string}`,
+            roundManager: "0x" as `0x${string}`,
+            prizePool: "0x" as `0x${string}`,
+          };
         }
         (cfg.contracts as Record<string, string>)[contractKey] = value;
       } else if (key === "chainId") {

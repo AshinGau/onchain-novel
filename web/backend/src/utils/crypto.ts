@@ -1,4 +1,5 @@
 import { createCipheriv, createDecipheriv, randomBytes } from "crypto";
+
 import { env } from "./env.js";
 
 // AES-256-GCM encryption for storing plaintext votes at rest.
@@ -8,7 +9,12 @@ const ALGO = "aes-256-gcm";
 const IV_LEN = 12; // GCM standard
 const KEY_LEN = 32;
 
-function loadKey(): Buffer {
+/**
+ * Decode and validate the configured VOTE_ENCRYPTION_KEY. Throws on missing /
+ * malformed key. Exported so the server can fail fast at startup instead of
+ * surfacing the error on the first vote.
+ */
+export function loadKey(): Buffer {
   const raw = env.VOTE_ENCRYPTION_KEY;
   if (!raw) throw new Error("VOTE_ENCRYPTION_KEY is not configured");
   // Accept hex (64 chars) or base64 (44 chars)

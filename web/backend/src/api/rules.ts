@@ -1,8 +1,16 @@
 import { Router } from "express";
-import { query } from "../db/index.js";
-import { safeInt } from "../utils/validate.js";
 
+import { query } from "../db/index.js";
+import { createLogger } from "../utils/logger.js";
+import { parsePagination, validateIdParams } from "../utils/validate.js";
+
+const log = createLogger("api:rules");
 const router = Router();
+
+// Validate any :id / :novelId style param before it hits the DB.
+router.use("/novels/:id/rules", validateIdParams("id"));
+router.use("/novels/:id/rule-proposals", validateIdParams("id"));
+router.use("/rule-proposals/:id", validateIdParams("id"));
 
 // GET /api/novels/:id/rules — all rules for a novel
 router.get("/novels/:id/rules", async (req, res) => {
@@ -10,11 +18,11 @@ router.get("/novels/:id/rules", async (req, res) => {
     const novelId = req.params.id;
     const result = await query(
       "SELECT name, content FROM rules WHERE novel_id = $1 ORDER BY name",
-      [novelId]
+      [novelId],
     );
     res.json(result.rows);
   } catch (err) {
-    console.error("GET /api/novels/:id/rules error:", err);
+    log.error({ err }, "GET /api/novels/:id/rules error");
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -24,13 +32,9 @@ router.get("/novels/:id/rule-proposals", async (req, res) => {
   try {
     const novelId = req.params.id;
     const status = req.query.status as string | undefined;
-    const page = safeInt(req.query.page, 1, 1, 1000);
-    const limit = safeInt(req.query.limit, 20, 1, 50);
-    const offset = (page - 1) * limit;
+    const { page, limit, offset } = parsePagination(req.query);
 
     let where = "WHERE novel_id = $1";
-    const params: any[] = [novelId];
-
     if (status === "active") {
       where += " AND executed = FALSE";
     } else if (status === "executed") {
@@ -38,12 +42,12 @@ router.get("/novels/:id/rule-proposals", async (req, res) => {
     }
 
     const result = await query(
-      `SELECT * FROM rule_proposals ${where} ORDER BY id DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
-      [...params, limit, offset]
+      `SELECT * FROM rule_proposals ${where} ORDER BY id DESC LIMIT $2 OFFSET $3`,
+      [novelId, limit, offset],
     );
     res.json(result.rows);
   } catch (err) {
-    console.error("GET /api/novels/:id/rule-proposals error:", err);
+    log.error({ err }, "GET /api/novels/:id/rule-proposals error");
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -59,12 +63,12 @@ router.get("/rule-proposals/:id", async (req, res) => {
 
     const votesRes = await query(
       "SELECT voter, block_number FROM rule_proposal_votes WHERE proposal_id = $1 ORDER BY block_number",
-      [proposalId]
+      [proposalId],
     );
 
     res.json({ ...proposalRes.rows[0], votes: votesRes.rows });
   } catch (err) {
-    console.error("GET /api/rule-proposals/:id error:", err);
+    log.error({ err }, "GET /api/rule-proposals/:id error");
     res.status(500).json({ error: "Internal server error" });
   }
 });

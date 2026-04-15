@@ -1,16 +1,12 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { z } from "zod";
 import { formatEther } from "viem";
-import {
-  submitChapter,
-  getNovel,
-  getChapter,
-  buildContentSubmission,
-} from "../shared/index.js";
+import { z } from "zod";
+
 import { config } from "../config.js";
+import { buildContentSubmission, getChapter, getNovel, submitChapter } from "../shared/index.js";
+import { apiGet, apiPost, hasApi } from "../utils/api.js";
 import { getPublicClient, getWalletClient } from "../utils/client.js";
-import { hasApi, apiGet, apiPost } from "../utils/api.js";
-import { ok, fail } from "../utils/response.js";
+import { fail, ok } from "../utils/response.js";
 
 export function registerChapterTools(server: McpServer): void {
   // ── chapter_submit ──
@@ -65,7 +61,9 @@ export function registerChapterTools(server: McpServer): void {
             `Parent: ${ch.parent_id}`,
             `Depth: ${ch.depth}`,
             `Is World Line: ${ch.is_world_line}`,
-            ch.content_text ? `\n--- Content ---\n${ch.content_text}` : `Content hash: ${ch.content_hash}`,
+            ch.content_text
+              ? `\n--- Content ---\n${ch.content_text}`
+              : `Content hash: ${ch.content_hash}`,
           ];
           return ok(lines.join("\n"));
         }
@@ -99,14 +97,23 @@ export function registerChapterTools(server: McpServer): void {
       try {
         if (!hasApi()) return fail("chapter_tree requires API_BASE_URL.");
         const data = await apiGet<{
-          chapters: { id: string; parent_id: string; depth: number; author: string; is_world_line: boolean; is_canon: boolean }[];
+          chapters: {
+            id: string;
+            parent_id: string;
+            depth: number;
+            author: string;
+            is_world_line: boolean;
+            is_canon: boolean;
+          }[];
         }>(`/api/novels/${params.novelId}/chapters`);
 
         if (data.chapters.length === 0) return ok("No chapters.");
 
         const lines = data.chapters.map((ch) => {
           const indent = "  ".repeat(ch.depth);
-          const flags = [ch.is_world_line ? "WL" : "", ch.is_canon ? "Canon" : ""].filter(Boolean).join(",");
+          const flags = [ch.is_world_line ? "WL" : "", ch.is_canon ? "Canon" : ""]
+            .filter(Boolean)
+            .join(",");
           return `${indent}#${ch.id} (d${ch.depth}) by ${(ch.author as string).slice(0, 10)}...${flags ? ` [${flags}]` : ""}`;
         });
         return ok(`Chapter tree for Novel #${params.novelId}:\n${lines.join("\n")}`);
@@ -125,7 +132,13 @@ export function registerChapterTools(server: McpServer): void {
       try {
         if (!hasApi()) return fail("chapter_context requires API_BASE_URL.");
         const data = await apiGet<{
-          ancestors: { id: string; author: string; depth: number; content_text: string | null; is_canon: boolean }[];
+          ancestors: {
+            id: string;
+            author: string;
+            depth: number;
+            content_text: string | null;
+            is_canon: boolean;
+          }[];
         }>(`/api/chapters/${params.chapterId}/context`);
 
         const parts = data.ancestors.map((ch) => {
@@ -183,10 +196,12 @@ export function registerChapterTools(server: McpServer): void {
         const message = `Comment on chapter ${params.chapterId} at ${ts}: ${params.content}`;
         const signature = await wallet.signMessage({ account: wallet.account!, message });
 
-        const result = await apiPost<{ id: number }>(
-          `/api/chapters/${params.chapterId}/comments`,
-          { address, content: params.content, timestamp: ts, signature },
-        );
+        const result = await apiPost<{ id: number }>(`/api/chapters/${params.chapterId}/comments`, {
+          address,
+          content: params.content,
+          timestamp: ts,
+          signature,
+        });
 
         if (result.status === 201 && result.body?.id) {
           return ok(`Comment posted (id=${result.body.id}) on Chapter #${params.chapterId}.`);

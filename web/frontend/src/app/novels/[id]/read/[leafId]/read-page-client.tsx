@@ -1,7 +1,7 @@
 "use client";
 
-import type { ChapterContext } from "@/lib/api";
 import { ChapterReader } from "@/components/chapter-reader";
+import type { ChapterContext } from "@/lib/api";
 
 interface ReadPageClientProps {
   chapters: ChapterContext[];
@@ -12,7 +12,11 @@ interface ReadPageClientProps {
 }
 
 export function ReadPageClient({
-  chapters, novelId, novelTitle, leafId, initialDepthParam,
+  chapters,
+  novelId,
+  novelTitle,
+  leafId,
+  initialDepthParam,
 }: ReadPageClientProps) {
   if (chapters.length === 0) {
     return (

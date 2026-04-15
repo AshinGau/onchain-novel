@@ -1,24 +1,25 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { z } from "zod";
-import { formatEther, toHex } from "viem";
 import { randomBytes } from "node:crypto";
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { formatEther, toHex } from "viem";
+import { z } from "zod";
+
+import { config } from "../config.js";
 import {
+  buildPathToAnchor,
   commitVote,
-  revealVote,
-  startRound,
-  settleRound,
-  nominateCandidate,
+  computeCommitHash,
   getNovel,
   getRoundData,
-  computeCommitHash,
+  nominateCandidate,
+  revealVote,
+  settleRound,
+  startRound,
   toBytes32Salt,
-  buildPathToAnchor,
 } from "../shared/index.js";
-import { config } from "../config.js";
+import { apiGet, apiPost, hasApi } from "../utils/api.js";
 import { getPublicClient, getWalletClient } from "../utils/client.js";
-import { hasApi, apiGet, apiPost } from "../utils/api.js";
-import { saveVoteSalt, getVoteSalt, getStorePath } from "../utils/vote-store.js";
-import { ok, fail } from "../utils/response.js";
+import { fail, ok } from "../utils/response.js";
+import { getStorePath, getVoteSalt, saveVoteSalt } from "../utils/vote-store.js";
 
 /** Generate a fresh 32-byte random salt as 0x-prefixed hex */
 function generateSalt(): `0x${string}` {
@@ -33,7 +34,9 @@ export function registerVoteTools(server: McpServer): void {
       "(one per current world line, deepest leaves preferred). Each must have no children.",
     {
       novelId: z.number().describe("Novel ID"),
-      leaves: z.array(z.number()).describe("Leaf chapter IDs (>= worldLineCount entries, true tree leaves)"),
+      leaves: z
+        .array(z.number())
+        .describe("Leaf chapter IDs (>= worldLineCount entries, true tree leaves)"),
     },
     async (params) => {
       try {
@@ -45,7 +48,9 @@ export function registerVoteTools(server: McpServer): void {
           roundManager: config.roundManager,
         });
         const receipt = await pub.waitForTransactionReceipt({ hash });
-        return ok(`Round started for Novel #${params.novelId}.\nTx: ${hash}\nBlock: ${receipt.blockNumber}`);
+        return ok(
+          `Round started for Novel #${params.novelId}.\nTx: ${hash}\nBlock: ${receipt.blockNumber}`,
+        );
       } catch (error) {
         return fail(`Failed: ${error instanceof Error ? error.message : String(error)}`);
       }
@@ -60,8 +65,14 @@ export function registerVoteTools(server: McpServer): void {
     {
       novelId: z.number().describe("Novel ID"),
       candidateId: z.number().describe("Candidate chapter ID to vote for"),
-      salt: z.string().optional().describe("Optional memorable salt string. If omitted, generated automatically."),
-      keeperAssisted: z.boolean().default(true).describe("Submit plaintext to backend so keeper can auto-reveal"),
+      salt: z
+        .string()
+        .optional()
+        .describe("Optional memorable salt string. If omitted, generated automatically."),
+      keeperAssisted: z
+        .boolean()
+        .default(true)
+        .describe("Submit plaintext to backend so keeper can auto-reveal"),
     },
     async (params) => {
       try {
@@ -109,8 +120,7 @@ export function registerVoteTools(server: McpServer): void {
         // Best-effort keeper-assisted reveal submission
         if (params.keeperAssisted && currentRound > 0 && hasApi()) {
           const ts = Math.floor(Date.now() / 1000);
-          const message =
-            `Submit vote on novel ${params.novelId} round ${currentRound} for candidate ${params.candidateId} at ${ts}`;
+          const message = `Submit vote on novel ${params.novelId} round ${currentRound} for candidate ${params.candidateId} at ${ts}`;
           const signature = await wallet.signMessage({ account: wallet.account!, message });
 
           const result = await apiPost("/api/votes/submit", {
@@ -128,7 +138,9 @@ export function registerVoteTools(server: McpServer): void {
           } else if (result.status === 503) {
             lines.push(`Keeper-assisted reveal disabled on backend (you must reveal manually).`);
           } else {
-            lines.push(`Backend rejected /api/votes/submit (status ${result.status}); reveal manually.`);
+            lines.push(
+              `Backend rejected /api/votes/submit (status ${result.status}); reveal manually.`,
+            );
           }
         } else if (params.keeperAssisted && !hasApi()) {
           lines.push(`API_BASE_URL not configured; skipped keeper submission.`);
@@ -205,7 +217,9 @@ export function registerVoteTools(server: McpServer): void {
           roundManager: config.roundManager,
         });
         const receipt = await pub.waitForTransactionReceipt({ hash });
-        return ok(`Round settled for Novel #${params.novelId}.\nTx: ${hash}\nBlock: ${receipt.blockNumber}`);
+        return ok(
+          `Round settled for Novel #${params.novelId}.\nTx: ${hash}\nBlock: ${receipt.blockNumber}`,
+        );
       } catch (error) {
         return fail(`Failed: ${error instanceof Error ? error.message : String(error)}`);
       }
@@ -221,7 +235,10 @@ export function registerVoteTools(server: McpServer): void {
     {
       novelId: z.number().describe("Novel ID"),
       chapterId: z.number().describe("Chapter to nominate"),
-      forfeit: z.boolean().default(false).describe("If true, skip path proof and forfeit reward eligibility"),
+      forfeit: z
+        .boolean()
+        .default(false)
+        .describe("If true, skip path proof and forfeit reward eligibility"),
     },
     async (params) => {
       try {
@@ -292,10 +309,18 @@ export function registerVoteTools(server: McpServer): void {
 
         const pub = getPublicClient();
         const novel = (await getNovel(pub, BigInt(params.novelId), config.novelCore)) as any;
-        const round = await getRoundData(pub, BigInt(params.novelId), novel.currentRound, config.novelCore);
+        const round = await getRoundData(
+          pub,
+          BigInt(params.novelId),
+          novel.currentRound,
+          config.novelCore,
+        );
         const rd = round as any;
         if (!rd.candidates || rd.candidates.length === 0) return ok("No candidates.");
-        const lines = rd.candidates.map((id: bigint, i: number) => `  #${id}${rd.candidateIsEligible?.[i] ? "" : " [ineligible]"}`);
+        const lines = rd.candidates.map(
+          (id: bigint, i: number) =>
+            `  #${id}${rd.candidateIsEligible?.[i] ? "" : " [ineligible]"}`,
+        );
         return ok(`Candidates (Round ${novel.currentRound}):\n${lines.join("\n")}`);
       } catch (error) {
         return fail(`Failed: ${error instanceof Error ? error.message : String(error)}`);

@@ -1,14 +1,20 @@
 import { Router } from "express";
-import { query } from "../db/index.js";
-import { validateAddress, safeInt } from "../utils/validate.js";
 
+import { query } from "../db/index.js";
+import { createLogger } from "../utils/logger.js";
+import { parsePagination, validateAddress } from "../utils/validate.js";
+
+const log = createLogger("api:users");
 const router = Router();
 
 // GET /api/users/nicknames/batch — Batch lookup nicknames for multiple addresses
 // NOTE: Must be defined BEFORE /:address routes to avoid matching "nicknames" as an address
 router.get("/nicknames/batch", async (req, res) => {
   try {
-    const addresses = (req.query.addresses as string)?.split(",").map(a => a.toLowerCase()).filter(Boolean);
+    const addresses = (req.query.addresses as string)
+      ?.split(",")
+      .map((a) => a.toLowerCase())
+      .filter(Boolean);
     if (!addresses || addresses.length === 0) {
       res.json({ nicknames: {} });
       return;
@@ -17,7 +23,7 @@ router.get("/nicknames/batch", async (req, res) => {
     const placeholders = limited.map((_, i) => `$${i + 1}`).join(",");
     const result = await query(
       `SELECT address, nickname FROM nicknames WHERE address IN (${placeholders})`,
-      limited
+      limited,
     );
     const map: Record<string, string> = {};
     for (const row of result.rows) {
@@ -25,7 +31,7 @@ router.get("/nicknames/batch", async (req, res) => {
     }
     res.json({ nicknames: map });
   } catch (err) {
-    console.error("GET /api/users/nicknames/batch error:", err);
+    log.error({ err }, "GET /api/users/nicknames/batch error");
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -39,31 +45,26 @@ router.get("/:address/votes", async (req, res) => {
   try {
     const { address } = req.params;
     const addr = address.toLowerCase();
-    const page = safeInt(req.query.page, 1, 1, 1000);
-    const limit = safeInt(req.query.limit, 20, 1, 50);
-    const offset = (page - 1) * limit;
+    const { page, limit, offset } = parsePagination(req.query);
 
     const votesRes = await query(
       `SELECT v.*, n.title AS novel_title, n.round_phase
        FROM votes v
        LEFT JOIN novels n ON n.id = v.novel_id
-       WHERE LOWER(v.voter) = $1
+       WHERE v.voter = $1
        ORDER BY v.commit_block DESC
        LIMIT $2 OFFSET $3`,
-      [addr, limit, offset]
+      [addr, limit, offset],
     );
 
-    const countRes = await query(
-      "SELECT COUNT(*) FROM votes WHERE LOWER(voter) = $1",
-      [addr]
-    );
+    const countRes = await query("SELECT COUNT(*) FROM votes WHERE voter = $1", [addr]);
 
     res.json({
       votes: votesRes.rows,
       total: parseInt(countRes.rows[0].count),
     });
   } catch (err) {
-    console.error("GET /api/users/:address/votes error:", err);
+    log.error({ err }, "GET /api/users/:address/votes error");
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -79,9 +80,14 @@ router.get("/:address/rewards", async (req, res) => {
       `SELECT v.novel_id, v.round, n.title AS novel_title
        FROM votes v
        LEFT JOIN novels n ON n.id = v.novel_id
-       WHERE LOWER(v.voter) = $1 AND v.revealed = TRUE AND v.claimed = FALSE`,
-      [addr]
+       WHERE v.voter = $1 AND v.revealed = TRUE AND v.claimed = FALSE`,
+      [addr],
     );
+
+    const { page, limit, offset } = parsePagination(req.query, {
+      defaultLimit: 50,
+      maxLimit: 200,
+    });
 
     // Past reward claims (per-row, newest first)
     const claimsRes = await query(
@@ -89,55 +95,72 @@ router.get("/:address/rewards", async (req, res) => {
               rc.block_number, rc.created_at, n.title AS novel_title
        FROM reward_claims rc
        LEFT JOIN novels n ON n.id = rc.novel_id
-       WHERE LOWER(rc.claimant) = $1
-       ORDER BY rc.created_at DESC`,
-      [addr]
+       WHERE rc.claimant = $1
+       ORDER BY rc.created_at DESC
+       LIMIT $2 OFFSET $3`,
+      [addr, limit, offset],
     );
 
     // Novels the user participated in (as author or voter)
     const novelsRes = await query(
       `SELECT DISTINCT t.novel_id, n.title AS novel_title FROM (
-         SELECT novel_id FROM chapters WHERE LOWER(author) = $1
+         SELECT novel_id FROM chapters WHERE author = $1
          UNION
-         SELECT novel_id FROM votes WHERE LOWER(voter) = $1
+         SELECT novel_id FROM votes WHERE voter = $1
        ) t
        LEFT JOIN novels n ON n.id = t.novel_id
-       ORDER BY t.novel_id DESC`,
-      [addr]
+       ORDER BY t.novel_id DESC
+       LIMIT 200`,
+      [addr],
     );
 
     res.json({
       unclaimedVotes: unclaimedVotesRes.rows,
       rewardClaims: claimsRes.rows,
-      participatedNovels: novelsRes.rows.map(r => ({ novel_id: r.novel_id, novel_title: r.novel_title || "" })),
+      participatedNovels: novelsRes.rows.map((r) => ({
+        novel_id: r.novel_id,
+        novel_title: r.novel_title || "",
+      })),
+      pagination: { page, limit },
     });
   } catch (err) {
-    console.error("GET /api/users/:address/rewards error:", err);
+    log.error({ err }, "GET /api/users/:address/rewards error");
     res.status(500).json({ error: "Internal server error" });
   }
 });
 
-// GET /api/users/:address/chapters — User's submitted chapters
+// GET /api/users/:address/chapters — User's submitted chapters (paginated)
 router.get("/:address/chapters", async (req, res) => {
   try {
     const { address } = req.params;
     const addr = address.toLowerCase();
+    const { page, limit, offset } = parsePagination(req.query, {
+      defaultLimit: 50,
+      maxLimit: 200,
+    });
 
-    const chaptersRes = await query(
-      `SELECT c.id, c.novel_id, c.depth, c."timestamp",
-              c.is_world_line, c.created_at, n.title AS novel_title,
-              (SELECT COUNT(*) FROM comments cm WHERE cm.chapter_id = c.id)::int AS comment_count,
-              (SELECT COUNT(*) FROM votes v WHERE v.candidate_id = c.id AND v.revealed = TRUE)::int AS vote_count
-       FROM chapters c
-       LEFT JOIN novels n ON n.id = c.novel_id
-       WHERE LOWER(c.author) = $1
-       ORDER BY c.created_at DESC`,
-      [addr]
-    );
+    const [chaptersRes, countRes] = await Promise.all([
+      query(
+        `SELECT c.id, c.novel_id, c.depth, c."timestamp",
+                c.is_world_line, c.created_at, n.title AS novel_title,
+                (SELECT COUNT(*) FROM comments cm WHERE cm.chapter_id = c.id)::int AS comment_count,
+                (SELECT COUNT(*) FROM votes v WHERE v.candidate_id = c.id AND v.revealed = TRUE)::int AS vote_count
+         FROM chapters c
+         LEFT JOIN novels n ON n.id = c.novel_id
+         WHERE c.author = $1
+         ORDER BY c.created_at DESC
+         LIMIT $2 OFFSET $3`,
+        [addr, limit, offset],
+      ),
+      query(`SELECT COUNT(*)::int AS n FROM chapters WHERE author = $1`, [addr]),
+    ]);
 
-    res.json({ chapters: chaptersRes.rows });
+    res.json({
+      chapters: chaptersRes.rows,
+      pagination: { page, limit, total: countRes.rows[0]?.n ?? 0 },
+    });
   } catch (err) {
-    console.error("GET /api/users/:address/chapters error:", err);
+    log.error({ err }, "GET /api/users/:address/chapters error");
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -146,13 +169,12 @@ router.get("/:address/chapters", async (req, res) => {
 router.get("/:address/nickname", async (req, res) => {
   try {
     const { address } = req.params;
-    const result = await query(
-      "SELECT nickname FROM nicknames WHERE address = $1",
-      [address.toLowerCase()]
-    );
+    const result = await query("SELECT nickname FROM nicknames WHERE address = $1", [
+      address.toLowerCase(),
+    ]);
     res.json({ nickname: result.rows[0]?.nickname ?? null });
   } catch (err) {
-    console.error("GET /api/users/:address/nickname error:", err);
+    log.error({ err }, "GET /api/users/:address/nickname error");
     res.status(500).json({ error: "Internal server error" });
   }
 });

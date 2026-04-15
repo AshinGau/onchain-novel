@@ -1,6 +1,7 @@
 import { createPublicClient, createWalletClient, defineChain, http, type Hash } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { foundry } from "viem/chains";
+
 import { requireConfig } from "./config.js";
 
 function getChain() {

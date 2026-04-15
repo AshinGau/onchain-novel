@@ -1,16 +1,17 @@
 import { Command } from "commander";
 import { parseEther } from "viem";
+
 import {
+  buildContentSubmission,
+  completeNovel as completeNovelTx,
   createNovel as createNovelTx,
   forkNovel as forkNovelTx,
-  completeNovel as completeNovelTx,
-  buildContentSubmission,
   type NovelConfig,
   type NovelMetadata,
 } from "../shared/index.js";
-import { getWalletClient, getContracts, waitForTx } from "../utils/client.js";
 import { apiGet } from "../utils/api.js";
-import { header, kv, success, error, txHash, eth, table, roundPhaseName } from "../utils/format.js";
+import { getContracts, getWalletClient, waitForTx } from "../utils/client.js";
+import { error, eth, header, kv, roundPhaseName, success, table, txHash } from "../utils/format.js";
 
 function buildNovelConfig(opts: Record<string, string>): NovelConfig {
   return {
@@ -141,9 +142,10 @@ export function registerNovelCommands(program: Command): void {
         if (opts.filter) params.set("filter", opts.filter);
         if (opts.search) params.set("search", opts.search);
 
-        const data = await apiGet<{ novels: Record<string, unknown>[]; pagination: Record<string, unknown> }>(
-          `/api/novels?${params.toString()}`,
-        );
+        const data = await apiGet<{
+          novels: Record<string, unknown>[];
+          pagination: Record<string, unknown>;
+        }>(`/api/novels?${params.toString()}`);
 
         header("Novels");
         table(

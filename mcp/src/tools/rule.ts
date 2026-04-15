@@ -1,19 +1,20 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { z } from "zod";
 import { parseEther } from "viem";
+import { z } from "zod";
+
+import { config } from "../config.js";
 import {
-  setCreatorRules,
-  proposeRule,
-  voteOnRuleProposal,
   buildWorldLineProof,
   getNovel,
-  getRuleNames,
   getRule,
+  getRuleNames,
   getRuleProposal,
+  proposeRule,
+  setCreatorRules,
+  voteOnRuleProposal,
 } from "../shared/index.js";
-import { config } from "../config.js";
 import { getPublicClient, getWalletClient } from "../utils/client.js";
-import { ok, fail } from "../utils/response.js";
+import { fail, ok } from "../utils/response.js";
 
 export function registerRuleTools(server: McpServer): void {
   // ── rule_list ──
@@ -25,12 +26,21 @@ export function registerRuleTools(server: McpServer): void {
       try {
         if (!config.rulesEngine) return fail("RULES_ENGINE_ADDRESS not configured.");
         const pub = getPublicClient();
-        const names = (await getRuleNames(pub, BigInt(params.novelId), config.rulesEngine)) as string[];
+        const names = (await getRuleNames(
+          pub,
+          BigInt(params.novelId),
+          config.rulesEngine,
+        )) as string[];
         if (names.length === 0) return ok(`No rules for Novel #${params.novelId}.`);
 
         const rules: string[] = [];
         for (const name of names) {
-          const content = (await getRule(pub, BigInt(params.novelId), name, config.rulesEngine)) as string;
+          const content = (await getRule(
+            pub,
+            BigInt(params.novelId),
+            name,
+            config.rulesEngine,
+          )) as string;
           rules.push(`[${name}]\n${content}`);
         }
         return ok(`Rules for Novel #${params.novelId}:\n\n${rules.join("\n\n")}`);
@@ -60,7 +70,9 @@ export function registerRuleTools(server: McpServer): void {
           rulesEngine: config.rulesEngine,
         });
         const receipt = await pub.waitForTransactionReceipt({ hash });
-        return ok(`${params.rules.length} rule(s) set for Novel #${params.novelId}.\nTx: ${hash}\nBlock: ${receipt.blockNumber}`);
+        return ok(
+          `${params.rules.length} rule(s) set for Novel #${params.novelId}.\nTx: ${hash}\nBlock: ${receipt.blockNumber}`,
+        );
       } catch (error) {
         return fail(`Failed: ${error instanceof Error ? error.message : String(error)}`);
       }
@@ -99,7 +111,9 @@ export function registerRuleTools(server: McpServer): void {
           BigInt(params.chapterId),
         );
         if (!path) {
-          return fail(`Chapter #${params.chapterId} is not on any current world line of novel #${params.novelId}.`);
+          return fail(
+            `Chapter #${params.chapterId} is not on any current world line of novel #${params.novelId}.`,
+          );
         }
 
         const hash = await proposeRule(wallet, {
@@ -135,8 +149,17 @@ export function registerRuleTools(server: McpServer): void {
         const pub = getPublicClient();
 
         // Derive novelId from the proposal so we can build the proof
-        const proposal = (await getRuleProposal(pub, BigInt(params.proposalId), config.rulesEngine)) as any;
-        const path = await buildWorldLineProof(pub, config.novelCore, proposal.novelId, BigInt(params.chapterId));
+        const proposal = (await getRuleProposal(
+          pub,
+          BigInt(params.proposalId),
+          config.rulesEngine,
+        )) as any;
+        const path = await buildWorldLineProof(
+          pub,
+          config.novelCore,
+          proposal.novelId,
+          BigInt(params.chapterId),
+        );
         if (!path) {
           return fail(
             `Chapter #${params.chapterId} is not on any current world line of novel #${proposal.novelId}.`,
@@ -149,7 +172,9 @@ export function registerRuleTools(server: McpServer): void {
           rulesEngine: config.rulesEngine,
         });
         const receipt = await pub.waitForTransactionReceipt({ hash });
-        return ok(`Voted on proposal #${params.proposalId}.\nTx: ${hash}\nBlock: ${receipt.blockNumber}`);
+        return ok(
+          `Voted on proposal #${params.proposalId}.\nTx: ${hash}\nBlock: ${receipt.blockNumber}`,
+        );
       } catch (error) {
         return fail(`Failed: ${error instanceof Error ? error.message : String(error)}`);
       }

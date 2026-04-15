@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
+
+import { StoryTree } from "@/components/story-tree";
 import type { ChapterSummary } from "@/lib/api";
 import { fetchNovelTree } from "@/lib/api";
-import { StoryTree } from "@/components/story-tree";
 
 interface TreePageClientProps {
   novelId: string;

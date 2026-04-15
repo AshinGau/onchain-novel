@@ -91,11 +91,11 @@ library DataTypes {
     }
 
     /// @notice Per-round voting data
-    /// @dev Eligibility / per-chapter-author derivation moved off-chain. settleRound takes
-    ///      caller-supplied per-winner paths whose chapters are validated against `_chapters`
-    ///      storage; no per-candidate eligibility flag or prevWorldLines snapshot is stored.
+    /// @dev `settleRound` takes no path arguments. For each winning candidate, reward authors
+    ///      are derived on-chain by walking `parentId` up to any previous world-line ancestor
+    ///      via `NovelCore.collectPathAuthors`. No per-candidate eligibility flag is stored.
     struct RoundData {
-        uint64[] candidates; // Candidate chain chapter IDs (keeper-provided leaves + user nominations)
+        uint64[] candidates; // Candidate chapter IDs (keeper-provided leaves + user nominations)
         uint64 nominateEndTime; // End of nomination phase
         uint64 commitEndTime; // End of commit phase
         uint64 revealEndTime; // End of reveal phase

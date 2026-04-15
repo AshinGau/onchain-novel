@@ -1,40 +1,48 @@
-import { createPublicClient, http, type Log, type PublicClient } from "viem";
-import { foundry } from "viem/chains";
+import type pg from "pg";
+import { type Log, type PublicClient } from "viem";
+
 import { getClient, query } from "../db/index.js";
+import { KeeperSignalBuffer } from "../keeper/index.js";
 import { env } from "../utils/env.js";
+import { createLogger } from "../utils/logger.js";
+import { createRpcPublicClient } from "../utils/viem-client.js";
 import {
-  handleNovelCoreEvent,
-  handleRoundManagerEvent,
-  handleVotingEvent,
-  handlePrizePoolEvent,
   handleBountyBoardEvent,
+  handleNovelCoreEvent,
+  handlePrizePoolEvent,
+  handleRoundManagerEvent,
   handleRulesEvent,
   handleUserRegistryEvent,
+  handleVotingEvent,
 } from "./handlers.js";
-import { KeeperSignalBuffer } from "../keeper/index.js";
+import { detectReorg, rollbackToBlock } from "./reorg.js";
+
+const ilog = createLogger("indexer");
 
 let currentRpcIndex = 0;
 const allRpcUrls = [env.RPC_URL, ...env.RPC_FALLBACK_URLS];
 
-function getTransport() {
-  return http(allRpcUrls[currentRpcIndex]);
-}
-
 function rotateRpc() {
   currentRpcIndex = (currentRpcIndex + 1) % allRpcUrls.length;
-  console.log(`Rotated to RPC #${currentRpcIndex}: ${allRpcUrls[currentRpcIndex]}`);
+  ilog.info({ rpcIndex: currentRpcIndex, url: allRpcUrls[currentRpcIndex] }, "Rotated RPC");
 }
 
 function createClient(): PublicClient {
-  return createPublicClient({ chain: foundry, transport: getTransport() }) as PublicClient;
+  return createRpcPublicClient(allRpcUrls[currentRpcIndex]);
 }
 
 async function sleep(ms: number) {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function getIndexerState(): Promise<{ lastBlock: bigint; lastBlockHash: string | null; batchSize: number }> {
-  const res = await query("SELECT last_block, last_block_hash, batch_size FROM indexer_state WHERE id = 1");
+async function getIndexerState(): Promise<{
+  lastBlock: bigint;
+  lastBlockHash: string | null;
+  batchSize: number;
+}> {
+  const res = await query(
+    "SELECT last_block, last_block_hash, batch_size FROM indexer_state WHERE id = 1",
+  );
   const row = res.rows[0];
   return {
     lastBlock: BigInt(row.last_block),
@@ -58,7 +66,7 @@ async function fetchLogs(
   client: PublicClient,
   fromBlock: bigint,
   toBlock: bigint,
-  addresses: `0x${string}`[]
+  addresses: `0x${string}`[],
 ): Promise<Log[]> {
   return client.getLogs({
     address: addresses,
@@ -72,7 +80,7 @@ async function fetchBatchWithRetry(
   fromBlock: bigint,
   batchSize: number,
   chainHead: bigint,
-  addresses: `0x${string}`[]
+  addresses: `0x${string}`[],
 ): Promise<FetchResult> {
   let currentClient = client;
   let currentBatchSize = batchSize;
@@ -80,9 +88,10 @@ async function fetchBatchWithRetry(
   const maxRetries = 10;
 
   while (retries < maxRetries) {
-    const toBlock = fromBlock + BigInt(currentBatchSize) - 1n > chainHead
-      ? chainHead
-      : fromBlock + BigInt(currentBatchSize) - 1n;
+    const toBlock =
+      fromBlock + BigInt(currentBatchSize) - 1n > chainHead
+        ? chainHead
+        : fromBlock + BigInt(currentBatchSize) - 1n;
 
     try {
       const logs = await fetchLogs(currentClient, fromBlock, toBlock, addresses);
@@ -100,19 +109,23 @@ async function fetchBatchWithRetry(
 
       if (msg.includes("429") || msg.includes("rate limit")) {
         const delay = Math.min(1000 * Math.pow(2, retries), 60000);
-        console.warn(`Rate limited, waiting ${delay}ms (retry ${retries}/${maxRetries})`);
+        ilog.warn({ delay, retries, maxRetries }, "Rate limited, waiting");
         await sleep(delay);
       } else if (msg.includes("range") || msg.includes("block range") || msg.includes("too many")) {
         currentBatchSize = Math.max(10, Math.floor(currentBatchSize / 2));
-        console.warn(`Range too wide, reducing batch to ${currentBatchSize}`);
-      } else if (msg.includes("timeout") || msg.includes("ECONNREFUSED") || msg.includes("network")) {
+        ilog.warn({ batchSize: currentBatchSize }, "Range too wide, reducing batch");
+      } else if (
+        msg.includes("timeout") ||
+        msg.includes("ECONNREFUSED") ||
+        msg.includes("network")
+      ) {
         const delay = Math.min(1000 * Math.pow(2, retries), 60000);
-        console.warn(`Network error, waiting ${delay}ms (retry ${retries}/${maxRetries})`);
+        ilog.warn({ delay, retries, maxRetries }, "Network error, waiting");
         if (allRpcUrls.length > 1) rotateRpc();
         await sleep(delay);
         currentClient = createClient();
       } else {
-        console.error(`Unexpected error fetching logs: ${msg}`);
+        ilog.error({ msg }, "Unexpected error fetching logs");
         const delay = Math.min(1000 * Math.pow(2, retries), 60000);
         await sleep(delay);
       }
@@ -122,7 +135,12 @@ async function fetchBatchWithRetry(
   throw new Error(`Failed to fetch logs after ${maxRetries} retries from block ${fromBlock}`);
 }
 
-async function processBatch(logs: Log[], endBlock: bigint, endBlockHash: string | null, client: PublicClient) {
+async function processBatch(
+  logs: Log[],
+  endBlock: bigint,
+  endBlockHash: string | null,
+  client: PublicClient,
+) {
   const dbClient = await getClient();
   // Buffer keeper signals during the transaction; flush only on successful COMMIT
   // so workers read committed DB state.
@@ -136,13 +154,18 @@ async function processBatch(logs: Log[], endBlock: bigint, endBlockHash: string 
       } catch (err) {
         // Log and skip individual event failures to avoid rolling back the entire batch
         const topic0 = log.topics[0]?.slice(0, 10) ?? "unknown";
-        console.error(`[indexer] Event processing failed (topic=${topic0} block=${log.blockNumber} tx=${log.transactionHash}):`, err instanceof Error ? err.message : err);
+        const errMsg = err instanceof Error ? err.message : String(err);
+        // shadowed `log` here refers to the viem Log; use module logger
+        ilog.error(
+          { topic0, block: log.blockNumber, tx: log.transactionHash, err: errMsg },
+          "Event processing failed",
+        );
       }
     }
 
     await dbClient.query(
-      "UPDATE indexer_state SET last_block = $1, last_block_hash = $2, updated_at = NOW() WHERE id = 1",
-      [endBlock.toString(), endBlockHash]
+      "UPDATE indexer_state SET last_block = $1, last_block_hash = $2, last_confirmed_block = $1, updated_at = NOW() WHERE id = 1",
+      [endBlock.toString(), endBlockHash],
     );
 
     await dbClient.query("COMMIT");
@@ -158,7 +181,12 @@ async function processBatch(logs: Log[], endBlock: bigint, endBlockHash: string 
   }
 }
 
-async function processLog(log: Log, dbClient: pg.PoolClient, rpcClient: PublicClient, keeperBuf: KeeperSignalBuffer) {
+async function processLog(
+  log: Log,
+  dbClient: pg.PoolClient,
+  rpcClient: PublicClient,
+  keeperBuf: KeeperSignalBuffer,
+) {
   const address = log.address.toLowerCase();
 
   if (address === env.NOVEL_CORE_ADDRESS.toLowerCase()) {
@@ -178,10 +206,8 @@ async function processLog(log: Log, dbClient: pg.PoolClient, rpcClient: PublicCl
   }
 }
 
-import type pg from "pg";
-
 export async function startIndexer() {
-  console.log("Starting indexer...");
+  ilog.info("Starting indexer");
   let client = createClient();
 
   const addresses: `0x${string}`[] = [env.NOVEL_CORE_ADDRESS];
@@ -195,7 +221,30 @@ export async function startIndexer() {
   // Main loop
   while (true) {
     try {
-      const state = await getIndexerState();
+      let state = await getIndexerState();
+
+      // Reorg check: before pulling new logs, ensure the last committed block still has
+      // the same hash on the canonical chain. If not, rewind to a safe depth and replay.
+      if (state.lastBlock > 0n && state.lastBlockHash) {
+        const verdict = await detectReorg(client, state.lastBlock, state.lastBlockHash);
+        if (verdict === "reorg") {
+          const rewindDepth = BigInt(env.INDEXER_CONFIRMATION_BLOCKS);
+          const safeBlock = state.lastBlock > rewindDepth ? state.lastBlock - rewindDepth : 0n;
+          const dbClient = await getClient();
+          try {
+            await dbClient.query("BEGIN");
+            await rollbackToBlock(dbClient, safeBlock);
+            await dbClient.query("COMMIT");
+          } catch (err) {
+            await dbClient.query("ROLLBACK").catch(() => {});
+            throw err;
+          } finally {
+            dbClient.release();
+          }
+          state = await getIndexerState();
+        }
+      }
+
       const fromBlock = state.lastBlock > 0n ? state.lastBlock + 1n : env.INDEXER_START_BLOCK;
       const latestBlock = await client.getBlockNumber();
       const chainHead = latestBlock - BigInt(env.INDEXER_CONFIRMATION_BLOCKS);
@@ -208,7 +257,10 @@ export async function startIndexer() {
 
       const lag = chainHead - fromBlock;
       if (lag > 100n) {
-        console.log(`Indexer catching up: block ${fromBlock} → ${chainHead} (${lag} blocks behind)`);
+        ilog.info(
+          { fromBlock: fromBlock.toString(), chainHead: chainHead.toString(), lag: lag.toString() },
+          "Indexer catching up",
+        );
       }
 
       const result = await fetchBatchWithRetry(
@@ -216,16 +268,30 @@ export async function startIndexer() {
         fromBlock,
         state.batchSize,
         chainHead,
-        addresses
+        addresses,
       );
       // Update client in case RPC was rotated during retry
       client = result.client;
 
       if (result.logs.length > 0) {
-        console.log(`[indexer] Processing ${result.logs.length} logs from block ${fromBlock} to ${result.endBlock}`);
+        ilog.info(
+          {
+            count: result.logs.length,
+            fromBlock: fromBlock.toString(),
+            toBlock: result.endBlock.toString(),
+          },
+          "Processing logs",
+        );
         const batchStart = Date.now();
         await processBatch(result.logs, result.endBlock, result.endBlockHash, client);
-        console.log(`[indexer] Batch committed in ${Date.now() - batchStart}ms (blocks ${fromBlock}–${result.endBlock})`);
+        ilog.info(
+          {
+            ms: Date.now() - batchStart,
+            fromBlock: fromBlock.toString(),
+            toBlock: result.endBlock.toString(),
+          },
+          "Batch committed",
+        );
       } else {
         await processBatch(result.logs, result.endBlock, result.endBlockHash, client);
       }
@@ -235,7 +301,7 @@ export async function startIndexer() {
         await sleep(env.INDEXER_POLL_INTERVAL_MS);
       }
     } catch (err) {
-      console.error("[indexer] Error:", err instanceof Error ? err.stack || err.message : err);
+      ilog.error({ err }, "Indexer error");
       await sleep(5000);
       // Recreate client in case of connection issues
       client = createClient();

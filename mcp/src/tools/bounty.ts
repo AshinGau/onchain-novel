@@ -1,10 +1,11 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { formatEther, parseEther } from "viem";
 import { z } from "zod";
-import { parseEther, formatEther } from "viem";
-import { createBounty, designateBounty, claimBounty, refundBounty } from "../shared/index.js";
+
 import { config } from "../config.js";
+import { claimBounty, createBounty, designateBounty, refundBounty } from "../shared/index.js";
 import { getPublicClient, getWalletClient } from "../utils/client.js";
-import { ok, fail } from "../utils/response.js";
+import { fail, ok } from "../utils/response.js";
 
 export function registerBountyTools(server: McpServer): void {
   // ── bounty_create ──
@@ -29,7 +30,9 @@ export function registerBountyTools(server: McpServer): void {
           bountyBoard: config.bountyBoard,
         });
         const receipt = await pub.waitForTransactionReceipt({ hash });
-        return ok(`Bounty created for Chapter #${params.chapterId}.\nAmount: ${formatEther(amount)} ETH\nTx: ${hash}\nBlock: ${receipt.blockNumber}`);
+        return ok(
+          `Bounty created for Chapter #${params.chapterId}.\nAmount: ${formatEther(amount)} ETH\nTx: ${hash}\nBlock: ${receipt.blockNumber}`,
+        );
       } catch (error) {
         return fail(`Failed: ${error instanceof Error ? error.message : String(error)}`);
       }
@@ -55,7 +58,9 @@ export function registerBountyTools(server: McpServer): void {
           bountyBoard: config.bountyBoard,
         });
         const receipt = await pub.waitForTransactionReceipt({ hash });
-        return ok(`Bounty #${params.bountyId} designated Chapter #${params.chapterId}.\nTx: ${hash}\nBlock: ${receipt.blockNumber}`);
+        return ok(
+          `Bounty #${params.bountyId} designated Chapter #${params.chapterId}.\nTx: ${hash}\nBlock: ${receipt.blockNumber}`,
+        );
       } catch (error) {
         return fail(`Failed: ${error instanceof Error ? error.message : String(error)}`);
       }
@@ -75,10 +80,12 @@ export function registerBountyTools(server: McpServer): void {
         if (params.novelId) url.searchParams.set("novelId", String(params.novelId));
         const res = await fetch(url.toString());
         if (!res.ok) return fail(`API error: ${res.status}`);
-        const data = await res.json() as { bounties: Array<Record<string, unknown>> };
+        const data = (await res.json()) as { bounties: Array<Record<string, unknown>> };
         if (data.bounties.length === 0) return ok("No active bounties found.");
         const lines = data.bounties.map((b: any) => {
-          const createDate = b.create_time ? new Date(Number(b.create_time) * 1000).toISOString() : "?";
+          const createDate = b.create_time
+            ? new Date(Number(b.create_time) * 1000).toISOString()
+            : "?";
           const deadlineDate = new Date(Number(b.deadline) * 1000).toISOString();
           return `Bounty #${b.id} | Chapter #${b.chapter_id} (${b.novel_title}) | ${formatEther(BigInt(b.locked_amount))} ETH locked | Window: ${createDate} → ${deadlineDate}${b.designated_chapter_id > 0 ? ` | Designated: Chapter #${b.designated_chapter_id}` : ""}`;
         });
@@ -101,7 +108,9 @@ export function registerBountyTools(server: McpServer): void {
         const pub = getPublicClient();
         const hash = await claimBounty(wallet, BigInt(params.bountyId), config.bountyBoard);
         const receipt = await pub.waitForTransactionReceipt({ hash });
-        return ok(`Bounty #${params.bountyId} claimed.\nTx: ${hash}\nBlock: ${receipt.blockNumber}`);
+        return ok(
+          `Bounty #${params.bountyId} claimed.\nTx: ${hash}\nBlock: ${receipt.blockNumber}`,
+        );
       } catch (error) {
         return fail(`Failed: ${error instanceof Error ? error.message : String(error)}`);
       }
@@ -120,7 +129,9 @@ export function registerBountyTools(server: McpServer): void {
         const pub = getPublicClient();
         const hash = await refundBounty(wallet, BigInt(params.bountyId), config.bountyBoard);
         const receipt = await pub.waitForTransactionReceipt({ hash });
-        return ok(`Bounty #${params.bountyId} refunded.\nTx: ${hash}\nBlock: ${receipt.blockNumber}`);
+        return ok(
+          `Bounty #${params.bountyId} refunded.\nTx: ${hash}\nBlock: ${receipt.blockNumber}`,
+        );
       } catch (error) {
         return fail(`Failed: ${error instanceof Error ? error.message : String(error)}`);
       }

@@ -1,13 +1,14 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+
 import {
   fetchNovel,
   fetchNovelTree,
-  fetchWorldlines,
   fetchRound,
-  type Novel,
+  fetchWorldlines,
   type ChapterSummary,
+  type Novel,
 } from "@/lib/api";
 
 /** Fetch a single novel detail */
@@ -104,10 +105,7 @@ export function findDeepestLeaf(node: TreeNode): TreeNode {
 }
 
 /** Get the chain (path) from root to a specific node */
-export function getChainToNode(
-  root: TreeNode,
-  targetId: string
-): ChapterSummary[] {
+export function getChainToNode(root: TreeNode, targetId: string): ChapterSummary[] {
   const path: ChapterSummary[] = [];
 
   function dfs(node: TreeNode): boolean {

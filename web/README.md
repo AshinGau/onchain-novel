@@ -109,5 +109,5 @@ Full lifecycle test against Anvil: deploy, create novel, submit chapters, vote, 
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/bounties/:id` | Bounty detail |
-| POST | `/api/content/upload` | Content hash computation |
+| POST | `/api/content/hash` | Compute `(contentHash, declaredLength)` for a UTF-8 body |
 | GET | `/health` | Indexer status |
