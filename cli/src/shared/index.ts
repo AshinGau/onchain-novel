@@ -1,7 +1,6 @@
 export {
   novelCoreAbi,
   roundManagerAbi,
-  votingEngineAbi,
   prizePoolAbi,
   bountyBoardAbi,
   rulesEngineAbi,
@@ -24,6 +23,7 @@ export {
   type DesignateBountyParams,
   type ProposeRuleParams,
   type SetCreatorRulesParams,
+  type UpdateNovelMetadataParams,
 
   // Path-proof params
   type StartRoundParams,
@@ -40,6 +40,7 @@ export {
 
   // Write operations
   createNovel,
+  updateNovelMetadata,
   submitChapter,
   commitVote,
   revealVote,

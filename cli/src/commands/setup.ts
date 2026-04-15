@@ -6,7 +6,7 @@ import { Command } from "commander";
 
 import type { OnchainNovelConfig } from "../shared/index.js";
 import { loadConfig, saveConfig } from "../utils/config.js";
-import { error, header, kv, success } from "../utils/format.js";
+import { error, header, success } from "../utils/format.js";
 
 function prompt(
   rl: ReturnType<typeof createInterface>,
@@ -36,11 +36,6 @@ export function registerSetupCommand(program: Command): void {
 
         const rpcUrl = await prompt(rl, "  RPC URL", existing?.rpcUrl ?? "http://127.0.0.1:8545");
         const chainIdStr = await prompt(rl, "  Chain ID", String(existing?.chainId ?? "31337"));
-        const privateKey = await prompt(
-          rl,
-          "  Private key (hex, optional)",
-          existing?.privateKey ?? "",
-        );
         const apiUrl = await prompt(
           rl,
           "  Backend API URL",
@@ -81,7 +76,6 @@ export function registerSetupCommand(program: Command): void {
         const config: OnchainNovelConfig = {
           rpcUrl,
           chainId,
-          privateKey: privateKey || undefined,
           apiUrl,
           contracts: {
             novelCore: novelCore as `0x${string}`,
@@ -96,20 +90,20 @@ export function registerSetupCommand(program: Command): void {
         saveConfig(config);
         success("Configuration saved to ~/.onchain-novel/config.json");
 
-        // Generate .mcp.json in current directory
+        // Generate .mcp.json in current directory. Never embed secrets — the MCP
+        // process inherits PRIVATE_KEY from its parent shell (the Claude Code host).
         const mcpConfig = {
           mcpServers: {
             "onchain-novel": {
               command: "onchain-novel-mcp",
               env: {
                 RPC_URL: rpcUrl,
-                ...(privateKey ? { PRIVATE_KEY: privateKey } : {}),
               },
             },
           },
         };
         writeFileSync(join(process.cwd(), ".mcp.json"), JSON.stringify(mcpConfig, null, 2) + "\n");
-        success("Generated .mcp.json");
+        success("Generated .mcp.json (no secrets inside)");
 
         // Generate .claude/commands/ skill files
         const skillsDir = join(process.cwd(), ".claude", "commands");
@@ -134,6 +128,11 @@ export function registerSetupCommand(program: Command): void {
 
         console.log(
           "\nSetup complete. Run 'onchain-novel-cli --help' to see available commands.\n",
+        );
+        console.log(
+          "  Secrets are never persisted. Export your signer key before running write commands:\n" +
+            "    export PRIVATE_KEY=0x...\n" +
+            "  (Use direnv, 1Password CLI, or a shell secret manager for convenience.)\n",
         );
       } catch (err) {
         error(String(err));

@@ -25,15 +25,17 @@ onchain-novel-cli rule list <novelId>
 
 ### 1.2 获取故事线章节
 
-你要续写的是某个 chapter（`<parentChapterId>`）的后续。先获取从 root 到这个 chapter 的完整故事线：
+你要续写的是某个 chapter（`<parentChapterId>`）的后续。**一条命令拉完整祖先链**：
 
 ```bash
-onchain-novel-cli chapter read <parentChapterId>
+onchain-novel-cli chapter context <parentChapterId>               # 全文
+onchain-novel-cli chapter context <parentChapterId> --summary     # 只看元数据
+onchain-novel-cli chapter context <parentChapterId> --max-depth 50
 ```
 
-每读一章，检查其 `parentId`，继续向上读，直到 `parentId = 0`（root）或到达另一个小说的 fork 源。
+输出按 root → leaf 顺序排列。把整份输出保存到 `novels/<novelId>/chapters/path-<parentChapterId>.md`。
 
-将每章内容缓存到 `novels/<novelId>/chapters/<chapterId>.md`。已缓存的跳过。
+（旧方法 `chapter read <id>` 一次只读一章，要手动回溯 `parentId`。除非需要单章详情，不推荐这样做。）
 
 ### 1.3 查看章节树（可选但推荐）
 
@@ -278,10 +280,38 @@ context.md 的目标是让你写作时不需要反复翻阅所有原文，一份
 一切检查通过后：
 
 ```bash
+# 推荐：用文件提交（长正文走文件避免 shell 转义问题）
 onchain-novel-cli chapter submit <novelId> <parentChapterId> --file draft.md
+
+# 短内容也可以用 --content（注意 shell 转义）
+onchain-novel-cli chapter submit <novelId> <parentChapterId> --content "text"
 ```
 
 提交会自动支付 `submissionFee`，你的章节会出现在故事树上，等待下一轮投票。
+
+### contentLocation（内容存储模式）
+
+每个小说在创建时就已经固定了存储模式（`contentLocation`），作者无法选择，只需按 `novel info` 给出的模式准备数据：
+
+| 模式 | 值 | 含义 | 作者需要做什么 |
+|------|-----|------|--------------|
+| **Onchain** | 0 | 正文完整写到链上（gas 最贵） | 直接 `--file draft.md`，CLI 会把正文全量上链 |
+| **External** | 1 | 正文存外部存储（IPFS/Arweave 等），链上只存 hash | 先自行上传到外部存储，再提交 CID/URI |
+| **HTTP** | 2 | 正文托管在 HTTP URL，链上存 URL | 先发布到可公开访问的 HTTPS URL，再提交 |
+
+**写之前先查**：`onchain-novel-cli novel info <novelId>` → 看 `contentLocation` 字段。写错模式会直接被合约拒绝。
+
+---
+
+## ⚠️ Common Pitfalls（常见陷阱）
+
+- **字数 = UTF-8 字节数**：中文一个字 ≈ 3 字节。写 1000 中文字 ≈ 3000 字节。对照 `meta.md` 的 `minChapterLength` / `maxChapterLength`（字节单位）校对。
+- **父链读不完整**：跳过中间章节会导致人物/世界观错乱。始终用 `chapter context` 拉完整链。
+- **--file 路径错误**：`--file` 是相对当前 shell cwd，不是工作区。建议用绝对路径或先 `cd` 到工作区。
+- **submissionFee 不足**：写前 `novel info` 确认 `submissionFee`；钱包余额至少 `submissionFee + gas`。
+- **rules 只在 Step 1 读一次**：写作每个关键节点都应该对照一次。尤其 outline 敲定后、draft 写完时、自审前。
+- **兄弟章节撞车**：写之前 `chapter children <parentChapterId>` 看看别人已经写了哪些方向，避免重复。
+- **上链后不可改**：提交后没有 "edit"。发现错误只能继续写新章节自圆其说。提交前**一定**把 draft 读一遍。
 
 ---
 

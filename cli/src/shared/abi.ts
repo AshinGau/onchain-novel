@@ -73,19 +73,6 @@ export const roundManagerAbi = parseAbi([
 ]);
 
 // ============================================================
-// VotingEngine ABI
-// ============================================================
-
-export const votingEngineAbi = parseAbi([
-  "event VotingInitialized(uint64 indexed novelId, uint32 indexed round, uint256 candidateCount)",
-  "event VoteCommitted(uint64 indexed novelId, uint32 indexed round, address indexed voter)",
-  "event VoteRevealed(uint64 indexed novelId, uint32 indexed round, address indexed voter, uint64 candidateId)",
-  "event VotesTallied(uint64 indexed novelId, uint32 indexed round, uint64[] rankedCandidateIds)",
-  "event VoterRewardsSettled(uint64 indexed novelId, uint32 indexed round, uint256 totalRewardPool)",
-  "event VotingRewardClaimed(uint64 indexed novelId, uint32 indexed round, address indexed voter, uint256 amount)",
-]);
-
-// ============================================================
 // PrizePool ABI (tipping is now public on PrizePool)
 // ============================================================
 

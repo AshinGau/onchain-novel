@@ -16,10 +16,13 @@ import {
   startRound as startRoundTx,
   toBytes32Salt,
 } from "../shared/index.js";
-import { apiGet, apiPost } from "../utils/api.js";
+import { privateKeyToAccount } from "viem/accounts";
+
+import { apiGet, apiPost, fetchNovelConfig } from "../utils/api.js";
 import { getContracts, getPublicClient, getWalletClient, waitForTx } from "../utils/client.js";
-import { error, header, kv, roundPhaseName, success, table, txHash } from "../utils/format.js";
-import { getStorePath, getVoteSalt, saveVoteSalt } from "../utils/vote-store.js";
+import { getPrivateKey } from "../utils/config.js";
+import { error, eth, header, kv, roundPhaseName, success, table, txHash } from "../utils/format.js";
+import { getStorePath, getVoteSalt, listVoteSalts, saveVoteSalt } from "../utils/vote-store.js";
 
 function parseIdList(raw: string): bigint[] {
   return raw
@@ -115,16 +118,8 @@ export function registerVoteCommands(program: Command): void {
         if (opts.value) {
           value = parseEther(opts.value);
         } else {
-          try {
-            const novel = await apiGet<Record<string, unknown>>(`/api/novels/${novelId}`);
-            const config = novel.config as Record<string, string>;
-            value = BigInt(config.nominationFee ?? "0");
-          } catch {
-            value = parseEther("0.001");
-            console.log(
-              chalk.yellow(`  Could not fetch novel config. Using default fee: 0.001 ETH`),
-            );
-          }
+          const { config } = await fetchNovelConfig(novelId);
+          value = BigInt(config.nominationFee ?? "0");
         }
 
         let path: bigint[] = [];
@@ -190,25 +185,11 @@ export function registerVoteCommands(program: Command): void {
         console.log(chalk.gray(`  Salt (bytes32): ${saltBytes32}`));
         console.log(chalk.gray(`  Commit hash:    ${commitHash}`));
 
-        // Resolve current round (needed for backend submission and local backup)
-        const novel = await apiGet<Record<string, unknown>>(`/api/novels/${novelId}`).catch(
-          () => null,
-        );
-        const currentRound = Number(novel?.current_round ?? 0);
-
-        // Resolve voteStake from on-chain config (fallback to flag, fallback to default)
-        let value: bigint;
-        if (opts.value) {
-          value = parseEther(opts.value);
-        } else if (novel) {
-          const config = novel.config as Record<string, string>;
-          value = BigInt(config.voteStake ?? "0");
-        } else {
-          value = parseEther("0.005");
-          console.log(
-            chalk.yellow(`  Could not fetch novel config. Using default stake: 0.005 ETH`),
-          );
-        }
+        // Resolve current round + voteStake from backend. Fail-fast if unreachable:
+        // committing with a wrong stake wastes gas and loses the reveal window.
+        const { novel, config } = await fetchNovelConfig(novelId);
+        const currentRound = Number(novel.current_round ?? 0);
+        const value = opts.value ? parseEther(opts.value) : BigInt(config.voteStake ?? "0");
 
         const hash = await commitVoteTx(client, {
           novelId: BigInt(novelId),
@@ -412,6 +393,190 @@ export function registerVoteCommands(program: Command): void {
               Claimed: v.claimed ? "Yes" : "No",
             })),
           );
+        }
+        console.log();
+      } catch (err) {
+        error(String(err));
+        process.exit(1);
+      }
+    });
+
+  vote
+    .command("discover")
+    .description(
+      "List active novels with a round in progress — the starting point for an agent looking " +
+        "for voting opportunities. Shows phase, deadline, and whether you already voted.",
+    )
+    .option("--phase <phase>", "filter by phase: nominating|committing|revealing|all", "all")
+    .option("--limit <n>", "max novels to scan", "100")
+    .action(async (opts) => {
+      try {
+        const wantPhase = String(opts.phase).toLowerCase();
+        const phaseMap: Record<string, number> = {
+          nominating: 1,
+          committing: 2,
+          revealing: 3,
+        };
+        const phaseFilter = wantPhase === "all" ? null : phaseMap[wantPhase];
+        if (wantPhase !== "all" && phaseFilter === undefined) {
+          error(`Invalid --phase. Use one of: nominating, committing, revealing, all`);
+          process.exit(1);
+        }
+
+        const limit = Math.min(parseInt(String(opts.limit)) || 100, 100);
+        const data = await apiGet<{ novels: Record<string, unknown>[] }>(
+          `/api/novels?filter=active&limit=${limit}&sort=active`,
+        );
+
+        const now = Math.floor(Date.now() / 1000);
+        const pk = getPrivateKey();
+        const myAddr = pk ? privateKeyToAccount(pk).address.toLowerCase() : null;
+
+        const rows: Record<string, unknown>[] = [];
+        for (const n of data.novels) {
+          const phase = Number(n.round_phase);
+          if (phase === 0) continue; // Idle — nothing to do for a voter
+          if (phaseFilter !== null && phase !== phaseFilter) continue;
+
+          const cfg = (n.config as Record<string, string>) ?? {};
+          const phaseStart = Number(n.phase_start_time ?? 0);
+          const durKey =
+            phase === 1 ? "nominateDuration" : phase === 2 ? "commitDuration" : "revealDuration";
+          const duration = Number(cfg[durKey] ?? 0);
+          const deadline = phaseStart + duration;
+          const remaining = deadline - now;
+
+          let already = "-";
+          let voterCount = 0;
+          if (phase >= 2) {
+            try {
+              const round = Number(n.current_round);
+              if (round > 0) {
+                const rd = await apiGet<{ votes: Record<string, unknown>[] }>(
+                  `/api/novels/${n.id}/rounds/${round}`,
+                );
+                voterCount = rd.votes.length;
+                if (myAddr) {
+                  const mine = rd.votes.find(
+                    (v) => String(v.voter ?? "").toLowerCase() === myAddr,
+                  );
+                  already = mine ? (mine.revealed ? "revealed" : "committed") : "no";
+                }
+              }
+            } catch {
+              // best effort
+            }
+          }
+
+          rows.push({
+            Novel: `#${n.id}`,
+            Title: String(n.title ?? "").slice(0, 28),
+            Round: n.current_round,
+            Phase: roundPhaseName(phase),
+            Deadline:
+              remaining > 0
+                ? `${Math.floor(remaining / 3600)}h${Math.floor((remaining % 3600) / 60)}m`
+                : chalk.red("expired"),
+            Pool: eth(BigInt(String(n.pool_balance ?? "0"))),
+            Voters: voterCount,
+            VoteStake: cfg.voteStake ? eth(cfg.voteStake) : "-",
+            Voted: already,
+          });
+        }
+
+        header("Voting Opportunities");
+        if (rows.length === 0) {
+          console.log(chalk.gray("  No novels currently in a voting phase.\n"));
+          return;
+        }
+        table(rows);
+        console.log();
+      } catch (err) {
+        error(String(err));
+        process.exit(1);
+      }
+    });
+
+  vote
+    .command("status <novel-id>")
+    .description(
+      "Show your voting status for a novel: current phase, deadline, locally-stored salts, " +
+        "and on-chain reveal status. Use this to avoid missing the reveal window.",
+    )
+    .action(async (novelId) => {
+      try {
+        const novel = await apiGet<Record<string, unknown>>(`/api/novels/${novelId}`);
+        const round = Number(novel.current_round ?? 0);
+        const phase = Number(novel.round_phase ?? 0);
+        const cfg = (novel.config as Record<string, string>) ?? {};
+        const phaseStart = Number(novel.phase_start_time ?? 0);
+        const now = Math.floor(Date.now() / 1000);
+
+        header(`Vote Status — Novel #${novelId}`);
+        kv("Round", round);
+        kv("Phase", roundPhaseName(phase));
+
+        if (phase !== 0) {
+          const durKey =
+            phase === 1 ? "nominateDuration" : phase === 2 ? "commitDuration" : "revealDuration";
+          const duration = Number(cfg[durKey] ?? 0);
+          const deadline = phaseStart + duration;
+          const remaining = deadline - now;
+          kv(
+            "Deadline",
+            remaining > 0
+              ? `in ${Math.floor(remaining / 3600)}h ${Math.floor((remaining % 3600) / 60)}m`
+              : chalk.red("expired"),
+          );
+        }
+
+        const pk = getPrivateKey();
+        if (!pk) {
+          console.log(chalk.gray("\n  (PRIVATE_KEY not set — skipping per-voter details)\n"));
+          return;
+        }
+        const voter = privateKeyToAccount(pk).address;
+        kv("Voter", voter);
+
+        // On-chain votes for this round
+        if (round > 0) {
+          try {
+            const rd = await apiGet<{ votes: Record<string, unknown>[] }>(
+              `/api/novels/${novelId}/rounds/${round}`,
+            );
+            const mine = rd.votes.filter(
+              (v) => String(v.voter ?? "").toLowerCase() === voter.toLowerCase(),
+            );
+            if (mine.length > 0) {
+              console.log(chalk.bold("\n  On-chain votes this round:"));
+              table(
+                mine.map((v) => ({
+                  Committed: v.commit_hash ? "yes" : "no",
+                  Revealed: v.revealed ? "yes" : "no",
+                  Candidate: v.revealed ? v.candidate_id : "-",
+                  Claimed: v.claimed ? "yes" : "no",
+                })),
+              );
+            }
+          } catch {
+            // best effort
+          }
+        }
+
+        // Local salt backups (all rounds)
+        const salts = listVoteSalts(BigInt(novelId), voter);
+        if (salts.length > 0) {
+          console.log(chalk.bold("\n  Local salt backups:"));
+          table(
+            salts.slice(0, 10).map((s) => ({
+              Round: s.round,
+              Candidate: s.candidateId,
+              SavedAt: new Date(s.createdAt * 1000).toISOString().slice(0, 19).replace("T", " "),
+            })),
+          );
+          kv("Store", getStorePath());
+        } else {
+          console.log(chalk.gray("\n  No local salt backups for this novel."));
         }
         console.log();
       } catch (err) {

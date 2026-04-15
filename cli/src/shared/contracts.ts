@@ -273,6 +273,26 @@ export function buildContentSubmission(content: string): ContentSubmission {
 // NovelCore writes
 // ============================================================
 
+export interface UpdateNovelMetadataParams {
+  novelId: bigint;
+  metadata: NovelMetadata;
+  novelCore: `0x${string}`;
+}
+
+export async function updateNovelMetadata(
+  client: WalletClient,
+  params: UpdateNovelMetadataParams,
+): Promise<Hash> {
+  return client.writeContract({
+    address: params.novelCore,
+    abi: novelCoreAbi,
+    functionName: "updateNovelMetadata",
+    args: [params.novelId, params.metadata],
+    chain: client.chain,
+    account: client.account!,
+  });
+}
+
 export async function createNovel(client: WalletClient, params: CreateNovelParams): Promise<Hash> {
   return client.writeContract({
     address: params.novelCore,

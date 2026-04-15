@@ -2,9 +2,11 @@ import chalk from "chalk";
 import { Command } from "commander";
 import { parseEther } from "viem";
 
+
 import { buildContentSubmission, submitChapter as submitChapterTx } from "../shared/index.js";
-import { apiGet, apiPost } from "../utils/api.js";
+import { apiGet, apiPost, fetchNovelConfig } from "../utils/api.js";
 import { getContracts, getWalletClient, waitForTx } from "../utils/client.js";
+import { resolveContent, warnIfOutOfRange } from "../utils/content.js";
 import { error, header, kv, success, table, txHash } from "../utils/format.js";
 
 export function registerChapterCommands(program: Command): void {
@@ -13,30 +15,28 @@ export function registerChapterCommands(program: Command): void {
   chapter
     .command("submit <novel-id> <parent-id>")
     .description("Submit a new chapter")
-    .requiredOption("--content <text>", "chapter content")
+    .option("--content <text>", "chapter content (mutually exclusive with --file)")
+    .option("--file <path>", "read chapter content from a UTF-8 text file")
     .option("--value <eth>", "submission fee in ETH (auto-detected from novel config if not set)")
     .action(async (novelId, parentId, opts) => {
       try {
         const client = getWalletClient();
         const contracts = getContracts();
-        const submission = buildContentSubmission(opts.content);
+        const content = resolveContent(opts);
 
-        // If value not specified, try to read novel config for submission fee
+        // Resolve submission fee: --value wins, otherwise backend config. No fallback
+        // default — a wrong fee causes a guaranteed revert and wasted gas.
         let value: bigint;
+        let novelConfig: Record<string, string> | undefined;
         if (opts.value) {
           value = parseEther(opts.value);
         } else {
-          try {
-            const novel = await apiGet<Record<string, unknown>>(`/api/novels/${novelId}`);
-            const config = novel.config as Record<string, string>;
-            value = BigInt(config.submissionFee ?? "0");
-          } catch {
-            value = parseEther("0.001");
-            console.log(
-              chalk.yellow(`  Could not fetch novel config. Using default fee: 0.001 ETH`),
-            );
-          }
+          const { config } = await fetchNovelConfig(novelId);
+          novelConfig = config;
+          value = BigInt(config.submissionFee ?? "0");
         }
+        warnIfOutOfRange(content, novelConfig);
+        const submission = buildContentSubmission(content);
 
         const hash = await submitChapterTx(client, {
           novelId: BigInt(novelId),
@@ -156,6 +156,56 @@ export function registerChapterCommands(program: Command): void {
             Length: ch.declared_length,
           })),
         );
+        console.log();
+      } catch (err) {
+        error(String(err));
+        process.exit(1);
+      }
+    });
+
+  chapter
+    .command("context <chapter-id>")
+    .description(
+      "Fetch the full ancestor chain (root → target). Essential for evaluating a candidate " +
+        "chapter before voting or continuing the story — gives you the complete narrative so far.",
+    )
+    .option("--max-depth <n>", "max ancestors to walk back", "100")
+    .option("--summary", "print only metadata; skip full content")
+    .action(async (chapterId, opts) => {
+      try {
+        const maxDepth = Math.min(parseInt(opts.maxDepth) || 100, 200);
+        const data = await apiGet<{ ancestors: Record<string, unknown>[] }>(
+          `/api/chapters/${chapterId}/context?maxDepth=${maxDepth}`,
+        );
+        header(`Context for Chapter #${chapterId}`);
+        kv("Ancestors", data.ancestors.length);
+
+        if (opts.summary) {
+          table(
+            data.ancestors.map((a) => ({
+              Chapter: `#${a.id}`,
+              Depth: a.depth,
+              Author: String(a.author ?? "").slice(0, 12) + "...",
+              WorldLine: a.is_world_line ? "yes" : "no",
+              Fetched: a.content_fetched ? "yes" : "no",
+            })),
+          );
+          console.log();
+          return;
+        }
+
+        for (const a of data.ancestors) {
+          console.log(
+            chalk.gray(`\n─── Chapter #${a.id} (depth ${a.depth}, by ${String(a.author ?? "").slice(0, 10)}...) ───`),
+          );
+          if (a.content_text) {
+            console.log(String(a.content_text));
+          } else if (a.content_fetched === false) {
+            console.log(chalk.yellow("  (content not yet indexed)"));
+          } else {
+            console.log(chalk.gray("  (no content)"));
+          }
+        }
         console.log();
       } catch (err) {
         error(String(err));
