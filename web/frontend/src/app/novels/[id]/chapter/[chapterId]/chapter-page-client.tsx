@@ -15,7 +15,7 @@ import { useTxAction } from "@/hooks/use-tx-action";
 import type { Bounty, ChapterDetail, ChapterSummary, Novel } from "@/lib/api";
 import { TOKEN_SYMBOL } from "@/lib/config";
 import { BOUNTY_BOARD_ADDRESS, bountyBoardAbi } from "@/lib/contracts";
-import { timeAgo } from "@/lib/format";
+import { parsePositiveDecimal, parsePositiveInt, timeAgo } from "@/lib/format";
 
 import { TipButton } from "./tip-button";
 
@@ -23,11 +23,23 @@ import { TipButton } from "./tip-button";
 function BountyCreateForm({ chapterId, onClose }: { chapterId: string; onClose: () => void }) {
   const [amount, setAmount] = useState("0.01");
   const [days, setDays] = useState("7");
+  const [inputError, setInputError] = useState<string | null>(null);
   const { send, isPending, status, error, reset } = useTxAction();
 
   async function handleCreate() {
-    const value = parseEther(amount);
-    const deadline = BigInt(Math.floor(Date.now() / 1000) + Number(days) * 86400);
+    const amountNum = parsePositiveDecimal(amount);
+    const daysNum = parsePositiveInt(days);
+    if (amountNum === null) {
+      setInputError("Amount must be a positive number");
+      return;
+    }
+    if (daysNum === null) {
+      setInputError("Deadline must be a positive integer number of days");
+      return;
+    }
+    setInputError(null);
+    const value = parseEther(String(amountNum));
+    const deadline = BigInt(Math.floor(Date.now() / 1000) + daysNum * 86400);
     await send(
       {
         address: BOUNTY_BOARD_ADDRESS,
@@ -90,6 +102,7 @@ function BountyCreateForm({ chapterId, onClose }: { chapterId: string; onClose: 
             Cancel
           </button>
         )}
+        {inputError && <span className="text-tiny on-error">{inputError}</span>}
         <TxStatusLabel status={status} error={error} successText="Bounty created!" />
       </div>
     </div>
