@@ -25,11 +25,7 @@ interface Props {
   totalPages: number;
 }
 
-export function NovelListControls({
-  currentSort,
-  currentFilter,
-  currentSearch,
-}: Props) {
+export function NovelListControls({ currentSort, currentFilter, currentSearch }: Props) {
   const router = useRouter();
   const [search, setSearch] = useState(currentSearch);
 

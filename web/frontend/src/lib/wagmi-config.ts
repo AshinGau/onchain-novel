@@ -1,6 +1,6 @@
 import { getDefaultConfig } from "@rainbow-me/rainbowkit";
 import { http } from "wagmi";
-import { foundry, base } from "wagmi/chains";
+import { base, foundry } from "wagmi/chains";
 
 const chain = process.env.NEXT_PUBLIC_CHAIN === "base" ? base : foundry;
 

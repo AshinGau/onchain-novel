@@ -1,20 +1,21 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { formatEther, parseEther } from "viem";
 import { z } from "zod";
-import { parseEther, formatEther } from "viem";
+
+import { config } from "../config.js";
 import {
+  buildContentSubmission,
+  completeNovel,
   createNovel,
   forkNovel,
-  completeNovel,
-  setCreatorRules,
   getNovel,
   getNovelMetadata,
-  buildContentSubmission,
+  setCreatorRules,
   type NovelConfig,
 } from "../shared/index.js";
-import { config } from "../config.js";
+import { apiGet, hasApi } from "../utils/api.js";
 import { getPublicClient, getWalletClient } from "../utils/client.js";
-import { hasApi, apiGet } from "../utils/api.js";
-import { ok, fail } from "../utils/response.js";
+import { fail, ok } from "../utils/response.js";
 
 const ROUND_PHASES = ["Submitting", "Committing", "Revealing", "Settling"];
 
@@ -83,7 +84,11 @@ export function registerNovelTools(server: McpServer): void {
 
         const hash = await createNovel(wallet, {
           config: novelConfig,
-          metadata: { title: params.title, description: params.description, coverUri: params.coverUri },
+          metadata: {
+            title: params.title,
+            description: params.description,
+            coverUri: params.coverUri,
+          },
           rootChapter,
           value,
           novelCore: config.novelCore,
@@ -118,7 +123,9 @@ export function registerNovelTools(server: McpServer): void {
           `Novel created.${novelId ? ` ID: ${novelId}` : ""}\nTx: ${hash}\nBlock: ${receipt.blockNumber}${rulesInfo}`,
         );
       } catch (error) {
-        return fail(`Failed to create novel: ${error instanceof Error ? error.message : String(error)}`);
+        return fail(
+          `Failed to create novel: ${error instanceof Error ? error.message : String(error)}`,
+        );
       }
     },
   );
@@ -142,7 +149,9 @@ export function registerNovelTools(server: McpServer): void {
             `Round: ${novel.current_round} (${ROUND_PHASES[novel.round_phase as number]})`,
             `Pool: ${formatEther(BigInt(cfg.submissionFee as string))} ETH submission fee`,
             `World Lines: ${cfg.worldLineCount}`,
-            novel.pool_balance ? `Pool Balance: ${formatEther(BigInt(novel.pool_balance as string))} ETH` : "",
+            novel.pool_balance
+              ? `Pool Balance: ${formatEther(BigInt(novel.pool_balance as string))} ETH`
+              : "",
             `Chapters: ${novel.chapter_count ?? "?"}`,
             `Authors: ${novel.author_count ?? "?"}`,
           ].filter(Boolean);
@@ -197,7 +206,15 @@ export function registerNovelTools(server: McpServer): void {
         qs.set("limit", String(params.limit));
 
         const data = await apiGet<{
-          novels: { id: string; title: string; creator: string; active: boolean; pool_balance: string; chapter_count: string; author_count: string }[];
+          novels: {
+            id: string;
+            title: string;
+            creator: string;
+            active: boolean;
+            pool_balance: string;
+            chapter_count: string;
+            author_count: string;
+          }[];
           pagination: { page: number; totalPages: number; total: number };
         }>(`/api/novels?${qs}`);
 
@@ -206,7 +223,9 @@ export function registerNovelTools(server: McpServer): void {
           (n) =>
             `  #${n.id} "${n.title}" by ${n.creator.slice(0, 10)}... | ${n.active ? "Active" : "Done"} | ${n.chapter_count} ch | Pool: ${formatEther(BigInt(n.pool_balance))} ETH`,
         );
-        return ok(`Novels (${data.pagination.page}/${data.pagination.totalPages}, ${data.pagination.total} total):\n${lines.join("\n")}`);
+        return ok(
+          `Novels (${data.pagination.page}/${data.pagination.totalPages}, ${data.pagination.total} total):\n${lines.join("\n")}`,
+        );
       } catch (error) {
         return fail(`Failed: ${error instanceof Error ? error.message : String(error)}`);
       }
@@ -253,13 +272,19 @@ export function registerNovelTools(server: McpServer): void {
         const hash = await forkNovel(wallet, {
           sourceChapterId: BigInt(params.sourceChapterId),
           config: novelConfig,
-          metadata: { title: params.title, description: params.description, coverUri: params.coverUri },
+          metadata: {
+            title: params.title,
+            description: params.description,
+            coverUri: params.coverUri,
+          },
           rootChapter,
           value,
           novelCore: config.novelCore,
         });
         const receipt = await pub.waitForTransactionReceipt({ hash });
-        return ok(`Novel forked from Chapter #${params.sourceChapterId}.\nTx: ${hash}\nBlock: ${receipt.blockNumber}`);
+        return ok(
+          `Novel forked from Chapter #${params.sourceChapterId}.\nTx: ${hash}\nBlock: ${receipt.blockNumber}`,
+        );
       } catch (error) {
         return fail(`Failed: ${error instanceof Error ? error.message : String(error)}`);
       }
@@ -281,7 +306,9 @@ export function registerNovelTools(server: McpServer): void {
           roundManager: config.roundManager,
         });
         const receipt = await pub.waitForTransactionReceipt({ hash });
-        return ok(`Novel #${params.novelId} completed.\nTx: ${hash}\nBlock: ${receipt.blockNumber}`);
+        return ok(
+          `Novel #${params.novelId} completed.\nTx: ${hash}\nBlock: ${receipt.blockNumber}`,
+        );
       } catch (error) {
         return fail(`Failed: ${error instanceof Error ? error.message : String(error)}`);
       }

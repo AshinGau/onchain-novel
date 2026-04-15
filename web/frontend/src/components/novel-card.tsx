@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import type { Novel } from "@/lib/api";
-import { formatBalance, timeAgo } from "@/lib/format";
-import { phaseLabel } from "@/lib/config";
+
 import { useNicknames } from "@/hooks/use-nickname";
+import type { Novel } from "@/lib/api";
+import { phaseLabel } from "@/lib/config";
+import { formatBalance, timeAgo } from "@/lib/format";
 
 export function NovelCard({ novel }: { novel: Novel }) {
   const displayName = useNicknames([novel.creator]);
@@ -23,23 +24,17 @@ export function NovelCard({ novel }: { novel: Novel }) {
         </div>
 
         <div className="on-row" style={{ gap: "0.75rem", alignItems: "flex-start" }}>
-          {novel.cover_uri && (
-            <img
-              src={novel.cover_uri}
-              alt=""
-              className="on-cover on-cover-sm"
-            />
-          )}
+          {novel.cover_uri && <img src={novel.cover_uri} alt="" className="on-cover on-cover-sm" />}
 
           <div className="on-flex-1">
             <p className="text-caption">
               by {displayName(novel.creator)}
-              <span className="text-muted" style={{ marginLeft: "0.5rem" }}>{timeAgo(novel.created_at)}</span>
+              <span className="text-muted" style={{ marginLeft: "0.5rem" }}>
+                {timeAgo(novel.created_at)}
+              </span>
             </p>
 
-            {novel.description && (
-              <p className="text-caption text-truncate">{novel.description}</p>
-            )}
+            {novel.description && <p className="text-caption text-truncate">{novel.description}</p>}
 
             <div className="on-row-wrap">
               <span className="text-caption">

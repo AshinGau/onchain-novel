@@ -46,11 +46,7 @@ export function saveVoteSalt(record: Omit<VoteSaltRecord, "createdAt">): void {
   persist(store);
 }
 
-export function getVoteSalt(
-  novelId: bigint,
-  round: number,
-  voter: string,
-): VoteSaltRecord | null {
+export function getVoteSalt(novelId: bigint, round: number, voter: string): VoteSaltRecord | null {
   const store = load();
   return store[makeKey(novelId, round, voter)] ?? null;
 }

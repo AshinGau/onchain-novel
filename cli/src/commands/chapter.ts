@@ -1,10 +1,11 @@
+import chalk from "chalk";
 import { Command } from "commander";
 import { parseEther } from "viem";
-import { submitChapter as submitChapterTx, buildContentSubmission } from "../shared/index.js";
-import { getWalletClient, getContracts, waitForTx } from "../utils/client.js";
+
+import { buildContentSubmission, submitChapter as submitChapterTx } from "../shared/index.js";
 import { apiGet, apiPost } from "../utils/api.js";
-import { header, kv, success, error, txHash, table } from "../utils/format.js";
-import chalk from "chalk";
+import { getContracts, getWalletClient, waitForTx } from "../utils/client.js";
+import { error, header, kv, success, table, txHash } from "../utils/format.js";
 
 export function registerChapterCommands(program: Command): void {
   const chapter = program.command("chapter").description("Chapter commands");
@@ -31,7 +32,9 @@ export function registerChapterCommands(program: Command): void {
             value = BigInt(config.submissionFee ?? "0");
           } catch {
             value = parseEther("0.001");
-            console.log(chalk.yellow(`  Could not fetch novel config. Using default fee: 0.001 ETH`));
+            console.log(
+              chalk.yellow(`  Could not fetch novel config. Using default fee: 0.001 ETH`),
+            );
           }
         }
 
@@ -86,7 +89,9 @@ export function registerChapterCommands(program: Command): void {
     .description("Show the chapter tree of a novel")
     .action(async (novelId) => {
       try {
-        const data = await apiGet<{ chapters: Record<string, unknown>[] }>(`/api/novels/${novelId}/tree`);
+        const data = await apiGet<{ chapters: Record<string, unknown>[] }>(
+          `/api/novels/${novelId}/tree`,
+        );
         header(`Chapter Tree — Novel #${novelId}`);
 
         if (data.chapters.length === 0) {
@@ -115,9 +120,7 @@ export function registerChapterCommands(program: Command): void {
           const connector = isLast ? "\\-- " : "|-- ";
           const wl = ch.is_world_line ? chalk.green(" *") : "";
           const authorShort = String(ch.author ?? "").slice(0, 8);
-          console.log(
-            `${prefix}${connector}#${ch.id} (d=${ch.depth}) by ${authorShort}..${wl}`,
-          );
+          console.log(`${prefix}${connector}#${ch.id} (d=${ch.depth}) by ${authorShort}..${wl}`);
           const kids = children.get(id) ?? [];
           for (let i = 0; i < kids.length; i++) {
             const childPrefix = prefix + (isLast ? "    " : "|   ");

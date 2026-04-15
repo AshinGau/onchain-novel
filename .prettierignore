@@ -1,0 +1,15 @@
+node_modules
+dist
+.next
+out
+build
+coverage
+*.lock
+package-lock.json
+lib/
+broadcast/
+cache/
+artifacts/
+web/frontend/.next
+web/frontend/public/*.svg
+docs/audit*.md

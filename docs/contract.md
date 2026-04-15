@@ -56,8 +56,9 @@ Only chapter fields needed, no extra SLOAD.
 Fork rules:
 - Fork initiator becomes the new novel's **creator**
 - Fork root is **new content** written by the forker (not a copy of the source chapter); parentId points to source chapter only as origin marker
-- Fork fee = `max(submissionFee, sourcePoolBalance * forkFeeRate / 10000)`, goes to the **source novel's** prize pool. Successful novels cost more to fork
-- **`forkFeeRate` is a protocol-level constant, not per-novel configurable.** Rationale: if creators could set their own rate, they would set it prohibitively high (e.g. 10000 = 100%) to make their novels effectively un-forkable, defeating the open-collaboration premise. Keeping it at the protocol level guarantees every novel is forkable on the same economic terms
+- Fork fee to the **source pool** = `max(submissionFee, sourcePoolBalance * FORK_FEE_RATE / 10000)`. Successful novels cost more to fork.
+- **Caller total payment** = `forkFee + config.submissionFee`. The extra `submissionFee` is deposited as the **new novel's genesis pool**.
+- **`FORK_FEE_RATE = 100` (1%) is a protocol-level constant, not per-novel configurable.** Rationale: if creators could set their own rate, they would set it prohibitively high (e.g. 10000 = 100%) to make their novels effectively un-forkable, defeating the open-collaboration premise. Keeping it at the protocol level guarantees every novel is forkable on the same economic terms.
 - **Self-fork is permitted**. The original creator may fork their own novel; this resets `currentRound` to 1 and therefore `creatorRoyalty` back to its initial 75%. This is intentional, not an exploit: the chain is fully transparent, and any reader or co-author who feels the reset is unfair can either fork the same chapter themselves or stay in the original novel. Forced creator loyalty would require off-chain enforcement that this protocol explicitly avoids
 - New novel's config is freely configurable (`contentLocation` inherited from source)
 
@@ -103,7 +104,9 @@ Duration: `nominateDuration`.
 
 **Committing**: `commitVote(novelId, commitHash)`, requires staking `voteStake`. One vote per address per round. Duration: `commitDuration`.
 
-**Revealing**: `revealVote(novelId, voter, candidateId, salt)`, vote weight = staked amount. Duration: `revealDuration`. The call is permissionless — anyone (keeper, voter, third party) may submit the reveal for a given voter; the voter binding in `commitHash` prevents vote redirection (see §2.5 Keeper-Assisted Reveal).
+**Revealing**: `revealVote(novelId, voter, candidateId, salt)`. Duration: `revealDuration`. The call is permissionless — anyone (keeper, voter, third party) may submit the reveal for a given voter; the voter binding in `commitHash` prevents vote redirection (see §2.5 Keeper-Assisted Reveal).
+
+> **Uniform weight.** `commitVote` enforces `msg.value == voteStake` exactly, so every voter stakes identical ETH and therefore contributes identical **base** weight. The only differentiator is the 3× accuracy multiplier at reward time (§3.5). There is no partial-stake or superlinear-stake voting.
 
 **Settlement**: Keeper calls `settleRound(novelId)` — no path arguments. `VotingEngine.tallyVotes` selects top N (stable insertion sort; fewer than N if insufficient candidates). For each winner, `NovelCore.collectPathAuthors` walks `parentId` up to any previous world line ancestor (anchor excluded — already rewarded); if no anchor reached (orphan winner from a forfeit nomination), that winner contributes zero authors. Rewards distributed, unrevealed stakes processed (see §3.5), worldLineAncestors replaced, return to Idle.
 
@@ -167,11 +170,17 @@ Only rewards chapters newly added to world lines this round. Walk from each Wi u
 
 ### 3.5 Voter Rewards
 
-Voted for world line: 3x weight. Did not: 1x weight.
+All revealed voters share `voterRewards` in proportion to their weight. Accurate voters (voted for a winning world line) get **3×**; revealed-but-wrong voters get **1×**. Unrevealed voters forfeit 50% of stake (see below).
 
-**Per-address reward cap** (protocol constant): a single voter's payout in one round is capped at `voteStake * VOTER_REWARD_CAP_MULTIPLIER` (20×). The cap is applied **after** the 3x accuracy multiplier. Any excess returns to the prize pool. Since voteStake is fixed per round, this is a safety rail for edge cases where the reward pool is huge relative to the number of revealed voters — not a per-novel tuning knob.
+**Distribution formula** (`VotingEngine.settleVoterRewards` + `claimVotingReward`):
+```
+myWeight    = accurate ? 3 * voteStake : voteStake
+totalWeight = totalRevealedStake + 2 * totalAccurateStake
+myReward    = min(voterRewards * myWeight / totalWeight, voteStake * 20)
+```
+The identity `totalWeight = revealedStake + 2 × accurateStake` holds because the `1×` contribution for every revealed voter is already in `totalRevealedStake`; the extra `+2×` reflects the bonus for accurate voters (bringing their multiplier to 3×). Revealed voters always recover their stake in full. **Unrevealed voters** forfeit `voteStake * UNREVEAL_PENALTY_RATE_BP / 10000` (50%); the penalty is added to the voter reward pool.
 
-**Unrevealed stake penalty** (protocol constant): unrevealed voters are charged `voteStake * UNREVEAL_PENALTY_RATE_BP / 10000` = 50% of stake. The penalty enters the round's voter reward pool. The remainder is returned to the voter.
+**Per-address reward cap** (protocol constant): a single voter's payout in one round is capped at `voteStake * VOTER_REWARD_CAP_MULTIPLIER` (20×), applied after the 3× multiplier. Excess from the cap + any undistributed remainder returns to the prize pool on settlement. This is a safety rail for edge cases where the reward pool is huge relative to the number of revealed voters — not a per-novel tuning knob.
 
 | Protocol Constant | Value | Description |
 |-------------------|-------|-------------|
@@ -181,7 +190,20 @@ Voted for world line: 3x weight. Did not: 1x weight.
 
 ### 3.6 Keeper Rewards
 
-Each state transition pays `keeperRewardAmount` from prize pool.
+Each of the four round-phase transitions (`startRound`, `closeNomination`, `closeCommit`, `settleRound`) credits `keeperRewardAmount` from the prize pool to the caller's pending balance (pull-based, claimed via `claimReward`). If the pool balance is below `keeperRewardAmount`, the call **silently skips the payout** — the phase transition still succeeds. `keeperRewardAmount` is a global protocol parameter set by the owner on `PrizePool`.
+
+### 3.7 Novel Completion (`completeNovel`)
+
+When a novel is wound down, 100% of the remaining pool is distributed to **every author on every world line** (walked from each `worldLineAncestor` back to the root). Preconditions and permissions:
+
+- Novel must be `active` and have `currentRound >= 1` and phase `Idle`.
+- Allowed callers (immediate): creator, keeper, owner.
+- After `INACTIVITY_TIMEOUT = 30 days` since `max(phaseStartTime, latest worldLineAncestor timestamp)`, **anyone** may call it.
+- Distribution uses `releaseRate = 10000` (100%) and `voterRewardRate = 0` (no voter rewards — rounds are over).
+- Rounding dust is re-deposited to the pool with reason `"completionDust"`.
+- On success, `active` is flipped to false.
+
+> Security note: at `currentRound = 1`, the creator-royalty decay `3/(3+1) = 75%` would send 75% of the pool to the creator in a single completion call. Protocol defaults and product flow assume completion happens after several rounds; an early completion is allowed by design but should be socially / economically discouraged (see `docs/audit-consolidated.md` H-1 for the trade-off analysis).
 
 ---
 
@@ -193,42 +215,147 @@ Full amount goes to prize pool.
 
 ### 4.2 Tip Chapter
 
-50% credited to author (pull-based withdrawal), 50% to prize pool. Author calls `withdrawTips()` to claim accumulated tips.
+50% credited to the chapter author's pending balance (pull-based), 50% to prize pool. Author calls `NovelCore.claimReward(novelId)` — which delegates to `PrizePool.claimReward` — to withdraw accumulated tips alongside any other pending rewards. Minimum tip is `MIN_TIP_AMOUNT = 0.001 ETH`.
 
 ### 4.3 Continuation Bounty
 
-- Create: 20% immediately to prize pool, 80% locked; `createTime` is recorded on-chain
-- Qualifying continuations are **direct child chapters whose timestamp falls within `[createTime, deadline]`** — pre-existing children written before the bounty was posted do not qualify. One share per author regardless of how many qualifying children they submitted.
-- Has qualifying continuations: 80% split equally among qualifying authors (or full amount to the designated chapter's author if the tipper designated one before deadline)
-- No qualifying continuations: 80% refundable to reader after the deadline
+- **Create** (`createBounty`): minimum `MIN_BOUNTY_AMOUNT = 0.001 ETH`. 20% immediately to prize pool, 80% locked; `createTime` is recorded on-chain.
+- **Qualifying continuations** are **direct child chapters whose timestamp falls within `[createTime, deadline]`** — pre-existing children written before the bounty was posted do not qualify. One share per author regardless of how many qualifying children they submitted.
+- **Designation**: before the deadline, the tipper may call `designateBounty(bountyId, chapterId)` to pin the entire 80% to one qualifying direct child's author.
+- **Claim paths after deadline**:
+  - Has qualifying authors: each calls `claimBounty` to pull their equal share (or the designated author claims the full amount).
+  - No qualifying authors: tipper calls `refundBounty` to recover the 80%.
+- **Grace-period sweep** (`CLAIM_GRACE_PERIOD = 30 days`): after deadline + 30 days, any unclaimed remainder may be swept back to the tipper via `sweepUnclaimed(bountyId)`. This guarantees funds never go permanently unclaimed even if qualifying authors are inactive.
 
 ---
 
 ## 5. Security
 
 - **Keeper single-attack-surface**: the ONLY input a malicious keeper controls is the `leaves[]` passed to `startRound` (bias which tree leaf per world line becomes the candidate). Winner selection, reward-author derivation (parent-chain walk via `NovelCore.collectPathAuthors`), vote integrity (commit-reveal), and prize distribution are fully on-chain. Phase transitions have anyone-after-`KEEPER_INACTIVITY_TIMEOUT` fallback; this single residual weakness is the core value proposition of onchain-novel (§2.2).
-- **Off-chain DFS, on-chain walk**: keeper does the off-chain DFS to pick leaves; reward author derivation and final-authors collection are on-chain parent-chain walks bounded by `MAX_PROOF_PATH_LENGTH` (1024). submissionFee + minRoundGap bound tree depth between rounds.
-- **Voting game theory**: fixed `voteStake` (every voter stakes the same amount), linear weight inside a protocol-level cap of `20 × voteStake`, commit-reveal prevents following, 3× accuracy incentive. Keeper-assisted reveal reduces user friction without compromising commit-reveal security (Keeper cannot alter committed votes).
-- **Chapter spam**: submissionFee + minChapterLength + N candidate slots + Nomination rescue.
+- **Off-chain leaf pick, on-chain walk**: keeper picks leaves off-chain (any algorithm, typically DFS over the novel tree); reward-author derivation and final-authors collection are on-chain parent-chain walks bounded by `MAX_PROOF_PATH_LENGTH` (1024). submissionFee + minRoundGap bound tree depth between rounds.
+- **Voting game theory**: fixed `voteStake` (every voter stakes the same amount, uniform base weight), 3× accuracy multiplier with a per-address payout cap of `20 × voteStake`, commit-reveal prevents following. Keeper-assisted reveal reduces user friction without compromising commit-reveal security (Keeper cannot alter committed votes).
+- **Chapter spam**: submissionFee + minChapterLength + N candidate slots + nomination rescue.
+- **UUPS hygiene**: all upgradeable implementations disable their own initializer via `_disableInitializers()` constructors, preventing a direct-on-implementation `initialize` attack that could culminate in `selfdestruct` of the logic contract.
+- **Reentrancy**: all cash-flow functions are `nonReentrant`. Since OZ 5.5 the `ReentrancyGuard` slot is ERC-7201 namespaced and upgrade-safe; we use `ReentrancyGuardTransient` (EIP-1153) for ~4.8 k gas savings per call. **Requires chains supporting EIP-1153 (Ethereum Cancun and later, plus Base / Optimism / Arbitrum / Polygon / BNB post-upgrade).**
+- **Pausable**: `NovelCore`, `RoundManager`, `PrizePool`, `BountyBoard` expose an owner `pause()/unpause()` kill-switch on cash-flow and state-transition entry points.
 - **Protocol fee**: removed; can be added via upgrade.
 
 ---
 
 ## 6. Configuration Reference
 
-| Parameter | Suggested Default | Description |
-|-----------|-------------------|-------------|
-| `minChapterLength` | 100 bytes | Minimum chapter length |
-| `maxChapterLength` | 50,000 bytes | Maximum chapter length |
-| `submissionFee` | 0.005 ETH | Submission fee (also floor for `voteStake`) |
-| `worldLineCount` (N) | 3 | World lines per round |
-| `voteStake` | 0.001 ETH | Vote stake (must be ≤ `submissionFee`) |
-| `nominationFee` | 0.01 ETH | Nomination fee |
-| `nominateDuration` | 1 day | Nomination phase |
-| `commitDuration` | 2 days | Commit phase |
-| `revealDuration` | 1 day | Reveal phase |
-| `minRoundGap` | 1 day | Minimum gap between rounds |
-| `prizeReleaseRate` | 2000 (20%) | Per-round release rate |
-| `voterRewardRate` | 1500 (15%) | Voter reward rate |
+### 6.1 Per-Novel Config (`NovelConfig`, set by creator at `createNovel`)
+
+| Parameter | Bounds | Suggested Default | Description |
+|-----------|--------|-------------------|-------------|
+| `minChapterLength` | > 0, ≤ `maxChapterLength` | 100 bytes | Minimum chapter length |
+| `maxChapterLength` | ≥ `minChapterLength` | 50,000 bytes | Maximum chapter length |
+| `submissionFee` | ≥ `MIN_SUBMISSION_FEE` (0.0001 ETH) | 0.005 ETH | Submission fee; also the **ceiling** for `voteStake` |
+| `worldLineCount` (N) | 1 ≤ N ≤ `MAX_WORLD_LINE_COUNT` (16) | 3 | World lines per round |
+| `voteStake` | ≤ `submissionFee` | 0.001 ETH | Fixed stake per vote (uniform across voters) |
+| `nominationFee` | — | 0.01 ETH | Per-nomination fee |
+| `nominateDuration` | > 0 | 1 day | Nomination phase |
+| `commitDuration` | > 0 | 2 days | Commit phase |
+| `revealDuration` | > 0 | 1 day | Reveal phase |
+| `minRoundGap` | — | 1 day | Minimum gap between rounds |
+| `prizeReleaseRate` | ≤ 5000 (50%) | 2000 (20%) | Per-round release rate (bps) |
+| `voterRewardRate` | ≤ 5000 (50%) | 1500 (15%) | Voter reward rate (bps of `releaseAmount - creatorRoyalty`) |
+| `ruleFee` | — | 0.001 ETH | Fee for `RulesEngine.proposeRule` |
+| `ruleVoteDuration` | > 0 if `ruleQuorum > 0` | 3 days | Rule proposal voting duration |
+| `ruleQuorum` | — | N/A | Minimum yes-votes for rule proposal to pass |
 
 **Invariant**: `voteStake ≤ submissionFee` — voting must not cost more than writing.
+
+### 6.2 Protocol Constants (hardcoded, not per-novel)
+
+| Constant | Location | Value | Description |
+|----------|----------|-------|-------------|
+| `FORK_FEE_RATE` | `NovelCore` | 100 bps (1%) | `forkFee = max(submissionFee, sourcePool × 1%)` |
+| `MIN_SUBMISSION_FEE` | `NovelCore` | 0.0001 ETH | Absolute floor on `submissionFee` |
+| `MAX_WORLD_LINE_COUNT` | `NovelCore` | 16 | Cap on `config.worldLineCount` |
+| `MAX_PROOF_PATH_LENGTH` | `NovelCore` | 1024 | Cap on parent-chain walk depth |
+| `CREATOR_DECAY_DIVISOR` (D) | `PrizePool` | 3 | Royalty share = `D / (D + round)` |
+| `MIN_TIP_AMOUNT` | `PrizePool` | 0.001 ETH | `tipNovel` / `tipChapter` floor |
+| `VOTER_REWARD_CAP_MULTIPLIER` | `VotingEngine` | 20 | Per-address cap = 20 × voteStake |
+| `UNREVEAL_PENALTY_RATE_BP` | `VotingEngine` | 5000 (50%) | Forfeit on not revealing |
+| `MAX_VOTERS_PER_ROUND` | `VotingEngine` | 500 | Hard cap, reverts `TooManyVoters` |
+| `INACTIVITY_TIMEOUT` | `RoundManager` | 30 days | Public-`completeNovel` grace window |
+| `KEEPER_INACTIVITY_TIMEOUT` | `RoundManager` | 1 day | Public fallback per phase-transition call |
+| `MAX_CANDIDATES_PER_ROUND` | `RoundManager` | 64 | Cap on `leaves[] + nominations` |
+| `MIN_BOUNTY_AMOUNT` | `BountyBoard` | 0.001 ETH | `createBounty` floor |
+| `CLAIM_GRACE_PERIOD` | `BountyBoard` | 30 days | Post-deadline window before tipper sweep |
+
+---
+
+## 7. Events
+
+Indexed by contract. See `docs/backend.md` for the indexer-side schema. Signatures are authoritative; types mirror storage (`uint64` IDs, `uint32` round).
+
+**NovelCore**
+- `NovelCreated(uint64 indexed novelId, address indexed creator)`
+- `NovelForked(uint64 indexed novelId, uint64 indexed sourceChapterId, address indexed creator)`
+- `ChapterSubmitted(uint64 indexed novelId, uint64 indexed chapterId, uint64 parentId, address indexed author, bytes32 contentHash, uint64 timestamp)`
+- `RewardClaimed(uint64 indexed novelId, address indexed recipient, uint256 amount)` *(re-emits from PrizePool for indexer convenience)*
+- `NovelMetadataUpdated(uint64 indexed novelId, string title, string description, string coverUri)`
+
+**RoundManager**
+- `KeeperUpdated(address indexed oldAddr, address indexed newAddr)`
+- `RoundStarted(uint64 indexed novelId, uint32 round, uint64[] candidates)`
+- `NominationClosed(uint64 indexed novelId, uint32 round)`
+- `CommitClosed(uint64 indexed novelId, uint32 round)`
+- `RoundSettled(uint64 indexed novelId, uint32 round, uint64[] worldLines)`
+- `CandidateNominated(uint64 indexed novelId, uint32 round, uint64 chapterId, address nominator)`
+- `VoteCommitted(uint64 indexed novelId, uint32 round, address indexed voter)`
+- `VoteRevealed(uint64 indexed novelId, uint32 round, address indexed voter, uint64 candidateId)`
+- `NovelCompleted(uint64 indexed novelId)`
+- `KeeperRewarded(uint64 indexed novelId, address indexed keeper, uint256 amount)`
+- `RewardClaimed(uint64 indexed novelId, address indexed recipient, uint256 amount)` *(voter reward claim)*
+
+**PrizePool**
+- `PoolDeposited(uint64 indexed novelId, uint256 amount, string reason)`
+- `RoundRewardsDistributed(uint64 indexed novelId, uint32 round, uint256 releaseAmount, uint256 creatorRoyalty, uint256 authorRewards, uint256 voterRewards)`
+- `TipReceived(uint64 indexed novelId, address indexed tipper, uint256 amount)`
+- `ChapterTipped(uint64 indexed novelId, uint64 indexed chapterId, address indexed tipper, uint256 amount)`
+- `RewardClaimed(uint64 indexed novelId, address indexed recipient, uint256 amount)`
+- `KeeperRewardPaid(uint64 indexed novelId, address indexed keeper, uint256 amount)`
+
+**BountyBoard**
+- `BountyCreated(uint64 indexed bountyId, uint64 indexed novelId, uint64 indexed chapterId, address tipper, uint256 amount, uint64 deadline)`
+- `BountyClaimed(uint64 indexed bountyId, address indexed author, uint256 amount)`
+- `BountyDesignated(uint64 indexed bountyId, uint64 indexed chapterId)`
+- `BountyRefunded(uint64 indexed bountyId, address indexed tipper, uint256 amount)`
+
+**RulesEngine**
+- `RuleSet(uint64 indexed novelId, string name)`
+- `RuleDeleted(uint64 indexed novelId, string name)`
+- `RuleProposed(...)` / `RuleProposalVoted(uint64 indexed proposalId, address indexed voter, uint32 newVoteCount)`
+
+**UserRegistry**
+- `NicknameSet(address indexed user, bytes32 nickname)`
+
+> **Note on `RewardClaimed` topic collision**: `NovelCore`, `RoundManager`, and `PrizePool` all emit an event with the same signature. Indexers must disambiguate by **emitting contract address**, not by topic0 alone.
+
+---
+
+## 8. Error Catalog (selected)
+
+All custom errors are defined on the emitting contract. Listed here are the user-facing ones most likely surfaced in the frontend.
+
+| Error | Meaning |
+|-------|---------|
+| `InvalidConfig(uint8 code)` | `NovelCore` config validation failure; `code` identifies the failing field (see `_validateConfig`) |
+| `NovelNotFound(uint64)` / `ChapterNotFound(uint64)` | ID does not exist |
+| `NovelNotActive(uint64)` | Novel has been completed |
+| `InvalidFee(sent, required)` / `InsufficientForkFee(sent, required)` | msg.value wrong |
+| `ContentLengthOutOfRange(length, min, max)` | Chapter body bounds violated |
+| `ContentHashMismatch(expected, actual)` | For `Onchain` content mode, calldata hash ≠ declared |
+| `WrongRoundPhase(expected, actual)` | Phase-gated call at the wrong time |
+| `PhaseNotExpired()` / `MinRoundGapNotMet()` | Time-gated call too early |
+| `InsufficientLeaves` / `TooManyLeaves` / `LeafHasChildren` / `DuplicateLeaf` | `startRound` leaves validation |
+| `AlreadyACandidate` / `InvalidPathAnchor` | `nominateCandidate` validation |
+| `NotKeeperYet()` | Public-fallback called before `KEEPER_INACTIVITY_TIMEOUT` |
+| `NotAllowedToComplete()` / `NovelHasNoRound()` / `NovelAlreadyCompleted` | `completeNovel` guards |
+| `AlreadyCommitted` / `AlreadyRevealed` / `InvalidReveal` / `InvalidCandidate` / `TooManyVoters` | VotingEngine flow |
+| `NoPendingReward()` / `NoRewardToClaim()` | Claim on empty balance |
+| `TipTooSmall(amount, min)` | Below `MIN_TIP_AMOUNT` |
+| `BountyTooSmall(amount, min)` / `DeadlineInPast` / `DeadlineNotReached` / `DeadlineReached` / `AlreadyClaimed` / `BountyFullyClaimed` / `NoQualifyingAuthors` / `NotQualifyingAuthor` / `NotDesignatedAuthor` / `NotTipper` / `NotDirectChild` / `QualifyingAuthorsExist` / `GracePeriodNotExpired` | BountyBoard flow |

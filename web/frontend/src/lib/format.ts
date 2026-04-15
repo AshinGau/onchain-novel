@@ -1,4 +1,5 @@
 import { formatEther } from "viem";
+
 import { TOKEN_SYMBOL } from "./config";
 
 /** Shorten an address: 0x1234...abcd */

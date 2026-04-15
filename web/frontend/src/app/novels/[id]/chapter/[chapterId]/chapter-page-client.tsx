@@ -1,21 +1,23 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
+import { useState } from "react";
+import { formatEther, parseEther } from "viem";
 import { useAccount } from "wagmi";
-import { parseEther, formatEther } from "viem";
-import type { ChapterDetail, Novel, ChapterSummary, Bounty } from "@/lib/api";
-import { useChapterChildren, useChapterBounties, useChapterTips } from "@/hooks/use-chapter";
-import { timeAgo } from "@/lib/format";
-import { useNicknames } from "@/hooks/use-nickname";
-import { TOKEN_SYMBOL } from "@/lib/config";
-import { BOUNTY_BOARD_ADDRESS, bountyBoardAbi } from "@/lib/contracts";
-import { useTxAction } from "@/hooks/use-tx-action";
+
 import { ChapterCardMini } from "@/components/chapter-card-mini";
 import { ChapterEditor } from "@/components/chapter-editor";
 import { CommentList } from "@/components/comment-list";
+import { txButtonLabel, TxStatusLabel } from "@/components/tx-status";
+import { useChapterBounties, useChapterChildren, useChapterTips } from "@/hooks/use-chapter";
+import { useNicknames } from "@/hooks/use-nickname";
+import { useTxAction } from "@/hooks/use-tx-action";
+import type { Bounty, ChapterDetail, ChapterSummary, Novel } from "@/lib/api";
+import { TOKEN_SYMBOL } from "@/lib/config";
+import { BOUNTY_BOARD_ADDRESS, bountyBoardAbi } from "@/lib/contracts";
+import { timeAgo } from "@/lib/format";
+
 import { TipButton } from "./tip-button";
-import { TxStatusLabel, txButtonLabel } from "@/components/tx-status";
 
 /* ── Sponsor Next Chapter (追更) form ── */
 function BountyCreateForm({ chapterId, onClose }: { chapterId: string; onClose: () => void }) {
@@ -34,34 +36,59 @@ function BountyCreateForm({ chapterId, onClose }: { chapterId: string; onClose: 
         args: [BigInt(chapterId), deadline],
         value,
       },
-      () => { setTimeout(() => { reset(); onClose(); }, 2000); }
+      () => {
+        setTimeout(() => {
+          reset();
+          onClose();
+        }, 2000);
+      },
     );
   }
 
   return (
     <div className="on-card on-stack" style={{ gap: "0.5rem" }}>
-      <h4 className="text-caption" style={{ margin: 0 }}>Sponsor Next Chapter</h4>
+      <h4 className="text-caption" style={{ margin: 0 }}>
+        Sponsor Next Chapter
+      </h4>
       <div className="on-row">
         <div>
           <label className="text-tiny">Amount ({TOKEN_SYMBOL})</label>
-          <input type="text" className="on-form-input on-form-input-narrow" value={amount} onChange={(e) => setAmount(e.target.value)} />
+          <input
+            type="text"
+            className="on-form-input on-form-input-narrow"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+          />
         </div>
         <div>
           <label className="text-tiny">Deadline (days)</label>
-          <input type="text" className="on-form-input on-form-input-narrow" value={days} onChange={(e) => setDays(e.target.value)} />
+          <input
+            type="text"
+            className="on-form-input on-form-input-narrow"
+            value={days}
+            onChange={(e) => setDays(e.target.value)}
+          />
         </div>
       </div>
       <p className="text-muted" style={{ fontSize: "0.75rem", margin: 0 }}>
-        20% goes to prize pool. 80% locked for authors. You can designate a favorite before the deadline.
+        20% goes to prize pool. 80% locked for authors. You can designate a favorite before the
+        deadline.
       </p>
       <div className="on-row">
         {status !== "success" && (
-          <button type="button" className="on-btn on-btn-primary" onClick={handleCreate} disabled={isPending}>
+          <button
+            type="button"
+            className="on-btn on-btn-primary"
+            onClick={handleCreate}
+            disabled={isPending}
+          >
             {txButtonLabel(status, "Create Bounty")}
           </button>
         )}
         {!isPending && status !== "success" && (
-          <button type="button" className="on-btn on-btn-ghost" onClick={onClose}>Cancel</button>
+          <button type="button" className="on-btn on-btn-ghost" onClick={onClose}>
+            Cancel
+          </button>
         )}
         <TxStatusLabel status={status} error={error} successText="Bounty created!" />
       </div>
@@ -70,7 +97,15 @@ function BountyCreateForm({ chapterId, onClose }: { chapterId: string; onClose: 
 }
 
 /* ── Active bounty list for a chapter ── */
-function BountyList({ bounties, chapterId, displayName }: { bounties: Bounty[]; chapterId: string; displayName: (addr: string) => string }) {
+function BountyList({
+  bounties,
+  chapterId,
+  displayName,
+}: {
+  bounties: Bounty[];
+  chapterId: string;
+  displayName: (addr: string) => string;
+}) {
   const now = Math.floor(Date.now() / 1000);
 
   const active = bounties.filter((b) => !b.claimed && Number(b.deadline) > now);
@@ -78,7 +113,9 @@ function BountyList({ bounties, chapterId, displayName }: { bounties: Bounty[]; 
 
   return (
     <div className="on-card on-stack" style={{ gap: "0.5rem" }}>
-      <h4 className="text-caption" style={{ margin: 0 }}>Active Bounties ({active.length})</h4>
+      <h4 className="text-caption" style={{ margin: 0 }}>
+        Active Bounties ({active.length})
+      </h4>
       {active.map((b) => {
         const remaining = Number(b.deadline) - now;
         const days = Math.floor(remaining / 86400);
@@ -86,10 +123,15 @@ function BountyList({ bounties, chapterId, displayName }: { bounties: Bounty[]; 
         const designated = Number(b.designated_chapter_id || 0);
 
         return (
-          <div key={b.id} style={{
-            padding: "0.5rem 0.75rem", borderRadius: "0.375rem",
-            background: "var(--color-bg-secondary)", border: "1px solid var(--color-border)",
-          }}>
+          <div
+            key={b.id}
+            style={{
+              padding: "0.5rem 0.75rem",
+              borderRadius: "0.375rem",
+              background: "var(--color-bg-secondary)",
+              border: "1px solid var(--color-border)",
+            }}
+          >
             <div className="on-row-wrap" style={{ gap: "0.5rem" }}>
               <span style={{ fontWeight: 600, color: "var(--color-warning)" }}>
                 {formatEther(BigInt(b.locked_amount))} {TOKEN_SYMBOL}
@@ -99,9 +141,7 @@ function BountyList({ bounties, chapterId, displayName }: { bounties: Bounty[]; 
               </span>
               <span className="text-muted">by {displayName(b.tipper)}</span>
               {designated > 0 && (
-                <span className="on-badge badge-active">
-                  Designated: Chapter #{designated}
-                </span>
+                <span className="on-badge badge-active">Designated: Chapter #{designated}</span>
               )}
             </div>
           </div>
@@ -141,14 +181,18 @@ export function ChapterPageClient({ chapter, novel }: Props) {
           {novel.title || `Novel #${novelId}`}
         </Link>
         <span className="text-muted">/</span>
-        <span className="text-caption">Chapter {chapter.depth} (ID.{chapter.id})</span>
+        <span className="text-caption">
+          Chapter {chapter.depth} (ID.{chapter.id})
+        </span>
       </div>
 
       {/* Navigation buttons */}
       <div className="on-row-wrap">
         {chapter.parent_id && chapter.parent_id !== "0" && (
           <Link href={`/novels/${novelId}/chapter/${chapter.parent_id}`}>
-            <button type="button" className="on-btn on-btn-secondary">Previous</button>
+            <button type="button" className="on-btn on-btn-secondary">
+              Previous
+            </button>
           </Link>
         )}
         <button
@@ -159,7 +203,9 @@ export function ChapterPageClient({ chapter, novel }: Props) {
           Next Chapters ({children?.length ?? 0})
         </button>
         <Link href={`/novels/${novelId}/tree`}>
-          <button type="button" className="on-btn on-btn-secondary">Story Tree</button>
+          <button type="button" className="on-btn on-btn-secondary">
+            Story Tree
+          </button>
         </Link>
       </div>
 
@@ -178,9 +224,7 @@ export function ChapterPageClient({ chapter, novel }: Props) {
         <div className="on-row-wrap">
           <span className="text-caption">Author: {displayName(chapter.author)}</span>
           <span className="on-badge badge-depth">#{chapter.depth}</span>
-          {chapter.is_world_line && (
-            <span className="on-badge badge-worldline">World Line</span>
-          )}
+          {chapter.is_world_line && <span className="on-badge badge-worldline">World Line</span>}
           <span className="text-muted">{timeAgo(chapter.timestamp)}</span>
         </div>
 
@@ -192,7 +236,9 @@ export function ChapterPageClient({ chapter, novel }: Props) {
       </div>
 
       {/* Active bounties */}
-      {bounties && <BountyList bounties={bounties} chapterId={chapter.id} displayName={displayName} />}
+      {bounties && (
+        <BountyList bounties={bounties} chapterId={chapter.id} displayName={displayName} />
+      )}
 
       {/* Chapter content */}
       <div className="prose">
@@ -216,7 +262,9 @@ export function ChapterPageClient({ chapter, novel }: Props) {
           {showEditor ? "Cancel" : "Write Next Chapter"}
         </button>
         <Link href={`/fork/${novelId}/${chapter.id}`}>
-          <button type="button" className="on-btn on-btn-secondary">Fork Novel</button>
+          <button type="button" className="on-btn on-btn-secondary">
+            Fork Novel
+          </button>
         </Link>
         {isConnected && (
           <button
@@ -239,7 +287,9 @@ export function ChapterPageClient({ chapter, novel }: Props) {
         <div className="on-card">
           <p className="text-caption" style={{ margin: 0 }}>
             {isCommitting ? "Voting is open for this round." : "Reveal phase is active."}{" "}
-            <Link href={`/novels/${novelId}`} className="text-link">Go to novel page →</Link>
+            <Link href={`/novels/${novelId}`} className="text-link">
+              Go to novel page →
+            </Link>
           </p>
         </div>
       )}

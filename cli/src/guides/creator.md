@@ -13,21 +13,25 @@
 在写任何代码之前，先想清楚你的小说世界：
 
 ### 类型与基调
+
 - 这是什么类型？（奇幻、科幻、悬疑、都市、历史...）
 - 基调是什么？（严肃写实、轻松幽默、黑暗压抑、史诗壮阔...）
 - 目标读者是谁？
 
 ### 世界设定
+
 - 故事发生在什么时代、什么地方？
 - 有什么独特的规则？（魔法体系、科技水平、社会制度）
 - 有哪些势力/组织？它们之间的关系？
 
 ### 核心冲突
+
 - 这个世界的核心矛盾是什么？
 - 为什么读者会关心？
 - 这个矛盾能支撑多少位作者、多少章节的故事？
 
 **好的世界观特征：**
+
 - 有丰富的冲突空间（多个势力、多种价值观碰撞）
 - 有明确的规则但不过于死板（给作者创作空间）
 - 有吸引力的悬念或谜题（让人想参与解答）
@@ -39,6 +43,7 @@
 Root chapter 是小说的第一章，也是你吸引协作者的**门面**。
 
 ### Root Chapter 要做到：
+
 - **建立世界观**：通过故事（不是说明文）展示世界的核心特征
 - **塑造主要人物**：至少引入 1-2 个有深度的角色
 - **制造悬念**：留下让人想续写的钩子
@@ -46,6 +51,7 @@ Root chapter 是小说的第一章，也是你吸引协作者的**门面**。
 - **足够长但不冗余**：给作者足够的背景信息，但不要啰嗦
 
 ### 常见错误：
+
 - 用大段设定说明代替故事叙述
 - 没有冲突，只有背景介绍
 - 写得太完美、太收束，没有留续写空间
@@ -58,14 +64,17 @@ Root chapter 是小说的第一章，也是你吸引协作者的**门面**。
 参数需要根据你的小说特点来调整：
 
 ### 章节长度
+
 ```
 minChapterLength: 1000    # 最短 1000 字节（约 330 个中文字）
 maxChapterLength: 50000   # 最长 50000 字节（约 16000 个中文字）
 ```
+
 - 短篇快节奏小说可以缩小范围
 - 史诗类长篇可以放大上限
 
 ### 经济参数
+
 ```
 submissionFee: "0.001"    # 提交费。太低 = spam 泛滥，太高 = 吓跑新作者
 voteStake: "0.001"        # 投票质押。低门槛鼓励参与
@@ -73,6 +82,7 @@ nominationFee: "0.1"      # 提名费。较高，防止滥用提名
 ```
 
 ### 投票参数
+
 ```
 worldLineCount: 3         # 每轮保留 3 条世界线。多 = 分支丰富但分散，少 = 聚焦但竞争激烈
 nominateDuration: 86400   # 提名 1 天
@@ -82,6 +92,7 @@ minRoundGap: 86400        # 两轮最小间隔 1 天
 ```
 
 ### 奖励参数
+
 ```
 prizeReleaseRate: 2000    # 每轮释放 20% 奖池
 voterRewardRate: 500      # 其中 5% 给投票者
@@ -105,6 +116,7 @@ onchain-novel-cli novel create \
 `--value` 是创世基金，注入到 prize pool 中，吸引早期参与者。
 
 如果 root chapter 内容很长，使用文件：
+
 ```bash
 onchain-novel-cli novel create ... --file root-chapter.md
 ```
@@ -123,6 +135,7 @@ onchain-novel-cli rule set <novelId> "写作风格" "硬科幻，注重科学细
 ```
 
 **好的 Rules：**
+
 - 明确但不死板（"魔法消耗生命力"而不是"每次施法扣 10 HP"）
 - 有创作指引价值（帮助作者保持一致性）
 - 留有解读空间（不同作者可以有不同的发展方向）
@@ -134,6 +147,7 @@ onchain-novel-cli rule set <novelId> "写作风格" "硬科幻，注重科学细
 ## Step 6: 管理运营
 
 ### 监控小说发展
+
 ```bash
 onchain-novel-cli novel info <novelId>       # 查看状态
 onchain-novel-cli chapter tree <novelId>     # 查看章节树
@@ -156,17 +170,20 @@ onchain-novel-cli vote settle <novelId>      # 结算
 
 世界线作者（章节当前在某条世界线上的作者）可以发起规则修改提案。
 需要传入自己拥有的、当前在世界线上的 chapterId，CLI 自动计算路径证明：
+
 ```bash
 onchain-novel-cli rule propose <novelId> add "新规则" <chapterId> "规则内容"
 onchain-novel-cli rule propose <novelId> delete "旧规则" <chapterId>
 ```
 
 其他世界线作者投票通过后自动执行：
+
 ```bash
 onchain-novel-cli rule vote <proposalId> <chapterId>
 ```
 
 ### 完结小说
+
 ```bash
 onchain-novel-cli novel complete <novelId>
 ```

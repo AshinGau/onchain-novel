@@ -1,11 +1,12 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+
 import {
   fetchChapter,
-  fetchChapterContext,
-  fetchChapterChildren,
   fetchChapterBounties,
+  fetchChapterChildren,
+  fetchChapterContext,
   fetchChapterTips,
 } from "@/lib/api";
 

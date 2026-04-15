@@ -15,7 +15,9 @@ export async function apiGet<T = unknown>(path: string): Promise<T> {
   try {
     res = await fetch(`${base}${path}`);
   } catch (err) {
-    throw new Error(`Cannot reach API at ${base} — is the backend running? (${err instanceof Error ? err.message : err})`);
+    throw new Error(
+      `Cannot reach API at ${base} — is the backend running? (${err instanceof Error ? err.message : err})`,
+    );
   }
   if (!res.ok) {
     const body = await res.text();
@@ -43,7 +45,9 @@ export async function apiPost<T = unknown>(path: string, body: unknown): Promise
       body: JSON.stringify(body),
     });
   } catch (err) {
-    throw new Error(`Cannot reach API at ${base} — is the backend running? (${err instanceof Error ? err.message : err})`);
+    throw new Error(
+      `Cannot reach API at ${base} — is the backend running? (${err instanceof Error ? err.message : err})`,
+    );
   }
   let parsed: T | null = null;
   try {

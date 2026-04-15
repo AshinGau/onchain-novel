@@ -2,12 +2,12 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
-import { registerNovelTools } from "./tools/novel.js";
-import { registerChapterTools } from "./tools/chapter.js";
-import { registerVoteTools } from "./tools/vote.js";
-import { registerTipTools } from "./tools/tip.js";
 import { registerBountyTools } from "./tools/bounty.js";
+import { registerChapterTools } from "./tools/chapter.js";
+import { registerNovelTools } from "./tools/novel.js";
 import { registerRuleTools } from "./tools/rule.js";
+import { registerTipTools } from "./tools/tip.js";
+import { registerVoteTools } from "./tools/vote.js";
 
 async function main() {
   const server = new McpServer({

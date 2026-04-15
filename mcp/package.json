@@ -12,7 +12,9 @@
   ],
   "scripts": {
     "build": "tsc",
-    "dev": "tsc --watch"
+    "dev": "tsc --watch",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "keywords": [
     "mcp",
@@ -28,7 +30,9 @@
     "zod": "^3.23.0"
   },
   "devDependencies": {
-    "typescript": "^5.7.3",
-    "@types/node": "^22.0.0"
+    "@ianvs/prettier-plugin-sort-imports": "^4.7.1",
+    "@types/node": "^22.0.0",
+    "prettier": "^3.8.3",
+    "typescript": "^5.7.3"
   }
 }

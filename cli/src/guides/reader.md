@@ -27,6 +27,7 @@ onchain-novel-cli novel info <novelId>
 ```
 
 关注这些信息：
+
 - **pool_balance**：奖池大小反映了小说的经济活力
 - **chapter_count / author_count**：参与度
 - **round / epoch**：进展程度
@@ -108,6 +109,7 @@ onchain-novel-cli bounty create <chapterId> --value 0.1 --deadline 7d
 - `--deadline`：截止时间（支持 `s/m/h/d` 后缀）
 
 **资金分配**：
+
 - 20% 立即进入 prize pool
 - 80% 锁定，在 deadline 后平分给所有提交了续写的作者
 

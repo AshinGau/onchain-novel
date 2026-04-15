@@ -117,9 +117,7 @@ export function fetchNovels(params: {
   if (params.sort) sp.set("sort", params.sort);
   if (params.filter) sp.set("filter", params.filter);
   if (params.search) sp.set("search", params.search);
-  return apiFetch<{ novels: Novel[]; pagination: Pagination }>(
-    `/novels?${sp.toString()}`
-  );
+  return apiFetch<{ novels: Novel[]; pagination: Pagination }>(`/novels?${sp.toString()}`);
 }
 
 export function fetchNovel(id: string) {
@@ -128,18 +126,18 @@ export function fetchNovel(id: string) {
 
 export function fetchNovelTree(id: string, maxDepth?: number) {
   const params = maxDepth ? `?maxDepth=${maxDepth}` : "";
-  return apiFetch<{ chapters: ChapterSummary[]; hasMore: boolean; maxDepth: number }>(`/novels/${id}/tree${params}`);
+  return apiFetch<{ chapters: ChapterSummary[]; hasMore: boolean; maxDepth: number }>(
+    `/novels/${id}/tree${params}`,
+  );
 }
 
 export function fetchWorldlines(id: string) {
-  return apiFetch<{ worldlines: ChapterSummary[] }>(
-    `/novels/${id}/worldlines`
-  );
+  return apiFetch<{ worldlines: ChapterSummary[] }>(`/novels/${id}/worldlines`);
 }
 
 export function fetchRound(novelId: string, round: number) {
   return apiFetch<{ votes: RoundVote[]; candidates: RoundCandidate[] }>(
-    `/novels/${novelId}/rounds/${round}`
+    `/novels/${novelId}/rounds/${round}`,
   );
 }
 
@@ -214,7 +212,7 @@ export function fetchNickname(address: string) {
 export function fetchNicknamesBatch(addresses: string[]) {
   if (addresses.length === 0) return Promise.resolve({ nicknames: {} as Record<string, string> });
   return apiFetch<{ nicknames: Record<string, string> }>(
-    `/users/nicknames/batch?addresses=${addresses.join(",")}`
+    `/users/nicknames/batch?addresses=${addresses.join(",")}`,
   );
 }
 
@@ -248,7 +246,15 @@ export interface UserVote {
 
 export interface RewardSummary {
   unclaimedVotes: { novel_id: string; round: number; novel_title: string }[];
-  rewardClaims: { novel_id: string; source: string; amount: string; round: number | null; block_number: string; created_at: string; novel_title: string }[];
+  rewardClaims: {
+    novel_id: string;
+    source: string;
+    amount: string;
+    round: number | null;
+    block_number: string;
+    created_at: string;
+    novel_title: string;
+  }[];
   participatedNovels: { novel_id: string; novel_title: string }[];
 }
 
@@ -278,7 +284,7 @@ export interface Comment {
 
 export function fetchComments(chapterId: string, page = 1, limit = 20) {
   return apiFetch<{ comments: Comment[] }>(
-    `/chapters/${chapterId}/comments?page=${page}&limit=${limit}`
+    `/chapters/${chapterId}/comments?page=${page}&limit=${limit}`,
   );
 }
 

@@ -1,7 +1,13 @@
 import { Router } from "express";
-import { query } from "../db/index.js";
 
+import { query } from "../db/index.js";
+import { createLogger } from "../utils/logger.js";
+import { parsePositiveInt, validateIdParams } from "../utils/validate.js";
+
+const log = createLogger("api:bounties");
 const router = Router();
+
+router.use("/:id", validateIdParams("id"));
 
 // GET /api/bounties/active — Active bounties (not claimed, deadline in future)
 router.get("/active", async (req, res) => {
@@ -16,9 +22,11 @@ router.get("/active", async (req, res) => {
                WHERE b.claimed = FALSE AND b.deadline > $1`;
     const params: (string | number)[] = [nowEpoch];
 
-    if (novelId) {
+    if (novelId !== undefined) {
+      const n = parsePositiveInt(novelId);
+      if (n === null) return res.status(400).json({ error: "novelId must be a positive integer" });
       sql += ` AND b.novel_id = $2`;
-      params.push(String(novelId));
+      params.push(n);
     }
 
     sql += ` ORDER BY b.deadline ASC`;
@@ -26,7 +34,7 @@ router.get("/active", async (req, res) => {
     const result = await query(sql, params);
     res.json({ bounties: result.rows });
   } catch (err) {
-    console.error("GET /api/bounties/active error:", err);
+    log.error({ err }, "GET /api/bounties/active error");
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -41,7 +49,7 @@ router.get("/:id", async (req, res) => {
        JOIN chapters c ON c.id = b.chapter_id
        JOIN novels n ON n.id = b.novel_id
        WHERE b.id = $1`,
-      [id]
+      [id],
     );
 
     if (bountyRes.rows.length === 0) {
@@ -50,7 +58,7 @@ router.get("/:id", async (req, res) => {
 
     res.json(bountyRes.rows[0]);
   } catch (err) {
-    console.error("GET /api/bounties/:id error:", err);
+    log.error({ err }, "GET /api/bounties/:id error");
     res.status(500).json({ error: "Internal server error" });
   }
 });

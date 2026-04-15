@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useCallback, useState, useRef, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+import { useNicknames } from "@/hooks/use-nickname";
 import type { ChapterSummary } from "@/lib/api";
 import { timeAgo } from "@/lib/format";
-import { useNicknames } from "@/hooks/use-nickname";
 import { getReadSet } from "@/lib/reading-storage";
 
 interface StoryTreeProps {
@@ -32,7 +33,14 @@ const H_GAP = 24;
 const V_GAP = 40;
 const PADDING = 40;
 
-export function StoryTree({ chapters, novelId, hasMore, maxDepth, loading, onLoadMore }: StoryTreeProps) {
+export function StoryTree({
+  chapters,
+  novelId,
+  hasMore,
+  maxDepth,
+  loading,
+  onLoadMore,
+}: StoryTreeProps) {
   const router = useRouter();
   const displayName = useNicknames(chapters.map((c) => c.author));
   const containerRef = useRef<HTMLDivElement>(null);
@@ -45,7 +53,9 @@ export function StoryTree({ chapters, novelId, hasMore, maxDepth, loading, onLoa
 
   // Hydrate read set on the client to avoid SSR mismatch
   const [readSet, setReadSet] = useState<Set<string>>(new Set());
-  useEffect(() => { setReadSet(getReadSet()); }, []);
+  useEffect(() => {
+    setReadSet(getReadSet());
+  }, []);
 
   useEffect(() => {
     if (!isFullscreen) return;
@@ -81,7 +91,7 @@ export function StoryTree({ chapters, novelId, hasMore, maxDepth, loading, onLoa
     return m;
   }, [root]);
 
-  const selectedNode = selectedId ? nodeIndex.get(selectedId) ?? null : null;
+  const selectedNode = selectedId ? (nodeIndex.get(selectedId) ?? null) : null;
 
   // Center the tree only on first mount
   const initializedRef = useRef(false);
@@ -96,79 +106,106 @@ export function StoryTree({ chapters, novelId, hasMore, maxDepth, loading, onLoa
     });
   }, [root, totalWidth, totalHeight]);
 
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    e.preventDefault();
-    const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    const newScale = Math.max(0.2, Math.min(2.5, transform.scale * delta));
-    const rect = containerRef.current!.getBoundingClientRect();
-    const mx = e.clientX - rect.left;
-    const my = e.clientY - rect.top;
-    setTransform(prev => ({
-      x: mx - (mx - prev.x) * (newScale / prev.scale),
-      y: my - (my - prev.y) * (newScale / prev.scale),
-      scale: newScale,
-    }));
-  }, [transform.scale]);
+  const handleWheel = useCallback(
+    (e: React.WheelEvent) => {
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? 0.9 : 1.1;
+      const newScale = Math.max(0.2, Math.min(2.5, transform.scale * delta));
+      const rect = containerRef.current!.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      setTransform((prev) => ({
+        x: mx - (mx - prev.x) * (newScale / prev.scale),
+        y: my - (my - prev.y) * (newScale / prev.scale),
+        scale: newScale,
+      }));
+    },
+    [transform.scale],
+  );
 
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    if (e.button !== 0) return;
-    setDragging(true);
-    setDragStart({ x: e.clientX - transform.x, y: e.clientY - transform.y });
-  }, [transform]);
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      if (e.button !== 0) return;
+      setDragging(true);
+      setDragStart({ x: e.clientX - transform.x, y: e.clientY - transform.y });
+    },
+    [transform],
+  );
 
-  const handleMouseMove = useCallback((e: React.MouseEvent) => {
-    if (!dragging) return;
-    setTransform(prev => ({
-      ...prev,
-      x: e.clientX - dragStart.x,
-      y: e.clientY - dragStart.y,
-    }));
-  }, [dragging, dragStart]);
+  const handleMouseMove = useCallback(
+    (e: React.MouseEvent) => {
+      if (!dragging) return;
+      setTransform((prev) => ({
+        ...prev,
+        x: e.clientX - dragStart.x,
+        y: e.clientY - dragStart.y,
+      }));
+    },
+    [dragging, dragStart],
+  );
 
   const handleMouseUp = useCallback(() => setDragging(false), []);
 
   // Touch: 1 finger pan, 2 fingers pinch-zoom
   const touchRef = useRef<{
     mode: "pan" | "pinch" | null;
-    startX: number; startY: number;
-    initialDist: number; initialScale: number;
-    midX: number; midY: number;
-    initialTx: number; initialTy: number;
-  }>({ mode: null, startX: 0, startY: 0, initialDist: 0, initialScale: 1, midX: 0, midY: 0, initialTx: 0, initialTy: 0 });
+    startX: number;
+    startY: number;
+    initialDist: number;
+    initialScale: number;
+    midX: number;
+    midY: number;
+    initialTx: number;
+    initialTy: number;
+  }>({
+    mode: null,
+    startX: 0,
+    startY: 0,
+    initialDist: 0,
+    initialScale: 1,
+    midX: 0,
+    midY: 0,
+    initialTx: 0,
+    initialTy: 0,
+  });
 
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    const rect = containerRef.current!.getBoundingClientRect();
-    if (e.touches.length === 1) {
-      const t = e.touches[0];
-      touchRef.current = {
-        ...touchRef.current,
-        mode: "pan",
-        startX: t.clientX - transform.x,
-        startY: t.clientY - transform.y,
-      };
-    } else if (e.touches.length === 2) {
-      const [a, b] = [e.touches[0], e.touches[1]];
-      const dx = b.clientX - a.clientX;
-      const dy = b.clientY - a.clientY;
-      touchRef.current = {
-        mode: "pinch",
-        startX: 0, startY: 0,
-        initialDist: Math.hypot(dx, dy),
-        initialScale: transform.scale,
-        midX: (a.clientX + b.clientX) / 2 - rect.left,
-        midY: (a.clientY + b.clientY) / 2 - rect.top,
-        initialTx: transform.x,
-        initialTy: transform.y,
-      };
-    }
-  }, [transform]);
+  const handleTouchStart = useCallback(
+    (e: React.TouchEvent) => {
+      const rect = containerRef.current!.getBoundingClientRect();
+      if (e.touches.length === 1) {
+        const t = e.touches[0];
+        touchRef.current = {
+          ...touchRef.current,
+          mode: "pan",
+          startX: t.clientX - transform.x,
+          startY: t.clientY - transform.y,
+        };
+      } else if (e.touches.length === 2) {
+        const [a, b] = [e.touches[0], e.touches[1]];
+        const dx = b.clientX - a.clientX;
+        const dy = b.clientY - a.clientY;
+        touchRef.current = {
+          mode: "pinch",
+          startX: 0,
+          startY: 0,
+          initialDist: Math.hypot(dx, dy),
+          initialScale: transform.scale,
+          midX: (a.clientX + b.clientX) / 2 - rect.left,
+          midY: (a.clientY + b.clientY) / 2 - rect.top,
+          initialTx: transform.x,
+          initialTy: transform.y,
+        };
+      }
+    },
+    [transform],
+  );
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     const ref = touchRef.current;
     if (ref.mode === "pan" && e.touches.length === 1) {
       e.preventDefault();
       const t = e.touches[0];
-      setTransform(prev => ({ ...prev, x: t.clientX - ref.startX, y: t.clientY - ref.startY }));
+      setTransform((prev) => ({ ...prev, x: t.clientX - ref.startX, y: t.clientY - ref.startY }));
     } else if (ref.mode === "pinch" && e.touches.length === 2) {
       e.preventDefault();
       const [a, b] = [e.touches[0], e.touches[1]];
@@ -183,23 +220,30 @@ export function StoryTree({ chapters, novelId, hasMore, maxDepth, loading, onLoa
     }
   }, []);
 
-  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
-    if (e.touches.length === 0) {
-      touchRef.current.mode = null;
-    } else if (e.touches.length === 1 && touchRef.current.mode === "pinch") {
-      // Downgrade pinch → pan
-      const t = e.touches[0];
-      touchRef.current = {
-        ...touchRef.current,
-        mode: "pan",
-        startX: t.clientX - transform.x,
-        startY: t.clientY - transform.y,
-      };
-    }
-  }, [transform]);
+  const handleTouchEnd = useCallback(
+    (e: React.TouchEvent) => {
+      if (e.touches.length === 0) {
+        touchRef.current.mode = null;
+      } else if (e.touches.length === 1 && touchRef.current.mode === "pinch") {
+        // Downgrade pinch → pan
+        const t = e.touches[0];
+        touchRef.current = {
+          ...touchRef.current,
+          mode: "pan",
+          startX: t.clientX - transform.x,
+          startY: t.clientY - transform.y,
+        };
+      }
+    },
+    [transform],
+  );
 
   if (!root) {
-    return <div className="text-caption on-text-center" style={{ padding: "2rem" }}>No chapters to display</div>;
+    return (
+      <div className="text-caption on-text-center" style={{ padding: "2rem" }}>
+        No chapters to display
+      </div>
+    );
   }
 
   return (
@@ -217,10 +261,17 @@ export function StoryTree({ chapters, novelId, hasMore, maxDepth, loading, onLoa
       onTouchCancel={handleTouchEnd}
     >
       {/* Toolbar */}
-      <div style={{
-        position: "absolute", top: "0.5rem", right: "0.5rem", zIndex: 10,
-        display: "flex", gap: "0.5rem", alignItems: "center",
-      }}>
+      <div
+        style={{
+          position: "absolute",
+          top: "0.5rem",
+          right: "0.5rem",
+          zIndex: 10,
+          display: "flex",
+          gap: "0.5rem",
+          alignItems: "center",
+        }}
+      >
         {hasMore && onLoadMore && (
           <>
             <span className="text-tiny" style={{ color: "var(--color-text-muted)" }}>
@@ -242,11 +293,18 @@ export function StoryTree({ chapters, novelId, hasMore, maxDepth, loading, onLoa
           onClick={toggleFullscreen}
           title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
           style={{
-            width: "2rem", height: "2rem", borderRadius: "0.375rem",
-            border: "1px solid var(--color-border)", background: "var(--color-bg)",
-            color: "var(--color-text-muted)", cursor: "pointer",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: "1rem", lineHeight: 1,
+            width: "2rem",
+            height: "2rem",
+            borderRadius: "0.375rem",
+            border: "1px solid var(--color-border)",
+            background: "var(--color-bg)",
+            color: "var(--color-text-muted)",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: "1rem",
+            lineHeight: 1,
           }}
         >
           {isFullscreen ? "⊡" : "⛶"}
@@ -272,18 +330,27 @@ export function StoryTree({ chapters, novelId, hasMore, maxDepth, loading, onLoa
         >
           <div className="on-row-between" style={{ marginBottom: "0.5rem", alignItems: "center" }}>
             <span className="text-caption" style={{ fontWeight: 600 }}>
-              ID.{selectedNode.id} <span className="text-muted" style={{ fontWeight: 400 }}>#{selectedNode.chapter.depth}</span>
+              ID.{selectedNode.id}{" "}
+              <span className="text-muted" style={{ fontWeight: 400 }}>
+                #{selectedNode.chapter.depth}
+              </span>
             </span>
             <button
               type="button"
               onClick={() => setSelectedId(null)}
               aria-label="Close"
               style={{
-                width: "1.5rem", height: "1.5rem",
-                background: "transparent", border: "none", cursor: "pointer",
-                color: "var(--color-text-muted)", fontSize: "1rem",
+                width: "1.5rem",
+                height: "1.5rem",
+                background: "transparent",
+                border: "none",
+                cursor: "pointer",
+                color: "var(--color-text-muted)",
+                fontSize: "1rem",
               }}
-            >×</button>
+            >
+              ×
+            </button>
           </div>
           <div className="on-stack" style={{ gap: "0.375rem" }}>
             <Link
@@ -303,7 +370,10 @@ export function StoryTree({ chapters, novelId, hasMore, maxDepth, loading, onLoa
                 const chain = chainFromRoot(root!, leaf.id);
                 let startIdx = 0;
                 for (let i = chain.length - 1; i >= 0; i--) {
-                  if (readSet.has(chain[i].id)) { startIdx = i; break; }
+                  if (readSet.has(chain[i].id)) {
+                    startIdx = i;
+                    break;
+                  }
                 }
                 router.push(`/novels/${novelId}/read/${leaf.id}?depth=${startIdx + 1}`);
               }}
@@ -314,16 +384,20 @@ export function StoryTree({ chapters, novelId, hasMore, maxDepth, loading, onLoa
         </div>
       )}
 
-      <svg
-        width="100%"
-        height="100%"
-        style={{ cursor: dragging ? "grabbing" : "grab" }}
-      >
+      <svg width="100%" height="100%" style={{ cursor: dragging ? "grabbing" : "grab" }}>
         <g transform={`translate(${transform.x}, ${transform.y}) scale(${transform.scale})`}>
           {/* Edges */}
           {renderEdges(root)}
           {/* Nodes */}
-          {renderNodes(root, hoveredId, setHoveredId, selectedId, setSelectedId, readSet, displayName)}
+          {renderNodes(
+            root,
+            hoveredId,
+            setHoveredId,
+            selectedId,
+            setSelectedId,
+            readSet,
+            displayName,
+          )}
         </g>
       </svg>
     </div>
@@ -347,7 +421,7 @@ function renderEdges(node: TreeNode): React.ReactNode[] {
         stroke="var(--color-text-muted)"
         strokeWidth={2}
         opacity={0.6}
-      />
+      />,
     );
     edges.push(...renderEdges(child));
   }
@@ -484,11 +558,21 @@ function renderNodes(
           opacity={0.6}
         />
       )}
-    </g>
+    </g>,
   );
 
   for (const child of node.children) {
-    nodes.push(...renderNodes(child, hoveredId, setHoveredId, selectedId, setSelectedId, readSet, displayName));
+    nodes.push(
+      ...renderNodes(
+        child,
+        hoveredId,
+        setHoveredId,
+        selectedId,
+        setSelectedId,
+        readSet,
+        displayName,
+      ),
+    );
   }
 
   return nodes;
@@ -506,7 +590,10 @@ function findDeepestDescendant(node: TreeNode): TreeNode {
     let bestDepth = depth(best);
     for (let i = 1; i < current.children.length; i++) {
       const d = depth(current.children[i]);
-      if (d > bestDepth) { best = current.children[i]; bestDepth = d; }
+      if (d > bestDepth) {
+        best = current.children[i];
+        bestDepth = d;
+      }
     }
     current = best;
   }
@@ -527,7 +614,11 @@ function chainFromRoot(root: TreeNode, targetId: string): TreeNode[] {
   return path;
 }
 
-function layoutTree(chapters: ChapterSummary[]): { root: TreeNode | null; totalWidth: number; totalHeight: number } {
+function layoutTree(chapters: ChapterSummary[]): {
+  root: TreeNode | null;
+  totalWidth: number;
+  totalHeight: number;
+} {
   if (chapters.length === 0) return { root: null, totalWidth: 0, totalHeight: 0 };
 
   // Build tree structure
@@ -567,7 +658,8 @@ function layoutTree(chapters: ChapterSummary[]): { root: TreeNode | null; totalW
   function calcWidth(node: TreeNode): number {
     if (node.children.length === 0) return NODE_WIDTH;
     const childWidths = node.children.map(calcWidth);
-    const totalChildWidth = childWidths.reduce((sum, w) => sum + w, 0) + (node.children.length - 1) * H_GAP;
+    const totalChildWidth =
+      childWidths.reduce((sum, w) => sum + w, 0) + (node.children.length - 1) * H_GAP;
     return Math.max(NODE_WIDTH, totalChildWidth);
   }
 
@@ -583,7 +675,8 @@ function layoutTree(chapters: ChapterSummary[]): { root: TreeNode | null; totalW
     }
 
     const childWidths = node.children.map(calcWidth);
-    const totalChildWidth = childWidths.reduce((sum, w) => sum + w, 0) + (node.children.length - 1) * H_GAP;
+    const totalChildWidth =
+      childWidths.reduce((sum, w) => sum + w, 0) + (node.children.length - 1) * H_GAP;
 
     // Center this node above its children
     node.x = x + (totalChildWidth - NODE_WIDTH) / 2;

@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import type { ChapterSummary } from "@/lib/api";
+
 import { useNicknames } from "@/hooks/use-nickname";
+import type { ChapterSummary } from "@/lib/api";
 
 interface ChapterCardMiniProps {
   chapter: ChapterSummary;
@@ -28,9 +29,7 @@ export function ChapterCardMini({
         style={{
           padding: "0.5rem 0.75rem",
           borderRadius: "0.5rem",
-          border: highlight
-            ? "2px solid var(--color-primary)"
-            : "1px solid var(--color-border)",
+          border: highlight ? "2px solid var(--color-primary)" : "1px solid var(--color-border)",
           background: "var(--color-bg)",
           transition: "box-shadow 0.2s",
         }}

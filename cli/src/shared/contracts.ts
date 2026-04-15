@@ -1,16 +1,17 @@
 import {
-  type PublicClient,
-  type WalletClient,
-  type Hash,
   encodePacked,
   keccak256,
   toHex,
+  type Hash,
+  type PublicClient,
+  type WalletClient,
 } from "viem";
+
 import {
-  novelCoreAbi,
-  roundManagerAbi,
-  prizePoolAbi,
   bountyBoardAbi,
+  novelCoreAbi,
+  prizePoolAbi,
+  roundManagerAbi,
   rulesEngineAbi,
   userRegistryAbi,
 } from "./abi.js";
@@ -169,7 +170,7 @@ export interface SetCreatorRulesParams {
 export function computeCommitHash(
   voter: `0x${string}`,
   candidateId: bigint,
-  salt: `0x${string}`
+  salt: `0x${string}`,
 ): `0x${string}` {
   return keccak256(encodePacked(["address", "uint64", "bytes32"], [voter, candidateId, salt]));
 }
@@ -284,7 +285,10 @@ export async function createNovel(client: WalletClient, params: CreateNovelParam
   });
 }
 
-export async function submitChapter(client: WalletClient, params: SubmitChapterParams): Promise<Hash> {
+export async function submitChapter(
+  client: WalletClient,
+  params: SubmitChapterParams,
+): Promise<Hash> {
   return client.writeContract({
     address: params.novelCore,
     abi: novelCoreAbi,
@@ -308,7 +312,11 @@ export async function forkNovel(client: WalletClient, params: ForkNovelParams): 
   });
 }
 
-export async function claimReward(client: WalletClient, novelId: bigint, novelCore: `0x${string}`): Promise<Hash> {
+export async function claimReward(
+  client: WalletClient,
+  novelId: bigint,
+  novelCore: `0x${string}`,
+): Promise<Hash> {
   return client.writeContract({
     address: novelCore,
     abi: novelCoreAbi,
@@ -372,7 +380,11 @@ export async function closeNomination(
   });
 }
 
-export async function closeCommit(client: WalletClient, novelId: bigint, roundManager: `0x${string}`): Promise<Hash> {
+export async function closeCommit(
+  client: WalletClient,
+  novelId: bigint,
+  roundManager: `0x${string}`,
+): Promise<Hash> {
   return client.writeContract({
     address: roundManager,
     abi: roundManagerAbi,
@@ -394,7 +406,10 @@ export async function settleRound(client: WalletClient, params: SettleRoundParam
   });
 }
 
-export async function nominateCandidate(client: WalletClient, params: NominateCandidateParams): Promise<Hash> {
+export async function nominateCandidate(
+  client: WalletClient,
+  params: NominateCandidateParams,
+): Promise<Hash> {
   return client.writeContract({
     address: params.roundManager,
     abi: roundManagerAbi,
@@ -422,7 +437,10 @@ export async function claimVotingReward(
   });
 }
 
-export async function completeNovel(client: WalletClient, params: CompleteNovelParams): Promise<Hash> {
+export async function completeNovel(
+  client: WalletClient,
+  params: CompleteNovelParams,
+): Promise<Hash> {
   return client.writeContract({
     address: params.roundManager,
     abi: roundManagerAbi,
@@ -484,7 +502,10 @@ export async function setNickname(
 // BountyBoard / RulesEngine writes
 // ============================================================
 
-export async function createBounty(client: WalletClient, params: CreateBountyParams): Promise<Hash> {
+export async function createBounty(
+  client: WalletClient,
+  params: CreateBountyParams,
+): Promise<Hash> {
   return client.writeContract({
     address: params.bountyBoard,
     abi: bountyBoardAbi,
@@ -502,7 +523,10 @@ export interface DesignateBountyParams {
   bountyBoard: `0x${string}`;
 }
 
-export async function designateBounty(client: WalletClient, params: DesignateBountyParams): Promise<Hash> {
+export async function designateBounty(
+  client: WalletClient,
+  params: DesignateBountyParams,
+): Promise<Hash> {
   return client.writeContract({
     address: params.bountyBoard,
     abi: bountyBoardAbi,
@@ -513,7 +537,11 @@ export async function designateBounty(client: WalletClient, params: DesignateBou
   });
 }
 
-export async function claimBounty(client: WalletClient, bountyId: bigint, bountyBoard: `0x${string}`): Promise<Hash> {
+export async function claimBounty(
+  client: WalletClient,
+  bountyId: bigint,
+  bountyBoard: `0x${string}`,
+): Promise<Hash> {
   return client.writeContract({
     address: bountyBoard,
     abi: bountyBoardAbi,
@@ -539,7 +567,10 @@ export async function refundBounty(
   });
 }
 
-export async function setCreatorRules(client: WalletClient, params: SetCreatorRulesParams): Promise<Hash> {
+export async function setCreatorRules(
+  client: WalletClient,
+  params: SetCreatorRulesParams,
+): Promise<Hash> {
   return client.writeContract({
     address: params.rulesEngine,
     abi: rulesEngineAbi,
@@ -562,7 +593,10 @@ export async function proposeRule(client: WalletClient, params: ProposeRuleParam
   });
 }
 
-export async function voteOnRuleProposal(client: WalletClient, params: VoteOnRuleProposalParams): Promise<Hash> {
+export async function voteOnRuleProposal(
+  client: WalletClient,
+  params: VoteOnRuleProposalParams,
+): Promise<Hash> {
   return client.writeContract({
     address: params.rulesEngine,
     abi: rulesEngineAbi,
@@ -586,7 +620,11 @@ export async function getNovel(client: PublicClient, novelId: bigint, novelCore:
   });
 }
 
-export async function getChapter(client: PublicClient, chapterId: bigint, novelCore: `0x${string}`) {
+export async function getChapter(
+  client: PublicClient,
+  chapterId: bigint,
+  novelCore: `0x${string}`,
+) {
   return client.readContract({
     address: novelCore,
     abi: novelCoreAbi,
@@ -595,7 +633,11 @@ export async function getChapter(client: PublicClient, chapterId: bigint, novelC
   });
 }
 
-export async function getWorldLineAncestors(client: PublicClient, novelId: bigint, novelCore: `0x${string}`) {
+export async function getWorldLineAncestors(
+  client: PublicClient,
+  novelId: bigint,
+  novelCore: `0x${string}`,
+) {
   return client.readContract({
     address: novelCore,
     abi: novelCoreAbi,
@@ -618,7 +660,11 @@ export async function getRoundData(
   });
 }
 
-export async function getNovelMetadata(client: PublicClient, novelId: bigint, novelCore: `0x${string}`) {
+export async function getNovelMetadata(
+  client: PublicClient,
+  novelId: bigint,
+  novelCore: `0x${string}`,
+) {
   return client.readContract({
     address: novelCore,
     abi: novelCoreAbi,
@@ -627,7 +673,11 @@ export async function getNovelMetadata(client: PublicClient, novelId: bigint, no
   });
 }
 
-export async function getPoolBalance(client: PublicClient, novelId: bigint, prizePool: `0x${string}`) {
+export async function getPoolBalance(
+  client: PublicClient,
+  novelId: bigint,
+  prizePool: `0x${string}`,
+) {
   return client.readContract({
     address: prizePool,
     abi: prizePoolAbi,
@@ -636,7 +686,11 @@ export async function getPoolBalance(client: PublicClient, novelId: bigint, priz
   });
 }
 
-export async function getRuleNames(client: PublicClient, novelId: bigint, rulesEngine: `0x${string}`) {
+export async function getRuleNames(
+  client: PublicClient,
+  novelId: bigint,
+  rulesEngine: `0x${string}`,
+) {
   return client.readContract({
     address: rulesEngine,
     abi: rulesEngineAbi,
@@ -645,7 +699,12 @@ export async function getRuleNames(client: PublicClient, novelId: bigint, rulesE
   });
 }
 
-export async function getRule(client: PublicClient, novelId: bigint, name: string, rulesEngine: `0x${string}`) {
+export async function getRule(
+  client: PublicClient,
+  novelId: bigint,
+  name: string,
+  rulesEngine: `0x${string}`,
+) {
   return client.readContract({
     address: rulesEngine,
     abi: rulesEngineAbi,
@@ -654,7 +713,11 @@ export async function getRule(client: PublicClient, novelId: bigint, name: strin
   });
 }
 
-export async function getRuleProposal(client: PublicClient, proposalId: bigint, rulesEngine: `0x${string}`) {
+export async function getRuleProposal(
+  client: PublicClient,
+  proposalId: bigint,
+  rulesEngine: `0x${string}`,
+) {
   return client.readContract({
     address: rulesEngine,
     abi: rulesEngineAbi,
@@ -663,7 +726,11 @@ export async function getRuleProposal(client: PublicClient, proposalId: bigint, 
   });
 }
 
-export async function getNickname(client: PublicClient, user: `0x${string}`, userRegistry: `0x${string}`) {
+export async function getNickname(
+  client: PublicClient,
+  user: `0x${string}`,
+  userRegistry: `0x${string}`,
+) {
   return client.readContract({
     address: userRegistry,
     abi: userRegistryAbi,

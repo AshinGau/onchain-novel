@@ -1,12 +1,13 @@
 import { Command } from "commander";
 import { parseEther } from "viem";
+
 import {
-  tipNovel as tipNovelTx,
-  tipChapter as tipChapterTx,
   claimReward as claimRewardTx,
+  tipChapter as tipChapterTx,
+  tipNovel as tipNovelTx,
 } from "../shared/index.js";
-import { getWalletClient, getContracts, waitForTx } from "../utils/client.js";
-import { success, error, txHash } from "../utils/format.js";
+import { getContracts, getWalletClient, waitForTx } from "../utils/client.js";
+import { error, success, txHash } from "../utils/format.js";
 
 export function registerTipCommands(program: Command): void {
   const tip = program.command("tip").description("Tip novels or chapters");

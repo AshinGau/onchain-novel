@@ -1,10 +1,7 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import {
-  useWriteContract,
-  useWaitForTransactionReceipt,
-} from "wagmi";
+import { useCallback, useState } from "react";
+import { useWaitForTransactionReceipt, useWriteContract } from "wagmi";
 
 type TxStatus = "idle" | "confirming" | "waiting" | "success" | "error";
 
@@ -27,7 +24,7 @@ export function useTxAction() {
     async (
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       params: any,
-      onSuccess?: () => void
+      onSuccess?: () => void,
     ) => {
       setStatus("confirming");
       setError(null);
@@ -46,13 +43,10 @@ export function useTxAction() {
             try {
               const { createPublicClient, http } = await import("viem");
               const { foundry, base } = await import("wagmi/chains");
-              const chain =
-                process.env.NEXT_PUBLIC_CHAIN === "base" ? base : foundry;
+              const chain = process.env.NEXT_PUBLIC_CHAIN === "base" ? base : foundry;
               const client = createPublicClient({
                 chain,
-                transport: http(
-                  process.env.NEXT_PUBLIC_RPC_URL || "http://localhost:8545"
-                ),
+                transport: http(process.env.NEXT_PUBLIC_RPC_URL || "http://localhost:8545"),
               });
               const receipt = await client.getTransactionReceipt({ hash });
               if (receipt) {
@@ -75,8 +69,7 @@ export function useTxAction() {
         waitForReceipt();
       } catch (err: unknown) {
         setStatus("error");
-        const msg =
-          err instanceof Error ? err.message : "Transaction rejected";
+        const msg = err instanceof Error ? err.message : "Transaction rejected";
         // Extract user-readable part
         if (msg.includes("User rejected")) {
           setError("Transaction cancelled");
@@ -85,7 +78,7 @@ export function useTxAction() {
         }
       }
     },
-    [writeContractAsync]
+    [writeContractAsync],
   );
 
   const reset = useCallback(() => {

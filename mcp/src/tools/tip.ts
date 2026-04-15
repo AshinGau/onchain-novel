@@ -1,10 +1,11 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { formatEther, parseEther } from "viem";
 import { z } from "zod";
-import { parseEther, formatEther } from "viem";
-import { tipNovel, tipChapter } from "../shared/index.js";
+
 import { config } from "../config.js";
+import { tipChapter, tipNovel } from "../shared/index.js";
 import { getPublicClient, getWalletClient } from "../utils/client.js";
-import { ok, fail } from "../utils/response.js";
+import { fail, ok } from "../utils/response.js";
 
 export function registerTipTools(server: McpServer): void {
   // ── tip_novel ──
@@ -26,7 +27,9 @@ export function registerTipTools(server: McpServer): void {
           prizePool: config.prizePool,
         });
         const receipt = await pub.waitForTransactionReceipt({ hash });
-        return ok(`Tipped Novel #${params.novelId} with ${formatEther(amount)} ETH.\nTx: ${hash}\nBlock: ${receipt.blockNumber}`);
+        return ok(
+          `Tipped Novel #${params.novelId} with ${formatEther(amount)} ETH.\nTx: ${hash}\nBlock: ${receipt.blockNumber}`,
+        );
       } catch (error) {
         return fail(`Failed: ${error instanceof Error ? error.message : String(error)}`);
       }
@@ -52,7 +55,9 @@ export function registerTipTools(server: McpServer): void {
           prizePool: config.prizePool,
         });
         const receipt = await pub.waitForTransactionReceipt({ hash });
-        return ok(`Tipped Chapter #${params.chapterId} with ${formatEther(amount)} ETH.\nTx: ${hash}\nBlock: ${receipt.blockNumber}`);
+        return ok(
+          `Tipped Chapter #${params.chapterId} with ${formatEther(amount)} ETH.\nTx: ${hash}\nBlock: ${receipt.blockNumber}`,
+        );
       } catch (error) {
         return fail(`Failed: ${error instanceof Error ? error.message : String(error)}`);
       }

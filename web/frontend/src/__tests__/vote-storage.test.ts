@@ -1,11 +1,6 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import {
-  saveVote,
-  loadVote,
-  clearVote,
-  generateSalt,
-  computeCommitHash,
-} from "@/lib/vote-storage";
+import { beforeEach, describe, expect, it } from "vitest";
+
+import { clearVote, computeCommitHash, generateSalt, loadVote, saveVote } from "@/lib/vote-storage";
 
 beforeEach(() => {
   localStorage.clear();

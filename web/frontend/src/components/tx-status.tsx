@@ -2,7 +2,11 @@
 
 type TxStatus = "idle" | "confirming" | "waiting" | "success" | "error";
 
-export function TxStatusLabel({ status, error, successText = "Done!" }: {
+export function TxStatusLabel({
+  status,
+  error,
+  successText = "Done!",
+}: {
   status: TxStatus;
   error?: string | null;
   successText?: string;

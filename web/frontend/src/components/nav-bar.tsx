@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { ConnectButton } from "@rainbow-me/rainbowkit";
+import { BookOpen, LayoutDashboard, Menu, Plus, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BookOpen, Menu, X, Plus, LayoutDashboard } from "lucide-react";
-import { ConnectButton } from "@rainbow-me/rainbowkit";
-import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { useState } from "react";
+
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 
 const NAV_LINKS = [
   { href: "/novels", label: "Novels" },

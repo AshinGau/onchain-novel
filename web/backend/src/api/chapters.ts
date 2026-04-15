@@ -1,15 +1,21 @@
 import { Router } from "express";
-import { query } from "../db/index.js";
-import { verifyEip191 } from "../utils/auth.js";
-import { safeInt } from "../utils/validate.js";
 
+import { getClient, query } from "../db/index.js";
+import { verifyEip191 } from "../utils/auth.js";
+import { createLogger } from "../utils/logger.js";
+import { isAddress, parsePagination, safeInt, validateIdParams } from "../utils/validate.js";
+
+const log = createLogger("api:chapters");
 const router = Router();
+
+// All routes expect :id to be a positive integer chapter id.
+router.use("/:id", validateIdParams("id"));
 
 // Per-address rate limit for comments: 10 per chapter per hour, enforced inline
 const COMMENT_WINDOW_MS = 60 * 60 * 1000;
 const COMMENT_MAX_PER_WINDOW = 10;
 // Reject signed messages older than this (replay protection)
-const COMMENT_TIMESTAMP_TOLERANCE_MS = 5 * 60 * 1000;
+const COMMENT_TIMESTAMP_TOLERANCE_MS = 60 * 1000;
 
 // GET /api/chapters/:id — Chapter detail with content
 router.get("/:id", async (req, res) => {
@@ -20,7 +26,7 @@ router.get("/:id", async (req, res) => {
        FROM chapters c
        JOIN novels n ON n.id = c.novel_id
        WHERE c.id = $1`,
-      [id]
+      [id],
     );
 
     if (chapterRes.rows.length === 0) {
@@ -29,7 +35,7 @@ router.get("/:id", async (req, res) => {
 
     res.json(chapterRes.rows[0]);
   } catch (err) {
-    console.error("GET /api/chapters/:id error:", err);
+    log.error({ err }, "GET /api/chapters/:id error");
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -48,39 +54,55 @@ router.get("/:id/siblings", async (req, res) => {
       `SELECT id, author, depth, "timestamp", is_world_line, declared_length
        FROM chapters WHERE novel_id = $1 AND parent_id = $2 AND id != $3
        ORDER BY "timestamp" DESC`,
-      [novel_id, parent_id, id]
+      [novel_id, parent_id, id],
     );
 
     res.json({ siblings: siblingsRes.rows });
   } catch (err) {
-    console.error("GET /api/chapters/:id/siblings error:", err);
+    log.error({ err }, "GET /api/chapters/:id/siblings error");
     res.status(500).json({ error: "Internal server error" });
   }
 });
 
-// GET /api/chapters/:id/children — Direct children
+// GET /api/chapters/:id/children — Direct children (paginated)
 router.get("/:id/children", async (req, res) => {
   try {
     const { id } = req.params;
-    const childrenRes = await query(
-      `SELECT id, author, depth, "timestamp", is_world_line, declared_length
-       FROM chapters WHERE parent_id = $1
-       ORDER BY "timestamp" DESC`,
-      [id]
-    );
-    res.json({ children: childrenRes.rows });
+    const { page, limit, offset } = parsePagination(req.query, {
+      defaultLimit: 50,
+      maxLimit: 200,
+    });
+
+    const [childrenRes, countRes] = await Promise.all([
+      query(
+        `SELECT id, author, depth, "timestamp", is_world_line, declared_length
+         FROM chapters WHERE parent_id = $1
+         ORDER BY "timestamp" DESC, id DESC
+         LIMIT $2 OFFSET $3`,
+        [id, limit, offset],
+      ),
+      query(`SELECT COUNT(*)::int AS n FROM chapters WHERE parent_id = $1`, [id]),
+    ]);
+    res.json({
+      children: childrenRes.rows,
+      pagination: { page, limit, total: countRes.rows[0]?.n ?? 0 },
+    });
   } catch (err) {
-    console.error("GET /api/chapters/:id/children error:", err);
+    log.error({ err }, "GET /api/chapters/:id/children error");
     res.status(500).json({ error: "Internal server error" });
   }
 });
 
 // GET /api/chapters/:id/context — Ancestor chain for writing context
 router.get("/:id/context", async (req, res) => {
+  const client = await getClient();
   try {
     const { id } = req.params;
+    const maxDepth = safeInt(req.query.maxDepth, 100, 1, 200);
 
-    const ancestorsRes = await query(
+    await client.query("BEGIN");
+    await client.query("SET LOCAL statement_timeout = '3s'");
+    const ancestorsRes = await client.query(
       `WITH RECURSIVE chain AS (
          SELECT id, parent_id, author, depth, content_text, content_fetched, is_world_line, "timestamp", 0 AS chain_depth
          FROM chapters WHERE id = $1
@@ -88,17 +110,21 @@ router.get("/:id/context", async (req, res) => {
          SELECT c.id, c.parent_id, c.author, c.depth, c.content_text, c.content_fetched, c.is_world_line, c."timestamp", chain.chain_depth + 1
          FROM chapters c
          INNER JOIN chain ON c.id = chain.parent_id
-         WHERE chain.parent_id != '0' AND chain.parent_id::bigint > 0 AND chain.chain_depth < 100
+         WHERE chain.parent_id != 0 AND chain.chain_depth < $2
        )
        SELECT id, parent_id, author, depth, content_text, content_fetched, is_world_line, "timestamp"
        FROM chain ORDER BY chain_depth DESC`,
-      [id]
+      [id, maxDepth],
     );
+    await client.query("COMMIT");
 
     res.json({ ancestors: ancestorsRes.rows });
   } catch (err) {
-    console.error("GET /api/chapters/:id/context error:", err);
+    await client.query("ROLLBACK").catch(() => {});
+    log.error({ err }, "GET /api/chapters/:id/context error");
     res.status(500).json({ error: "Internal server error" });
+  } finally {
+    client.release();
   }
 });
 
@@ -106,17 +132,15 @@ router.get("/:id/context", async (req, res) => {
 router.get("/:id/comments", async (req, res) => {
   try {
     const { id } = req.params;
-    const page = safeInt(req.query.page, 1, 1, 1000);
-    const limit = safeInt(req.query.limit, 20, 1, 50);
-    const offset = (page - 1) * limit;
+    const { page, limit, offset } = parsePagination(req.query);
 
     const commentsRes = await query(
       "SELECT id, chapter_id, author, content, created_at FROM comments WHERE chapter_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3",
-      [id, limit, offset]
+      [id, limit, offset],
     );
     res.json({ comments: commentsRes.rows });
   } catch (err) {
-    console.error("GET /api/chapters/:id/comments error:", err);
+    log.error({ err }, "GET /api/chapters/:id/comments error");
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -131,13 +155,18 @@ router.post("/:id/comments", async (req, res) => {
     const { id } = req.params;
     const { address, content, timestamp, signature } = req.body ?? {};
 
-    if (typeof address !== "string" || typeof signature !== "string") {
+    if (!isAddress(address) || typeof signature !== "string") {
       return res.status(400).json({ error: "address and signature are required" });
     }
-    if (typeof content !== "string" || content.trim().length === 0) {
+    if (typeof content !== "string") {
       return res.status(400).json({ error: "content is required" });
     }
-    if (content.length > 5000) {
+    // Canonicalize BEFORE signature check so client/server agree on the signed bytes.
+    const cleanContent = content.trim();
+    if (cleanContent.length === 0) {
+      return res.status(400).json({ error: "content is required" });
+    }
+    if (cleanContent.length > 5000) {
       return res.status(400).json({ error: "content must be 5000 characters or less" });
     }
     const ts = Number(timestamp);
@@ -157,8 +186,8 @@ router.post("/:id/comments", async (req, res) => {
       return res.status(404).json({ error: "chapter not found" });
     }
 
-    // Verify EIP-191 signature against canonical message
-    const message = `Comment on chapter ${id} at ${ts}: ${content}`;
+    // Verify EIP-191 signature against canonical message (uses the same trimmed content that will be persisted)
+    const message = `Comment on chapter ${id} at ${ts}: ${cleanContent}`;
     const verified = await verifyEip191(address, message, signature);
     if (!verified) {
       return res.status(401).json({ error: "invalid signature" });
@@ -166,8 +195,8 @@ router.post("/:id/comments", async (req, res) => {
 
     // Per-address rate limit on this chapter
     const rateRes = await query(
-      "SELECT COUNT(*)::int AS n FROM comments WHERE chapter_id = $1 AND LOWER(author) = $2 AND created_at > NOW() - ($3 || ' milliseconds')::interval",
-      [id, verified, COMMENT_WINDOW_MS]
+      "SELECT COUNT(*)::int AS n FROM comments WHERE chapter_id = $1 AND author = $2 AND created_at > NOW() - ($3 || ' milliseconds')::interval",
+      [id, verified, COMMENT_WINDOW_MS],
     );
     if (rateRes.rows[0].n >= COMMENT_MAX_PER_WINDOW) {
       return res.status(429).json({ error: "rate limit exceeded for this chapter" });
@@ -175,42 +204,44 @@ router.post("/:id/comments", async (req, res) => {
 
     const result = await query(
       "INSERT INTO comments (chapter_id, author, content, signature) VALUES ($1, $2, $3, $4) RETURNING id, chapter_id, author, content, created_at",
-      [id, verified, content.trim(), signature]
+      [id, verified, cleanContent, signature],
     );
 
     res.status(201).json(result.rows[0]);
   } catch (err) {
-    console.error("POST /api/chapters/:id/comments error:", err);
+    log.error({ err }, "POST /api/chapters/:id/comments error");
     res.status(500).json({ error: "Internal server error" });
   }
 });
 
-// GET /api/chapters/:id/bounties — Bounties targeting this chapter
+// GET /api/chapters/:id/bounties — Bounties targeting this chapter (paginated)
 router.get("/:id/bounties", async (req, res) => {
   try {
     const { id } = req.params;
+    const { page, limit, offset } = parsePagination(req.query);
     const bountiesRes = await query(
-      "SELECT * FROM bounties WHERE chapter_id = $1 ORDER BY block_number DESC",
-      [id]
+      "SELECT * FROM bounties WHERE chapter_id = $1 ORDER BY block_number DESC LIMIT $2 OFFSET $3",
+      [id, limit, offset],
     );
-    res.json({ bounties: bountiesRes.rows });
+    res.json({ bounties: bountiesRes.rows, pagination: { page, limit } });
   } catch (err) {
-    console.error("GET /api/chapters/:id/bounties error:", err);
+    log.error({ err }, "GET /api/chapters/:id/bounties error");
     res.status(500).json({ error: "Internal server error" });
   }
 });
 
-// GET /api/chapters/:id/tips — Tips for this chapter
+// GET /api/chapters/:id/tips — Tips for this chapter (paginated)
 router.get("/:id/tips", async (req, res) => {
   try {
     const { id } = req.params;
+    const { page, limit, offset } = parsePagination(req.query);
     const tipsRes = await query(
-      "SELECT * FROM chapter_tips WHERE chapter_id = $1 ORDER BY block_number DESC",
-      [id]
+      "SELECT * FROM chapter_tips WHERE chapter_id = $1 ORDER BY block_number DESC LIMIT $2 OFFSET $3",
+      [id, limit, offset],
     );
-    res.json({ tips: tipsRes.rows });
+    res.json({ tips: tipsRes.rows, pagination: { page, limit } });
   } catch (err) {
-    console.error("GET /api/chapters/:id/tips error:", err);
+    log.error({ err }, "GET /api/chapters/:id/tips error");
     res.status(500).json({ error: "Internal server error" });
   }
 });

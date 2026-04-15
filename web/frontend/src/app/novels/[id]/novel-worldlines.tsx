@@ -1,10 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { ChapterSummary } from "@/lib/api";
+
 import { ChainColumn } from "@/components/chain-column";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { buildTree, findDeepestLeaf, getChainToNode, type TreeNode } from "@/hooks/use-novel";
+import type { ChapterSummary } from "@/lib/api";
 
 interface Props {
   novelId: string;
@@ -163,20 +164,24 @@ function OtherBranches({ data, novelId }: { data: WorldlineData[]; novelId: stri
                     {branch.length > 2
                       ? ` → ... ${branch.length - 2} chapter${branch.length - 2 !== 1 ? "s" : ""} ... → `
                       : branch.length === 2
-                      ? " → "
-                      : ""}
+                        ? " → "
+                        : ""}
                     {branch.length > 1 ? `ID.${last.id}` : ""}
                   </span>
                   <a
                     href={`/novels/${novelId}/read/${last.id}`}
                     className="on-btn on-btn-secondary"
-                    style={{ textDecoration: "none", padding: "0.25rem 0.75rem", fontSize: "0.75rem" }}
+                    style={{
+                      textDecoration: "none",
+                      padding: "0.25rem 0.75rem",
+                      fontSize: "0.75rem",
+                    }}
                   >
                     Read
                   </a>
                 </div>
               );
-            })
+            }),
           )}
         </div>
       )}

@@ -64,21 +64,31 @@ export function parseDuration(duration: string): number {
   const value = parseInt(match[1]);
   const unit = match[2];
   switch (unit) {
-    case "s": return value;
-    case "m": return value * 60;
-    case "h": return value * 3600;
-    case "d": return value * 86400;
-    default: throw new Error(`Unknown unit: ${unit}`);
+    case "s":
+      return value;
+    case "m":
+      return value * 60;
+    case "h":
+      return value * 3600;
+    case "d":
+      return value * 86400;
+    default:
+      throw new Error(`Unknown unit: ${unit}`);
   }
 }
 
 /** Round phase name from numeric value */
 export function roundPhaseName(phase: number): string {
   switch (phase) {
-    case 0: return "Idle";
-    case 1: return "Nominating";
-    case 2: return "Committing";
-    case 3: return "Revealing";
-    default: return `Unknown(${phase})`;
+    case 0:
+      return "Idle";
+    case 1:
+      return "Nominating";
+    case 2:
+      return "Committing";
+    case 3:
+      return "Revealing";
+    default:
+      return `Unknown(${phase})`;
   }
 }

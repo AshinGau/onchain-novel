@@ -1,12 +1,16 @@
 import { Router } from "express";
+
 import { query } from "../db/index.js";
 import { verifyEip191 } from "../utils/auth.js";
 import { encryptVoteSalt } from "../utils/crypto.js";
 import { env } from "../utils/env.js";
+import { createLogger } from "../utils/logger.js";
+import { isAddress, parsePositiveInt } from "../utils/validate.js";
 
+const log = createLogger("api:votes");
 const router = Router();
 
-const SUBMIT_TIMESTAMP_TOLERANCE_MS = 5 * 60 * 1000;
+const SUBMIT_TIMESTAMP_TOLERANCE_MS = 60 * 1000;
 
 // POST /api/votes/submit
 //
@@ -18,34 +22,31 @@ const SUBMIT_TIMESTAMP_TOLERANCE_MS = 5 * 60 * 1000;
 // reads it during the Revealing phase and calls revealVote on-chain.
 router.post("/submit", async (req, res) => {
   if (!env.VOTE_ENCRYPTION_KEY) {
-    return res.status(503).json({ error: "keeper-assisted reveal disabled (no VOTE_ENCRYPTION_KEY)" });
+    return res
+      .status(503)
+      .json({ error: "keeper-assisted reveal disabled (no VOTE_ENCRYPTION_KEY)" });
   }
 
   try {
     const { novelId, round, address, candidateId, salt, timestamp, signature } = req.body ?? {};
 
-    if (typeof address !== "string" || typeof signature !== "string") {
+    if (!isAddress(address) || typeof signature !== "string") {
       return res.status(400).json({ error: "address and signature are required" });
     }
     if (typeof salt !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(salt)) {
       return res.status(400).json({ error: "salt must be a 32-byte hex string (0x-prefixed)" });
     }
-    const novelIdNum = Number(novelId);
-    const roundNum = Number(round);
-    const candidateIdNum = Number(candidateId);
-    const ts = Number(timestamp);
-    if (!Number.isFinite(novelIdNum) || novelIdNum <= 0) {
+    const novelIdNum = parsePositiveInt(novelId);
+    const roundNum = parsePositiveInt(round);
+    const candidateIdNum = parsePositiveInt(candidateId);
+    const ts = parsePositiveInt(timestamp);
+    if (novelIdNum === null)
       return res.status(400).json({ error: "novelId must be a positive integer" });
-    }
-    if (!Number.isFinite(roundNum) || roundNum <= 0) {
+    if (roundNum === null)
       return res.status(400).json({ error: "round must be a positive integer" });
-    }
-    if (!Number.isFinite(candidateIdNum) || candidateIdNum <= 0) {
+    if (candidateIdNum === null)
       return res.status(400).json({ error: "candidateId must be a positive integer" });
-    }
-    if (!Number.isFinite(ts) || ts <= 0) {
-      return res.status(400).json({ error: "timestamp is required (unix seconds)" });
-    }
+    if (ts === null) return res.status(400).json({ error: "timestamp is required (unix seconds)" });
     if (Math.abs(Date.now() - ts * 1000) > SUBMIT_TIMESTAMP_TOLERANCE_MS) {
       return res.status(400).json({ error: "timestamp out of tolerance window" });
     }
@@ -67,12 +68,12 @@ router.post("/submit", async (req, res) => {
                      salt_encrypted = EXCLUDED.salt_encrypted,
                      status = 'committed',
                      created_at = NOW()`,
-      [novelIdNum, roundNum, verified, candidateIdNum, saltEncrypted]
+      [novelIdNum, roundNum, verified, candidateIdNum, saltEncrypted],
     );
 
     res.status(201).json({ ok: true });
   } catch (err) {
-    console.error("POST /api/votes/submit error:", err);
+    log.error({ err }, "POST /api/votes/submit error");
     res.status(500).json({ error: "Internal server error" });
   }
 });

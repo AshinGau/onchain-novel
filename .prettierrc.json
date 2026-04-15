@@ -1,0 +1,15 @@
+{
+  "printWidth": 100,
+  "singleQuote": false,
+  "trailingComma": "all",
+  "semi": true,
+  "arrowParens": "always",
+  "plugins": ["@ianvs/prettier-plugin-sort-imports"],
+  "importOrder": [
+    "<THIRD_PARTY_MODULES>",
+    "",
+    "^@/(.*)$",
+    "",
+    "^[./]"
+  ]
+}

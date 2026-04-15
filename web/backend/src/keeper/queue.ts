@@ -9,6 +9,10 @@
  * - simulateContract inside checkNovel handles any residual race (revert → silent skip).
  */
 
+import { createLogger } from "../utils/logger.js";
+
+const log = createLogger("keeper:queue");
+
 type CheckFn = (novelId: bigint) => Promise<void>;
 
 export class KeeperQueue {
@@ -18,7 +22,10 @@ export class KeeperQueue {
   private waiters: Array<() => void> = []; // workers blocked on empty queue
   private stopped = false;
 
-  constructor(private check: CheckFn, private concurrency: number = 5) {}
+  constructor(
+    private check: CheckFn,
+    private concurrency: number = 5,
+  ) {}
 
   enqueue(novelId: bigint): void {
     const id = novelId.toString();
@@ -33,7 +40,7 @@ export class KeeperQueue {
 
   start(): void {
     for (let i = 0; i < this.concurrency; i++) {
-      this.workerLoop(i).catch((e) => console.error("[KeeperQueue] worker crash:", e));
+      this.workerLoop(i).catch((err) => log.error({ err, workerIdx: i }, "worker crash"));
     }
   }
 
@@ -76,7 +83,7 @@ export class KeeperQueue {
       try {
         await this.check(BigInt(id));
       } catch (err) {
-        console.error(`[KeeperQueue worker#${workerIdx}] check(${id}) error:`, err);
+        log.error({ err, workerIdx, novelId: id }, "check error");
       } finally {
         this.inFlight.delete(id);
         if (this.needsRecheck.has(id)) {

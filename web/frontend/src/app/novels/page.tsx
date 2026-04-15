@@ -1,5 +1,6 @@
-import { fetchNovels } from "@/lib/api";
 import { NovelCard } from "@/components/novel-card";
+import { fetchNovels } from "@/lib/api";
+
 import { NovelListControls } from "./novel-list-controls";
 
 export default async function NovelsPage({

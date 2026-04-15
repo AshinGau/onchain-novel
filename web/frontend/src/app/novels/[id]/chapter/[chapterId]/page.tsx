@@ -1,4 +1,5 @@
 import { fetchChapter, fetchNovel } from "@/lib/api";
+
 import { ChapterPageClient } from "./chapter-page-client";
 
 export default async function ChapterPage({
@@ -8,10 +9,7 @@ export default async function ChapterPage({
 }) {
   const { id, chapterId } = await params;
 
-  const [chapter, novel] = await Promise.all([
-    fetchChapter(chapterId),
-    fetchNovel(id),
-  ]);
+  const [chapter, novel] = await Promise.all([fetchChapter(chapterId), fetchNovel(id)]);
 
   return (
     <div className="on-container" style={{ paddingTop: "1.5rem", paddingBottom: "3rem" }}>

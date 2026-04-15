@@ -1,22 +1,25 @@
+import chalk from "chalk";
 import { Command } from "commander";
 import { parseEther } from "viem";
+
 import {
-  setCreatorRules as setCreatorRulesTx,
-  proposeRule as proposeRuleTx,
-  voteOnRuleProposal as voteOnRuleProposalTx,
   buildWorldLineProof,
-  getRuleNames,
   getRule,
+  getRuleNames,
   getRuleProposal,
+  proposeRule as proposeRuleTx,
+  setCreatorRules as setCreatorRulesTx,
+  voteOnRuleProposal as voteOnRuleProposalTx,
 } from "../shared/index.js";
-import { getWalletClient, getPublicClient, getContracts, waitForTx } from "../utils/client.js";
 import { apiGet } from "../utils/api.js";
-import { header, kv, success, error, txHash } from "../utils/format.js";
-import chalk from "chalk";
+import { getContracts, getPublicClient, getWalletClient, waitForTx } from "../utils/client.js";
+import { error, header, kv, success, txHash } from "../utils/format.js";
 
 function requireRulesEngine(contracts: ReturnType<typeof getContracts>): `0x${string}` {
   if (!contracts.rulesEngine) {
-    error("RulesEngine contract address not configured. Run 'onchain-novel-cli config set contracts.rulesEngine <address>'.");
+    error(
+      "RulesEngine contract address not configured. Run 'onchain-novel-cli config set contracts.rulesEngine <address>'.",
+    );
     return process.exit(1);
   }
   return contracts.rulesEngine;
@@ -110,11 +113,18 @@ export function registerRuleCommands(program: Command): void {
             value = BigInt(config.ruleFee ?? "0");
           } catch {
             value = parseEther("0.001");
-            console.log(chalk.yellow(`  Could not fetch novel config. Using default fee: 0.001 ETH`));
+            console.log(
+              chalk.yellow(`  Could not fetch novel config. Using default fee: 0.001 ETH`),
+            );
           }
         }
 
-        const path = await buildWorldLineProof(pub, contracts.novelCore, BigInt(novelId), BigInt(chapterId));
+        const path = await buildWorldLineProof(
+          pub,
+          contracts.novelCore,
+          BigInt(novelId),
+          BigInt(chapterId),
+        );
         if (!path) {
           error(`Chapter #${chapterId} is not currently on any world line of novel #${novelId}.`);
           return process.exit(1);
@@ -154,9 +164,16 @@ export function registerRuleCommands(program: Command): void {
 
         // Derive the novelId from the proposal so we can build the path
         const proposal = await getRuleProposal(pub, BigInt(proposalId), rulesEngine);
-        const path = await buildWorldLineProof(pub, contracts.novelCore, proposal.novelId, BigInt(chapterId));
+        const path = await buildWorldLineProof(
+          pub,
+          contracts.novelCore,
+          proposal.novelId,
+          BigInt(chapterId),
+        );
         if (!path) {
-          error(`Chapter #${chapterId} is not currently on any world line of novel #${proposal.novelId}.`);
+          error(
+            `Chapter #${chapterId} is not currently on any world line of novel #${proposal.novelId}.`,
+          );
           return process.exit(1);
         }
 

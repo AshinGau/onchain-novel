@@ -1,8 +1,12 @@
 import { createPublicClient, http } from "viem";
 import { foundry } from "viem/chains";
+
 import { query } from "../db/index.js";
-import { env } from "./env.js";
 import { prizePoolAbi } from "./abi.js";
+import { env } from "./env.js";
+import { createLogger } from "./logger.js";
+
+const log = createLogger("pool-sync");
 
 export async function syncPoolBalances() {
   if (!env.PRIZE_POOL_ADDRESS) return;
@@ -18,9 +22,12 @@ export async function syncPoolBalances() {
         functionName: "getPoolBalance",
         args: [BigInt(row.id)],
       });
-      await query("UPDATE novels SET pool_balance = $1 WHERE id = $2", [balance.toString(), row.id]);
+      await query("UPDATE novels SET pool_balance = $1 WHERE id = $2", [
+        balance.toString(),
+        row.id,
+      ]);
     } catch (err) {
-      console.error(`Pool sync failed for novel ${row.id}:`, err);
+      log.error({ err, novelId: row.id }, "Pool sync failed");
     }
   }
 }
