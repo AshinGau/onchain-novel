@@ -86,11 +86,20 @@ BROADCAST_JSON="broadcast/Deploy.s.sol/31337/run-latest.json"
 
 CREATES=$(jq -r '[.transactions[] | select(.transactionType == "CREATE") | .contractAddress] | .[]' "$BROADCAST_JSON")
 CREATES_ARR=($CREATES)
-VOTING_ENGINE="${CREATES_ARR[5]}"
-PRIZE_POOL="${CREATES_ARR[6]}"
-RULES_ENGINE="${CREATES_ARR[7]}"
-NOVEL_CORE="${CREATES_ARR[8]}"
-BOUNTY_BOARD="${CREATES_ARR[9]}"
+# Deploy.s.sol CREATE order: 6 impls (0..5), then 6 proxies (6..11):
+# votingProxy=6, prizeProxy=7, rulesProxy=8, novelCoreProxy=9, bountyProxy=10, roundProxy=11
+VOTING_ENGINE="${CREATES_ARR[6]}"
+PRIZE_POOL="${CREATES_ARR[7]}"
+RULES_ENGINE="${CREATES_ARR[8]}"
+NOVEL_CORE="${CREATES_ARR[9]}"
+BOUNTY_BOARD="${CREATES_ARR[10]}"
+ROUND_MANAGER="${CREATES_ARR[11]}"
+
+# Rotate keeper from deployer -> PK_KEEPER so smoke test's keeper-gated calls succeed
+ADDR_KEEPER=$(cast wallet address "$PK_KEEPER")
+cast send --rpc-url "$RPC" --private-key "$PK_DEPLOYER" "$ROUND_MANAGER" \
+  "setKeeper(address)" "$ADDR_KEEPER" > /dev/null
+info "Keeper rotated to $ADDR_KEEPER"
 pass "Contracts deployed (NovelCore=$NOVEL_CORE)"
 
 # Start backend
@@ -98,6 +107,7 @@ info "Starting backend on $API_PORT..."
 DATABASE_URL="$DB_URL" \
 RPC_URL="$RPC" \
 NOVEL_CORE_ADDRESS="$NOVEL_CORE" \
+ROUND_MANAGER_ADDRESS="$ROUND_MANAGER" \
 VOTING_ENGINE_ADDRESS="$VOTING_ENGINE" \
 PRIZE_POOL_ADDRESS="$PRIZE_POOL" \
 BOUNTY_BOARD_ADDRESS="$BOUNTY_BOARD" \
@@ -122,6 +132,7 @@ pass "Backend running"
 info "Running smoke-mcp-tools.ts..."
 RPC_URL="$RPC" \
 NOVEL_CORE_ADDRESS="$NOVEL_CORE" \
+ROUND_MANAGER_ADDRESS="$ROUND_MANAGER" \
 VOTING_ENGINE_ADDRESS="$VOTING_ENGINE" \
 PRIZE_POOL_ADDRESS="$PRIZE_POOL" \
 BOUNTY_BOARD_ADDRESS="$BOUNTY_BOARD" \

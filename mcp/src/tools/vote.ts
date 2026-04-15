@@ -18,7 +18,7 @@ import {
 } from "../shared/index.js";
 import { apiGet, apiPost, hasApi } from "../utils/api.js";
 import { getPublicClient, getWalletClient } from "../utils/client.js";
-import { fail, ok } from "../utils/response.js";
+import { fail, ok, sanitizeError } from "../utils/response.js";
 import { getStorePath, getVoteSalt, saveVoteSalt } from "../utils/vote-store.js";
 
 /** Generate a fresh 32-byte random salt as 0x-prefixed hex */
@@ -30,8 +30,10 @@ export function registerVoteTools(server: McpServer): void {
   // ── vote_start ──
   server.tool(
     "vote_start",
-    "Start a new voting round (keeper / owner only). Caller must supply `leaves`: leaf chapter IDs " +
-      "(one per current world line, deepest leaves preferred). Each must have no children.",
+    "Start a new voting round (keeper / owner only). `leaves` = one true tree leaf per current " +
+      "world line (each must have no children). Deepest leaves are preferred because the contract " +
+      "treats all chapters on the leaf's parent chain as candidates — picking a shallow leaf causes " +
+      "vote splitting across siblings that could have coalesced under a deeper common candidate.",
     {
       novelId: z.number().describe("Novel ID"),
       leaves: z
@@ -52,7 +54,7 @@ export function registerVoteTools(server: McpServer): void {
           `Round started for Novel #${params.novelId}.\nTx: ${hash}\nBlock: ${receipt.blockNumber}`,
         );
       } catch (error) {
-        return fail(`Failed: ${error instanceof Error ? error.message : String(error)}`);
+        return fail(`Failed: ${sanitizeError(error)}`);
       }
     },
   );
@@ -60,8 +62,11 @@ export function registerVoteTools(server: McpServer): void {
   // ── vote_commit ──
   server.tool(
     "vote_commit",
-    "Commit a vote. If `salt` is omitted, a random 32-byte salt is generated, " +
-      "saved locally as backup, and submitted to the backend for keeper-assisted reveal.",
+    "Commit a vote. If `salt` is omitted, a random 32-byte salt is generated and saved locally. " +
+      "By default the plaintext (candidateId, salt) is ALSO POSTed to the backend (API_BASE_URL) " +
+      "so its keeper service can reveal on your behalf during the reveal phase — the backend " +
+      "encrypts the salt at rest. Set keeperAssisted=false to keep the salt local-only; you will " +
+      "then need to call vote_reveal yourself before the reveal phase ends.",
     {
       novelId: z.number().describe("Novel ID"),
       candidateId: z.number().describe("Candidate chapter ID to vote for"),
@@ -148,7 +153,7 @@ export function registerVoteTools(server: McpServer): void {
 
         return ok(lines.join("\n"));
       } catch (error) {
-        return fail(`Failed: ${error instanceof Error ? error.message : String(error)}`);
+        return fail(`Failed: ${sanitizeError(error)}`);
       }
     },
   );
@@ -159,12 +164,17 @@ export function registerVoteTools(server: McpServer): void {
     "Reveal a previously committed vote. Anyone can call revealVote on behalf of a voter — " +
       "only the matching voter address whose commit hash equals keccak(voter, c, s) will succeed. " +
       "If `voter` is omitted, defaults to the connected wallet. If `salt` is omitted, falls back " +
-      "to the local backup saved by vote_commit.",
+      "to the local backup saved by vote_commit. " +
+      "Reward weighting: revealers who backed a winning world-line get 3x weight, others 1x.",
     {
       novelId: z.number().describe("Novel ID"),
       candidateId: z.number().describe("Candidate chapter ID you voted for"),
       salt: z.string().optional().describe("Optional salt — falls back to local store"),
-      voter: z.string().optional().describe("Voter address (defaults to connected wallet)"),
+      voter: z
+        .string()
+        .regex(/^0x[0-9a-fA-F]{40}$/, "must be a 0x-prefixed 20-byte address")
+        .optional()
+        .describe("Voter address (defaults to connected wallet)"),
     },
     async (params) => {
       try {
@@ -195,7 +205,7 @@ export function registerVoteTools(server: McpServer): void {
         const receipt = await pub.waitForTransactionReceipt({ hash: txHash });
         return ok(`Vote revealed.\nTx: ${txHash}\nBlock: ${receipt.blockNumber}`);
       } catch (error) {
-        return fail(`Failed: ${error instanceof Error ? error.message : String(error)}`);
+        return fail(`Failed: ${sanitizeError(error)}`);
       }
     },
   );
@@ -221,7 +231,7 @@ export function registerVoteTools(server: McpServer): void {
           `Round settled for Novel #${params.novelId}.\nTx: ${hash}\nBlock: ${receipt.blockNumber}`,
         );
       } catch (error) {
-        return fail(`Failed: ${error instanceof Error ? error.message : String(error)}`);
+        return fail(`Failed: ${sanitizeError(error)}`);
       }
     },
   );
@@ -284,7 +294,7 @@ export function registerVoteTools(server: McpServer): void {
             `Tx: ${hash}\nBlock: ${receipt.blockNumber}`,
         );
       } catch (error) {
-        return fail(`Failed: ${error instanceof Error ? error.message : String(error)}`);
+        return fail(`Failed: ${sanitizeError(error)}`);
       }
     },
   );
@@ -323,7 +333,7 @@ export function registerVoteTools(server: McpServer): void {
         );
         return ok(`Candidates (Round ${novel.currentRound}):\n${lines.join("\n")}`);
       } catch (error) {
-        return fail(`Failed: ${error instanceof Error ? error.message : String(error)}`);
+        return fail(`Failed: ${sanitizeError(error)}`);
       }
     },
   );

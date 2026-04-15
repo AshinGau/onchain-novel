@@ -14,7 +14,7 @@ import {
   voteOnRuleProposal,
 } from "../shared/index.js";
 import { getPublicClient, getWalletClient } from "../utils/client.js";
-import { fail, ok } from "../utils/response.js";
+import { fail, ok, sanitizeError } from "../utils/response.js";
 
 export function registerRuleTools(server: McpServer): void {
   // ── rule_list ──
@@ -45,7 +45,7 @@ export function registerRuleTools(server: McpServer): void {
         }
         return ok(`Rules for Novel #${params.novelId}:\n\n${rules.join("\n\n")}`);
       } catch (error) {
-        return fail(`Failed: ${error instanceof Error ? error.message : String(error)}`);
+        return fail(`Failed: ${sanitizeError(error)}`);
       }
     },
   );
@@ -74,7 +74,7 @@ export function registerRuleTools(server: McpServer): void {
           `${params.rules.length} rule(s) set for Novel #${params.novelId}.\nTx: ${hash}\nBlock: ${receipt.blockNumber}`,
         );
       } catch (error) {
-        return fail(`Failed: ${error instanceof Error ? error.message : String(error)}`);
+        return fail(`Failed: ${sanitizeError(error)}`);
       }
     },
   );
@@ -128,7 +128,7 @@ export function registerRuleTools(server: McpServer): void {
         const receipt = await pub.waitForTransactionReceipt({ hash });
         return ok(`Rule proposed.\nTx: ${hash}\nBlock: ${receipt.blockNumber}`);
       } catch (error) {
-        return fail(`Failed: ${error instanceof Error ? error.message : String(error)}`);
+        return fail(`Failed: ${sanitizeError(error)}`);
       }
     },
   );
@@ -176,7 +176,7 @@ export function registerRuleTools(server: McpServer): void {
           `Voted on proposal #${params.proposalId}.\nTx: ${hash}\nBlock: ${receipt.blockNumber}`,
         );
       } catch (error) {
-        return fail(`Failed: ${error instanceof Error ? error.message : String(error)}`);
+        return fail(`Failed: ${sanitizeError(error)}`);
       }
     },
   );

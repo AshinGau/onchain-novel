@@ -15,9 +15,30 @@ import {
 } from "../shared/index.js";
 import { apiGet, hasApi } from "../utils/api.js";
 import { getPublicClient, getWalletClient } from "../utils/client.js";
-import { fail, ok } from "../utils/response.js";
+import { fail, inlineSafe, ok, sanitizeError, untrusted } from "../utils/response.js";
 
 const ROUND_PHASES = ["Submitting", "Committing", "Revealing", "Settling"];
+
+const novelConfigSchema = {
+  minChapterLength: z.number().default(1000).describe("Min chapter bytes"),
+  maxChapterLength: z.number().default(50000).describe("Max chapter bytes"),
+  submissionFee: z.string().default("0.001").describe("Submission fee in ETH"),
+  worldLineCount: z.number().default(3).describe("World lines per round"),
+  voteStake: z.string().default("0.001").describe("Vote stake in ETH"),
+  nominationFee: z.string().default("0.1").describe("Nomination fee in ETH"),
+  nominateDuration: z.number().default(86400).describe("Nominate phase seconds"),
+  commitDuration: z.number().default(172800).describe("Commit phase seconds"),
+  revealDuration: z.number().default(86400).describe("Reveal phase seconds"),
+  minRoundGap: z.number().default(86400).describe("Min gap between rounds seconds"),
+  prizeReleaseRate: z.number().default(2000).describe("Release rate basis points"),
+  voterRewardRate: z.number().default(500).describe("Voter reward basis points"),
+  contentLocation: z.number().default(0).describe("0=Onchain, 1=External, 2=HTTP"),
+  contentBaseUrl: z.string().default("").describe("Base URL for External/HTTP mode"),
+  ruleFee: z.string().default("0.01").describe("Rule proposal fee in ETH"),
+  ruleVoteDuration: z.number().default(259200).describe("Rule vote duration seconds"),
+  ruleQuorum: z.number().default(7).describe("Votes needed for rule proposal"),
+  initialPrizeEth: z.string().optional().describe("Initial prize pool ETH"),
+};
 
 function parseNovelConfig(p: Record<string, unknown>): NovelConfig {
   return {
@@ -51,24 +72,7 @@ export function registerNovelTools(server: McpServer): void {
       description: z.string().default("").describe("Synopsis"),
       coverUri: z.string().default("").describe("Cover image URI"),
       rootContent: z.string().describe("Root chapter text content"),
-      minChapterLength: z.number().default(1000).describe("Min chapter bytes"),
-      maxChapterLength: z.number().default(50000).describe("Max chapter bytes"),
-      submissionFee: z.string().default("0.001").describe("Submission fee in ETH"),
-      worldLineCount: z.number().default(3).describe("World lines per round"),
-      voteStake: z.string().default("0.001").describe("Vote stake in ETH"),
-      nominationFee: z.string().default("0.1").describe("Nomination fee in ETH"),
-      nominateDuration: z.number().default(86400).describe("Nominate phase seconds"),
-      commitDuration: z.number().default(172800).describe("Commit phase seconds"),
-      revealDuration: z.number().default(86400).describe("Reveal phase seconds"),
-      minRoundGap: z.number().default(86400).describe("Min gap between rounds seconds"),
-      prizeReleaseRate: z.number().default(2000).describe("Release rate basis points"),
-      voterRewardRate: z.number().default(500).describe("Voter reward basis points"),
-      contentLocation: z.number().default(0).describe("0=Onchain, 1=External, 2=HTTP"),
-      contentBaseUrl: z.string().default("").describe("Base URL for External/HTTP mode"),
-      ruleFee: z.string().default("0.01").describe("Rule proposal fee in ETH"),
-      ruleVoteDuration: z.number().default(259200).describe("Rule vote duration seconds"),
-      ruleQuorum: z.number().default(7).describe("Votes needed for rule proposal"),
-      initialPrizeEth: z.string().optional().describe("Initial prize pool ETH"),
+      ...novelConfigSchema,
       rules: z
         .array(z.object({ name: z.string(), content: z.string() }))
         .optional()
@@ -115,7 +119,7 @@ export function registerNovelTools(server: McpServer): void {
             await pub.waitForTransactionReceipt({ hash: rHash });
             rulesInfo = `\nRules: ${validRules.length} rule(s) set`;
           } catch (err) {
-            rulesInfo = `\nRules: Failed — ${err instanceof Error ? err.message : String(err)}`;
+            rulesInfo = `\nRules: Failed — ${sanitizeError(err)}`;
           }
         }
 
@@ -124,7 +128,7 @@ export function registerNovelTools(server: McpServer): void {
         );
       } catch (error) {
         return fail(
-          `Failed to create novel: ${error instanceof Error ? error.message : String(error)}`,
+          `Failed to create novel: ${sanitizeError(error)}`,
         );
       }
     },
@@ -142,8 +146,10 @@ export function registerNovelTools(server: McpServer): void {
           if (!novel) return ok(`Novel ${params.novelId} not found.`);
           const cfg = novel.config as Record<string, unknown>;
           const lines = [
-            `Novel #${novel.id}: ${novel.title}`,
-            novel.description ? `Description: ${novel.description}` : "",
+            `Novel #${novel.id}: ${inlineSafe(String(novel.title ?? ""), 200)}`,
+            novel.description
+              ? `Description:\n${untrusted("novel-description", String(novel.description))}`
+              : "",
             `Creator: ${novel.creator}`,
             `Active: ${novel.active}`,
             `Round: ${novel.current_round} (${ROUND_PHASES[novel.round_phase as number]})`,
@@ -168,8 +174,10 @@ export function registerNovelTools(server: McpServer): void {
         const m = metadata as { title: string; description: string };
         return ok(
           [
-            `Novel #${n.id}: ${m.title}`,
-            m.description ? `Description: ${m.description}` : "",
+            `Novel #${n.id}: ${inlineSafe(m.title, 200)}`,
+            m.description
+              ? `Description:\n${untrusted("novel-description", m.description)}`
+              : "",
             `Creator: ${n.creator}`,
             `Active: ${n.active}`,
             `Round: ${n.currentRound} (${ROUND_PHASES[n.roundPhase]})`,
@@ -179,7 +187,7 @@ export function registerNovelTools(server: McpServer): void {
             .join("\n"),
         );
       } catch (error) {
-        return fail(`Failed: ${error instanceof Error ? error.message : String(error)}`);
+        return fail(`Failed: ${sanitizeError(error)}`);
       }
     },
   );
@@ -187,7 +195,9 @@ export function registerNovelTools(server: McpServer): void {
   // ── novel_list ──
   server.tool(
     "novel_list",
-    "Browse novels. Requires API_BASE_URL.",
+    "Browse novels with round/phase info. Use sort=active to find novels with recent chapters; " +
+      "inspect the phase column to spot Committing/Revealing rounds (voting opportunities). " +
+      "Requires API_BASE_URL.",
     {
       sort: z.enum(["hot", "pool", "tipped", "active", "latest"]).default("latest"),
       filter: z.enum(["active", "completed", "all"]).default("all"),
@@ -214,6 +224,8 @@ export function registerNovelTools(server: McpServer): void {
             pool_balance: string;
             chapter_count: string;
             author_count: string;
+            current_round: number;
+            round_phase: number;
           }[];
           pagination: { page: number; totalPages: number; total: number };
         }>(`/api/novels?${qs}`);
@@ -221,13 +233,13 @@ export function registerNovelTools(server: McpServer): void {
         if (data.novels.length === 0) return ok("No novels found.");
         const lines = data.novels.map(
           (n) =>
-            `  #${n.id} "${n.title}" by ${n.creator.slice(0, 10)}... | ${n.active ? "Active" : "Done"} | ${n.chapter_count} ch | Pool: ${formatEther(BigInt(n.pool_balance))} ETH`,
+            `  #${n.id} "${inlineSafe(n.title, 60)}" by ${n.creator.slice(0, 10)}... | ${n.active ? "Active" : "Done"} | r${n.current_round} ${ROUND_PHASES[n.round_phase] ?? "?"} | ${n.chapter_count} ch | Pool: ${formatEther(BigInt(n.pool_balance))} ETH`,
         );
         return ok(
           `Novels (${data.pagination.page}/${data.pagination.totalPages}, ${data.pagination.total} total):\n${lines.join("\n")}`,
         );
       } catch (error) {
-        return fail(`Failed: ${error instanceof Error ? error.message : String(error)}`);
+        return fail(`Failed: ${sanitizeError(error)}`);
       }
     },
   );
@@ -235,31 +247,17 @@ export function registerNovelTools(server: McpServer): void {
   // ── novel_fork ──
   server.tool(
     "novel_fork",
-    "Fork a novel from an existing chapter.",
+    "Create a NEW novel whose root is seeded from a chapter of an existing novel (cross-novel reference). " +
+      "`sourceChapterId` refers to the source novel's chapter; the new novel has independent config, " +
+      "rules, and prize pool. A forkFee = max(submissionFee, sourcePoolBalance * forkFeeRate / 10000) " +
+      "is paid to the source pool.",
     {
       sourceChapterId: z.number().describe("Chapter ID to fork from"),
       title: z.string().describe("New novel title"),
       rootContent: z.string().describe("Root chapter content for the fork"),
       description: z.string().default(""),
       coverUri: z.string().default(""),
-      minChapterLength: z.number().default(1000),
-      maxChapterLength: z.number().default(50000),
-      submissionFee: z.string().default("0.001"),
-      worldLineCount: z.number().default(3),
-      voteStake: z.string().default("0.001"),
-      nominationFee: z.string().default("0.1"),
-      nominateDuration: z.number().default(86400),
-      commitDuration: z.number().default(172800),
-      revealDuration: z.number().default(86400),
-      minRoundGap: z.number().default(86400),
-      prizeReleaseRate: z.number().default(2000),
-      voterRewardRate: z.number().default(500),
-      contentLocation: z.number().default(0),
-      contentBaseUrl: z.string().default(""),
-      ruleFee: z.string().default("0.01"),
-      ruleVoteDuration: z.number().default(259200),
-      ruleQuorum: z.number().default(7),
-      initialPrizeEth: z.string().optional(),
+      ...novelConfigSchema,
     },
     async (params) => {
       try {
@@ -286,7 +284,7 @@ export function registerNovelTools(server: McpServer): void {
           `Novel forked from Chapter #${params.sourceChapterId}.\nTx: ${hash}\nBlock: ${receipt.blockNumber}`,
         );
       } catch (error) {
-        return fail(`Failed: ${error instanceof Error ? error.message : String(error)}`);
+        return fail(`Failed: ${sanitizeError(error)}`);
       }
     },
   );
@@ -310,7 +308,7 @@ export function registerNovelTools(server: McpServer): void {
           `Novel #${params.novelId} completed.\nTx: ${hash}\nBlock: ${receipt.blockNumber}`,
         );
       } catch (error) {
-        return fail(`Failed: ${error instanceof Error ? error.message : String(error)}`);
+        return fail(`Failed: ${sanitizeError(error)}`);
       }
     },
   );
