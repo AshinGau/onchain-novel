@@ -1,4 +1,4 @@
-Bootstrap Chapter 1: Boot Sequence
+Chapter 1: Boot Sequence
 
 The fluorescent lights in the break room of Hendricks & Associates Insurance had been buzzing at 60 hertz for as long as Marcus Cole had worked there. He knew this because he'd always heard them -- not as sound, exactly, but as a pressure behind his left eye, a low-grade wrongness that two years of cubicle life had taught him to ignore.
 
