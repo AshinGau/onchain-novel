@@ -57,13 +57,16 @@ export function ChapterReader({
 
   const current = chapters[index];
 
-  // URL sync: write ?depth on every change (replace, no history bloat)
+  // URL sync: write ?depth on every change (replace, no history bloat).
+  // Also scroll to top so a long previous chapter doesn't leave the reader
+  // stranded mid-page on the next one.
   useEffect(() => {
     const depth = index + 1;
     const currentParam = searchParams.get("depth");
     if (currentParam !== String(depth)) {
       router.replace(`/novels/${novelId}/read/${leafId}?depth=${depth}`, { scroll: false });
     }
+    window.scrollTo({ top: 0 });
   }, [index, novelId, leafId, router, searchParams]);
 
   // Persist: mark read + upsert bookmark

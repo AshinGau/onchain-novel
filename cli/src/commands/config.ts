@@ -22,7 +22,6 @@ export function registerConfigCommand(program: Command): void {
     kv("apiUrl", cfg.apiUrl ?? "(not set)");
     kv("contracts.novelCore", cfg.contracts?.novelCore ?? "(not set)");
     kv("contracts.roundManager", cfg.contracts?.roundManager ?? "(not set)");
-    kv("contracts.votingEngine", cfg.contracts?.votingEngine ?? "(not set)");
     kv("contracts.prizePool", cfg.contracts?.prizePool ?? "(not set)");
     kv("contracts.bountyBoard", cfg.contracts?.bountyBoard ?? "(not set)");
     kv("contracts.rulesEngine", cfg.contracts?.rulesEngine ?? "(not set)");
@@ -69,7 +68,7 @@ export function registerConfigCommand(program: Command): void {
       } else {
         error(`Unknown config key: ${key}`);
         console.log(
-          "Valid keys: rpcUrl, chainId, apiUrl, contracts.novelCore, contracts.roundManager, contracts.prizePool, contracts.votingEngine, contracts.bountyBoard, contracts.rulesEngine, contracts.userRegistry",
+          "Valid keys: rpcUrl, chainId, apiUrl, contracts.novelCore, contracts.roundManager, contracts.prizePool, contracts.bountyBoard, contracts.rulesEngine, contracts.userRegistry",
         );
         process.exit(1);
       }

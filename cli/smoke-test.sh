@@ -190,7 +190,6 @@ node_cli config set apiUrl "$API" > /dev/null
 node_cli config set chainId 31337 > /dev/null
 node_cli config set contracts.novelCore "$NOVEL_CORE" > /dev/null
 node_cli config set contracts.roundManager "$ROUND_MANAGER" > /dev/null
-node_cli config set contracts.votingEngine "$VOTING_ENGINE" > /dev/null
 node_cli config set contracts.prizePool "$PRIZE_POOL" > /dev/null
 node_cli config set contracts.bountyBoard "$BOUNTY_BOARD" > /dev/null
 node_cli config set contracts.rulesEngine "$RULES_ENGINE" > /dev/null

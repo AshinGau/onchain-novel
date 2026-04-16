@@ -1,129 +1,154 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { ChainColumn } from "@/components/chain-column";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { buildTree, findDeepestLeaf, getChainToNode, type TreeNode } from "@/hooks/use-novel";
-import type { ChapterSummary } from "@/lib/api";
+import { fetchNovelLines, type LineMode, type NovelLine } from "@/lib/api";
 
 interface Props {
   novelId: string;
-  chapters: ChapterSummary[];
-  worldlines: ChapterSummary[];
+  initialMode: LineMode;
+  initialLines: NovelLine[];
 }
 
-interface WorldlineData {
-  worldline: ChapterSummary;
-  chain: ChapterSummary[];
-  leafId: string;
-  otherBranches: ChapterSummary[][];
+const MODES: { value: LineMode; label: string; hint: string }[] = [
+  { value: "longest", label: "Longest", hint: "Deepest chains under each canon ancestor" },
+  { value: "canon", label: "Canon", hint: "Contract's current world-line ancestors (next round's bases)" },
+  { value: "active", label: "Active", hint: "Most recently updated leaf chapters" },
+  { value: "funded", label: "Most Funded", hint: "Leaves with the most chapter tips" },
+];
+
+// Unified column heading across all modes — the active mode is already
+// indicated by the highlighted button above, so a per-mode prefix would be
+// redundant and visually fragmented.
+function columnLabel(_mode: LineMode, index: number): string {
+  return `Story Line ${index}`;
 }
 
-export function NovelWorldlines({ novelId, chapters, worldlines }: Props) {
-  const tree = useMemo(() => buildTree(chapters), [chapters]);
-
-  const worldlineData = useMemo<WorldlineData[]>(() => {
-    if (!tree || worldlines.length === 0) return [];
-
-    // Build a lookup map for tree nodes
-    const nodeMap = new Map<string, TreeNode>();
-    function indexNodes(node: TreeNode) {
-      nodeMap.set(node.chapter.id, node);
-      for (const child of node.children) indexNodes(child);
-    }
-    indexNodes(tree);
-
-    return worldlines.map((wl) => {
-      const wlNode = nodeMap.get(wl.id);
-      if (!wlNode) {
-        return { worldline: wl, chain: [wl], leafId: wl.id, otherBranches: [] };
-      }
-
-      // Find deepest leaf from the worldline ancestor
-      const deepestLeaf = findDeepestLeaf(wlNode);
-      // Get the full chain from root to this leaf
-      const chain = getChainToNode(tree, deepestLeaf.chapter.id);
-
-      // Find other branches: all leaves from wlNode except the main chain
-      const otherBranches: ChapterSummary[][] = [];
-      function collectBranches(node: TreeNode, currentPath: ChapterSummary[]) {
-        const path = [...currentPath, node.chapter];
-        if (node.children.length === 0 && node.chapter.id !== deepestLeaf.chapter.id) {
-          otherBranches.push(path);
-        }
-        for (const child of node.children) {
-          collectBranches(child, path);
-        }
-      }
-      for (const child of wlNode.children) {
-        collectBranches(child, [wlNode.chapter]);
-      }
-
-      return {
-        worldline: wl,
-        chain,
-        leafId: deepestLeaf.chapter.id,
-        otherBranches,
-      };
-    });
-  }, [tree, worldlines]);
-
-  if (worldlineData.length === 0) {
-    return (
-      <div className="text-caption" style={{ textAlign: "center", padding: "2rem" }}>
-        No world lines yet. Start writing to create the story!
-      </div>
-    );
+// Pick the deepest WL ancestor present in the chain so ChainColumn can render
+// the same root → ... → WL → ... → leaf layout regardless of which mode
+// produced the chain.
+function findWorldLineAncestor(chain: NovelLine["chain"]): string {
+  for (let i = chain.length - 1; i >= 0; i--) {
+    if (chain[i].is_world_line) return chain[i].id;
   }
+  return "";
+}
+
+export function NovelWorldlines({ novelId, initialMode, initialLines }: Props) {
+  const [mode, setMode] = useState<LineMode>(initialMode);
+  const [lines, setLines] = useState<NovelLine[]>(initialLines);
+  const [loading, setLoading] = useState(false);
+  // Skip the very first effect run — initialLines is already populated from
+  // the server, no need to refetch. Every subsequent mode change refetches,
+  // including switching back to the initial mode.
+  const isFirstRun = useRef(true);
+
+  useEffect(() => {
+    if (isFirstRun.current) {
+      isFirstRun.current = false;
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    fetchNovelLines(novelId, mode)
+      .then((data) => {
+        if (!cancelled) setLines(data.lines);
+      })
+      .catch(() => {
+        if (!cancelled) setLines([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [mode, novelId]);
+
+  const activeMode = MODES.find((m) => m.value === mode);
 
   return (
-    <div>
-      {/* Desktop: multi-column grid */}
-      <div className="worldline-grid-desktop">
-        <div
-          className="on-grid"
-          style={{ "--cols": Math.min(worldlineData.length, 4) } as React.CSSProperties}
-        >
-          {worldlineData.map((wld, i) => (
-            <ChainColumn
-              key={wld.worldline.id}
-              worldlineIndex={i + 1}
-              chain={wld.chain}
-              worldlineAncestorId={wld.worldline.id}
-              novelId={novelId}
-            />
-          ))}
-        </div>
-
-        {/* Other branches section */}
-        {worldlineData.some((wld) => wld.otherBranches.length > 0) && (
-          <OtherBranches data={worldlineData} novelId={novelId} />
+    <div className="on-stack" style={{ gap: "1rem" }}>
+      {/* Mode selector */}
+      <div className="on-row" style={{ gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
+        {MODES.map((m) => (
+          <button
+            key={m.value}
+            onClick={() => setMode(m.value)}
+            className={mode === m.value ? "on-btn on-btn-primary" : "on-btn on-btn-secondary"}
+            style={{ padding: "0.35rem 0.85rem", fontSize: "0.85rem" }}
+          >
+            {m.label}
+          </button>
+        ))}
+        {activeMode && (
+          <span className="text-caption text-muted" style={{ marginLeft: "0.5rem" }}>
+            {activeMode.hint}
+          </span>
         )}
       </div>
 
-      {/* Mobile: tab-based */}
-      <div className="worldline-tabs-mobile">
-        <Tabs defaultValue="0">
-          <TabsList>
-            {worldlineData.map((_, i) => (
-              <TabsTrigger key={i} value={String(i)}>
-                WL {i + 1}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-          {worldlineData.map((wld, i) => (
-            <TabsContent key={i} value={String(i)}>
-              <ChainColumn
-                worldlineIndex={i + 1}
-                chain={wld.chain}
-                worldlineAncestorId={wld.worldline.id}
-                novelId={novelId}
-              />
-            </TabsContent>
-          ))}
-        </Tabs>
-      </div>
+      {loading && <div className="text-caption text-muted">Loading…</div>}
+
+      {!loading && lines.length === 0 && (
+        <div className="text-caption" style={{ textAlign: "center", padding: "2rem" }}>
+          No story lines available for this mode.
+        </div>
+      )}
+
+      {!loading && lines.length > 0 && (
+        <>
+          {/* Desktop: multi-column grid */}
+          <div className="worldline-grid-desktop">
+            <div
+              className="on-grid"
+              style={{ "--cols": Math.min(lines.length, 4) } as React.CSSProperties}
+            >
+              {lines.map((ln, i) => (
+                <ChainColumn
+                  key={ln.leafId}
+                  worldlineIndex={i + 1}
+                  chain={ln.chain}
+                  worldlineAncestorId={findWorldLineAncestor(ln.chain)}
+                  novelId={novelId}
+                  label={columnLabel(mode, i + 1)}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Mobile: tab-based. Key by mode so the Tabs primitive re-mounts on
+              mode change — otherwise its uncontrolled internal "active tab" can
+              point at an index that no longer exists (e.g. "1" when only "0" is
+              left), leaving the panel blank. */}
+          <div className="worldline-tabs-mobile">
+            <Tabs key={mode} defaultValue="0">
+              <TabsList>
+                {lines.map((_, i) => (
+                  <TabsTrigger key={i} value={String(i)}>
+                    {columnLabel(mode, i + 1)}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+              {lines.map((ln, i) => (
+                <TabsContent key={i} value={String(i)}>
+                  <ChainColumn
+                    worldlineIndex={i + 1}
+                    chain={ln.chain}
+                    worldlineAncestorId={
+                      mode === "canon" || mode === "longest" ? ln.ancestorId : ""
+                    }
+                    novelId={novelId}
+                    label={columnLabel(mode, i + 1)}
+                  />
+                </TabsContent>
+              ))}
+            </Tabs>
+          </div>
+        </>
+      )}
 
       <style>{`
         .worldline-tabs-mobile { display: none; }
@@ -132,59 +157,6 @@ export function NovelWorldlines({ novelId, chapters, worldlines }: Props) {
           .worldline-tabs-mobile { display: block; }
         }
       `}</style>
-    </div>
-  );
-}
-
-function OtherBranches({ data, novelId }: { data: WorldlineData[]; novelId: string }) {
-  const [expanded, setExpanded] = useState(false);
-
-  const totalBranches = data.reduce((sum, wld) => sum + wld.otherBranches.length, 0);
-  if (totalBranches === 0) return null;
-
-  return (
-    <div className="on-card" style={{ marginTop: "1rem" }}>
-      <button
-        className="on-btn on-btn-ghost"
-        onClick={() => setExpanded(!expanded)}
-        style={{ width: "100%" }}
-      >
-        Other branches ({totalBranches}) {expanded ? "▲" : "▼"}
-      </button>
-      {expanded && (
-        <div className="on-stack" style={{ gap: "0.5rem", marginTop: "0.75rem" }}>
-          {data.map((wld, wlIdx) =>
-            wld.otherBranches.map((branch, brIdx) => {
-              const first = branch[0];
-              const last = branch[branch.length - 1];
-              return (
-                <div key={`${wlIdx}-${brIdx}`} className="on-row-between">
-                  <span className="text-caption">
-                    ID.{first.id}
-                    {branch.length > 2
-                      ? ` → ... ${branch.length - 2} chapter${branch.length - 2 !== 1 ? "s" : ""} ... → `
-                      : branch.length === 2
-                        ? " → "
-                        : ""}
-                    {branch.length > 1 ? `ID.${last.id}` : ""}
-                  </span>
-                  <a
-                    href={`/novels/${novelId}/read/${last.id}`}
-                    className="on-btn on-btn-secondary"
-                    style={{
-                      textDecoration: "none",
-                      padding: "0.25rem 0.75rem",
-                      fontSize: "0.75rem",
-                    }}
-                  >
-                    Read
-                  </a>
-                </div>
-              );
-            }),
-          )}
-        </div>
-      )}
     </div>
   );
 }

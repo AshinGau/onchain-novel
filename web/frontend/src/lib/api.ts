@@ -135,6 +135,22 @@ export function fetchWorldlines(id: string) {
   return apiFetch<{ worldlines: ChapterSummary[] }>(`/novels/${id}/worldlines`);
 }
 
+export type LineMode = "canon" | "longest" | "active" | "funded";
+
+export interface NovelLine {
+  leafId: string;
+  ancestorId: string;
+  chain: ChapterSummary[];
+}
+
+export function fetchNovelLines(id: string, mode: LineMode = "longest", limit?: number) {
+  const sp = new URLSearchParams({ mode });
+  if (limit) sp.set("limit", String(limit));
+  return apiFetch<{ mode: LineMode; lines: NovelLine[] }>(
+    `/novels/${id}/lines?${sp.toString()}`,
+  );
+}
+
 export function fetchRound(novelId: string, round: number) {
   return apiFetch<{ votes: RoundVote[]; candidates: RoundCandidate[] }>(
     `/novels/${novelId}/rounds/${round}`,
