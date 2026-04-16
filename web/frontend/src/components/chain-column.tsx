@@ -8,14 +8,16 @@ import { ChapterCardMini } from "./chapter-card-mini";
 import { CollapsedChapters } from "./collapsed-chapters";
 
 interface ChainColumnProps {
-  /** Index (1-based) for worldline color */
+  /** Index (1-based) for color */
   worldlineIndex: number;
   /** Full chain from root to leaf */
   chain: ChapterSummary[];
-  /** The worldline ancestor chapter id */
+  /** The worldline ancestor chapter id (for highlight). Pass "" to skip highlight. */
   worldlineAncestorId: string;
   /** Novel id for links */
   novelId: string;
+  /** Override the column heading. Defaults to "World Line N". */
+  label?: string;
 }
 
 export function ChainColumn({
@@ -23,6 +25,7 @@ export function ChainColumn({
   chain,
   worldlineAncestorId,
   novelId,
+  label,
 }: ChainColumnProps) {
   if (chain.length === 0) return null;
 
@@ -49,7 +52,7 @@ export function ChainColumn({
         className="text-caption"
         style={{ textAlign: "center", fontWeight: 600, marginBottom: "0.25rem" }}
       >
-        World Line {worldlineIndex}
+        {label ?? `World Line ${worldlineIndex}`}
       </div>
 
       {/* Root */}

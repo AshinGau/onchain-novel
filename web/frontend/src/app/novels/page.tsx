@@ -10,7 +10,7 @@ export default async function NovelsPage({
 }) {
   const sp = await searchParams;
   const page = Number(sp.page) || 1;
-  const sort = (sp.sort as string) || "latest";
+  const sort = (sp.sort as string) || "active";
   const filter = (sp.filter as string) || "";
   const search = (sp.search as string) || "";
 

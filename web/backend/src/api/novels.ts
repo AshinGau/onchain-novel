@@ -7,6 +7,18 @@ import { isId, parsePagination, safeInt, validateIdParams } from "../utils/valid
 const log = createLogger("api:novels");
 const router = Router();
 
+interface ChapterRow {
+  id: string;
+  parent_id: string;
+  author: string;
+  content_hash: string;
+  depth: number;
+  timestamp: string;
+  is_world_line: boolean;
+  declared_length: number;
+  created_at: string;
+}
+
 // All :id / :round route params are enforced to be positive integers before hitting the DB.
 router.use("/:id", validateIdParams("id"));
 router.use("/:id/rounds/:round", validateIdParams("id", "round"));
@@ -176,6 +188,149 @@ router.get("/:id/worldlines", async (req, res) => {
     res.json({ worldlines: wlRes.rows });
   } catch (err) {
     log.error({ err }, "GET /api/novels/:id/worldlines error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /api/novels/:id/lines — Story lines (full root → leaf chains) under a sort mode.
+// Modes:
+//   canon   — one line per current worldLineAncestor, chain stops at the ancestor.
+//   longest — for each ancestor walk all leaf descendants, build root→leaf chains,
+//             return the top N by chain length (multiple per ancestor allowed).
+//   active  — top N leaves across the novel by created_at DESC, chains root→leaf.
+//   funded  — top N leaves by SUM(chapter_tips.amount) DESC, chains root→leaf.
+// Default mode = longest. Default limit = novel.config.worldLineCount.
+router.get("/:id/lines", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const mode = (req.query.mode as string) || "longest";
+    if (!["canon", "longest", "active", "funded"].includes(mode)) {
+      return res
+        .status(400)
+        .json({ error: `Invalid mode. Use: canon | longest | active | funded` });
+    }
+
+    // Look up worldLineCount as default limit (config is JSONB).
+    const novelRes = await query<{ world_line_count: number }>(
+      `SELECT (config->>'worldLineCount')::int AS world_line_count
+       FROM novels WHERE id = $1`,
+      [id],
+    );
+    if (novelRes.rows.length === 0) {
+      return res.status(404).json({ error: "Novel not found" });
+    }
+    const defaultLimit = novelRes.rows[0].world_line_count || 3;
+    const limit = safeInt(req.query.limit, defaultLimit, 1, 16);
+
+    // Load every chapter for the novel into memory once. Chapters per novel are
+    // bounded (a few thousand at most), and every mode needs the parent chain
+    // for chain reconstruction.
+    const chRes = await query<ChapterRow>(
+      `SELECT id, parent_id, author, content_hash, depth, "timestamp",
+              is_world_line, declared_length, created_at
+       FROM chapters WHERE novel_id = $1`,
+      [id],
+    );
+    if (chRes.rows.length === 0) {
+      return res.json({ mode, lines: [] });
+    }
+    const byId = new Map<string, ChapterRow>();
+    const childrenOf = new Map<string, string[]>();
+    for (const c of chRes.rows) {
+      byId.set(c.id, c);
+      const parentKey = String(c.parent_id);
+      if (!childrenOf.has(parentKey)) childrenOf.set(parentKey, []);
+      childrenOf.get(parentKey)!.push(c.id);
+    }
+
+    function chainTo(leafId: string): ChapterRow[] {
+      const chain: ChapterRow[] = [];
+      let cur: string | undefined = leafId;
+      // Walk parent_id up to root (parent_id "0" or missing in map).
+      while (cur && cur !== "0") {
+        const ch = byId.get(cur);
+        if (!ch) break;
+        chain.push(ch);
+        cur = String(ch.parent_id);
+      }
+      return chain.reverse();
+    }
+
+    // Find every leaf descendant of `nodeId` (including nodeId itself if it has no children).
+    function leavesUnder(nodeId: string): string[] {
+      const out: string[] = [];
+      const stack = [nodeId];
+      while (stack.length > 0) {
+        const cur = stack.pop()!;
+        const kids = childrenOf.get(cur);
+        if (!kids || kids.length === 0) {
+          out.push(cur);
+        } else {
+          for (const k of kids) stack.push(k);
+        }
+      }
+      return out;
+    }
+
+    let lines: { leafId: string; ancestorId: string; chain: ChapterRow[] }[] = [];
+
+    if (mode === "canon") {
+      const ancestors = chRes.rows.filter((c) => c.is_world_line);
+      ancestors.sort((a, b) => Number(b.depth) - Number(a.depth) || Number(a.id) - Number(b.id));
+      lines = ancestors
+        .slice(0, limit)
+        .map((a) => ({ leafId: a.id, ancestorId: a.id, chain: chainTo(a.id) }));
+    } else if (mode === "longest") {
+      const ancestors = chRes.rows.filter((c) => c.is_world_line);
+      const candidates: { leafId: string; ancestorId: string; chain: ChapterRow[] }[] = [];
+      for (const a of ancestors) {
+        for (const leafId of leavesUnder(a.id)) {
+          candidates.push({ leafId, ancestorId: a.id, chain: chainTo(leafId) });
+        }
+      }
+      // Longest first; tie-break by newer leaf (higher id).
+      candidates.sort(
+        (x, y) => y.chain.length - x.chain.length || Number(y.leafId) - Number(x.leafId),
+      );
+      lines = candidates.slice(0, limit);
+    } else if (mode === "active") {
+      // Leaves = chapters with no children, ordered by recency.
+      const leaves = chRes.rows
+        .filter((c) => !childrenOf.has(c.id))
+        .sort(
+          (a, b) =>
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime() ||
+            Number(b.id) - Number(a.id),
+        )
+        .slice(0, limit);
+      lines = leaves.map((l) => ({ leafId: l.id, ancestorId: l.id, chain: chainTo(l.id) }));
+    } else {
+      // funded: aggregate chapter tips by leaf.
+      const leafIds = chRes.rows.filter((c) => !childrenOf.has(c.id)).map((c) => c.id);
+      if (leafIds.length === 0) {
+        return res.json({ mode, lines: [] });
+      }
+      const tipRes = await query<{ chapter_id: string; total: string }>(
+        `SELECT chapter_id, COALESCE(SUM(amount::numeric), 0)::text AS total
+         FROM chapter_tips
+         WHERE chapter_id = ANY($1::bigint[])
+         GROUP BY chapter_id`,
+        [leafIds],
+      );
+      const totalById = new Map(tipRes.rows.map((r) => [r.chapter_id, BigInt(r.total)]));
+      const ranked = leafIds
+        .map((leafId) => ({ leafId, total: totalById.get(leafId) ?? 0n }))
+        .sort((a, b) => {
+          if (a.total !== b.total) return a.total > b.total ? -1 : 1;
+          return Number(b.leafId) - Number(a.leafId);
+        })
+        .slice(0, limit);
+      lines = ranked.map((r) => ({ leafId: r.leafId, ancestorId: r.leafId, chain: chainTo(r.leafId) }));
+    }
+
+    res.json({ mode, lines });
+  } catch (err) {
+    log.error({ err }, "GET /api/novels/:id/lines error");
     res.status(500).json({ error: "Internal server error" });
   }
 });

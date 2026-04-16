@@ -1,42 +1,58 @@
 import { NovelInfo } from "@/components/novel-info";
 import { VoteCandidates } from "@/components/vote-candidates";
-import { fetchNovel, fetchNovelTree, fetchRound, fetchWorldlines } from "@/lib/api";
+import {
+  fetchNovel,
+  fetchNovelLines,
+  fetchNovelTree,
+  fetchRound,
+  fetchWorldlines,
+} from "@/lib/api";
 
 import { NovelWorldlines } from "./novel-worldlines";
+
+const DEFAULT_MODE = "longest" as const;
 
 export default async function NovelDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
-  // Fetch worldlines first to know how deep we need to load the tree.
-  const [novel, wlData] = await Promise.all([fetchNovel(id), fetchWorldlines(id)]);
+  // Worldlines (canon ancestors) feed the "ready for next round" badge in NovelInfo.
+  // Lines (default = longest chains) feed the main visualization.
+  const [novel, wlData, linesData] = await Promise.all([
+    fetchNovel(id),
+    fetchWorldlines(id),
+    fetchNovelLines(id, DEFAULT_MODE),
+  ]);
 
-  // Tree must include the world-line heads and a little buffer for fresh
-  // descendants submitted after the last settle. Fall back to 10 when empty.
-  const maxDepth =
-    wlData.worldlines.length === 0
-      ? 10
-      : Math.max(10, ...wlData.worldlines.map((w) => Number(w.depth) + 3));
-  const treeData = await fetchNovelTree(id, maxDepth);
-
-  // If a round is in progress (phase != Idle), fetch its candidates
+  // Vote candidates section still needs the chapter tree for context lookup.
   let roundCandidates: Awaited<ReturnType<typeof fetchRound>>["candidates"] = [];
+  let candidateChapters: Awaited<ReturnType<typeof fetchNovelTree>>["chapters"] = [];
   if (novel.round_phase > 0 && novel.current_round > 0) {
     try {
-      const round = await fetchRound(id, novel.current_round);
+      const [round, treeData] = await Promise.all([
+        fetchRound(id, novel.current_round),
+        fetchNovelTree(
+          id,
+          wlData.worldlines.length === 0
+            ? 10
+            : Math.max(10, ...wlData.worldlines.map((w) => Number(w.depth) + 3)),
+        ),
+      ]);
       roundCandidates = round.candidates;
+      candidateChapters = treeData.chapters;
     } catch {
-      // Round data not yet indexed; ignore
+      // Round / tree data not yet indexed; ignore
     }
   }
 
-  // Compute continuation readiness: how many world lines have at least one descendant?
+  // Continuation-readiness badge: how many world-line ancestors have at least one descendant?
   const worldLineCount = Number(novel.config?.worldLineCount ?? 0);
-  const worldlineIds = new Set(wlData.worldlines.map((w) => w.id));
-  const parentIdsWithChildren = new Set(
-    treeData.chapters.filter((c) => worldlineIds.has(c.parent_id)).map((c) => c.parent_id),
+  const ancestorsWithChildren = new Set(
+    linesData.lines
+      .filter((ln) => ln.chain.length > 0 && ln.chain[ln.chain.length - 1].id !== ln.ancestorId)
+      .map((ln) => ln.ancestorId),
   );
   const worldlinesWithContinuations = wlData.worldlines.filter((w) =>
-    parentIdsWithChildren.has(w.id),
+    ancestorsWithChildren.has(w.id),
   ).length;
 
   return (
@@ -55,11 +71,15 @@ export default async function NovelDetailPage({ params }: { params: Promise<{ id
           phase={novel.round_phase}
           voteStake={novel.config?.voteStake || "0"}
           candidates={roundCandidates}
-          chapters={treeData.chapters}
+          chapters={candidateChapters}
         />
       )}
 
-      <NovelWorldlines novelId={id} chapters={treeData.chapters} worldlines={wlData.worldlines} />
+      <NovelWorldlines
+        novelId={id}
+        initialMode={DEFAULT_MODE}
+        initialLines={linesData.lines}
+      />
     </div>
   );
 }
