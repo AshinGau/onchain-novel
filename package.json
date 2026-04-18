@@ -1,0 +1,22 @@
+{
+  "name": "onchain-novel",
+  "private": true,
+  "packageManager": "npm@11.3.0",
+  "workspaces": [
+    "packages/*",
+    "cli",
+    "web/frontend",
+    "web/backend"
+  ],
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "yaml": "^2.6.0"
+  },
+  "scripts": {
+    "build:shared": "npm run build --workspace @onchain-novel/shared",
+    "build:backend": "npm run build --workspace onchain-novel-backend",
+    "build:frontend": "npm run build --workspace onchain-novel-frontend",
+    "build:cli": "npm run build --workspace onchain-novel-cli",
+    "build": "npm run build:shared && npm run build:backend && npm run build:cli && npm run build:frontend"
+  }
+}

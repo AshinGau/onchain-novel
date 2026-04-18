@@ -1,35 +1,41 @@
 import dotenv from "dotenv";
+import { loadConfig } from "@onchain-novel/shared";
 
+// Secrets + DATABASE_URL still flow via env (dotenv stays). Non-secret fields
+// (addresses, URLs, ports, indexer params) come from config.yaml.
 dotenv.config();
 
-function required(key: string): string {
-  const v = process.env[key];
-  if (!v) throw new Error(`Missing required env: ${key}`);
+const cfg = loadConfig();
+
+function requireAddress(name: keyof typeof cfg.contracts): `0x${string}` {
+  const v = cfg.contracts[name];
+  if (!v) throw new Error(`Missing contract address in config.yaml: contracts.${name}`);
   return v;
 }
 
-function optional(key: string, fallback: string): string {
-  return process.env[key] || fallback;
-}
-
 export const env = {
-  DATABASE_URL: required("DATABASE_URL"),
-  RPC_URL: required("RPC_URL"),
-  RPC_FALLBACK_URLS: optional("RPC_FALLBACK_URLS", "").split(",").filter(Boolean),
-  NOVEL_CORE_ADDRESS: required("NOVEL_CORE_ADDRESS") as `0x${string}`,
-  ROUND_MANAGER_ADDRESS: optional("ROUND_MANAGER_ADDRESS", "") as `0x${string}`,
-  VOTING_ENGINE_ADDRESS: optional("VOTING_ENGINE_ADDRESS", "") as `0x${string}`,
-  PRIZE_POOL_ADDRESS: optional("PRIZE_POOL_ADDRESS", "") as `0x${string}`,
-  BOUNTY_BOARD_ADDRESS: optional("BOUNTY_BOARD_ADDRESS", "") as `0x${string}`,
-  RULES_ENGINE_ADDRESS: optional("RULES_ENGINE_ADDRESS", "") as `0x${string}`,
-  USER_REGISTRY_ADDRESS: optional("USER_REGISTRY_ADDRESS", "") as `0x${string}`,
-  INDEXER_START_BLOCK: BigInt(optional("INDEXER_START_BLOCK", "0")),
-  INDEXER_POLL_INTERVAL_MS: parseInt(optional("INDEXER_POLL_INTERVAL_MS", "5000")),
-  INDEXER_CONFIRMATION_BLOCKS: parseInt(optional("INDEXER_CONFIRMATION_BLOCKS", "12")),
-  PORT: parseInt(optional("PORT", "3001")),
-  KEEPER_PRIVATE_KEY: optional("KEEPER_PRIVATE_KEY", "") as `0x${string}`,
-  KEEPER_POLL_INTERVAL_MS: parseInt(optional("KEEPER_POLL_INTERVAL_MS", "10000")),
-  // 32-byte key (hex or base64) used to encrypt stored plaintext votes for keeper-assisted reveal.
-  // Required only when accepting POST /api/votes/submit.
-  VOTE_ENCRYPTION_KEY: optional("VOTE_ENCRYPTION_KEY", ""),
+  DATABASE_URL: cfg.backend.databaseUrl,
+  RPC_URL: cfg.chain.rpcUrl,
+  RPC_FALLBACK_URLS: (process.env.RPC_FALLBACK_URLS || "").split(",").filter(Boolean),
+  NOVEL_CORE_ADDRESS: requireAddress("novelCore"),
+  ROUND_MANAGER_ADDRESS: (cfg.contracts.roundManager ?? "") as `0x${string}`,
+  VOTING_ENGINE_ADDRESS: (cfg.contracts.votingEngine ?? "") as `0x${string}`,
+  PRIZE_POOL_ADDRESS: (cfg.contracts.prizePool ?? "") as `0x${string}`,
+  BOUNTY_BOARD_ADDRESS: (cfg.contracts.bountyBoard ?? "") as `0x${string}`,
+  RULES_ENGINE_ADDRESS: (cfg.contracts.rulesEngine ?? "") as `0x${string}`,
+  USER_REGISTRY_ADDRESS: (cfg.contracts.userRegistry ?? "") as `0x${string}`,
+  INDEXER_START_BLOCK: BigInt(cfg.backend.indexer.startBlock),
+  INDEXER_POLL_INTERVAL_MS: cfg.backend.indexer.pollIntervalMs,
+  INDEXER_CONFIRMATION_BLOCKS: cfg.backend.indexer.confirmationBlocks,
+  INDEXER_BATCH_SIZE: cfg.backend.indexer.batchSize,
+  PORT: cfg.backend.port,
+  HOST: cfg.backend.host,
+  KEEPER_PRIVATE_KEY: (process.env.KEEPER_PRIVATE_KEY || "") as `0x${string}`,
+  KEEPER_POLL_INTERVAL_MS: cfg.backend.keeper.pollIntervalMs,
+  // 32-byte key (hex or base64) to encrypt stored plaintext votes. Required
+  // only when accepting POST /api/votes/submit. Env-only for secrecy.
+  VOTE_ENCRYPTION_KEY: process.env.VOTE_ENCRYPTION_KEY || "",
+  // Allowed CORS origins (split-deploy / native-app clients). Same-origin
+  // browsers don't need this because the Next.js proxy keeps API calls local.
+  FRONTEND_URLS: (process.env.FRONTEND_URL || "").split(",").map((s) => s.trim()).filter(Boolean),
 };

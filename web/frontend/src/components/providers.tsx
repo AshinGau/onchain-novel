@@ -22,18 +22,19 @@ const rkDark = darkTheme({ accentColor: "#6366f1" });
 const rkLight = lightTheme({ accentColor: "#6366f1" });
 
 export function Providers({ children }: { children: React.ReactNode }) {
+  // SSR has no DOM — pick "dark" to match the no-FOUC default. After mount
+  // the observer reads the real `.dark` class state (set by the head script)
+  // and updates if needed. Worst case: a sub-tick of wrong RainbowKit theme
+  // on first paint, but no hydration mismatch.
   const [mode, setMode] = useState<"dark" | "light">("dark");
 
   useEffect(() => {
-    // Read initial theme
-    const stored = localStorage.getItem("theme");
-    if (stored === "light") setMode("light");
-
-    // Watch for changes (theme-toggle mutates classList + data-theme)
-    const observer = new MutationObserver(() => {
-      const isDark = document.documentElement.classList.contains("dark");
-      setMode(isDark ? "dark" : "light");
-    });
+    const sync = () => {
+      setMode(document.documentElement.classList.contains("dark") ? "dark" : "light");
+    };
+    sync();
+    // Watch for theme-toggle toggling the `.dark` class on <html>.
+    const observer = new MutationObserver(sync);
     observer.observe(document.documentElement, {
       attributes: true,
       attributeFilter: ["class"],

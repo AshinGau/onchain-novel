@@ -26,7 +26,7 @@ story-genesis/
 1. Start the local development stack:
 
 ```bash
-./script/local-node.sh start
+./scripts/dev.sh start
 ```
 
 2. Initialize all 34 novels on-chain:

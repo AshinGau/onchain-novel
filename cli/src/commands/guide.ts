@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Command } from "commander";
@@ -9,7 +9,10 @@ const VALID_ROLES = ["author", "voter", "creator", "reader"] as const;
 type Role = (typeof VALID_ROLES)[number];
 
 function getGuidePath(role: Role): string {
-  const guidesDir = join(dirname(fileURLToPath(import.meta.url)), "..", "guides");
+  const here = dirname(fileURLToPath(import.meta.url));
+  const guidesDir = existsSync(join(here, "guides"))
+    ? join(here, "guides")
+    : join(here, "..", "guides");
   return join(guidesDir, `${role}.md`);
 }
 

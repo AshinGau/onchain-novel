@@ -8,7 +8,7 @@ Next.js 16 + App Router. Data from backend REST API; on-chain writes via wallet 
 - Semantic CSS classes in `globals.css`, no inline styles or excessive utility classes
 - Shared components for repeated patterns (chapter cards, buttons, modals, tx status)
 - Responsive: lg+ full N-column layout, md 2-column, sm single-column with tabs
-- Reader-subset scope: writing, voting, rule governance, and novel completion flows live in CLI/MCP; the frontend covers discovery, reading, tipping, bounties, forking, and novel creation.
+- Reader-subset scope: writing, voting, rule governance, and novel completion flows live in the CLI (with agent skill files); the frontend covers discovery, reading, tipping, bounties, forking, and novel creation.
 
 ## 2. Pages
 
@@ -63,7 +63,7 @@ EIP-191 signed, off-chain, append-only. No gas, no on-chain transaction.
 
 `useTxAction` returns `{ send, reset, status, error, txHash, isPending }`. `send(params, onSuccess?)` calls `writeContractAsync`, then the hook observes `useWaitForTransactionReceipt` and fires `onSuccess` only after the receipt resolves. No manual RPC polling.
 
-## 5. Not Implemented (use CLI/MCP)
+## 5. Not Implemented (use CLI)
 
 - Nomination submission UI
 - Rule proposal / governance UI (frontend only sets initial creator rules at novel creation)

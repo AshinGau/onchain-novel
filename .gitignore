@@ -18,7 +18,6 @@ out/
 .agent/
 .gemini/
 .cursor/
-.mcp.json
 *.swp
 *.swo
 *~
@@ -50,7 +49,10 @@ yarn-error.log*
 coverage/
 lcov.info
 
-# Local dev node
+# Local dev node state (pidfiles, logs, deploy log)
 .local-node/
-mcp/local-node-config.json
-.mcp.json
+
+# Local config override (personal) + secrets
+config.local.yaml
+config.yaml
+.secrets.env

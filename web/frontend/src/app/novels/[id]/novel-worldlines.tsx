@@ -90,16 +90,25 @@ export function NovelWorldlines({ novelId, initialMode, initialLines }: Props) {
         )}
       </div>
 
-      {loading && <div className="text-caption text-muted">Loading…</div>}
-
+      {/* Stale-while-revalidate: keep rendering the previous `lines` while a
+          new fetch is in flight so the page height doesn't collapse and the
+          scroll position stays put. Only show "empty" when we truly have none
+          and aren't loading. */}
       {!loading && lines.length === 0 && (
         <div className="text-caption" style={{ textAlign: "center", padding: "2rem" }}>
           No story lines available for this mode.
         </div>
       )}
 
-      {!loading && lines.length > 0 && (
-        <>
+      {lines.length > 0 && (
+        <div
+          style={{
+            opacity: loading ? 0.5 : 1,
+            pointerEvents: loading ? "none" : "auto",
+            transition: "opacity 0.15s",
+          }}
+          aria-busy={loading}
+        >
           {/* Desktop: multi-column grid */}
           <div className="worldline-grid-desktop">
             <div
@@ -147,7 +156,7 @@ export function NovelWorldlines({ novelId, initialMode, initialLines }: Props) {
               ))}
             </Tabs>
           </div>
-        </>
+        </div>
       )}
 
       <style>{`

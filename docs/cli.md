@@ -1,13 +1,15 @@
 # CLI Design
 
-Single npm package `onchain-novel-cli`: command-line interaction + `setup` to generate MCP and skill configs.
+Single npm package `onchain-novel-cli`, published as a single bundled artifact (tsup). Provides the full set of read + write operations against the protocol, plus a `setup` command that drops agent skill files into `.claude/commands/`.
 
 ## 1. Setup
 
 ```bash
 npm install -g onchain-novel-cli
-onchain-novel-cli setup    # Generate ~/.onchain-novel/config.json + .mcp.json + .claude/commands/*.md skill files
+onchain-novel-cli setup    # Drops role-specific skill files into .claude/commands/
 ```
+
+Configuration (RPC URL, API URL, contract addresses) is read from `config.yaml` at the repo root — the loader walks up from CWD. Override with `ONCHAIN_NOVEL_CONFIG=/path/to/config.yaml`. Contract addresses are populated automatically after `scripts/deploy.sh`.
 
 Secrets are never persisted. Export your signer key before running write commands:
 
@@ -18,10 +20,9 @@ export PRIVATE_KEY=0x...
 ## 2. Subcommands
 
 ```bash
-# Init and config
-onchain-novel-cli setup
-onchain-novel-cli config
-onchain-novel-cli config set <key> <value>
+# Setup and config
+onchain-novel-cli setup               # write skill files into .claude/commands/
+onchain-novel-cli config              # print current configuration (read-only)
 
 # Novels
 onchain-novel-cli novel create [options] --content "..."

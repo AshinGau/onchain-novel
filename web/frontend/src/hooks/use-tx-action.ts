@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { TransactionReceipt } from "viem";
 import { useWaitForTransactionReceipt, useWriteContract } from "wagmi";
 
 type TxStatus = "idle" | "confirming" | "waiting" | "success" | "error";
@@ -13,28 +14,33 @@ export function useTxAction() {
   const [status, setStatus] = useState<TxStatus>("idle");
   const [error, setError] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<`0x${string}` | undefined>();
-  const onSuccessRef = useRef<(() => void) | undefined>(undefined);
+  const onSuccessRef = useRef<((receipt: TransactionReceipt) => void) | undefined>(undefined);
 
   const { writeContractAsync } = useWriteContract();
 
-  const { isSuccess, isError, error: receiptError } = useWaitForTransactionReceipt({ hash: txHash });
+  const {
+    data: receipt,
+    isSuccess,
+    isError,
+    error: receiptError,
+  } = useWaitForTransactionReceipt({ hash: txHash, pollingInterval: 500 });
 
   useEffect(() => {
     if (!txHash || status !== "waiting") return;
-    if (isSuccess) {
+    if (isSuccess && receipt) {
       setStatus("success");
-      onSuccessRef.current?.();
+      onSuccessRef.current?.(receipt);
     } else if (isError) {
       setStatus("error");
       setError(receiptError?.message?.slice(0, 200) || "Transaction reverted");
     }
-  }, [txHash, status, isSuccess, isError, receiptError]);
+  }, [txHash, status, isSuccess, isError, receipt, receiptError]);
 
   const send = useCallback(
     async (
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       params: any,
-      onSuccess?: () => void,
+      onSuccess?: (receipt: TransactionReceipt) => void,
     ) => {
       setStatus("confirming");
       setError(null);
@@ -66,6 +72,7 @@ export function useTxAction() {
     status,
     error,
     txHash,
+    receipt,
     isPending: status === "confirming" || status === "waiting",
   };
 }
