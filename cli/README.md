@@ -15,7 +15,7 @@ Requires Node.js ≥ 20.
 ## Quick Start
 
 ```bash
-# 1. Configure the CLI (RPC, backend API, contract addresses)
+# 1. Drop agent skill files into .claude/commands/ in your project
 onchain-novel-cli setup
 
 # 2. Export your signer key (never stored on disk)
@@ -26,10 +26,13 @@ onchain-novel-cli novel list
 onchain-novel-cli vote discover --phase committing
 ```
 
-`setup` also generates:
+`setup` writes `.claude/commands/novel-{author,voter,creator,reader}.md` — role-specific skill files that teach an agent how to use this CLI end-to-end.
 
-- `.mcp.json` — MCP server config for Claude Code / other agents.
-- `.claude/commands/novel-{author,voter,creator,reader}.md` — role-specific skill files that teach an agent how to use this CLI end-to-end.
+## Configuration
+
+The CLI reads `config.yaml` at the repo root (walks up from CWD) for non-secret settings: RPC URL, backend API URL, chain ID, contract addresses. Override the path with `ONCHAIN_NOVEL_CONFIG=/path/to/config.yaml` when working outside the repo.
+
+Edit `config.yaml` directly to change values. Contract addresses are filled in automatically by `scripts/deploy.sh` after `forge script Deploy`. Secrets always come from env vars — there is no persistent CLI-side config.
 
 ## Commands
 
@@ -42,8 +45,9 @@ onchain-novel-cli vote discover --phase committing
 | `bounty` | `create` / `list` / `info` / `designate` / `claim` / `refund` |
 | `rule` | `list` / `set` / `propose` / `vote` / `proposal` |
 | `user` | `votes` / `chapters` / `rewards` |
-| `config` | View or set CLI configuration |
+| `config` | Print current configuration (read-only) |
 | `guide` | Print role guides: `author` / `voter` / `creator` / `reader` |
+| `setup` | Drop skill files into `.claude/commands/` |
 
 Run `onchain-novel-cli <group> --help` for details on each subcommand.
 
@@ -66,7 +70,7 @@ The CLI **never persists private keys**. Always inject via environment:
 export PRIVATE_KEY=0x...
 ```
 
-Use `direnv`, `1Password CLI`, or a shell secret manager for convenience. `config set privateKey` is explicitly rejected.
+Use `direnv`, `1Password CLI`, or a shell secret manager for convenience.
 
 ## Links
 

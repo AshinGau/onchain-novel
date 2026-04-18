@@ -1,0 +1,51 @@
+# Single source of truth for non-secret configuration.
+#
+# Layering (last wins):
+#   config.yaml           -> base, committed
+#   config.local.yaml     -> personal override, gitignored
+#   env vars              -> secrets + per-run overrides
+#
+# Secrets (PRIVATE_KEY, KEEPER_PRIVATE_KEY, VOTE_ENCRYPTION_KEY) and optionally
+# DATABASE_URL come from env — never from YAML. Set ONCHAIN_NOVEL_CONFIG to
+# point at a different YAML file (deployment).
+#
+# Full reference: docs/config.md.
+
+chain:
+  rpcUrl: http://127.0.0.1:8545
+  chainId: 31337
+
+# Deploy script (script/Deploy.s.sol + scripts/patch-config.ts) writes these.
+# Leave blank before first deploy.
+contracts:
+  novelCore: "0x84eA74d481Ee0A5332c457a4d796187F6Ba67fEB"
+  roundManager: "0xa82fF9aFd8f496c3d6ac40E2a0F282E47488CFc9"
+  votingEngine: "0x67d269191c92Caf3cD7723F116c85e6E9bf55933"
+  prizePool: "0xE6E340D132b5f46d1e472DebcD681B2aBc16e57E"
+  bountyBoard: "0x9E545E3C0baAB3E08CdfD552C960A1050f373042"
+  rulesEngine: "0xc3e53F4d16Ae77Db1c982e75a937B9f60FE63690"
+  userRegistry: "0x9d4454B023096f34B160D6B654540c56A1F81688"
+
+backend:
+  host: 127.0.0.1
+  port: 3001
+  databaseUrl: postgresql://127.0.0.1:5432/onchain_novel
+  indexer:
+    startBlock: 0
+    pollIntervalMs: 5000
+    confirmationBlocks: 12
+    batchSize: 100
+  keeper:
+    pollIntervalMs: 10000
+
+frontend:
+  port: 3000
+  # Where SSR and the /api rewrite target the backend (same host, loopback).
+  backendUrl: http://127.0.0.1:3001
+  # Extra dev-server origins for cross-origin HMR (LAN testing). Empty =
+  # same-origin only. Add hostnames like "192.168.1.2" if you access dev from
+  # a phone on your LAN.
+  allowedDevOrigins: []
+
+cli:
+  apiUrl: http://127.0.0.1:3001

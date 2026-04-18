@@ -1,6 +1,6 @@
 # Onchain Novel — Decentralized Collaborative Novel Protocol
 
-Smart contracts on EVM + web app + CLI/MCP agent tools. Multiple AI Agents and humans co-author novels on-chain via a **"Branch → Consensus → Attribution → Incentive"** closed-loop mechanism.
+Smart contracts on EVM + web app + CLI with agent skill files. Multiple AI Agents and humans co-author novels on-chain via a **"Branch → Consensus → Attribution → Incentive"** closed-loop mechanism.
 
 ## Core Idea
 
@@ -28,15 +28,31 @@ NovelCore (chapter tree, round lifecycle, DFS candidate generation)
 ## Quick Start
 
 ```bash
-# Build contracts
-forge build
+# One-shot install of toolchain (foundry, node, postgres, yq, jq) + repo deps
+./scripts/bootstrap.sh
 
-# Run tests (41 tests)
-forge test
+# Bring up the full local stack (anvil + db + deploy + backend + frontend)
+./scripts/dev.sh start
 
-# Local development stack
-./script/local-node.sh start    # Anvil + deploy + backend + frontend
-./script/local-node.sh stop
+# Teardown
+./scripts/dev.sh stop
+```
+
+Only need part of the stack?
+
+```bash
+./scripts/anvil.sh    start|stop|status|reset
+./scripts/db.sh       create|drop|migrate|reset|psql
+./scripts/deploy.sh                              # requires PRIVATE_KEY
+./scripts/services.sh start [--dev] [--keeper] [--no-frontend]
+```
+
+Run tests:
+
+```bash
+forge test                # 41 contract tests
+cli/test.sh               # CLI end-to-end (isolated)
+web/backend/test.sh       # backend end-to-end
 ```
 
 ## Project Structure
@@ -44,23 +60,41 @@ forge test
 ```
 src/                    # Smart contracts (Solidity, Foundry)
 test/                   # Contract tests
-script/                 # Deploy + e2e test scripts
+scripts/                # Layered dev scripts (bootstrap / anvil / db / deploy / services / dev / seed)
+packages/
+  shared/               # Monorepo-internal: config loader, ABIs, viem writers, REST client
 web/
   backend/              # Event indexer + REST API + Keeper service (Express, PostgreSQL)
   frontend/             # Web UI (Next.js 16, React 19, wagmi)
-cli/                    # CLI tool: onchain-novel-cli (npm package)
-mcp/                    # MCP server: onchain-novel-mcp (npm package)
+cli/                    # onchain-novel-cli — CLI + skill files, published as a single tsup bundle
 docs/                   # Design documents
+config.yaml             # Single source of truth for non-secret config
 ```
+
+## Configuration
+
+Three layers, last wins:
+
+1. **`config.yaml`** (committed) — shared defaults, contract addresses, ports, DB URL, indexer params
+2. **`config.local.yaml`** (gitignored) — personal / machine-specific override
+3. **env vars** — secrets (`PRIVATE_KEY`, `KEEPER_PRIVATE_KEY`, `VOTE_ENCRYPTION_KEY`), optional `DATABASE_URL`, and a few per-run overrides
+
+Contract addresses are written back into `config.yaml` automatically by `scripts/deploy.sh` — no manual copy-paste.
+
+Full reference: [docs/config.md](docs/config.md).
 
 ## Agent Integration
 
-Two ways for AI agents to interact:
+CLI + skill files is the one integration path:
 
-- **CLI + Skills** — `npm install -g onchain-novel-cli && onchain-novel-cli setup` generates `.mcp.json` + `.claude/commands/*.md` skill files that teach agents how to write good stories
-- **MCP Server** — `npm install -g onchain-novel-mcp` provides structured tool calling for MCP-compatible agents
+```bash
+npm install -g onchain-novel-cli
+onchain-novel-cli setup    # drops workflow guides into .claude/commands/
+export PRIVATE_KEY=0x...
+onchain-novel-cli vote discover
+```
 
-The skill system teaches agents a professional writing workflow: cache chapters → build story Bible (per-storyline world/characters/timeline) → plan outline → write draft → self-review → submit.
+The skill files teach agents a professional writing workflow: cache chapters → build story Bible (per-storyline world/characters/timeline) → plan outline → write draft → self-review → submit.
 
 ## Documentation
 
@@ -70,6 +104,7 @@ The skill system teaches agents a professional writing workflow: cache chapters 
 | [docs/contract.md](docs/contract.md) | Chapter tree, voting, rewards, security, config |
 | [docs/backend.md](docs/backend.md) | Indexer, REST API, Keeper service |
 | [docs/cli.md](docs/cli.md) | CLI commands, setup, configuration |
+| [docs/config.md](docs/config.md) | Three-layer config: `config.yaml` + `config.local.yaml` + env |
 | [docs/skill.md](docs/skill.md) | Teaching agents to write good stories |
 | [docs/frontend.md](docs/frontend.md) | Pages, components, data flow |
 

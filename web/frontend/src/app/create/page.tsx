@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-import { keccak256, parseEther, toBytes, toHex } from "viem";
-import { useAccount, usePublicClient } from "wagmi";
+import { useState } from "react";
+import { keccak256, parseEther, toBytes, toHex, type TransactionReceipt } from "viem";
+import { useAccount } from "wagmi";
 
 import { ConfigForm } from "@/components/config-form";
 import { useTxAction } from "@/hooks/use-tx-action";
@@ -16,6 +16,13 @@ import {
   rulesEngineAbi,
 } from "@/lib/contracts";
 import { DEFAULT_CONFIG, validateAllFields, type NovelConfigForm } from "@/lib/novel-config";
+
+function extractNovelId(receipt: TransactionReceipt): bigint | null {
+  const log = receipt.logs.find(
+    (l) => l.address.toLowerCase() === NOVEL_CORE_ADDRESS.toLowerCase() && l.topics.length >= 2,
+  );
+  return log?.topics[1] ? BigInt(log.topics[1]) : null;
+}
 
 interface BootstrapChapter {
   content: string;
@@ -29,7 +36,6 @@ interface CreatorRule {
 export default function CreateNovelPage() {
   const router = useRouter();
   const { isConnected } = useAccount();
-  const publicClient = usePublicClient();
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -39,54 +45,11 @@ export default function CreateNovelPage() {
   const [initialPrize, setInitialPrize] = useState("");
   const [creatorRules, setCreatorRules] = useState<CreatorRule[]>([]);
   const [validationError, setValidationError] = useState("");
-  const [rulesSent, setRulesSent] = useState(false);
 
   const hasRules =
     creatorRules.length > 0 && creatorRules.some((r) => r.name.trim() && r.content.trim());
   const ruleTx = useTxAction();
   const tx = useTxAction();
-
-  useEffect(() => {
-    if (
-      !tx.status ||
-      tx.status !== "success" ||
-      !tx.txHash ||
-      !hasRules ||
-      rulesSent ||
-      !publicClient
-    )
-      return;
-    setRulesSent(true);
-    (async () => {
-      try {
-        const receipt = await publicClient.getTransactionReceipt({ hash: tx.txHash! });
-        const novelCreatedLog = receipt.logs.find(
-          (l) =>
-            l.address.toLowerCase() === NOVEL_CORE_ADDRESS.toLowerCase() && l.topics.length >= 2,
-        );
-        if (!novelCreatedLog?.topics[1]) return;
-        const novelId = BigInt(novelCreatedLog.topics[1]);
-        const validRules = creatorRules.filter((r) => r.name.trim() && r.content.trim());
-        ruleTx.send(
-          {
-            address: RULES_ENGINE_ADDRESS,
-            abi: rulesEngineAbi,
-            functionName: "setCreatorRules",
-            args: [
-              novelId,
-              validRules.map((r) => r.name.trim()),
-              validRules.map((r) => r.content.trim()),
-            ],
-          },
-          () => {
-            setTimeout(() => router.push("/novels"), 2000);
-          },
-        );
-      } catch (err) {
-        console.error("Failed to set creator rules:", err);
-      }
-    })();
-  }, [tx.status]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function byteCount(text: string): number {
     return new TextEncoder().encode(text).length;
@@ -172,11 +135,30 @@ export default function CreateNovelPage() {
         ],
         value,
       },
-      hasRules
-        ? undefined
-        : () => {
-            setTimeout(() => router.push("/novels"), 2000);
+      (receipt) => {
+        const novelId = extractNovelId(receipt);
+        if (novelId === null) return;
+        if (!hasRules) {
+          setTimeout(() => router.push(`/novels/${novelId}`), 1500);
+          return;
+        }
+        const validRules = creatorRules.filter((r) => r.name.trim() && r.content.trim());
+        ruleTx.send(
+          {
+            address: RULES_ENGINE_ADDRESS,
+            abi: rulesEngineAbi,
+            functionName: "setCreatorRules",
+            args: [
+              novelId,
+              validRules.map((r) => r.name.trim()),
+              validRules.map((r) => r.content.trim()),
+            ],
           },
+          () => {
+            setTimeout(() => router.push(`/novels/${novelId}`), 1500);
+          },
+        );
+      },
     );
   }
 

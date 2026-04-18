@@ -20,54 +20,47 @@ Frontend (Next.js 16)          Backend (Express)                Chain (EVM)
 
 ## Prerequisites
 
-- Node.js >= 18
-- PostgreSQL >= 14
-- Foundry (anvil, forge, cast)
+`./scripts/bootstrap.sh` installs everything (foundry, node ≥20, postgres, yq, jq) on macOS (brew) or Linux (apt/yum). Alternatively install each tool manually.
+
+## Configuration
+
+All non-secret settings (ports, RPC, DB URL, contract addresses, indexer params) live in `config.yaml` at the repo root. Secrets (`PRIVATE_KEY`, `KEEPER_PRIVATE_KEY`, `VOTE_ENCRYPTION_KEY`, optional `DATABASE_URL`) come from the environment.
 
 ## Quick Start
 
-### Backend
+### Full local stack
 
 ```bash
-cd web/backend
-npm install
-npm run migrate   # Create database tables (single 001_init.sql)
-npm run dev       # Start API server + indexer on :3001
+./scripts/dev.sh start      # anvil + db + deploy + backend + frontend (release mode; add --dev for watch)
+./scripts/dev.sh stop    # stop everything
+./scripts/dev.sh reset   # wipe DB + redeploy + restart
 ```
 
-Environment variables:
-```env
-DATABASE_URL=postgresql://localhost:5432/onchain_novel
-RPC_URL=http://localhost:8545
-NOVEL_CORE_ADDRESS=0x...
-VOTING_ENGINE_ADDRESS=0x...
-PRIZE_POOL_ADDRESS=0x...
-BOUNTY_BOARD_ADDRESS=0x...
-RULES_ENGINE_ADDRESS=0x...
-KEEPER_PRIVATE_KEY=0x...       # Optional: enables auto-keeper
+### Backend only
+
+```bash
+./scripts/anvil.sh    start
+./scripts/db.sh       reset                  # create + migrate
+PRIVATE_KEY=0x... ./scripts/deploy.sh        # writes addresses back to config.yaml
+./scripts/services.sh start --no-frontend    # backend only, built artifact
+# or: ./scripts/services.sh start --dev --no-frontend     # tsx watch
 ```
 
-### Frontend
+### Frontend only
 
 ```bash
 cd web/frontend
-npm install
-npm run dev       # Start dev server on :3000
+npm run dev           # Next.js dev server on :3000
 ```
 
-### Local Development (all-in-one)
+`/api/*` is proxied through Next.js to the backend (see `web/frontend/next.config.ts`), so the browser talks to a single origin regardless of IP / domain — no CORS.
 
-```bash
-./script/local-node.sh start   # Anvil + deploy + backend + frontend
-./script/local-node.sh stop
-```
-
-## Backend E2E Tests
+## Backend E2E Test
 
 Full lifecycle test against Anvil: deploy, create novel, submit chapters, vote, settle, tip, bounty, fork, verify API.
 
 ```bash
-./web/backend/e2e-test.sh
+./web/backend/test.sh
 ```
 
 ## API Endpoints

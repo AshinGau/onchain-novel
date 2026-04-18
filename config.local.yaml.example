@@ -1,0 +1,12 @@
+# Copy to config.local.yaml (gitignored) and edit as needed.
+# Deep-merged on top of config.yaml. Secrets still go in env vars, not here.
+
+# Example: access dev server from a phone on your LAN.
+# frontend:
+#   allowedDevOrigins:
+#     - 192.168.1.2
+
+# Example: point at a remote RPC for testing.
+# chain:
+#   rpcUrl: https://eth-sepolia.g.alchemy.com/v2/YOUR_KEY
+#   chainId: 11155111

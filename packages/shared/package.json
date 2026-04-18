@@ -1,0 +1,40 @@
+{
+  "name": "@onchain-novel/shared",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Monorepo-internal shared code: config, chain bindings, REST DTOs. Bundled into the CLI at publish time via tsup; never published to npm.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./chain": {
+      "types": "./dist/chain/index.d.ts",
+      "default": "./dist/chain/index.js"
+    },
+    "./vote-store": {
+      "types": "./dist/chain/vote-store.d.ts",
+      "default": "./dist/chain/vote-store.js"
+    },
+    "./api": {
+      "types": "./dist/api/index.d.ts",
+      "default": "./dist/api/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "viem": "^2.23.2",
+    "yaml": "^2.6.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.7.0"
+  }
+}

@@ -109,7 +109,8 @@
   --color-worldline-5: #10b981;
 }
 
-[data-theme="dark"] {
+.dark {
+  /* Semantic layer (on-* classes) */
   --color-bg: #0f172a;
   --color-bg-secondary: #1e293b;
   --color-bg-tertiary: #334155;
@@ -117,9 +118,8 @@
   --color-text-secondary: #94a3b8;
   --color-text-muted: #64748b;
   --color-border: #334155;
-}
 
-.dark {
+  /* shadcn tokens */
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);

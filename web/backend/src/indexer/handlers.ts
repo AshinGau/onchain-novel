@@ -10,7 +10,7 @@ import {
   rulesEngineAbi,
   userRegistryAbi,
   votingEngineAbi,
-} from "../utils/abi.js";
+} from "@onchain-novel/shared/chain";
 import { env } from "../utils/env.js";
 import { addrLc, eventMeta, safeDecode } from "../utils/event-meta.js";
 import { createLogger } from "../utils/logger.js";

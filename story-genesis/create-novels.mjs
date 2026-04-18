@@ -6,8 +6,12 @@
  *   node story-genesis/create-novels.mjs
  *
  * Requirements:
- *   - Local node running (./script/local-node.sh start)
+ *   - Local stack running (./scripts/dev.sh start)
  *   - Node.js with access to viem (resolved from web/frontend/node_modules)
+ *   - yaml parser (from root devDependencies)
+ *
+ * Reads RPC URL and contract addresses from config.yaml (the same single
+ * source of truth the rest of the codebase uses).
  */
 
 import { createRequire } from "module";
@@ -30,28 +34,30 @@ const { foundry } = require("viem/chains");
 import { readFileSync, readdirSync, existsSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
+import YAML from "yaml";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
 
 // ── Config ──────────────────────────────────────────────────────────────────
-const RPC_URL = "http://127.0.0.1:8545";
+const configPath = process.env.ONCHAIN_NOVEL_CONFIG || join(ROOT, "config.yaml");
+const cfg = YAML.parse(readFileSync(configPath, "utf-8"));
+
+const RPC_URL = cfg.chain.rpcUrl;
+// Anvil test account #1 — deterministic, safe to hardcode for local dev.
 const PRIVATE_KEY =
   "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d";
 
 const COVER_BASE_URL =
   "https://raw.githubusercontent.com/AshinGau/onchain-novel/refs/heads/main/story-genesis/images";
 
-// Read contract addresses from .local-node/env
-const envFile = readFileSync(join(ROOT, ".local-node/env"), "utf-8");
-const env = Object.fromEntries(
-  envFile
-    .split("\n")
-    .filter((l) => l.includes("="))
-    .map((l) => l.split("="))
-);
-const NOVEL_CORE = env.NOVEL_CORE_ADDRESS;
-const RULES_ENGINE = env.RULES_ENGINE_ADDRESS;
+const NOVEL_CORE = cfg.contracts.novelCore;
+const RULES_ENGINE = cfg.contracts.rulesEngine;
+
+if (!NOVEL_CORE || !RULES_ENGINE) {
+  console.error("contracts.novelCore / contracts.rulesEngine empty in config.yaml — run ./scripts/dev.sh start first");
+  process.exit(1);
+}
 
 // ── ABI fragments ───────────────────────────────────────────────────────────
 const novelCoreAbi = parseAbi([

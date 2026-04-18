@@ -127,7 +127,7 @@ export function registerVoteCommands(program: Command): void {
           // Build path proof: nominated chapter → current worldLineAncestor
           const ancestors = (await pub.readContract({
             address: contracts.novelCore,
-            abi: (await import("../shared/abi.js")).novelCoreAbi,
+            abi: (await import("../shared/index.js")).novelCoreAbi,
             functionName: "getWorldLineAncestors",
             args: [BigInt(novelId)],
           })) as readonly bigint[];
