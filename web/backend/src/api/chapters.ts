@@ -8,9 +8,6 @@ import { isAddress, parsePagination, safeInt, validateIdParams } from "../utils/
 const log = createLogger("api:chapters");
 const router = Router();
 
-// All routes expect :id to be a positive integer chapter id.
-router.use("/:id", validateIdParams("id"));
-
 // Per-address rate limit for comments: 10 per chapter per hour, enforced inline
 const COMMENT_WINDOW_MS = 60 * 60 * 1000;
 const COMMENT_MAX_PER_WINDOW = 10;
@@ -18,7 +15,7 @@ const COMMENT_MAX_PER_WINDOW = 10;
 const COMMENT_TIMESTAMP_TOLERANCE_MS = 60 * 1000;
 
 // GET /api/chapters/:id — Chapter detail with content
-router.get("/:id", async (req, res) => {
+router.get("/:id", validateIdParams("id"), async (req, res) => {
   try {
     const { id } = req.params;
     const chapterRes = await query(
@@ -41,7 +38,7 @@ router.get("/:id", async (req, res) => {
 });
 
 // GET /api/chapters/:id/siblings — Same parent chapters
-router.get("/:id/siblings", async (req, res) => {
+router.get("/:id/siblings", validateIdParams("id"), async (req, res) => {
   try {
     const { id } = req.params;
     const chapterRes = await query("SELECT parent_id, novel_id FROM chapters WHERE id = $1", [id]);
@@ -65,7 +62,7 @@ router.get("/:id/siblings", async (req, res) => {
 });
 
 // GET /api/chapters/:id/children — Direct children (paginated)
-router.get("/:id/children", async (req, res) => {
+router.get("/:id/children", validateIdParams("id"), async (req, res) => {
   try {
     const { id } = req.params;
     const { page, limit, offset } = parsePagination(req.query, {
@@ -94,7 +91,7 @@ router.get("/:id/children", async (req, res) => {
 });
 
 // GET /api/chapters/:id/context — Ancestor chain for writing context
-router.get("/:id/context", async (req, res) => {
+router.get("/:id/context", validateIdParams("id"), async (req, res) => {
   const client = await getClient();
   try {
     const { id } = req.params;
@@ -129,7 +126,7 @@ router.get("/:id/context", async (req, res) => {
 });
 
 // GET /api/chapters/:id/comments
-router.get("/:id/comments", async (req, res) => {
+router.get("/:id/comments", validateIdParams("id"), async (req, res) => {
   try {
     const { id } = req.params;
     const { page, limit, offset } = parsePagination(req.query);
@@ -150,7 +147,7 @@ router.get("/:id/comments", async (req, res) => {
 // Request body: { address, content, timestamp, signature }
 // Canonical message format:  Comment on chapter {id} at {timestamp}: {content}
 // Reject if: signature mismatch, timestamp too old, rate limit exceeded.
-router.post("/:id/comments", async (req, res) => {
+router.post("/:id/comments", validateIdParams("id"), async (req, res) => {
   try {
     const { id } = req.params;
     const { address, content, timestamp, signature } = req.body ?? {};
@@ -215,7 +212,7 @@ router.post("/:id/comments", async (req, res) => {
 });
 
 // GET /api/chapters/:id/bounties — Bounties targeting this chapter (paginated)
-router.get("/:id/bounties", async (req, res) => {
+router.get("/:id/bounties", validateIdParams("id"), async (req, res) => {
   try {
     const { id } = req.params;
     const { page, limit, offset } = parsePagination(req.query);
@@ -231,7 +228,7 @@ router.get("/:id/bounties", async (req, res) => {
 });
 
 // GET /api/chapters/:id/tips — Tips for this chapter (paginated)
-router.get("/:id/tips", async (req, res) => {
+router.get("/:id/tips", validateIdParams("id"), async (req, res) => {
   try {
     const { id } = req.params;
     const { page, limit, offset } = parsePagination(req.query);

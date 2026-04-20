@@ -1,1 +1,1 @@
-(Coming-of-Age) Elias, a first-generation college student from Bakersfield, arrives at UCLA and confronts a world of privilege he's never known. The distance between a welder's son and everyone else has never felt so vast.
+(Coming-of-Age) Hedrick Hall 417. "YOU WILL SURVIVE THIS" scratched into the desk. Elias opens his mouth to greet his roommate and nothing comes out—just a dry click.

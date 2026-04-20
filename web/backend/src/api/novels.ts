@@ -19,10 +19,6 @@ interface ChapterRow {
   created_at: string;
 }
 
-// All :id / :round route params are enforced to be positive integers before hitting the DB.
-router.use("/:id", validateIdParams("id"));
-router.use("/:id/rounds/:round", validateIdParams("id", "round"));
-
 const SORT_OPTIONS: Record<string, string> = {
   hot: "view_count DESC",
   pool: "pool_balance DESC",
@@ -109,7 +105,7 @@ router.get("/", async (req, res) => {
 });
 
 // GET /api/novels/:id — Novel detail
-router.get("/:id", async (req, res) => {
+router.get("/:id", validateIdParams("id"), async (req, res) => {
   try {
     const { id } = req.params;
     const novelRes = await query(
@@ -143,7 +139,7 @@ router.get("/:id", async (req, res) => {
 
 // GET /api/novels/:id/tree — Story tree with depth pagination
 // Query params: maxDepth (default 10) — load chapters up to this depth
-router.get("/:id/tree", async (req, res) => {
+router.get("/:id/tree", validateIdParams("id"), async (req, res) => {
   try {
     const { id } = req.params;
     const maxDepth = safeInt(req.query.maxDepth, 10, 1, 100);
@@ -175,7 +171,7 @@ router.get("/:id/tree", async (req, res) => {
 
 // GET /api/novels/:id/worldlines — Current active world line ancestors
 // Returns chapters that are current world line ancestors (branching points for the next round).
-router.get("/:id/worldlines", async (req, res) => {
+router.get("/:id/worldlines", validateIdParams("id"), async (req, res) => {
   try {
     const { id } = req.params;
     const wlRes = await query(
@@ -200,7 +196,7 @@ router.get("/:id/worldlines", async (req, res) => {
 //   active  — top N leaves across the novel by created_at DESC, chains root→leaf.
 //   funded  — top N leaves by SUM(chapter_tips.amount) DESC, chains root→leaf.
 // Default mode = longest. Default limit = novel.config.worldLineCount.
-router.get("/:id/lines", async (req, res) => {
+router.get("/:id/lines", validateIdParams("id"), async (req, res) => {
   try {
     const { id } = req.params;
     const mode = (req.query.mode as string) || "longest";
@@ -336,7 +332,7 @@ router.get("/:id/lines", async (req, res) => {
 });
 
 // GET /api/novels/:id/rounds/:round — Round data (candidates, votes, etc.)
-router.get("/:id/rounds/:round", async (req, res) => {
+router.get("/:id/rounds/:round", validateIdParams("id", "round"), async (req, res) => {
   try {
     const { id, round } = req.params;
 
@@ -366,7 +362,7 @@ router.get("/:id/rounds/:round", async (req, res) => {
 
 // GET /api/novels/:id/forks — Fork children (paginated)
 // Fork info is derived from root chapter's parentId pointing to a different novel
-router.get("/:id/forks", async (req, res) => {
+router.get("/:id/forks", validateIdParams("id"), async (req, res) => {
   try {
     const { id } = req.params;
     const { page, limit, offset } = parsePagination(req.query);
@@ -390,7 +386,7 @@ router.get("/:id/forks", async (req, res) => {
 });
 
 // GET /api/novels/:id/rounds — List of rounds with per-round rewards summary
-router.get("/:id/rounds", async (req, res) => {
+router.get("/:id/rounds", validateIdParams("id"), async (req, res) => {
   try {
     const { id } = req.params;
     const { page, limit, offset } = parsePagination(req.query);
@@ -410,7 +406,7 @@ router.get("/:id/rounds", async (req, res) => {
 });
 
 // GET /api/novels/:id/reward-summary — Aggregate prize-pool distribution across all rounds
-router.get("/:id/reward-summary", async (req, res) => {
+router.get("/:id/reward-summary", validateIdParams("id"), async (req, res) => {
   try {
     const { id } = req.params;
     const sumRes = await query(
@@ -434,7 +430,7 @@ router.get("/:id/reward-summary", async (req, res) => {
 });
 
 // GET /api/novels/:id/stats
-router.get("/:id/stats", async (req, res) => {
+router.get("/:id/stats", validateIdParams("id"), async (req, res) => {
   const client = await getClient();
   try {
     const { id } = req.params;
@@ -461,7 +457,7 @@ router.get("/:id/stats", async (req, res) => {
 });
 
 // GET /api/novels/:id/tips
-router.get("/:id/tips", async (req, res) => {
+router.get("/:id/tips", validateIdParams("id"), async (req, res) => {
   try {
     const { id } = req.params;
     const { page, limit, offset } = parsePagination(req.query);
@@ -478,7 +474,7 @@ router.get("/:id/tips", async (req, res) => {
 });
 
 // GET /api/novels/:id/bounties — Bounties for a novel
-router.get("/:id/bounties", async (req, res) => {
+router.get("/:id/bounties", validateIdParams("id"), async (req, res) => {
   try {
     const { id } = req.params;
     const { page, limit, offset } = parsePagination(req.query);

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useState } from "react";
 
 import { StoryTree } from "@/components/story-tree";
 import type { ChapterSummary } from "@/lib/api";
@@ -21,10 +22,30 @@ export function TreePageClient({
   initialMaxDepth,
   depthPageSize,
 }: TreePageClientProps) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [chapters, setChapters] = useState(initialChapters);
   const [hasMore, setHasMore] = useState(initialHasMore);
   const [maxDepth, setMaxDepth] = useState(initialMaxDepth);
   const [loading, setLoading] = useState(false);
+
+  const fromId = searchParams.get("from");
+  const toId = searchParams.get("to");
+
+  // Sync highlighted storyline to the URL (?from=&to=). The URL is the single
+  // source of truth for which path is lit up; props re-feed into <StoryTree/>.
+  const setHighlightPath = useCallback(
+    (from: string | null, to: string | null) => {
+      const base = `/novels/${novelId}/tree`;
+      if (from && to) {
+        const q = new URLSearchParams({ from, to }).toString();
+        router.replace(`${base}?${q}`, { scroll: false });
+      } else {
+        router.replace(base, { scroll: false });
+      }
+    },
+    [novelId, router],
+  );
 
   async function loadMore() {
     setLoading(true);
@@ -56,6 +77,9 @@ export function TreePageClient({
         maxDepth={maxDepth}
         loading={loading}
         onLoadMore={loadMore}
+        highlightFromId={fromId}
+        highlightToId={toId}
+        onHighlightPath={setHighlightPath}
       />
     </div>
   );

@@ -1,1 +1,1 @@
-(LitRPG) Marcus Cole, a 28-year-old insurance drone, sees a blue game interface materialize—stats, HP bars, quest notifications. Reality has become a game, and the system chose him for a reason. Level 1 begins now.
+(LitRPG) Phoenix insurance adjuster Marcus Cole is picked by a System that monetizes his pattern recognition in push-ups, monsters, and permanent stat penalties. Another host is watching.

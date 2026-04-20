@@ -1,1 +1,1 @@
-(Gothic Horror) Elise Hartmann inherits a decaying rubber plantation in Malaysia from a great-uncle she never knew. The colonial bungalow is hauntingly beautiful—and the house breathes. Something in the jungle has been waiting.
+(Gothic Horror) Elise inherits a Perak rubber plantation. Five rules. A locked room. A carved stone that sweats white sap and knocks at night.

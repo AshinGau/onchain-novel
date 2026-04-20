@@ -8,7 +8,6 @@ const log = createLogger("api:users");
 const router = Router();
 
 // GET /api/users/nicknames/batch — Batch lookup nicknames for multiple addresses
-// NOTE: Must be defined BEFORE /:address routes to avoid matching "nicknames" as an address
 router.get("/nicknames/batch", async (req, res) => {
   try {
     const addresses = (req.query.addresses as string)
@@ -36,14 +35,10 @@ router.get("/nicknames/batch", async (req, res) => {
   }
 });
 
-// Validate address on all /:address routes
-router.use("/:address", validateAddress);
-router.use("/:address/*", validateAddress);
-
 // GET /api/users/:address/votes — User voting history
-router.get("/:address/votes", async (req, res) => {
+router.get("/:address/votes", validateAddress, async (req, res) => {
   try {
-    const { address } = req.params;
+    const { address } = req.params as { address: string };
     const addr = address.toLowerCase();
     const { page, limit, offset } = parsePagination(req.query);
 
@@ -70,9 +65,9 @@ router.get("/:address/votes", async (req, res) => {
 });
 
 // GET /api/users/:address/rewards — Reward summary
-router.get("/:address/rewards", async (req, res) => {
+router.get("/:address/rewards", validateAddress, async (req, res) => {
   try {
-    const { address } = req.params;
+    const { address } = req.params as { address: string };
     const addr = address.toLowerCase();
 
     // Unclaimed voting rewards (revealed but not claimed)
@@ -130,9 +125,9 @@ router.get("/:address/rewards", async (req, res) => {
 });
 
 // GET /api/users/:address/chapters — User's submitted chapters (paginated)
-router.get("/:address/chapters", async (req, res) => {
+router.get("/:address/chapters", validateAddress, async (req, res) => {
   try {
-    const { address } = req.params;
+    const { address } = req.params as { address: string };
     const addr = address.toLowerCase();
     const { page, limit, offset } = parsePagination(req.query, {
       defaultLimit: 50,
@@ -166,9 +161,9 @@ router.get("/:address/chapters", async (req, res) => {
 });
 
 // GET /api/users/:address/nickname — User nickname
-router.get("/:address/nickname", async (req, res) => {
+router.get("/:address/nickname", validateAddress, async (req, res) => {
   try {
-    const { address } = req.params;
+    const { address } = req.params as { address: string };
     const result = await query("SELECT nickname FROM nicknames WHERE address = $1", [
       address.toLowerCase(),
     ]);

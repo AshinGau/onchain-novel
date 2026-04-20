@@ -1,1 +1,1 @@
-(Crime Drama) In Corsica's mountain village of Cozzano, Anto Ferracci buries his father—found with his throat cut. The killing reopens a generations-old vendetta. His mother begs him to break the cycle, but Anto already knows who did it.
+(Crime Drama) Corsica, a shepherd found with his throat cut and his dog's skull crushed. His son Anto buries him Thursday, and already knows which family sent the knife.

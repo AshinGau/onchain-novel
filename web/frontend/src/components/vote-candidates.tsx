@@ -12,6 +12,7 @@ import type { ChapterSummary, RoundCandidate } from "@/lib/api";
 import { submitVotePlaintext } from "@/lib/api";
 import { ROUND_MANAGER_ADDRESS, roundManagerAbi } from "@/lib/contracts";
 import { formatEth, timeAgo } from "@/lib/format";
+import { findResumeIndex, getReadSet } from "@/lib/reading-storage";
 import {
   clearVote,
   computeCommitHash,
@@ -51,6 +52,18 @@ function resolvePath(
   return { ancestorId: null, hops };
 }
 
+/** Root → leaf chain of chapter IDs, walking parent_id via byId. */
+function chainToRootIds(leafId: string, byId: Map<string, ChapterSummary>): string[] {
+  const ids: string[] = [];
+  let cur: ChapterSummary | undefined = byId.get(leafId);
+  while (cur) {
+    ids.unshift(cur.id);
+    if (cur.parent_id === "0") break;
+    cur = byId.get(cur.parent_id);
+  }
+  return ids;
+}
+
 export function VoteCandidates({ novelId, round, phase, voteStake, candidates, chapters }: Props) {
   const { address, isConnected } = useAccount();
   const { signMessageAsync } = useSignMessage();
@@ -60,10 +73,18 @@ export function VoteCandidates({ novelId, round, phase, voteStake, candidates, c
   const [stored, setStored] = useState<StoredVote | null>(null);
   const [submitNote, setSubmitNote] = useState<string | null>(null);
   const [rescueSalt, setRescueSalt] = useState<StoredVote | null>(null);
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+  // Hydrate readSet on the client to avoid SSR mismatch — used by the hover
+  // Read / Visualize links to compute the resume depth per candidate.
+  const [readSet, setReadSet] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     setStored(loadVote(novelId, round));
   }, [novelId, round]);
+
+  useEffect(() => {
+    setReadSet(getReadSet());
+  }, []);
 
   const authors = candidates.map((c) => c.author);
   const displayName = useNicknames(authors);
@@ -147,6 +168,7 @@ export function VoteCandidates({ novelId, round, phase, voteStake, candidates, c
             hops === 0 ? "→ 0 chapters →" : hops === 1 ? "→ 1 chapter →" : `→ ${hops} chapters →`;
           const isSelected = selectedId === cand.chapter_id;
           const isMyVote = stored?.candidateId === cand.chapter_id;
+          const isHovered = hoveredId === cand.chapter_id;
           const selectable = committing && !alreadyVoted;
 
           const border = isMyVote
@@ -155,10 +177,20 @@ export function VoteCandidates({ novelId, round, phase, voteStake, candidates, c
               ? "2px solid var(--color-primary)"
               : "1px solid var(--color-border)";
 
+          // Storyline for hover actions: root → candidate. findResumeIndex
+          // (shared with /read and /tree) picks where the user left off.
+          const chainIds = chainToRootIds(cand.chapter_id, byId);
+          const startIdx = findResumeIndex(chainIds, readSet);
+          const fromId = chainIds[startIdx] ?? cand.chapter_id;
+          const readHref = `/novels/${novelId}/read/${cand.chapter_id}?depth=${startIdx + 1}`;
+          const treeHref = `/novels/${novelId}/tree?from=${fromId}&to=${cand.chapter_id}`;
+
           return (
             <div
               key={cand.chapter_id}
               onClick={selectable ? () => setSelectedId(cand.chapter_id) : undefined}
+              onMouseEnter={() => setHoveredId(cand.chapter_id)}
+              onMouseLeave={() => setHoveredId(null)}
               className="on-card-hover"
               style={{
                 padding: "0.5rem 0.75rem",
@@ -198,6 +230,28 @@ export function VoteCandidates({ novelId, round, phase, voteStake, candidates, c
                   </span>
                 )}
               </div>
+              {isHovered && !isMyVote && (
+                <div className="on-hover-actions">
+                  <Link
+                    href={readHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="on-btn-soft"
+                  >
+                    Read
+                  </Link>
+                  <Link
+                    href={treeHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="on-btn-soft"
+                  >
+                    Visualize
+                  </Link>
+                </div>
+              )}
             </div>
           );
         })}

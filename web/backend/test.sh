@@ -614,6 +614,9 @@ wait_indexer 10
 # Verify: bounty indexed
 api_check_gte "/api/chapters/2/bounties" ".bounties | length" 1 "Bounty indexed for chapter 2"
 api_check_gte "/api/novels/1/bounties" ".bounties | length" 1 "Bounty appears in novel bounties"
+# Regression: /api/bounties/active was previously being routed through /:id validator
+# (matching "active" as id) and returned 400. Ensure the literal /active route wins.
+api_check_gte "/api/bounties/active" ".bounties | length" 1 "/api/bounties/active lists active bounties"
 
 # Chapter 2 already has children (chapter 4), so there are qualifying authors.
 # Advance time past bounty deadline so Writer A can claim.

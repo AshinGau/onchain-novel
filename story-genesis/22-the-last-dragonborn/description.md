@@ -1,1 +1,1 @@
-(Epic Fantasy) In the Severed Kingdoms, magic works by burning your own memories. When orphan scribe Seren Vael witnesses a Naming ceremony, the ritual fire turns black for the first time in two centuries—and speaks her name.
+(Epic Fantasy) Magic burns memories. Scribe Seren Vael watches the Naming fire turn black for the first time in two centuries—then speak her name.

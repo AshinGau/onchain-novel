@@ -60,7 +60,11 @@ const KeeperSchema = z.object({
 const BackendSchema = z.object({
   host: z.string().default("127.0.0.1"),
   port: z.number().int().positive().default(3001),
-  databaseUrl: z.string().min(1),
+  // CLI-only configs (e.g. onchain-novel-cli setup) omit this section; backend
+  // runtime still needs a real URL, but the placeholder here keeps schema
+  // validation happy and the backend itself errors later with a clearer message
+  // if it tries to connect to a non-existent database.
+  databaseUrl: z.string().min(1).default("postgresql://127.0.0.1:5432/onchain_novel"),
   indexer: IndexerSchema.default({}),
   keeper: KeeperSchema.default({}),
 });
@@ -79,7 +83,7 @@ const CliSchema = z.object({
 export const AppConfigSchema = z.object({
   chain: ChainSchema,
   contracts: ContractsSchema.default({}),
-  backend: BackendSchema,
+  backend: BackendSchema.default({}),
   frontend: FrontendSchema.default({}),
   cli: CliSchema.default({}),
 });

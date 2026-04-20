@@ -1,1 +1,1 @@
-(Historical Fiction) In 1990s Saigon, young Minh is raised by Ba Tam, a lottery seller who claims to be his aunt. As he grows older, fragments of truth surface—his father worked with the Americans, and the secret of his death touches everyone around him.
+(Historical Fiction) Minh's earliest memory is of being handed over a chain-link fence during the fall of Saigon. Nineteen years later, in District 4, a stranger gives him his father's list of names, a wooden bird carved in a re-education camp, and the address of a man in Orange County who stole a seat on a helicopter.
