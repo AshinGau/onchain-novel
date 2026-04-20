@@ -1,1 +1,1 @@
-(Mystery) A cryptographer vanishes from his locked Vienna office—coffee still warm, coat on the door. Inspector Schiller receives a cryptic message and discovers a centuries-old notebook suggesting his disappearance connects to something far older than his research.
+(Mystery) A cryptographer vanishes from his Vienna office. Coffee still warm, cream still turning. Inspector Schiller's phone buzzes: ZERNDL=0. In his desk she finds a two-hundred-year-old notebook—numbers pressed into the staves by Beethoven's own furious hand.

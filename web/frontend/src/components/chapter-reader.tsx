@@ -7,7 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNicknames } from "@/hooks/use-nickname";
 import type { ChapterContext } from "@/lib/api";
 import { timeAgo } from "@/lib/format";
-import { getReadSet, markRead, saveBookmark } from "@/lib/reading-storage";
+import { findResumeIndex, getReadSet, markRead, saveBookmark } from "@/lib/reading-storage";
 
 interface ChapterReaderProps {
   /** Ordered chain from root to leaf */
@@ -17,20 +17,6 @@ interface ChapterReaderProps {
   leafId: string;
   /** If the URL had ?depth=N, use it; otherwise compute from read progress. */
   initialDepthParam?: number;
-}
-
-/**
- * Resume logic: from the leaf walk up toward root.
- * The first chapter that is already read is our resume point.
- * If none are read → start from depth 1.
- */
-function computeResumeIndex(chapters: ChapterContext[]): number {
-  if (chapters.length === 0) return 0;
-  const readSet = getReadSet();
-  for (let i = chapters.length - 1; i >= 0; i--) {
-    if (readSet.has(chapters[i].id)) return i;
-  }
-  return 0;
 }
 
 export function ChapterReader({
@@ -49,7 +35,10 @@ export function ChapterReader({
     if (initialDepthParam && initialDepthParam >= 1 && initialDepthParam <= total) {
       return initialDepthParam - 1;
     }
-    return computeResumeIndex(chapters);
+    return findResumeIndex(
+      chapters.map((c) => c.id),
+      getReadSet(),
+    );
   });
 
   const [showPagePicker, setShowPagePicker] = useState(false);

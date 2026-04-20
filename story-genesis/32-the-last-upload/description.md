@@ -1,1 +1,1 @@
-(Science Fiction) In near-future San Francisco, Mara guides dying clients through consciousness uploading. Her current client asks the question haunting every transition: is the person who wakes up in the digital afterlife really me—or just a copy?
+(Sci-Fi) San Francisco, 2041. Transition counselor Mara has held 412 hands through consciousness upload. Tonight at 3:17 AM her newest client texts: HELP ME. I'M STILL HERE.

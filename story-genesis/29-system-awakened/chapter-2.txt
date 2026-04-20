@@ -29,7 +29,7 @@ The other part -- the part that had watched STR jump from 7 to 10, that could se
 
 Marcus told his boss he had a dental emergency. Dave Hendricks didn't look up. "Take the afternoon," he said, with the profound indifference of a man who managed fourteen adjusters and couldn't remember which one Marcus was.
 
-He found the entity in the recycling center's sorting warehouse -- a long, open building with dead overhead lights and conveyor belts running down the center. The Rift Spawn was crouched on the far belt. It was the size of a large dog but shaped wrong: a body like a skinned cat, all exposed muscle and too many joints, its head dominated by a mouth that split its skull from temple to temple. The teeth were metallic -- corrugated, sharp, and growing. It was eating a conveyor motor. Sparks dripped from its jaw like saliva.
+He found the entity in the recycling center's sorting warehouse -- a long, open building with dead overhead lights and conveyor belts running down the center. The air smelled of hot aluminum and the sweet chemical tang of shredded plastic; somewhere behind a partition a belt motor ticked as it cooled. The Rift Spawn was crouched on the far belt. It was the size of a large dog but shaped wrong: a body like a skinned cat, all exposed muscle and too many joints, its head dominated by a mouth that split its skull from temple to temple. The teeth were metallic -- corrugated, sharp, and growing. It was eating a conveyor motor. Sparks dripped from its jaw like saliva.
 
 ==============================
 ENTITY: Rift Spawn (Scrapjaw)

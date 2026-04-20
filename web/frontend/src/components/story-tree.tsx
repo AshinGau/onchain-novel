@@ -1,13 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useNicknames } from "@/hooks/use-nickname";
 import type { ChapterSummary } from "@/lib/api";
 import { timeAgo } from "@/lib/format";
-import { getReadSet } from "@/lib/reading-storage";
+import { findResumeIndex, getReadSet } from "@/lib/reading-storage";
 
 interface StoryTreeProps {
   chapters: ChapterSummary[];
@@ -16,6 +15,11 @@ interface StoryTreeProps {
   maxDepth?: number;
   loading?: boolean;
   onLoadMore?: () => void;
+  /** Endpoint IDs of the highlighted storyline. Source of truth = the URL. */
+  highlightFromId?: string | null;
+  highlightToId?: string | null;
+  /** Parent syncs these back onto the URL. */
+  onHighlightPath?: (fromId: string | null, toId: string | null) => void;
 }
 
 interface TreeNode {
@@ -40,8 +44,10 @@ export function StoryTree({
   maxDepth,
   loading,
   onLoadMore,
+  highlightFromId,
+  highlightToId,
+  onHighlightPath,
 }: StoryTreeProps) {
-  const router = useRouter();
   const displayName = useNicknames(chapters.map((c) => c.author));
   const containerRef = useRef<HTMLDivElement>(null);
   const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 });
@@ -92,6 +98,57 @@ export function StoryTree({
   }, [root]);
 
   const selectedNode = selectedId ? (nodeIndex.get(selectedId) ?? null) : null;
+
+  // Nodes on the highlighted storyline (from → to). The tree's unique simple
+  // path between any two nodes goes through their LCA; here "from" is always
+  // an ancestor of "to" when driven by clicks, but the LCA form also handles
+  // arbitrary from/to values pasted into the URL.
+  const pathSet = useMemo(() => {
+    if (!root || !highlightFromId || !highlightToId) return new Set<string>();
+    const fromChain = chainFromRoot(root, highlightFromId);
+    const toChain = chainFromRoot(root, highlightToId);
+    if (fromChain.length === 0 || toChain.length === 0) return new Set<string>();
+    let lca = -1;
+    const len = Math.min(fromChain.length, toChain.length);
+    for (let i = 0; i < len; i++) {
+      if (fromChain[i].id === toChain[i].id) lca = i;
+      else break;
+    }
+    if (lca === -1) return new Set<string>();
+    const s = new Set<string>();
+    for (let j = lca; j < fromChain.length; j++) s.add(fromChain[j].id);
+    for (let j = lca; j < toChain.length; j++) s.add(toChain[j].id);
+    return s;
+  }, [root, highlightFromId, highlightToId]);
+
+  // Walk root → clicked, reuse findResumeIndex to pick the resume point.
+  // The chapter at that index becomes "from" (start of the highlighted
+  // storyline); startIdx + 1 is the /read page's depth param.
+  const resolveStoryline = useCallback(
+    (toId: string): { fromId: string; startIdx: number } | null => {
+      if (!root) return null;
+      const chain = chainFromRoot(root, toId);
+      if (chain.length === 0) return null;
+      const startIdx = findResumeIndex(
+        chain.map((n) => n.id),
+        readSet,
+      );
+      return { fromId: chain[startIdx].id, startIdx };
+    },
+    [root, readSet],
+  );
+
+  // Clicking a node: toggle the popup AND (re)sync the highlight path.
+  // Closing the popup intentionally leaves the URL + highlight in place so
+  // users can keep viewing the path without the action panel in the way.
+  const handleNodeClick = useCallback(
+    (nodeId: string) => {
+      setSelectedId((prev) => (prev === nodeId ? null : nodeId));
+      const resolved = resolveStoryline(nodeId);
+      if (resolved) onHighlightPath?.(resolved.fromId, nodeId);
+    },
+    [resolveStoryline, onHighlightPath],
+  );
 
   // Center the tree only on first mount
   const initializedRef = useRef(false);
@@ -330,10 +387,7 @@ export function StoryTree({
         >
           <div className="on-row-between" style={{ marginBottom: "0.5rem", alignItems: "center" }}>
             <span className="text-caption" style={{ fontWeight: 600 }}>
-              ID.{selectedNode.id}{" "}
-              <span className="text-muted" style={{ fontWeight: 400 }}>
-                #{selectedNode.chapter.depth}
-              </span>
+              Operation
             </span>
             <button
               type="button"
@@ -355,31 +409,28 @@ export function StoryTree({
           <div className="on-stack" style={{ gap: "0.375rem" }}>
             <Link
               href={`/novels/${novelId}/chapter/${selectedNode.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
               style={{ textDecoration: "none" }}
             >
               <button type="button" className="on-btn on-btn-secondary" style={{ width: "100%" }}>
-                Enter chapter
+                Enter ID.{selectedNode.id}#{selectedNode.chapter.depth}
               </button>
             </Link>
-            <button
-              type="button"
-              className="on-btn on-btn-primary"
-              style={{ width: "100%" }}
-              onClick={() => {
-                const leaf = findDeepestDescendant(selectedNode);
-                const chain = chainFromRoot(root!, leaf.id);
-                let startIdx = 0;
-                for (let i = chain.length - 1; i >= 0; i--) {
-                  if (readSet.has(chain[i].id)) {
-                    startIdx = i;
-                    break;
-                  }
-                }
-                router.push(`/novels/${novelId}/read/${leaf.id}?depth=${startIdx + 1}`);
-              }}
+            <Link
+              href={(() => {
+                const resolved = resolveStoryline(selectedNode.id);
+                const depth = resolved ? resolved.startIdx + 1 : 1;
+                return `/novels/${novelId}/read/${selectedNode.id}?depth=${depth}`;
+              })()}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ textDecoration: "none" }}
             >
-              Read storyline
-            </button>
+              <button type="button" className="on-btn on-btn-primary" style={{ width: "100%" }}>
+                Read storyline
+              </button>
+            </Link>
           </div>
         </div>
       )}
@@ -387,16 +438,17 @@ export function StoryTree({
       <svg width="100%" height="100%" style={{ cursor: dragging ? "grabbing" : "grab" }}>
         <g transform={`translate(${transform.x}, ${transform.y}) scale(${transform.scale})`}>
           {/* Edges */}
-          {renderEdges(root)}
+          {renderEdges(root, pathSet)}
           {/* Nodes */}
           {renderNodes(
             root,
             hoveredId,
             setHoveredId,
             selectedId,
-            setSelectedId,
+            handleNodeClick,
             readSet,
             displayName,
+            pathSet,
           )}
         </g>
       </svg>
@@ -404,7 +456,7 @@ export function StoryTree({
   );
 }
 
-function renderEdges(node: TreeNode): React.ReactNode[] {
+function renderEdges(node: TreeNode, pathSet: Set<string>): React.ReactNode[] {
   const edges: React.ReactNode[] = [];
   for (const child of node.children) {
     const x1 = node.x + NODE_WIDTH / 2;
@@ -413,17 +465,22 @@ function renderEdges(node: TreeNode): React.ReactNode[] {
     const y2 = child.y;
     const midY = (y1 + y2) / 2;
 
+    // An edge is on the highlighted path iff both endpoints are — in a tree
+    // the path between two nodes must cross every edge connecting consecutive
+    // members of the set.
+    const onPath = pathSet.has(node.id) && pathSet.has(child.id);
+
     edges.push(
       <path
         key={`edge-${node.id}-${child.id}`}
         d={`M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`}
         fill="none"
-        stroke="var(--color-text-muted)"
-        strokeWidth={2}
-        opacity={0.6}
+        stroke={onPath ? "var(--color-warning)" : "var(--color-text-muted)"}
+        strokeWidth={onPath ? 3 : 2}
+        opacity={onPath ? 1 : 0.6}
       />,
     );
-    edges.push(...renderEdges(child));
+    edges.push(...renderEdges(child, pathSet));
   }
   return edges;
 }
@@ -433,26 +490,31 @@ function renderNodes(
   hoveredId: string | null,
   setHoveredId: (id: string | null) => void,
   selectedId: string | null,
-  setSelectedId: (id: string | null) => void,
+  onNodeClick: (id: string) => void,
   readSet: Set<string>,
   displayName: (addr: string) => string,
+  pathSet: Set<string>,
 ): React.ReactNode[] {
   const nodes: React.ReactNode[] = [];
   const isWl = node.chapter.is_world_line;
   const isHovered = hoveredId === node.id;
   const isSelected = selectedId === node.id;
+  const isOnPath = pathSet.has(node.id);
   const isRead = !isWl && readSet.has(node.id);
 
   const bgColor = isWl ? "var(--color-primary)" : "var(--color-bg)";
   const textColor = isWl ? "white" : "var(--color-text)";
-  const borderColor = isSelected
+  // Orange (warning) means "on the highlighted storyline". A popup-only
+  // anchor (isSelected without being on the path) gets no border change —
+  // the popup itself is the anchor indicator.
+  const borderColor = isOnPath
     ? "var(--color-warning)"
     : isHovered
       ? "var(--color-primary)"
       : isWl || isRead
         ? "var(--color-primary)"
         : "var(--color-text-muted)";
-  const strokeWidth = isSelected ? 3 : isWl ? 2.5 : isRead ? 2 : 1.5;
+  const strokeWidth = isOnPath ? 3 : isWl ? 2.5 : isRead ? 2 : 1.5;
   const shadowOpacity = isHovered || isSelected ? 0.15 : 0;
 
   nodes.push(
@@ -461,7 +523,7 @@ function renderNodes(
       style={{ cursor: "pointer" }}
       onClick={(e) => {
         e.stopPropagation();
-        setSelectedId(selectedId === node.id ? null : node.id);
+        onNodeClick(node.id);
       }}
       onMouseEnter={() => setHoveredId(node.id)}
       onMouseLeave={() => setHoveredId(null)}
@@ -568,36 +630,15 @@ function renderNodes(
         hoveredId,
         setHoveredId,
         selectedId,
-        setSelectedId,
+        onNodeClick,
         readSet,
         displayName,
+        pathSet,
       ),
     );
   }
 
   return nodes;
-}
-
-/** Walk down from a node, always taking the deepest branch, return leaf. */
-function findDeepestDescendant(node: TreeNode): TreeNode {
-  function depth(n: TreeNode): number {
-    if (n.children.length === 0) return 1;
-    return 1 + Math.max(...n.children.map(depth));
-  }
-  let current = node;
-  while (current.children.length > 0) {
-    let best = current.children[0];
-    let bestDepth = depth(best);
-    for (let i = 1; i < current.children.length; i++) {
-      const d = depth(current.children[i]);
-      if (d > bestDepth) {
-        best = current.children[i];
-        bestDepth = d;
-      }
-    }
-    current = best;
-  }
-  return current;
 }
 
 /** Return chain of nodes from tree root to the node whose id matches `targetId`. */

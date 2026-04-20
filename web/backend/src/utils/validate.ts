@@ -1,4 +1,4 @@
-import type { NextFunction, Request, Response } from "express";
+import type { NextFunction, Request, RequestHandler, Response } from "express";
 
 const ADDR_RE = /^0x[0-9a-fA-F]{40}$/;
 const ID_RE = /^\d+$/;
@@ -21,17 +21,17 @@ export function isId(s: unknown): s is string {
 }
 
 /** Express middleware: validates :address param is a valid hex address */
-export function validateAddress(req: Request, res: Response, next: NextFunction) {
+export const validateAddress: RequestHandler = (req, res, next) => {
   if (!isAddress(req.params.address)) {
     return res.status(400).json({ error: "Invalid address format" });
   }
   next();
-}
+};
 
 /** Express middleware factory: validates one or more BIGINT-like route params. Default param name is `id`. */
-export function validateIdParams(...names: string[]) {
+export function validateIdParams(...names: string[]): RequestHandler {
   const keys = names.length > 0 ? names : ["id"];
-  return (req: Request, res: Response, next: NextFunction) => {
+  return (req, res, next) => {
     for (const k of keys) {
       if (!isId(req.params[k])) {
         return res.status(400).json({ error: `Invalid ${k}: must be a positive integer id` });

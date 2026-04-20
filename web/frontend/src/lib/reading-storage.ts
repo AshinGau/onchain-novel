@@ -48,6 +48,21 @@ export function isRead(chapterId: string): boolean {
   return loadReadSet().has(chapterId);
 }
 
+/**
+ * Given a root→leaf chain of chapter IDs, return the index of the last one
+ * already in `readSet` — i.e. where the user should resume. No reads → 0
+ * (start at root). Shared by:
+ *   - /read page: picks the initial `depth` when resuming a storyline.
+ *   - /tree page: picks the "from" endpoint when a node is clicked.
+ *   - /novels/[id]: vote-candidate hover actions (Read + Visualize URLs).
+ */
+export function findResumeIndex(chainIds: readonly string[], readSet: Set<string>): number {
+  for (let i = chainIds.length - 1; i >= 0; i--) {
+    if (readSet.has(chainIds[i])) return i;
+  }
+  return 0;
+}
+
 /* ── Bookmarks ── */
 
 function loadBookmarkList(): Bookmark[] {

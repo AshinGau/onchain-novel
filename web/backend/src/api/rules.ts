@@ -7,13 +7,8 @@ import { parsePagination, validateIdParams } from "../utils/validate.js";
 const log = createLogger("api:rules");
 const router = Router();
 
-// Validate any :id / :novelId style param before it hits the DB.
-router.use("/novels/:id/rules", validateIdParams("id"));
-router.use("/novels/:id/rule-proposals", validateIdParams("id"));
-router.use("/rule-proposals/:id", validateIdParams("id"));
-
 // GET /api/novels/:id/rules — all rules for a novel
-router.get("/novels/:id/rules", async (req, res) => {
+router.get("/novels/:id/rules", validateIdParams("id"), async (req, res) => {
   try {
     const novelId = req.params.id;
     const result = await query(
@@ -28,7 +23,7 @@ router.get("/novels/:id/rules", async (req, res) => {
 });
 
 // GET /api/novels/:id/rule-proposals — list proposals for a novel
-router.get("/novels/:id/rule-proposals", async (req, res) => {
+router.get("/novels/:id/rule-proposals", validateIdParams("id"), async (req, res) => {
   try {
     const novelId = req.params.id;
     const status = req.query.status as string | undefined;
@@ -53,7 +48,7 @@ router.get("/novels/:id/rule-proposals", async (req, res) => {
 });
 
 // GET /api/rule-proposals/:id — single proposal with votes
-router.get("/rule-proposals/:id", async (req, res) => {
+router.get("/rule-proposals/:id", validateIdParams("id"), async (req, res) => {
   try {
     const proposalId = req.params.id;
     const proposalRes = await query("SELECT * FROM rule_proposals WHERE id = $1", [proposalId]);

@@ -7,8 +7,6 @@ import { parsePositiveInt, validateIdParams } from "../utils/validate.js";
 const log = createLogger("api:bounties");
 const router = Router();
 
-router.use("/:id", validateIdParams("id"));
-
 // GET /api/bounties/active — Active bounties (not claimed, deadline in future)
 router.get("/active", async (req, res) => {
   try {
@@ -40,7 +38,7 @@ router.get("/active", async (req, res) => {
 });
 
 // GET /api/bounties/:id — Single bounty detail
-router.get("/:id", async (req, res) => {
+router.get("/:id", validateIdParams("id"), async (req, res) => {
   try {
     const { id } = req.params;
     const bountyRes = await query(

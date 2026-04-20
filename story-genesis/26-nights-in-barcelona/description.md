@@ -1,1 +1,1 @@
-(Romance) Leo, a blocked American painter reeling from divorce, meets Marta, a brilliant scarred artist, at Barcelona's Picasso Museum. She tells him his creative death is a beginning. Two broken artists in a city built on reinvention.
+(Romance) Leo hadn't touched a brush in 93 days when he saw Marta sketching in the Picasso Museum courtyard—scar like a brushstroke along her jaw. "That's not a problem," she said. "That's a beginning."

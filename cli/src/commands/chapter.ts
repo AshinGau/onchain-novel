@@ -1,3 +1,5 @@
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import chalk from "chalk";
 import { Command } from "commander";
 import { parseEther } from "viem";
@@ -8,6 +10,57 @@ import { apiGet, apiPost, fetchNovelConfig } from "../utils/api.js";
 import { getContracts, getWalletClient, waitForTx } from "../utils/client.js";
 import { resolveContent, warnIfOutOfRange } from "../utils/content.js";
 import { error, header, kv, success, table, txHash } from "../utils/format.js";
+
+/** Render the per-chapter notes skeleton. Root chapters (parent_id = 0) get a slightly different schema. */
+function renderNotesSkeleton(
+  id: string | number,
+  depth: string | number,
+  parentId: string | number,
+): string {
+  const isRoot = String(parentId) === "0";
+  const header = `# ${id} — ch${depth}, ${isRoot ? "root (no parent)" : `continues from ${parentId}`}`;
+  const preamble = `<!-- This file is your STRUCTURED analysis of chapter ${id}. Filling it IS the act
+of understanding — skimming the raw content without writing notes means you have
+not analyzed this chapter.
+
+Remove each <!-- TODO --> marker once you finish that section. A gate before
+drafting (Step 5) checks that every ancestor's notes have zero TODO markers. -->`;
+
+  const happened = `## 本章主要发生了什么
+<!-- TODO: 3-6 句具体情节。
+     ✓ 好："A 为救 B 拔枪射中了 C 的肩膀，C 退却但认出了 A 戴的十字吊坠。"
+     ✗ 差："展开了一场紧张的对决。" -->`;
+
+  const delta = isRoot
+    ? `## 初始世界设定
+<!-- TODO: 时间 / 地点 / 主要人物 / 权力格局 / 技术水平 / 文化特征。
+     这是后续所有续写的起点，要具体。 -->`
+    : `## 相对 parent 推进了什么
+<!-- TODO: 状态增量。任选适用：
+     - 谁的位置 / 处境变了
+     - 谁和谁的关系变了
+     - 谁知道了什么之前不知道的事
+     - 哪个悬念被解开 / 加深
+     - 世界格局有什么变化 -->`;
+
+  const newElements = `## 新引入的元素
+<!-- TODO: 本章才出现的：
+     - 新人物（名字、身份、关系）
+     - 新地点 / 新组织 / 新设定
+     - 新伏笔
+     若完全无新元素，直接写"无"。 -->`;
+
+  const hooks = `## 埋下 / 收割的钩子
+<!-- TODO:
+     - 埋下：本章留下的新悬念。具体些，不要"一个神秘的预感"。
+     - 收割${isRoot ? "（root 章节通常无可收割，留空或写'无'）" : ""}：本章解答了 / 推进了哪个 ancestor 的悬念？注明 ancestor chapterId。 -->`;
+
+  const voice = `## 语气和风格特征
+<!-- TODO: 1-2 句，够下一位作者匹配 voice 就行。
+     例："第三人称限知视角，冷峻克制的短句，大量感官细节，对话不用引号。" -->`;
+
+  return [header, preamble, happened, delta, newElements, hooks, voice].join("\n\n") + "\n";
+}
 
 export function registerChapterCommands(program: Command): void {
   const chapter = program.command("chapter").description("Chapter commands");
@@ -171,6 +224,11 @@ export function registerChapterCommands(program: Command): void {
     )
     .option("--max-depth <n>", "max ancestors to walk back", "100")
     .option("--summary", "print only metadata; skip full content")
+    .option(
+      "--cache <dir>",
+      "also write each ancestor's content to <dir>/<id>.md and a TODO notes skeleton to " +
+        "<dir>/<id>-ch<depth>-<parentId>.md. Existing files are NOT overwritten.",
+    )
     .action(async (chapterId, opts) => {
       try {
         const maxDepth = Math.min(parseInt(opts.maxDepth) || 100, 200);
@@ -179,6 +237,37 @@ export function registerChapterCommands(program: Command): void {
         );
         header(`Context for Chapter #${chapterId}`);
         kv("Ancestors", data.ancestors.length);
+
+        if (opts.cache) {
+          mkdirSync(opts.cache, { recursive: true });
+          let wrote = 0;
+          let skipped = 0;
+          let skeletonsAdded = 0;
+          for (const a of data.ancestors) {
+            const id = String(a.id);
+            const depth = String(a.depth);
+            const parentId = String(a.parent_id ?? "0");
+
+            const contentPath = join(opts.cache, `${id}.md`);
+            if (!existsSync(contentPath)) {
+              if (a.content_text) {
+                writeFileSync(contentPath, String(a.content_text));
+                wrote++;
+              }
+            } else {
+              skipped++;
+            }
+
+            const notesPath = join(opts.cache, `${id}-ch${depth}-${parentId}.md`);
+            if (!existsSync(notesPath)) {
+              writeFileSync(notesPath, renderNotesSkeleton(id, depth, parentId));
+              skeletonsAdded++;
+            }
+          }
+          kv("Cached content", `${wrote} new, ${skipped} existing (preserved)`);
+          kv("Notes skeletons", `${skeletonsAdded} new (TODO — fill before drafting)`);
+          kv("Cache dir", opts.cache);
+        }
 
         if (opts.summary) {
           table(
