@@ -165,5 +165,4 @@ interface INovelCore {
 
     /// @notice Get novel metadata
     function getNovelMetadata(uint64 novelId) external view returns (DataTypes.NovelMetadata memory);
-
 }

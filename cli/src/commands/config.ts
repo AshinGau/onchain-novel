@@ -1,6 +1,6 @@
 import { Command } from "commander";
 
-import { loadConfig } from "@onchain-novel/shared";
+import { bootstrapConfig } from "@onchain-novel/shared";
 import { error, header, kv } from "../utils/format.js";
 
 export function registerConfigCommand(program: Command): void {
@@ -10,20 +10,21 @@ export function registerConfigCommand(program: Command): void {
       "Show current configuration. Edit config.yaml (repo root) directly to change values. " +
         "Secrets (PRIVATE_KEY, KEEPER_PRIVATE_KEY, VOTE_ENCRYPTION_KEY) stay in env vars.",
     )
-    .action(() => {
+    .action(async () => {
       try {
-        const cfg = loadConfig();
+        const { config, chainId, contracts } = await bootstrapConfig();
         header("Configuration");
-        kv("chain.rpcUrl", cfg.chain.rpcUrl);
-        kv("chain.chainId", cfg.chain.chainId);
-        kv("cli.apiUrl", cfg.cli.apiUrl);
+        kv("chain.rpcUrl", config.chain.rpcUrl);
+        kv("chain.chainId", chainId);
+        kv("cli.apiUrl", config.cli.apiUrl);
         kv("PRIVATE_KEY env", process.env.PRIVATE_KEY ? "(set)" : "(not set)");
-        kv("contracts.novelCore", cfg.contracts.novelCore ?? "(not set)");
-        kv("contracts.roundManager", cfg.contracts.roundManager ?? "(not set)");
-        kv("contracts.prizePool", cfg.contracts.prizePool ?? "(not set)");
-        kv("contracts.bountyBoard", cfg.contracts.bountyBoard ?? "(not set)");
-        kv("contracts.rulesEngine", cfg.contracts.rulesEngine ?? "(not set)");
-        kv("contracts.userRegistry", cfg.contracts.userRegistry ?? "(not set)");
+        kv("contracts.novelCore", contracts.novelCore);
+        kv("contracts.roundManager", contracts.roundManager);
+        kv("contracts.votingEngine", contracts.votingEngine);
+        kv("contracts.prizePool", contracts.prizePool);
+        kv("contracts.bountyBoard", contracts.bountyBoard);
+        kv("contracts.rulesEngine", contracts.rulesEngine);
+        kv("contracts.userRegistry", contracts.userRegistry);
         console.log();
       } catch (err) {
         error(String(err));

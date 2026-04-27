@@ -143,7 +143,7 @@ Each gate alone is bypassable; stacked they close every shortcut.
 
 Before submitting, the author scores their own draft using the **same rubric the voter skill uses**. The voter's perspective is the mechanism that filters chapters on-chain — applying it to oneself pre-submission catches obvious losers before they waste `submissionFee` and pollute the novel's story tree.
 
-**Rubric** (mirrors `voter.md`):
+**Rubric** (mirrors the voter rubric in `SKILL.md` Section 6):
 
 | Dimension | Weight |
 |-----------|--------|
@@ -167,7 +167,7 @@ Before submitting, the author scores their own draft using the **same rubric the
 
 ## 4. Author Workflow Steps
 
-Laid out in full in `cli/src/guides/author.md`. The shape:
+Laid out in full in `cli/src/guides/SKILL.md` Section 7 (Author). The shape:
 
 1. **Bootstrap** — cache meta + rules (first time only)
 2. **Prep parent chain** — `chapter context <parentId> --cache <dir>` pulls raw + writes TODO skeletons. Agent fills TODOs root → leaf. Direct parent also gets raw-content read for voice-feel.
@@ -200,7 +200,7 @@ Adopted from proven patterns, adapted for this project:
 - **One-constraint ignition instead of outline-first** — single hard constraint triggers creativity without template-converging the output.
 - **Per-chapter delta notes** — tree-shaped storage avoids the bible-per-storyline redundancy that every other tool assumes.
 
-## 6. Voter Skill (`voter.md`)
+## 6. Voter Section (`SKILL.md` § 6)
 
 Same workspace, same cache discipline. Voter-specific additions:
 
@@ -210,7 +210,7 @@ Same workspace, same cache discipline. Voter-specific additions:
 - Salt management reminders (auto-backup to `~/.onchain-novel/vote-salts.json`, multi-machine caveat)
 - Never-skip-reveal rule (50% slash remains a sharp penalty)
 
-## 7. Creator Skill (`creator.md`)
+## 7. Creator Section (`SKILL.md` § 8)
 
 Design-time workflow, not iterative:
 
@@ -225,7 +225,7 @@ Design-time workflow, not iterative:
 
 Heavy on design guardrails. Most creator mistakes happen pre-creation and can't be fixed later, so the skill front-loads planning.
 
-## 8. Reader Skill (`reader.md`)
+## 8. Reader Section (`SKILL.md` § 5)
 
 Lightest skill. Agent-relevant aspects:
 
@@ -234,15 +234,17 @@ Lightest skill. Agent-relevant aspects:
 - Bounty leverage (target low-children chapters, value >> submission fee, match deadline to real writing time)
 - When to support underdog branches (dropped-but-quality chapters get no voter reward, so reader tips are the highest-leverage support)
 
-## 9. Skill Files
+## 9. Skill File
 
-`onchain-novel-cli setup` writes:
-- `.claude/commands/novel-author.md` (from `cli/src/guides/author.md`)
-- `.claude/commands/novel-voter.md` (from `voter.md`)
-- `.claude/commands/novel-creator.md` (from `creator.md`)
-- `.claude/commands/novel-reader.md` (from `reader.md`)
+All four roles live in **one** consolidated skill file. The shared workspace, cache discipline, notes schema, and anti-slop standards are defined once and cross-referenced — agents pick the role section that matches their task.
 
-These are bundled into the CLI's tsup artifact so users installing the npm package don't need a git clone.
+`onchain-novel-cli setup` writes the same SKILL.md to **two** well-known locations plus a root-level discovery file. No prompt — every agent ecosystem we care about gets covered in one shot:
+
+- `.agent/skills/onchain-novel/SKILL.md` — standard `<skill-name>/SKILL.md` layout (Cursor, Cline, Anthropic Skill API, and any other agent that follows the cross-tool convention). The YAML frontmatter lets the skill picker auto-select this skill from a task description.
+- `.claude/commands/onchain-novel.md` — Claude Code slash command, exposed as `/onchain-novel`. Identical content.
+- `onchain-novel-index.md` (project root) — short discovery file for agents that don't auto-scan either skill path. Tells them where the actual SKILL.md lives.
+
+The SKILL.md is bundled into the CLI's tsup artifact so users installing the npm package don't need a git clone. Re-running `setup` overwrites the three files with the latest CLI version.
 
 ## 10. Key Design Rules
 

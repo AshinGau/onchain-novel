@@ -64,10 +64,10 @@ function rowToNovelState(r: any): NovelState {
     phaseStartTime: BigInt(r.phase_start_time),
     lastSettleTime: BigInt(r.last_settle_time),
     config: {
-      nominateDuration: BigInt(r.config.nominateDuration || "0"),
-      commitDuration: BigInt(r.config.commitDuration || "0"),
-      revealDuration: BigInt(r.config.revealDuration || "0"),
-      minRoundGap: BigInt(r.config.minRoundGap || "0"),
+      nominateDuration: BigInt(r.config.nominateDuration),
+      commitDuration: BigInt(r.config.commitDuration),
+      revealDuration: BigInt(r.config.revealDuration),
+      minRoundGap: BigInt(r.config.minRoundGap),
     },
   };
 }
@@ -92,13 +92,8 @@ async function sendKeeperTx(
   extraArgs: unknown[] = [],
 ): Promise<boolean> {
   try {
-    const target = env.ROUND_MANAGER_ADDRESS;
-    if (!target) {
-      log.warn({ functionName, novelId }, "ROUND_MANAGER_ADDRESS not configured; skipping");
-      return false;
-    }
     const { request } = await publicClient.simulateContract({
-      address: target,
+      address: env.ROUND_MANAGER_ADDRESS,
       abi: keeperAbi,
       functionName: functionName as any,
       args: [novelId, ...extraArgs] as any,

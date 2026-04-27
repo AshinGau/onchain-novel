@@ -13,16 +13,22 @@ source "$HERE/lib/read-config.sh"
 
 RPC="$(cfg chain.rpcUrl)"
 NOVEL_CORE="$(cfg contracts.novelCore)"
-ROUND_MANAGER="$(cfg contracts.roundManager)"
-BOUNTY_BOARD="$(cfg contracts.bountyBoard)"
-USER_REGISTRY="$(cfg contracts.userRegistry)"
 
 # log.sh already provides step/info/ok/warn/err/die.
 
 # ── Preflight ──
-[[ -n "$NOVEL_CORE" ]] || die "contracts.novelCore empty in config.yaml — run scripts/dev.sh start first"
+[[ -n "$NOVEL_CORE" && "$NOVEL_CORE" != "null" ]] \
+    || die "contracts.novelCore empty in config.yaml — run scripts/dev.sh start first"
 cast block-number --rpc-url "$RPC" > /dev/null 2>&1 \
     || die "Anvil not reachable at $RPC. Run scripts/dev.sh start first."
+
+# Walk NovelCore's on-chain address book — same logic that backend / CLI /
+# frontend use at startup via @onchain-novel/shared's resolveContracts.
+# config.yaml only carries novelCore; everything else is derived here.
+ROUND_MANAGER="$(cast call "$NOVEL_CORE" 'roundManager()(address)' --rpc-url "$RPC")"
+PRIZE_POOL="$(cast call "$NOVEL_CORE" 'prizePool()(address)' --rpc-url "$RPC")"
+USER_REGISTRY="$(cast call "$NOVEL_CORE" 'userRegistry()(address)' --rpc-url "$RPC")"
+BOUNTY_BOARD="$(cast call "$PRIZE_POOL" 'bountyBoard()(address)' --rpc-url "$RPC")"
 
 # ── Anvil deterministic accounts ──
 # Anvil deterministic accounts — each role gets a distinct account.

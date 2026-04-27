@@ -27,6 +27,13 @@ export const novelCoreAbi = parseAbi([
   "function novelCount() external view returns (uint64)",
   "function chapterCount() external view returns (uint64)",
 
+  // --- Address-book getters (used by client-side resolveContracts) ---
+  "function votingEngine() external view returns (address)",
+  "function prizePool() external view returns (address)",
+  "function rulesEngine() external view returns (address)",
+  "function roundManager() external view returns (address)",
+  "function userRegistry() external view returns (address)",
+
   // --- Write functions ---
   "function submitChapter(uint64 novelId, uint64 parentId, (bytes32 contentHash, uint64 declaredLength, bytes content) submission) external payable",
   "function createNovel((uint64 minChapterLength, uint64 maxChapterLength, uint256 submissionFee, uint32 worldLineCount, uint256 voteStake, uint256 nominationFee, uint64 nominateDuration, uint64 commitDuration, uint64 revealDuration, uint64 minRoundGap, uint16 prizeReleaseRate, uint16 voterRewardRate, uint8 contentLocation, string contentBaseUrl, uint256 ruleFee, uint64 ruleVoteDuration, uint32 ruleQuorum) config, (string title, string description, string coverUri) metadata, (bytes32 contentHash, uint64 declaredLength, bytes content) rootChapter) external payable returns (uint64 novelId)",
@@ -101,6 +108,10 @@ export const prizePoolAbi = parseAbi([
   "function getPendingReward(uint64 novelId, address user) external view returns (uint256)",
   "function tipNovel(uint64 novelId) external payable",
   "function tipChapter(uint64 chapterId) external payable",
+
+  // --- Address-book getter (used by resolveContracts; bountyBoard is the
+  //     one address NovelCore doesn't know about) ---
+  "function bountyBoard() external view returns (address)",
 ]);
 
 // ============================================================

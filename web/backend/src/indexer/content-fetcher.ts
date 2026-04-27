@@ -97,9 +97,10 @@ export async function fetchChapterContent(chapterId: bigint, novelId: bigint) {
   // Onchain content is decoded from tx calldata in the event handler, not external fetch
   if (novelRes.rows[0].content_location === ContentLocation.Onchain) return;
 
-  const config = novelRes.rows[0].config;
-  const baseUrl: string = config.contentBaseUrl || "";
-  if (!baseUrl) return; // No base URL configured, skip content fetch
+  // contract enforces contentBaseUrl is non-empty when contentLocation !=
+  // Onchain (NovelCore.validateConfig, InvalidConfig(10)). The Onchain branch
+  // already returned above, so baseUrl is guaranteed non-empty here.
+  const baseUrl: string = novelRes.rows[0].config.contentBaseUrl;
 
   const chapterRes = await query(
     "SELECT content_hash, content_fetched FROM chapters WHERE id = $1",

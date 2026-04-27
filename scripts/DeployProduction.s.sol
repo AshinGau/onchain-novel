@@ -49,7 +49,11 @@ contract DeployProduction is Script {
         BountyBoard bountyBoardImpl = new BountyBoard();
         RoundManager roundManagerImpl = new RoundManager();
 
-        // 3. Deploy proxies — initially owned by deployer (will transfer to Timelock)
+        // 3. Standalone UserRegistry — deploy before NovelCore so its address
+        //    can be embedded into NovelCore's address book at initialize time.
+        UserRegistry userRegistry = new UserRegistry();
+
+        // 4. Deploy proxies — initially owned by deployer (will transfer to Timelock)
         ERC1967Proxy votingProxy =
             new ERC1967Proxy(address(votingEngineImpl), abi.encodeCall(VotingEngine.initialize, (deployer, address(1))));
         ERC1967Proxy prizeProxy =
@@ -61,7 +65,8 @@ contract DeployProduction is Script {
         ERC1967Proxy novelCoreProxy = new ERC1967Proxy(
             address(novelCoreImpl),
             abi.encodeCall(
-                NovelCore.initialize, (deployer, address(votingProxy), address(prizeProxy), address(rulesProxy))
+                NovelCore.initialize,
+                (deployer, address(votingProxy), address(prizeProxy), address(rulesProxy), address(userRegistry))
             )
         );
         ERC1967Proxy bountyProxy = new ERC1967Proxy(
@@ -71,12 +76,11 @@ contract DeployProduction is Script {
         ERC1967Proxy roundProxy = new ERC1967Proxy(
             address(roundManagerImpl),
             abi.encodeCall(
-                RoundManager.initialize,
-                (deployer, address(novelCoreProxy), address(votingProxy), address(prizeProxy))
+                RoundManager.initialize, (deployer, address(novelCoreProxy), address(votingProxy), address(prizeProxy))
             )
         );
 
-        // 4. Wire addresses
+        // 5. Wire addresses
         VotingEngine(payable(address(votingProxy))).setRoundManager(address(roundProxy));
         VotingEngine(payable(address(votingProxy))).setPrizePool(address(prizeProxy));
         PrizePool(payable(address(prizeProxy))).setNovelCore(address(novelCoreProxy));
@@ -86,9 +90,6 @@ contract DeployProduction is Script {
         PrizePool(payable(address(prizeProxy))).setVotingEngine(address(votingProxy));
         RulesEngine(address(rulesProxy)).setNovelCore(address(novelCoreProxy));
         NovelCore(payable(address(novelCoreProxy))).setRoundManager(address(roundProxy));
-
-        // 5. Standalone UserRegistry
-        UserRegistry userRegistry = new UserRegistry();
 
         // 6. Transfer ownership of all upgradeable contracts to TimelockController
         NovelCore(payable(address(novelCoreProxy))).transferOwnership(address(timelock));

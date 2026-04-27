@@ -6,7 +6,7 @@ import { requireConfig } from "./config.js";
 let _client: ApiClient | null = null;
 function client(): ApiClient {
   if (!_client) {
-    _client = createApiClient({ baseUrl: requireConfig().apiUrl || "http://127.0.0.1:3001" });
+    _client = createApiClient({ baseUrl: requireConfig().apiUrl });
   }
   return _client;
 }

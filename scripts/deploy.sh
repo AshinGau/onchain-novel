@@ -23,7 +23,13 @@ if [[ "${1:-}" == "--prod" ]]; then PROD=true; fi
 command -v forge >/dev/null 2>&1 || die "forge not found (run scripts/bootstrap.sh)"
 
 RPC_URL="$(cfg chain.rpcUrl)"
+# chain.chainId is optional in config.yaml; backend / CLI auto-detect via
+# eth_chainId. Mirror that here so the deploy log + patch-config call don't
+# print/pass "null".
 CHAIN_ID="$(cfg chain.chainId)"
+if [[ -z "$CHAIN_ID" || "$CHAIN_ID" == "null" ]]; then
+  CHAIN_ID="$(cast chain-id --rpc-url "$RPC_URL")"
+fi
 ROOT="$(_cfg_find_root)"
 
 SCRIPT_FILE="scripts/Deploy.s.sol"

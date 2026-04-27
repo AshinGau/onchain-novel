@@ -20,10 +20,15 @@ export interface EventMeta {
 }
 
 export function eventMeta(log: Log): EventMeta {
+  // Indexer only fetches logs from confirmed blocks, so blockNumber is never
+  // null here. Throw if the invariant breaks rather than papering over with 0.
+  if (log.blockNumber === null) {
+    throw new Error("eventMeta: log.blockNumber is null (unconfirmed block?)");
+  }
   return {
-    blockNumber: log.blockNumber?.toString() ?? "0",
-    txHash: log.transactionHash ?? null,
-    logIndex: log.logIndex ?? null,
+    blockNumber: log.blockNumber.toString(),
+    txHash: log.transactionHash,
+    logIndex: log.logIndex,
   };
 }
 

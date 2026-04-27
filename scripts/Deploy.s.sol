@@ -40,7 +40,11 @@ contract Deploy is Script {
         console.log("BountyBoard impl:", address(bountyBoardImpl));
         console.log("RoundManager impl:", address(roundManagerImpl));
 
-        // 2. Deploy proxies (with placeholder addresses for circular refs; wired in step 3)
+        // 2. Standalone UserRegistry — must precede NovelCore so the address
+        //    can be embedded into NovelCore's address book at initialize time.
+        UserRegistry userRegistry = new UserRegistry();
+
+        // 3. Deploy proxies (with placeholder addresses for circular refs; wired in step 4)
         bytes memory votingData = abi.encodeCall(VotingEngine.initialize, (deployer, address(0)));
         ERC1967Proxy votingProxy = new ERC1967Proxy(address(votingEngineImpl), votingData);
 
@@ -51,7 +55,8 @@ contract Deploy is Script {
         ERC1967Proxy rulesProxy = new ERC1967Proxy(address(rulesEngineImpl), rulesData);
 
         bytes memory novelCoreData = abi.encodeCall(
-            NovelCore.initialize, (deployer, address(votingProxy), address(prizeProxy), address(rulesProxy))
+            NovelCore.initialize,
+            (deployer, address(votingProxy), address(prizeProxy), address(rulesProxy), address(userRegistry))
         );
         ERC1967Proxy novelCoreProxy = new ERC1967Proxy(address(novelCoreImpl), novelCoreData);
 
@@ -60,12 +65,11 @@ contract Deploy is Script {
         ERC1967Proxy bountyProxy = new ERC1967Proxy(address(bountyBoardImpl), bountyData);
 
         bytes memory roundData = abi.encodeCall(
-            RoundManager.initialize,
-            (deployer, address(novelCoreProxy), address(votingProxy), address(prizeProxy))
+            RoundManager.initialize, (deployer, address(novelCoreProxy), address(votingProxy), address(prizeProxy))
         );
         ERC1967Proxy roundProxy = new ERC1967Proxy(address(roundManagerImpl), roundData);
 
-        // 3. Wire addresses
+        // 4. Wire addresses
         VotingEngine(payable(address(votingProxy))).setRoundManager(address(roundProxy));
         VotingEngine(payable(address(votingProxy))).setPrizePool(address(prizeProxy));
         PrizePool(payable(address(prizeProxy))).setNovelCore(address(novelCoreProxy));
@@ -77,9 +81,6 @@ contract Deploy is Script {
         NovelCore(payable(address(novelCoreProxy))).setRoundManager(address(roundProxy));
         // Initial keeper = deployer; owner should rotate via setKeeper post-deploy.
         RoundManager(payable(address(roundProxy))).setKeeper(deployer);
-
-        // 4. Standalone UserRegistry (no upgrade, no init args)
-        UserRegistry userRegistry = new UserRegistry();
 
         vm.stopBroadcast();
 

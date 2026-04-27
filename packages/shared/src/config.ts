@@ -33,17 +33,20 @@ const optionalHexAddress = z
 
 const ChainSchema = z.object({
   rpcUrl: z.string().url(),
-  chainId: z.number().int().positive(),
+  // Optional: when omitted, callers resolve via `eth_chainId` against rpcUrl
+  // (see bootstrapConfig). Keep it as an explicit override for offline tooling
+  // or for sanity-checking against an expected network.
+  chainId: z.number().int().positive().optional(),
 });
 
+// All non-novelCore addresses are derivable on-chain from NovelCore via
+// resolveContracts(). novelCore is the single field that can't be derived;
+// everything else is intentionally absent from the schema. If you find
+// yourself wanting to pin a non-novelCore address here, you almost certainly
+// want to fix the deployment instead — keeping config in sync with on-chain
+// truth is the whole point.
 const ContractsSchema = z.object({
   novelCore: optionalHexAddress,
-  roundManager: optionalHexAddress,
-  votingEngine: optionalHexAddress,
-  prizePool: optionalHexAddress,
-  bountyBoard: optionalHexAddress,
-  rulesEngine: optionalHexAddress,
-  userRegistry: optionalHexAddress,
 });
 
 const IndexerSchema = z.object({
@@ -228,3 +231,44 @@ export function getVoteEncryptionKey(): string | null {
 
 // Re-export hexAddress helper in case consumers need it for their own schemas
 export { hexAddress };
+
+// ────────────────────────────────────────────────────────────────────────────
+// Bootstrap (config + on-chain resolution in one call)
+// ────────────────────────────────────────────────────────────────────────────
+
+import { createPublicClient, http, type Address } from "viem";
+
+import { resolveContracts, type ResolvedContracts } from "./chain/resolveContracts.js";
+
+export interface BootstrappedConfig {
+  config: AppConfig;
+  chainId: number;
+  contracts: ResolvedContracts;
+}
+
+/**
+ * One-shot startup bootstrap for any service that needs the full deployment:
+ *   1. Load + validate config.yaml (sync).
+ *   2. If chain.chainId is unset, query the RPC's eth_chainId.
+ *   3. Walk NovelCore's address book to resolve the other 6 contract addresses.
+ *
+ * Returns a frozen view; callers should hold this for the process lifetime
+ * (addresses change only on redeploy / setter-call). Throws if the RPC is
+ * unreachable or `contracts.novelCore` is missing.
+ */
+export async function bootstrapConfig(opts: LoadConfigOptions = {}): Promise<BootstrappedConfig> {
+  const config = loadConfig(opts);
+  if (!config.contracts.novelCore) {
+    throw new Error(
+      "Missing contracts.novelCore in config.yaml. Run scripts/deploy.sh, then patch-config.ts will fill it in.",
+    );
+  }
+  const client = createPublicClient({ transport: http(config.chain.rpcUrl) });
+  const [chainId, contracts] = await Promise.all([
+    config.chain.chainId !== undefined
+      ? Promise.resolve(config.chain.chainId)
+      : client.getChainId(),
+    resolveContracts({ novelCore: config.contracts.novelCore as Address, client }),
+  ]);
+  return { config, chainId, contracts };
+}

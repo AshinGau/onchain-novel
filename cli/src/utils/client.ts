@@ -6,7 +6,7 @@ import { getPrivateKey, requireConfig } from "./config.js";
 
 function getChain() {
   const config = requireConfig();
-  if (!config.chainId || config.chainId === foundry.id) return foundry;
+  if (config.chainId === foundry.id) return foundry;
   return defineChain({
     id: config.chainId,
     name: `Chain ${config.chainId}`,

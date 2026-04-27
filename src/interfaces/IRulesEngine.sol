@@ -19,11 +19,7 @@ interface IRulesEngine {
     event RuleSet(uint64 indexed novelId, string name);
     event RuleDeleted(uint64 indexed novelId, string name);
     event RuleProposed(
-        uint64 indexed proposalId,
-        uint64 indexed novelId,
-        address indexed proposer,
-        uint8 proposalType,
-        string ruleName
+        uint64 indexed proposalId, uint64 indexed novelId, address indexed proposer, uint8 proposalType, string ruleName
     );
     event RuleProposalVoted(uint64 indexed proposalId, address indexed voter, uint32 newVoteCount);
     event RuleProposalExecuted(uint64 indexed proposalId, uint64 indexed novelId);

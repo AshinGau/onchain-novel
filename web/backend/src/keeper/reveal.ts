@@ -74,9 +74,6 @@ export async function batchReveal(
     }
 
     try {
-      if (!env.ROUND_MANAGER_ADDRESS) {
-        throw new Error("ROUND_MANAGER_ADDRESS not configured");
-      }
       const { request } = await publicClient.simulateContract({
         address: env.ROUND_MANAGER_ADDRESS,
         abi: revealAbi,

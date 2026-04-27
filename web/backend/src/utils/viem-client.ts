@@ -1,19 +1,19 @@
 import { createPublicClient, createWalletClient, http, type Chain, type PublicClient, type WalletClient } from "viem";
 import { privateKeyToAccount, type PrivateKeyAccount } from "viem/accounts";
-import { anvil, foundry, mainnet, sepolia } from "viem/chains";
+import { foundry, mainnet, sepolia } from "viem/chains";
 
 import { env } from "./env.js";
 
-const CHAINS: Record<string, Chain> = {
-  foundry,
-  anvil,
-  mainnet,
-  sepolia,
+const CHAINS_BY_ID: Record<number, Chain> = {
+  [foundry.id]: foundry,
+  [mainnet.id]: mainnet,
+  [sepolia.id]: sepolia,
 };
 
 export function resolveChain(): Chain {
-  const name = (process.env.CHAIN_NAME ?? "foundry").toLowerCase();
-  return CHAINS[name] ?? foundry;
+  const chain = CHAINS_BY_ID[env.CHAIN_ID];
+  if (!chain) throw new Error(`Unsupported chainId: ${env.CHAIN_ID}`);
+  return chain;
 }
 
 export function createRpcPublicClient(rpcUrl: string = env.RPC_URL): PublicClient {

@@ -20,16 +20,12 @@ Shape (see [`packages/shared/src/config.ts`](../packages/shared/src/config.ts) f
 ```yaml
 chain:
   rpcUrl: http://127.0.0.1:8545
-  chainId: 31337
+  # chainId: 31337   # optional; auto-detected from rpcUrl if omitted
 
 contracts:            # populated by scripts/deploy.sh — don't edit by hand
-  novelCore: "0x..."
-  roundManager: "0x..."
-  votingEngine: "0x..."
-  prizePool: "0x..."
-  bountyBoard: "0x..."
-  rulesEngine: "0x..."
-  userRegistry: "0x..."
+  novelCore: "0x..."  # the only address you need; the other six are derived
+                      # on-chain via NovelCore's address book at startup
+                      # (resolveContracts in @onchain-novel/shared)
 
 backend:
   host: 127.0.0.1
@@ -128,7 +124,7 @@ Rule of thumb: **if committing it would be wrong** (secret, machine-specific, se
 | Frontend (SSR + browser) | `loadConfig()` at **build time** in `web/frontend/next.config.ts` — values compiled into the bundle as `NEXT_PUBLIC_*` for browser, read via `process.env` for SSR |
 | CLI | `loadConfig()` on every invocation from `cli/src/utils/config.ts` (lazy; not invoked by `--help`) |
 | Shell scripts | `scripts/lib/read-config.sh` wraps `yq eval` for reading individual keys |
-| `scripts/patch-config.ts` | Writes contract addresses back into `config.yaml` after `forge script Deploy` |
+| `scripts/patch-config.ts` | Writes the NovelCore proxy address back into `config.yaml` after `forge script Deploy` |
 
 ## Typical lifecycle on a fresh checkout
 
@@ -136,7 +132,8 @@ Rule of thumb: **if committing it would be wrong** (secret, machine-specific, se
 # 1. Install deps (creates config.yaml defaults, optionally config.local.yaml from example)
 ./scripts/bootstrap.sh
 
-# 2. Deploy — writes the 7 contract addresses back into config.yaml
+# 2. Deploy — writes the NovelCore proxy address back into config.yaml
+#    (the other 6 addresses are reachable on-chain from NovelCore at startup)
 ./scripts/dev.sh start
 
 # 3. (Optional) override anything locally
@@ -163,7 +160,7 @@ export VOTE_ENCRYPTION_KEY=$(vault kv get -field=encryption_key secret/onchain)
 export FRONTEND_URL=https://novel.example.com     # CORS
 
 # /etc/onchain-novel/config.yaml committed via CM tool;
-# contracts.* baked in by patch-config.ts after each deploy
+# contracts.novelCore baked in by patch-config.ts after each deploy
 ```
 
 No `.env` files in production — all secrets come from the secret manager and are injected by the process supervisor (systemd, kubernetes, docker-compose, etc.).
