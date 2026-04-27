@@ -55,7 +55,7 @@ npm run build            # Compile TypeScript
 # Layer 1 (single-purpose)
 ./scripts/anvil.sh    {start|stop|status|reset}
 ./scripts/db.sh       {create|drop|migrate|reset|psql}
-./scripts/deploy.sh                           # needs PRIVATE_KEY, writes addresses back to config.yaml
+./scripts/deploy.sh                           # needs PRIVATE_KEY, writes contracts.novelCore back to config.yaml (the rest is on-chain)
 ./scripts/services.sh {start|stop|status} [--dev] [--keeper] [--no-frontend]
 
 # Fresh machine
@@ -64,7 +64,7 @@ npm run build            # Compile TypeScript
 
 ### Configuration
 Three layers merged in order (last wins):
-1. `config.yaml` (committed) — shared defaults, contract addresses, ports, DB URL
+1. `config.yaml` (committed) — shared defaults, **only `contracts.novelCore`** (the rest is resolved on-chain via `resolveContracts` from NovelCore's address book), ports, DB URL. `chain.chainId` is optional — auto-detected from `chain.rpcUrl` at startup.
 2. `config.local.yaml` (gitignored) — personal override
 3. env vars — secrets (`PRIVATE_KEY`, `KEEPER_PRIVATE_KEY`, `VOTE_ENCRYPTION_KEY`), optional `DATABASE_URL`, `ONCHAIN_NOVEL_CONFIG` path
 
@@ -74,7 +74,7 @@ See `docs/config.md` for the full schema + deployment cheat sheet.
 
 ### Smart Contracts (`src/`)
 Six UUPS-upgradeable contracts + one standalone:
-- **NovelCore** — Chapter tree (parentId + children[]), novel/chapter CRUD, metadata, worldLineAncestors storage. Writing always available. Round state is mutated only by RoundManager via privileged setters.
+- **NovelCore** — Chapter tree (parentId + children[]), novel/chapter CRUD, metadata, worldLineAncestors storage. Writing always available. Round state is mutated only by RoundManager via privileged setters. Also serves as the deployment-wide address book: stores votingEngine / prizePool / rulesEngine / roundManager / userRegistry pointers so off-chain clients can resolve every other contract from a single root address.
 - **RoundManager** — Round lifecycle (start/close/settle/nominate), commit-reveal vote forwarding, final completion. Round-phase functions are `keeper`-only (with anyone-after-timeout fallback). **Keeper's single attack surface = the `leaves[]` fed to `startRound`** (biasing which tree leaf per world line becomes the candidate). Everything else is fully on-chain deterministic: winners from `VotingEngine.tallyVotes`, reward authors from `NovelCore.collectPathAuthors` walking parentId, final authors likewise. Commit-reveal prevents vote alteration; prize release rules are fixed constants. This "keeper picks leaves only" property is the core trust proposition.
 - **VotingEngine** — Commit-reveal voting. 3x accuracy weight. One vote per address per round. Privileged calls gated by RoundManager.
 - **PrizePool** — Per-round distribution: creator royalty `D/(D+round)` decay, author/voter rewards. Tips (public `tipNovel` / `tipChapter`). Keeper rewards.
@@ -98,7 +98,7 @@ State flow (on RoundManager): `Idle → startRound(leaves[]) → Nominating → 
 
 ### CLI (`cli/`)
 - npm package: `onchain-novel-cli`, published as a single bundled artifact (tsup).
-- `onchain-novel-cli setup` drops role-specific skill files into `.claude/commands/`.
+- `onchain-novel-cli setup` drops a single consolidated `SKILL.md` (covering all four roles — reader / voter / author / creator) into **both** `.agent/skills/onchain-novel/SKILL.md` (cross-agent standard) and `.claude/commands/onchain-novel.md` (Claude Code slash command), plus a root-level `onchain-novel-index.md` for agents that don't auto-scan either path.
 - Reads via backend API, writes directly on-chain via viem.
 
 ### Shared (`packages/shared/`)

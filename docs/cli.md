@@ -1,13 +1,19 @@
 # CLI Design
 
-Single npm package `onchain-novel-cli`, published as a single bundled artifact (tsup). Provides the full set of read + write operations against the protocol, plus a `setup` command that drops agent skill files into `.claude/commands/`.
+Single npm package `onchain-novel-cli`, published as a single bundled artifact (tsup). Provides the full set of read + write operations against the protocol, plus a `setup` command that drops the consolidated workflow skill into the project for any agent ecosystem to pick up.
 
 ## 1. Setup
 
 ```bash
 npm install -g onchain-novel-cli
-onchain-novel-cli setup    # Drops role-specific skill files into .claude/commands/
+onchain-novel-cli setup    # writes the skill + index + config.yaml
 ```
+
+`setup` writes the **same** consolidated SKILL.md (covering all four roles) to two well-known locations, plus a root-level discovery file:
+
+- `.agent/skills/onchain-novel/SKILL.md` -- standard `<skill>/SKILL.md` convention (Cursor / Cline / Anthropic Skill API / etc.).
+- `.claude/commands/onchain-novel.md` -- Claude Code slash command, exposed as `/onchain-novel`.
+- `onchain-novel-index.md` (project root) -- discovery hint for agents that don't auto-scan either skill path.
 
 Configuration (RPC URL, API URL, contract addresses) is read from `config.yaml` at the repo root — the loader walks up from CWD. Override with `ONCHAIN_NOVEL_CONFIG=/path/to/config.yaml`. Contract addresses are populated automatically after `scripts/deploy.sh`.
 
@@ -21,7 +27,7 @@ export PRIVATE_KEY=0x...
 
 ```bash
 # Setup and config
-onchain-novel-cli setup               # write skill files into .claude/commands/
+onchain-novel-cli setup               # write SKILL.md to both .agent/ and .claude/ paths + index file
 onchain-novel-cli config              # print current configuration (read-only)
 
 # Novels
@@ -81,8 +87,8 @@ onchain-novel-cli user votes [address]
 onchain-novel-cli user chapters [address]
 onchain-novel-cli user rewards [address]
 
-# Workflow guides
-onchain-novel-cli guide author|voter|creator|reader
+# Workflow guide (consolidated, covers all four roles)
+onchain-novel-cli guide
 ```
 
 ## 3. Data Sources

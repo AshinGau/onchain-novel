@@ -1,33 +1,49 @@
-import { loadConfig as loadAppConfig, getPrivateKey as getPkFromEnv } from "@onchain-novel/shared";
+import {
+  bootstrapConfig,
+  getPrivateKey as getPkFromEnv,
+  type BootstrappedConfig,
+} from "@onchain-novel/shared";
+
 import type { OnchainNovelConfig } from "../shared/index.js";
 
 /**
- * CLI config is read from the shared project config.yaml. Run the CLI from
- * inside the repo (or set ONCHAIN_NOVEL_CONFIG=/path/to/config.yaml) and the
- * loader walks up to the nearest config.yaml.
+ * CLI config flow:
+ *
+ *   1. The bin entry installs a commander preAction hook that calls
+ *      `ensureBootstrapped()` for any command needing chain access.
+ *   2. Bootstrap loads config.yaml + walks NovelCore's on-chain address book
+ *      to resolve every other contract (and auto-detects chainId if absent).
+ *   3. Commands then call `requireConfig()` synchronously and get the resolved
+ *      shape. Read-only commands like `setup`/`guide` skip the hook entirely
+ *      — they don't need an RPC.
  *
  * Private keys are NEVER persisted — export PRIVATE_KEY in your shell.
  */
-export function requireConfig(): OnchainNovelConfig {
-  const cfg = loadAppConfig();
-  if (!cfg.contracts.novelCore) {
-    console.error(
-      "Missing contracts.novelCore in config.yaml. Deploy contracts first (scripts/Deploy.s.sol) — the patch-config tool will fill the addresses in.",
-    );
-    return process.exit(1);
+let _cache: BootstrappedConfig | null = null;
+
+export async function ensureBootstrapped(): Promise<void> {
+  if (_cache) return;
+  try {
+    _cache = await bootstrapConfig();
+  } catch (err) {
+    console.error(String(err));
+    process.exit(1);
   }
+}
+
+export function requireConfig(): OnchainNovelConfig {
+  if (!_cache) {
+    console.error(
+      "CLI bootstrap was not called for this command. This is a bug — please file an issue.",
+    );
+    process.exit(1);
+  }
+  const { config, chainId, contracts } = _cache;
   return {
-    rpcUrl: cfg.chain.rpcUrl,
-    chainId: cfg.chain.chainId,
-    apiUrl: cfg.cli.apiUrl,
-    contracts: {
-      novelCore: cfg.contracts.novelCore,
-      roundManager: cfg.contracts.roundManager ?? ("0x" as `0x${string}`),
-      prizePool: cfg.contracts.prizePool ?? ("0x" as `0x${string}`),
-      bountyBoard: cfg.contracts.bountyBoard,
-      rulesEngine: cfg.contracts.rulesEngine,
-      userRegistry: cfg.contracts.userRegistry,
-    },
+    rpcUrl: config.chain.rpcUrl,
+    chainId,
+    apiUrl: config.cli.apiUrl,
+    contracts,
   };
 }
 

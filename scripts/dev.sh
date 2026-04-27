@@ -54,11 +54,8 @@ _ensure_built() {
 
 _print_contracts() {
   echo ""
-  info "Contract addresses (from config.yaml):"
-  for key in novelCore roundManager votingEngine prizePool bountyBoard rulesEngine userRegistry; do
-    local v; v="$(cfg "contracts.$key")"
-    printf "  %-14s %s\n" "$key" "$v"
-  done
+  info "NovelCore address (the only one to put in config.yaml; every other contract is reachable on-chain from here):"
+  printf "  %s\n" "$(cfg "contracts.novelCore")"
   echo ""
 }
 

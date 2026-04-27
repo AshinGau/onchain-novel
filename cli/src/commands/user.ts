@@ -45,12 +45,6 @@ export function registerUserCommands(program: Command): void {
     .action(async (nickname) => {
       try {
         const contracts = getContracts();
-        if (!contracts.userRegistry) {
-          error(
-            "UserRegistry contract address not configured. Run 'onchain-novel-cli config set contracts.userRegistry <address>'.",
-          );
-          return process.exit(1);
-        }
         const bytes32 = nicknameToBytes32(nickname);
         const client = getWalletClient();
         const hash = await setNicknameTx(client, bytes32, contracts.userRegistry);
@@ -69,10 +63,6 @@ export function registerUserCommands(program: Command): void {
     .action(async (addrArg) => {
       try {
         const contracts = getContracts();
-        if (!contracts.userRegistry) {
-          error("UserRegistry contract address not configured.");
-          return process.exit(1);
-        }
         const addr = resolveAddress(addrArg) as `0x${string}`;
         const pub = getPublicClient();
         const raw = (await getNickname(pub, addr, contracts.userRegistry)) as `0x${string}`;

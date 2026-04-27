@@ -191,17 +191,17 @@ async function processLog(
 
   if (address === env.NOVEL_CORE_ADDRESS.toLowerCase()) {
     await handleNovelCoreEvent(log, dbClient, rpcClient, keeperBuf);
-  } else if (env.ROUND_MANAGER_ADDRESS && address === env.ROUND_MANAGER_ADDRESS.toLowerCase()) {
+  } else if (address === env.ROUND_MANAGER_ADDRESS.toLowerCase()) {
     await handleRoundManagerEvent(log, dbClient, rpcClient, keeperBuf);
-  } else if (env.VOTING_ENGINE_ADDRESS && address === env.VOTING_ENGINE_ADDRESS.toLowerCase()) {
+  } else if (address === env.VOTING_ENGINE_ADDRESS.toLowerCase()) {
     await handleVotingEvent(log, dbClient);
-  } else if (env.PRIZE_POOL_ADDRESS && address === env.PRIZE_POOL_ADDRESS.toLowerCase()) {
+  } else if (address === env.PRIZE_POOL_ADDRESS.toLowerCase()) {
     await handlePrizePoolEvent(log, dbClient);
-  } else if (env.BOUNTY_BOARD_ADDRESS && address === env.BOUNTY_BOARD_ADDRESS.toLowerCase()) {
+  } else if (address === env.BOUNTY_BOARD_ADDRESS.toLowerCase()) {
     await handleBountyBoardEvent(log, dbClient);
-  } else if (env.RULES_ENGINE_ADDRESS && address === env.RULES_ENGINE_ADDRESS.toLowerCase()) {
+  } else if (address === env.RULES_ENGINE_ADDRESS.toLowerCase()) {
     await handleRulesEvent(log, dbClient, rpcClient);
-  } else if (env.USER_REGISTRY_ADDRESS && address === env.USER_REGISTRY_ADDRESS.toLowerCase()) {
+  } else if (address === env.USER_REGISTRY_ADDRESS.toLowerCase()) {
     await handleUserRegistryEvent(log, dbClient);
   }
 }
@@ -210,13 +210,15 @@ export async function startIndexer() {
   ilog.info("Starting indexer");
   let client = createClient();
 
-  const addresses: `0x${string}`[] = [env.NOVEL_CORE_ADDRESS];
-  if (env.ROUND_MANAGER_ADDRESS) addresses.push(env.ROUND_MANAGER_ADDRESS);
-  if (env.VOTING_ENGINE_ADDRESS) addresses.push(env.VOTING_ENGINE_ADDRESS);
-  if (env.PRIZE_POOL_ADDRESS) addresses.push(env.PRIZE_POOL_ADDRESS);
-  if (env.BOUNTY_BOARD_ADDRESS) addresses.push(env.BOUNTY_BOARD_ADDRESS);
-  if (env.RULES_ENGINE_ADDRESS) addresses.push(env.RULES_ENGINE_ADDRESS);
-  if (env.USER_REGISTRY_ADDRESS) addresses.push(env.USER_REGISTRY_ADDRESS);
+  const addresses: `0x${string}`[] = [
+    env.NOVEL_CORE_ADDRESS,
+    env.ROUND_MANAGER_ADDRESS,
+    env.VOTING_ENGINE_ADDRESS,
+    env.PRIZE_POOL_ADDRESS,
+    env.BOUNTY_BOARD_ADDRESS,
+    env.RULES_ENGINE_ADDRESS,
+    env.USER_REGISTRY_ADDRESS,
+  ];
 
   // Main loop
   while (true) {

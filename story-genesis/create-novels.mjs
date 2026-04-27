@@ -52,12 +52,21 @@ const COVER_BASE_URL =
   "https://raw.githubusercontent.com/AshinGau/onchain-novel/refs/heads/main/story-genesis/images";
 
 const NOVEL_CORE = cfg.contracts.novelCore;
-const RULES_ENGINE = cfg.contracts.rulesEngine;
 
-if (!NOVEL_CORE || !RULES_ENGINE) {
-  console.error("contracts.novelCore / contracts.rulesEngine empty in config.yaml — run ./scripts/dev.sh start first");
+if (!NOVEL_CORE) {
+  console.error("contracts.novelCore empty in config.yaml — run ./scripts/dev.sh start first");
   process.exit(1);
 }
+
+// Walk NovelCore's on-chain address book to discover RulesEngine. Same
+// pattern backend / CLI / frontend use at startup via resolveContracts.
+// config.yaml only carries novelCore; everything else is derived here.
+const _bootstrapClient = createPublicClient({ chain: foundry, transport: http(RPC_URL) });
+const RULES_ENGINE = await _bootstrapClient.readContract({
+  address: NOVEL_CORE,
+  abi: parseAbi(["function rulesEngine() external view returns (address)"]),
+  functionName: "rulesEngine",
+});
 
 // ── ABI fragments ───────────────────────────────────────────────────────────
 const novelCoreAbi = parseAbi([

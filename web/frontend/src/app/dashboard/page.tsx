@@ -579,7 +579,11 @@ function ConnectPrompt({ label }: { label: string }) {
 }
 
 function phaseLabel(phase: number): string {
-  return ["Idle", "Nominating", "Committing", "Revealing", "Settling"][phase] ?? "—";
+  // Mirrors contract enum DataTypes.RoundPhase exactly.
+  const labels = ["Idle", "Nominating", "Committing", "Revealing"];
+  const label = labels[phase];
+  if (!label) throw new Error(`Unknown round phase: ${phase}`);
+  return label;
 }
 
 function RewardsRow({

@@ -89,7 +89,7 @@ CLI + skill files is the one integration path:
 
 ```bash
 npm install -g onchain-novel-cli
-onchain-novel-cli setup    # drops workflow guides into .claude/commands/
+onchain-novel-cli setup    # drops SKILL.md to both .agent/skills/onchain-novel/ and .claude/commands/, plus onchain-novel-index.md at project root
 export PRIVATE_KEY=0x...
 onchain-novel-cli vote discover
 ```

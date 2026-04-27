@@ -67,6 +67,10 @@ abstract contract TestBase is Test {
         RulesEngine rulesEngineImpl = new RulesEngine();
         BountyBoard bountyBoardImpl = new BountyBoard();
 
+        // UserRegistry deployed first so its address can be embedded into
+        // NovelCore's initialize-time address book.
+        UserRegistry userRegistryDeployed = new UserRegistry();
+
         bytes memory votingData = abi.encodeCall(VotingEngine.initialize, (deployer, address(1)));
         ERC1967Proxy votingProxy = new ERC1967Proxy(address(votingEngineImpl), votingData);
         votingEngine = VotingEngine(payable(address(votingProxy)));
@@ -80,7 +84,8 @@ abstract contract TestBase is Test {
         rulesEngine = RulesEngine(address(rulesProxy));
 
         bytes memory novelCoreData = abi.encodeCall(
-            NovelCore.initialize, (deployer, address(votingProxy), address(prizeProxy), address(rulesProxy))
+            NovelCore.initialize,
+            (deployer, address(votingProxy), address(prizeProxy), address(rulesProxy), address(userRegistryDeployed))
         );
         ERC1967Proxy novelCoreProxy = new ERC1967Proxy(address(novelCoreImpl), novelCoreData);
         novelCore = NovelCore(payable(address(novelCoreProxy)));
@@ -111,8 +116,9 @@ abstract contract TestBase is Test {
         // Configure the test `keeper` address as RoundManager's keeper so vm.prank(keeper) works.
         roundManager.setKeeper(keeper);
 
-        // UserRegistry standalone
-        userRegistry = new UserRegistry();
+        // Reuse the UserRegistry deployed earlier (now embedded in NovelCore's
+        // address book) so test assertions and real wiring point at the same instance.
+        userRegistry = userRegistryDeployed;
 
         vm.stopPrank();
     }
@@ -301,13 +307,9 @@ abstract contract TestBase is Test {
     }
 
     /// Run a full round. Caller provides leaves in tally order (target first, then by candidate position).
-    function _runFullRound(
-        uint64 novelId,
-        uint64[] memory leaves,
-        address[] memory voters,
-        uint64 target,
-        bytes32 salt
-    ) internal {
+    function _runFullRound(uint64 novelId, uint64[] memory leaves, address[] memory voters, uint64 target, bytes32 salt)
+        internal
+    {
         vm.prank(keeper);
         roundManager.startRound(novelId, leaves);
 
@@ -754,7 +756,6 @@ contract IntegrationTest is TestBase {
         vm.expectRevert(RoundManager.NovelHasNoRound.selector);
         roundManager.completeNovel(novelId);
     }
-
 
     // ----------------------------------------------------------
     //  Voter rewards: accurate voters get 3x weight

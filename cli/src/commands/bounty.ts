@@ -23,12 +23,6 @@ export function registerBountyCommands(program: Command): void {
       try {
         const client = getWalletClient();
         const contracts = getContracts();
-        if (!contracts.bountyBoard) {
-          error(
-            "BountyBoard contract address not configured. Run 'onchain-novel-cli config set contracts.bountyBoard <address>'.",
-          );
-          return process.exit(1);
-        }
 
         const durationSeconds = parseDuration(opts.deadline);
         const deadlineTimestamp = BigInt(Math.floor(Date.now() / 1000) + durationSeconds);
@@ -57,10 +51,6 @@ export function registerBountyCommands(program: Command): void {
       try {
         const client = getWalletClient();
         const contracts = getContracts();
-        if (!contracts.bountyBoard) {
-          error("BountyBoard contract address not configured.");
-          return process.exit(1);
-        }
         const hash = await designateBountyTx(client, {
           bountyId: BigInt(bountyId),
           chapterId: BigInt(chapterId),
@@ -113,10 +103,6 @@ export function registerBountyCommands(program: Command): void {
       try {
         const client = getWalletClient();
         const contracts = getContracts();
-        if (!contracts.bountyBoard) {
-          error("BountyBoard contract address not configured.");
-          return process.exit(1);
-        }
         const hash = await claimBountyTx(client, BigInt(bountyId), contracts.bountyBoard);
         txHash(hash);
         await waitForTx(hash);
@@ -134,10 +120,6 @@ export function registerBountyCommands(program: Command): void {
       try {
         const client = getWalletClient();
         const contracts = getContracts();
-        if (!contracts.bountyBoard) {
-          error("BountyBoard contract address not configured.");
-          return process.exit(1);
-        }
         const hash = await refundBountyTx(client, BigInt(bountyId), contracts.bountyBoard);
         txHash(hash);
         await waitForTx(hash);

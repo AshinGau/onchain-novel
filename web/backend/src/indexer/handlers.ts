@@ -469,7 +469,10 @@ export async function handlePrizePoolEvent(log: Log, db: Client) {
       const chapterRes = await db.query("SELECT author FROM chapters WHERE id = $1", [
         chapterId.toString(),
       ]);
-      const author = chapterRes.rows[0]?.author ?? "";
+      // ChapterSubmitted is emitted before any tip can land on it (PrizePool
+      // checks chapter existence in NovelCore), so by the time we process this
+      // event the chapter row must exist. Throw if not — surface real bugs.
+      const author = chapterRes.rows[0].author;
       await db.query(
         "INSERT INTO chapter_tips (chapter_id, novel_id, tipper, author, amount, block_number) VALUES ($1, $2, $3, $4, $5, $6)",
         [
@@ -565,7 +568,10 @@ export async function handleBountyBoardEvent(log: Log, db: Client) {
       const chapterRes = await db.query("SELECT novel_id FROM chapters WHERE id = $1", [
         chapterId.toString(),
       ]);
-      const novelId = chapterRes.rows[0]?.novel_id ?? "0";
+      // BountyBoard.createBounty validates the chapter exists in NovelCore, so
+      // the corresponding ChapterSubmitted event was indexed earlier and the
+      // row exists by the time we get here. Throw if not.
+      const novelId = chapterRes.rows[0].novel_id;
       await db.query(
         `INSERT INTO bounties (id, chapter_id, novel_id, tipper, locked_amount, create_time, deadline, block_number)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)

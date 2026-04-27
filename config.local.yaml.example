@@ -6,7 +6,13 @@
 #   allowedDevOrigins:
 #     - 192.168.1.2
 
-# Example: point at a remote RPC for testing.
+# Example: point at a remote RPC for testing. chainId is auto-detected from
+# rpcUrl on startup, so leave it out unless you want a sanity check.
 # chain:
 #   rpcUrl: https://eth-sepolia.g.alchemy.com/v2/YOUR_KEY
-#   chainId: 11155111
+#   # chainId: 11155111
+
+# Example: pin a different deployment. Only novelCore is needed — every other
+# contract is discovered on-chain via NovelCore's address book at startup.
+# contracts:
+#   novelCore: "0x..."

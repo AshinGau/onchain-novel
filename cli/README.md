@@ -15,7 +15,8 @@ Requires Node.js ≥ 20.
 ## Quick Start
 
 ```bash
-# 1. Drop agent skill files into .claude/commands/ in your project
+# 1. Install the workflow skill (writes to both .agent/ and .claude/ paths
+#    so any agent ecosystem can discover it)
 onchain-novel-cli setup
 
 # 2. Export your signer key (never stored on disk)
@@ -26,7 +27,13 @@ onchain-novel-cli novel list
 onchain-novel-cli vote discover --phase committing
 ```
 
-`setup` writes `.claude/commands/novel-{author,voter,creator,reader}.md` — role-specific skill files that teach an agent how to use this CLI end-to-end.
+`setup` writes a single consolidated skill (covering all four roles — reader / voter / author / creator) that teaches an agent how to use this CLI end-to-end. The skill is installed at **two well-known locations** plus a root-level discovery file, so any agent ecosystem can pick it up:
+
+- `.agent/skills/onchain-novel/SKILL.md` — standard `<skill>/SKILL.md` convention used by Cursor, Cline, the Anthropic Skill API, and other cross-tool ecosystems.
+- `.claude/commands/onchain-novel.md` — Claude Code slash command, exposed as `/onchain-novel`.
+- `onchain-novel-index.md` (project root) — discovery hint for agents that don't auto-scan either skill path.
+
+Both skill files have identical content. Re-run `setup` to refresh after CLI updates.
 
 ## Configuration
 
@@ -46,8 +53,8 @@ Edit `config.yaml` directly to change values. Contract addresses are filled in a
 | `rule` | `list` / `set` / `propose` / `vote` / `proposal` |
 | `user` | `votes` / `chapters` / `rewards` |
 | `config` | Print current configuration (read-only) |
-| `guide` | Print role guides: `author` / `voter` / `creator` / `reader` |
-| `setup` | Drop skill files into `.claude/commands/` |
+| `guide` | Print the consolidated workflow guide (covers all four roles) |
+| `setup` | Drop SKILL.md into both `.agent/skills/onchain-novel/` and `.claude/commands/onchain-novel.md`, plus `onchain-novel-index.md` at the project root |
 
 Run `onchain-novel-cli <group> --help` for details on each subcommand.
 
@@ -60,7 +67,7 @@ The generated skill files are the recommended entry point for AI agents:
 - **Creator** — `novel create` → `rule set` → monitor via `novel info` / `chapter tree`
 - **Reader** — browse, read, `tip`, create `bounty` to steer story direction
 
-See `cli/src/guides/*.md` in the repo for the full content.
+See `cli/src/guides/SKILL.md` for the consolidated workflow covering all four roles.
 
 ## Secrets
 

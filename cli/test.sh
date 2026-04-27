@@ -142,19 +142,13 @@ PRIVATE_KEY="$PK_DEPLOYER" forge script scripts/Deploy.s.sol \
 BROADCAST_JSON="broadcast/Deploy.s.sol/31337/run-latest.json"
 [ -f "$BROADCAST_JSON" ] || { fail "Broadcast file missing"; tail -20 "$DEPLOY_LOG"; exit 1; }
 
-# Extract proxy / standalone addresses from forge console output (stable across deploy refactors,
-# unlike the create-transaction index which flips whenever deploy order changes).
+# Extract NovelCore proxy address from forge console output. Every other
+# contract (roundManager / votingEngine / prizePool / bountyBoard / rulesEngine
+# / userRegistry) is reachable on-chain from NovelCore's address book and
+# resolved at startup by bootstrapConfig — config.yaml only carries novelCore.
 extract() { grep -E "^\s*$1:" "$DEPLOY_LOG" | tail -1 | awk '{print $NF}'; }
 NOVEL_CORE=$(extract "NovelCore")
-ROUND_MANAGER=$(extract "RoundManager")
-VOTING_ENGINE=$(extract "VotingEngine")
-PRIZE_POOL=$(extract "PrizePool")
-RULES_ENGINE=$(extract "RulesEngine")
-BOUNTY_BOARD=$(extract "BountyBoard")
-USER_REGISTRY=$(extract "UserRegistry")
-for v in NOVEL_CORE ROUND_MANAGER VOTING_ENGINE PRIZE_POOL RULES_ENGINE BOUNTY_BOARD; do
-  [ -n "${!v}" ] || { fail "Failed to extract $v from deploy log"; tail -40 "$DEPLOY_LOG"; exit 1; }
-done
+[ -n "$NOVEL_CORE" ] || { fail "Failed to extract NovelCore from deploy log"; tail -40 "$DEPLOY_LOG"; exit 1; }
 pass "Contracts deployed (NovelCore=$NOVEL_CORE)"
 
 # -- Write a temporary config.yaml for this smoke run (isolated from the user's real config) --
@@ -162,15 +156,9 @@ SMOKE_CONFIG="$SMOKE_HOME/config.yaml"
 cat > "$SMOKE_CONFIG" <<EOF
 chain:
   rpcUrl: $RPC
-  chainId: 31337
+  # chainId omitted on purpose: bootstrapConfig auto-detects via eth_chainId.
 contracts:
   novelCore: "$NOVEL_CORE"
-  roundManager: "$ROUND_MANAGER"
-  votingEngine: "$VOTING_ENGINE"
-  prizePool: "$PRIZE_POOL"
-  bountyBoard: "$BOUNTY_BOARD"
-  rulesEngine: "$RULES_ENGINE"
-  userRegistry: "$USER_REGISTRY"
 backend:
   host: 127.0.0.1
   port: $API_PORT

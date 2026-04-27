@@ -9,8 +9,6 @@ import { createLogger } from "./logger.js";
 const log = createLogger("pool-sync");
 
 export async function syncPoolBalances() {
-  if (!env.PRIZE_POOL_ADDRESS) return;
-
   const client = createPublicClient({ chain: foundry, transport: http(env.RPC_URL) });
   const novels = await query("SELECT id FROM novels WHERE active = TRUE");
 

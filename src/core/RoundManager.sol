@@ -135,7 +135,11 @@ contract RoundManager is
         novel; // silence unused
     }
 
-    function _phaseDeadline(DataTypes.Novel memory novel, DataTypes.RoundData storage rd) internal view returns (uint64) {
+    function _phaseDeadline(DataTypes.Novel memory novel, DataTypes.RoundData storage rd)
+        internal
+        view
+        returns (uint64)
+    {
         if (novel.roundPhase == DataTypes.RoundPhase.Idle) {
             // For startRound: deadline = lastSettleTime + minRoundGap (round 1 = 0)
             return novel.currentRound > 0 ? novel.lastSettleTime + novel.config.minRoundGap : 0;
@@ -275,13 +279,11 @@ contract RoundManager is
         if (totalCommitted > 0) {
             (bool sent,) = address(votingEngine).call{value: totalCommitted}("");
             if (!sent) revert TransferFailed();
-            uint256 excess =
-                votingEngine.settleVoterRewards(novelId, round, voterRewards, novel.config.voteStake);
+            uint256 excess = votingEngine.settleVoterRewards(novelId, round, voterRewards, novel.config.voteStake);
             if (excess > 0) prizePool.deposit{value: excess}(novelId, "voterRewardExcess");
         } else if (voterRewards > 0) {
             // No voters — pull the voterRewards back from VotingEngine and redeposit to the pool
-            uint256 excess =
-                votingEngine.settleVoterRewards(novelId, round, voterRewards, novel.config.voteStake);
+            uint256 excess = votingEngine.settleVoterRewards(novelId, round, voterRewards, novel.config.voteStake);
             if (excess > 0) prizePool.deposit{value: excess}(novelId, "noVoters");
         }
 

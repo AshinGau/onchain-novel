@@ -3,16 +3,14 @@
  *
  * Browser code uses a relative "/api" base (Next.js rewrite proxies to the
  * backend, same-origin, no CORS). Server components (SSR / RSC) use an
- * absolute URL because Node's fetch requires one; BACKEND_URL is set by
- * next.config.ts at build time from config.yaml.
+ * absolute URL because Node's fetch requires one; BACKEND_URL is baked in by
+ * next.config.ts at build time from config.yaml's frontend.backendUrl.
  */
 
 import { createApiClient } from "@onchain-novel/shared/api";
 
 const isServer = typeof window === "undefined";
-const baseUrl = isServer
-  ? process.env.BACKEND_URL || "http://127.0.0.1:3001"
-  : "";
+const baseUrl = isServer ? (process.env.BACKEND_URL as string) : "";
 
 const api = createApiClient({ baseUrl });
 

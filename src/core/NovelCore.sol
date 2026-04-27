@@ -43,6 +43,10 @@ contract NovelCore is
     IPrizePool public prizePool;
     IRulesEngine public rulesEngine;
     address public roundManager;
+    // Address-book pointer to the standalone UserRegistry. NovelCore never
+    // calls into it; this field exists only so off-chain clients can discover
+    // the full deployment from a single root address.
+    address public userRegistry;
 
     // ─────── Storage: data ───────
     uint64 public novelCount;
@@ -79,19 +83,23 @@ contract NovelCore is
     }
 
     // ─────── Initializer ───────
-    function initialize(address owner_, address votingEngine_, address prizePool_, address rulesEngine_)
-        external
-        initializer
-    {
+    function initialize(
+        address owner_,
+        address votingEngine_,
+        address prizePool_,
+        address rulesEngine_,
+        address userRegistry_
+    ) external initializer {
         if (
             owner_ == address(0) || votingEngine_ == address(0) || prizePool_ == address(0)
-                || rulesEngine_ == address(0)
+                || rulesEngine_ == address(0) || userRegistry_ == address(0)
         ) revert ZeroAddress();
         __Ownable_init(owner_);
         __Pausable_init();
         votingEngine = IVotingEngine(votingEngine_);
         prizePool = IPrizePool(prizePool_);
         rulesEngine = IRulesEngine(rulesEngine_);
+        userRegistry = userRegistry_;
     }
 
     // ─────── Admin ───────
@@ -113,6 +121,11 @@ contract NovelCore is
     function setRoundManager(address addr) external onlyOwner {
         if (addr == address(0)) revert ZeroAddress();
         roundManager = addr;
+    }
+
+    function setUserRegistry(address addr) external onlyOwner {
+        if (addr == address(0)) revert ZeroAddress();
+        userRegistry = addr;
     }
 
     function pause() external onlyOwner {

@@ -15,16 +15,6 @@ import { fetchNovelConfig } from "../utils/api.js";
 import { getContracts, getPublicClient, getWalletClient, waitForTx } from "../utils/client.js";
 import { error, header, kv, success, txHash } from "../utils/format.js";
 
-function requireRulesEngine(contracts: ReturnType<typeof getContracts>): `0x${string}` {
-  if (!contracts.rulesEngine) {
-    error(
-      "RulesEngine contract address not configured. Run 'onchain-novel-cli config set contracts.rulesEngine <address>'.",
-    );
-    return process.exit(1);
-  }
-  return contracts.rulesEngine;
-}
-
 export function registerRuleCommands(program: Command): void {
   const rule = program.command("rule").description("World-building rules commands");
 
@@ -34,7 +24,7 @@ export function registerRuleCommands(program: Command): void {
     .action(async (novelId) => {
       try {
         const client = getPublicClient();
-        const rulesEngine = requireRulesEngine(getContracts());
+        const rulesEngine = getContracts().rulesEngine;
 
         const names = await getRuleNames(client, BigInt(novelId), rulesEngine);
         header(`Rules — Novel #${novelId}`);
@@ -63,7 +53,7 @@ export function registerRuleCommands(program: Command): void {
     .action(async (novelId, name, content) => {
       try {
         const client = getWalletClient();
-        const rulesEngine = requireRulesEngine(getContracts());
+        const rulesEngine = getContracts().rulesEngine;
         const hash = await setCreatorRulesTx(client, {
           novelId: BigInt(novelId),
           names: [name],
@@ -101,7 +91,7 @@ export function registerRuleCommands(program: Command): void {
         const wallet = getWalletClient();
         const pub = getPublicClient();
         const contracts = getContracts();
-        const rulesEngine = requireRulesEngine(contracts);
+        const rulesEngine = contracts.rulesEngine;
 
         let value: bigint;
         if (opts.value) {
@@ -152,7 +142,7 @@ export function registerRuleCommands(program: Command): void {
         const wallet = getWalletClient();
         const pub = getPublicClient();
         const contracts = getContracts();
-        const rulesEngine = requireRulesEngine(contracts);
+        const rulesEngine = contracts.rulesEngine;
 
         // Derive the novelId from the proposal so we can build the path
         const proposal = await getRuleProposal(pub, BigInt(proposalId), rulesEngine);
@@ -189,7 +179,7 @@ export function registerRuleCommands(program: Command): void {
     .action(async (proposalId) => {
       try {
         const client = getPublicClient();
-        const rulesEngine = requireRulesEngine(getContracts());
+        const rulesEngine = getContracts().rulesEngine;
         const proposal = await getRuleProposal(client, BigInt(proposalId), rulesEngine);
         header(`Rule Proposal #${proposalId}`);
         kv("Novel", proposal.novelId.toString());
