@@ -15,13 +15,6 @@ source "$HERE/lib/log.sh"
 source "$HERE/lib/pidfile.sh"
 source "$HERE/lib/read-config.sh"
 
-# Next 16 tries to "patch" the frontend workspace's lockfile at build/start time
-# by probing package managers (`npm config get registry`, …) from inside the
-# web/frontend dir. In an npm-workspaces monorepo the subdir has no own
-# lockfile, so npm bails with ENOWORKSPACES and Next prints a noisy (but
-# harmless) "Failed to patch lockfile" error. Skip the whole probe.
-export NEXT_IGNORE_INCORRECT_LOCKFILE=1
-
 DEPLOYED_FLAG="$STATE_DIR/deployed"
 
 # Ensure built artifacts exist for the services we're about to start. Shared

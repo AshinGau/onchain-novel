@@ -1,11 +1,20 @@
 #!/usr/bin/env bash
-# Deploy the protocol contracts and write the resulting addresses back into
-# config.yaml via scripts/patch-config.ts.
+# Deploy the protocol contracts via CREATE2 (deterministic addresses) and write
+# the resulting NovelCore proxy address back into config.yaml via
+# scripts/patch-config.ts.
+#
+# Addresses are a function of (deployer, salt, init code). With the same
+# PRIVATE_KEY and DEPLOY_SALT, every fresh chain produces the same addresses —
+# bump DEPLOY_SALT (or change deployer) for a new namespace, or
+# `scripts/anvil.sh reset` to wipe state before redeploying to the same one.
 #
 # Requires:
 #   - anvil running (or a remote RPC reachable)
 #   - PRIVATE_KEY env (deployer key)
 #   - contracts already compiled (`forge build`)
+#
+# Optional env:
+#   DEPLOY_SALT — bytes32 hex (default keccak256("onchain-novel.v1") inside the script)
 #
 # Usage:
 #   PRIVATE_KEY=0x... scripts/deploy.sh          # local anvil
@@ -38,11 +47,22 @@ $PROD && SCRIPT_FILE="scripts/DeployProduction.s.sol"
 DEPLOY_LOG="$ROOT/.local-node/deploy.log"
 mkdir -p "$(dirname "$DEPLOY_LOG")"
 
-info "Deploying $SCRIPT_FILE to $RPC_URL (chainId $CHAIN_ID)"
+if [[ -n "${DEPLOY_SALT:-}" ]]; then
+  info "Deploying $SCRIPT_FILE to $RPC_URL (chainId $CHAIN_ID, salt=$DEPLOY_SALT)"
+else
+  info "Deploying $SCRIPT_FILE to $RPC_URL (chainId $CHAIN_ID, salt=default)"
+fi
+# Only export DEPLOY_SALT when caller set it — passing "" to vm.envOr(bytes32)
+# would fail to parse. Unset means the script falls back to its default salt.
 (
   cd "$ROOT"
-  PRIVATE_KEY="$PRIVATE_KEY" forge script "$SCRIPT_FILE" \
-    --rpc-url "$RPC_URL" --broadcast > "$DEPLOY_LOG" 2>&1
+  if [[ -n "${DEPLOY_SALT:-}" ]]; then
+    PRIVATE_KEY="$PRIVATE_KEY" DEPLOY_SALT="$DEPLOY_SALT" forge script "$SCRIPT_FILE" \
+      --rpc-url "$RPC_URL" --broadcast > "$DEPLOY_LOG" 2>&1
+  else
+    PRIVATE_KEY="$PRIVATE_KEY" forge script "$SCRIPT_FILE" \
+      --rpc-url "$RPC_URL" --broadcast > "$DEPLOY_LOG" 2>&1
+  fi
 ) || { err "forge script failed; last 20 lines of $DEPLOY_LOG:"; tail -20 "$DEPLOY_LOG" >&2; exit 1; }
 
 ok "Contracts deployed"

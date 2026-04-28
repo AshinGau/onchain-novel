@@ -20,10 +20,6 @@ source "$HERE/lib/log.sh"
 source "$HERE/lib/pidfile.sh"
 source "$HERE/lib/read-config.sh"
 
-# See scripts/dev.sh for why. Also export here so services.sh invoked directly
-# (not via dev.sh) stays quiet.
-export NEXT_IGNORE_INCORRECT_LOCKFILE=1
-
 ROOT="$(_cfg_find_root)"
 
 DEV=false

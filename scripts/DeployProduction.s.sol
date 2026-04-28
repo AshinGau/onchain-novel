@@ -20,16 +20,20 @@ import {UserRegistry} from "../src/core/UserRegistry.sol";
 ///        PRIVATE_KEY — deployer private key
 ///        MULTISIG    — multi-sig address (Gnosis Safe) that controls the Timelock
 ///        TIMELOCK_DELAY — minimum delay for Timelock operations (seconds, e.g. 86400 for 1 day)
+///      Optional:
+///        DEPLOY_SALT — bytes32 salt for CREATE2 (default keccak256("onchain-novel.v1"))
 contract DeployProduction is Script {
     function run() external {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         address deployer = vm.addr(deployerPrivateKey);
         address multisig = vm.envAddress("MULTISIG");
         uint256 timelockDelay = vm.envOr("TIMELOCK_DELAY", uint256(86400));
+        bytes32 salt = vm.envOr("DEPLOY_SALT", keccak256("onchain-novel.v1"));
 
         console.log("Deployer:", deployer);
         console.log("Multi-sig:", multisig);
         console.log("Timelock delay:", timelockDelay, "seconds");
+        console.logBytes32(salt);
 
         vm.startBroadcast(deployerPrivateKey);
 
@@ -38,42 +42,45 @@ contract DeployProduction is Script {
         proposers[0] = multisig;
         address[] memory executors = new address[](1);
         executors[0] = multisig;
-        TimelockController timelock = new TimelockController(timelockDelay, proposers, executors, address(0));
+        TimelockController timelock =
+            new TimelockController{salt: salt}(timelockDelay, proposers, executors, address(0));
         console.log("TimelockController:", address(timelock));
 
         // 2. Deploy implementations
-        NovelCore novelCoreImpl = new NovelCore();
-        VotingEngine votingEngineImpl = new VotingEngine();
-        PrizePool prizePoolImpl = new PrizePool();
-        RulesEngine rulesEngineImpl = new RulesEngine();
-        BountyBoard bountyBoardImpl = new BountyBoard();
-        RoundManager roundManagerImpl = new RoundManager();
+        NovelCore novelCoreImpl = new NovelCore{salt: salt}();
+        VotingEngine votingEngineImpl = new VotingEngine{salt: salt}();
+        PrizePool prizePoolImpl = new PrizePool{salt: salt}();
+        RulesEngine rulesEngineImpl = new RulesEngine{salt: salt}();
+        BountyBoard bountyBoardImpl = new BountyBoard{salt: salt}();
+        RoundManager roundManagerImpl = new RoundManager{salt: salt}();
 
         // 3. Standalone UserRegistry — deploy before NovelCore so its address
         //    can be embedded into NovelCore's address book at initialize time.
-        UserRegistry userRegistry = new UserRegistry();
+        UserRegistry userRegistry = new UserRegistry{salt: salt}();
 
         // 4. Deploy proxies — initially owned by deployer (will transfer to Timelock)
-        ERC1967Proxy votingProxy =
-            new ERC1967Proxy(address(votingEngineImpl), abi.encodeCall(VotingEngine.initialize, (deployer, address(1))));
-        ERC1967Proxy prizeProxy =
-            new ERC1967Proxy(address(prizePoolImpl), abi.encodeCall(PrizePool.initialize, (deployer, address(1))));
-        ERC1967Proxy rulesProxy = new ERC1967Proxy(
+        ERC1967Proxy votingProxy = new ERC1967Proxy{salt: salt}(
+            address(votingEngineImpl), abi.encodeCall(VotingEngine.initialize, (deployer, address(1)))
+        );
+        ERC1967Proxy prizeProxy = new ERC1967Proxy{salt: salt}(
+            address(prizePoolImpl), abi.encodeCall(PrizePool.initialize, (deployer, address(1)))
+        );
+        ERC1967Proxy rulesProxy = new ERC1967Proxy{salt: salt}(
             address(rulesEngineImpl),
             abi.encodeCall(RulesEngine.initialize, (deployer, address(1), address(prizeProxy)))
         );
-        ERC1967Proxy novelCoreProxy = new ERC1967Proxy(
+        ERC1967Proxy novelCoreProxy = new ERC1967Proxy{salt: salt}(
             address(novelCoreImpl),
             abi.encodeCall(
                 NovelCore.initialize,
                 (deployer, address(votingProxy), address(prizeProxy), address(rulesProxy), address(userRegistry))
             )
         );
-        ERC1967Proxy bountyProxy = new ERC1967Proxy(
+        ERC1967Proxy bountyProxy = new ERC1967Proxy{salt: salt}(
             address(bountyBoardImpl),
             abi.encodeCall(BountyBoard.initialize, (deployer, address(novelCoreProxy), address(prizeProxy)))
         );
-        ERC1967Proxy roundProxy = new ERC1967Proxy(
+        ERC1967Proxy roundProxy = new ERC1967Proxy{salt: salt}(
             address(roundManagerImpl),
             abi.encodeCall(
                 RoundManager.initialize, (deployer, address(novelCoreProxy), address(votingProxy), address(prizeProxy))
