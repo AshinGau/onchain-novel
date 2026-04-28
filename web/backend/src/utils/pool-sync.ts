@@ -1,15 +1,13 @@
-import { createPublicClient, http } from "viem";
-import { foundry } from "viem/chains";
-
 import { query } from "../db/index.js";
 import { prizePoolAbi } from "@onchain-novel/shared/chain";
 import { env } from "./env.js";
 import { createLogger } from "./logger.js";
+import { createRpcPublicClient } from "./viem-client.js";
 
 const log = createLogger("pool-sync");
 
 export async function syncPoolBalances() {
-  const client = createPublicClient({ chain: foundry, transport: http(env.RPC_URL) });
+  const client = createRpcPublicClient();
   const novels = await query("SELECT id FROM novels WHERE active = TRUE");
 
   for (const row of novels.rows) {

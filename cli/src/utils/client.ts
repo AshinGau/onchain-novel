@@ -1,16 +1,14 @@
 import { createPublicClient, createWalletClient, defineChain, http, type Hash } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { foundry } from "viem/chains";
 
 import { getPrivateKey, requireConfig } from "./config.js";
 
 function getChain() {
   const config = requireConfig();
-  if (config.chainId === foundry.id) return foundry;
   return defineChain({
     id: config.chainId,
     name: `Chain ${config.chainId}`,
-    nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+    nativeCurrency: config.nativeCurrency,
     rpcUrls: { default: { http: [config.rpcUrl] } },
   });
 }

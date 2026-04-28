@@ -7,8 +7,9 @@ import { createPublicClient, decodeEventLog, http, keccak256, toHex } from "viem
 import { useAccount } from "wagmi";
 import { writeContract } from "wagmi/actions";
 
+import { chain, rpcUrl } from "@/lib/chain";
 import { NOVEL_CORE_ADDRESS, novelCoreAbi } from "@/lib/contracts";
-import { chain, rpcUrl, wagmiConfig } from "@/lib/wagmi-config";
+import { wagmiConfig } from "@/lib/wagmi-config";
 
 interface ChapterEditorProps {
   novelId: string;

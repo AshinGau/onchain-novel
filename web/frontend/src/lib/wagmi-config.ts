@@ -11,13 +11,8 @@
 import { connectorsForWallets } from "@rainbow-me/rainbowkit";
 import { injectedWallet } from "@rainbow-me/rainbowkit/wallets";
 import { createConfig, http } from "wagmi";
-import { base, foundry, mainnet, sepolia } from "wagmi/chains";
 
-// Both NEXT_PUBLIC_RPC_URL and NEXT_PUBLIC_CHAIN_ID are populated at build
-// time by next.config.ts (which calls bootstrapConfig). If the build couldn't
-// resolve them, it would have failed before reaching here.
-export const rpcUrl = process.env.NEXT_PUBLIC_RPC_URL as string;
-const chainId = Number(process.env.NEXT_PUBLIC_CHAIN_ID);
+import { chain, rpcUrl } from "./chain";
 
 // injectedWallet auto-detects MetaMask, Rabby, and any other EIP-1193 wallet
 // available at window.ethereum. metaMaskWallet / rainbowWallet from the
@@ -29,56 +24,13 @@ const connectors = connectorsForWallets(
   { appName: "Onchain Novel", projectId: "onchain-novel-local" },
 );
 
-// Single-chain wagmi config keyed off the build-time chainId. Each branch is
-// typed with a concrete chain tuple so wagmi's transports key requirement is
-// satisfied without declaring an unused chain (which would make RainbowKit
-// show a spurious network switcher + let users accidentally send local-dev
-// txs to the wrong chain). New chain support = add another branch.
-function buildWagmiConfig() {
-  switch (chainId) {
-    case foundry.id:
-      return {
-        chain: foundry,
-        wagmiConfig: createConfig({
-          chains: [foundry],
-          transports: { [foundry.id]: http(rpcUrl) },
-          connectors,
-          ssr: true,
-        }),
-      };
-    case base.id:
-      return {
-        chain: base,
-        wagmiConfig: createConfig({
-          chains: [base],
-          transports: { [base.id]: http(rpcUrl) },
-          connectors,
-          ssr: true,
-        }),
-      };
-    case mainnet.id:
-      return {
-        chain: mainnet,
-        wagmiConfig: createConfig({
-          chains: [mainnet],
-          transports: { [mainnet.id]: http(rpcUrl) },
-          connectors,
-          ssr: true,
-        }),
-      };
-    case sepolia.id:
-      return {
-        chain: sepolia,
-        wagmiConfig: createConfig({
-          chains: [sepolia],
-          transports: { [sepolia.id]: http(rpcUrl) },
-          connectors,
-          ssr: true,
-        }),
-      };
-    default:
-      throw new Error(`Unsupported chainId: ${chainId}`);
-  }
-}
-
-export const { chain, wagmiConfig } = buildWagmiConfig();
+// Single-chain wagmi config — `chains` always has exactly one entry, so
+// RainbowKit doesn't render a network switcher and users can't accidentally
+// send local-dev txs to the wrong network. Add multi-chain support only if
+// the protocol is actually deployed on multiple chains simultaneously.
+export const wagmiConfig = createConfig({
+  chains: [chain],
+  transports: { [chain.id]: http(rpcUrl) },
+  connectors,
+  ssr: true,
+});

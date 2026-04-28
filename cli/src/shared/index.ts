@@ -11,6 +11,7 @@ export * from "@onchain-novel/shared/chain";
 export interface OnchainNovelConfig {
   rpcUrl: string;
   chainId: number;
+  nativeCurrency: { name: string; symbol: string; decimals: number };
   apiUrl: string;
   contracts: {
     novelCore: `0x${string}`;

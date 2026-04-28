@@ -42,6 +42,7 @@ export function requireConfig(): OnchainNovelConfig {
   return {
     rpcUrl: config.chain.rpcUrl,
     chainId,
+    nativeCurrency: config.chain.nativeCurrency,
     apiUrl: config.cli.apiUrl,
     contracts,
   };

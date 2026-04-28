@@ -1,17 +1,19 @@
 #!/usr/bin/env node
 /**
- * Create all story-genesis novels on the local Anvil chain.
+ * Create all story-genesis novels on the configured chain (any EVM network).
  *
  * Usage:
- *   node story-genesis/create-novels.mjs
+ *   PRIVATE_KEY=0x... node story-genesis/create-novels.mjs
  *
  * Requirements:
- *   - Local stack running (./scripts/dev.sh start)
+ *   - Stack running with deployed contracts (config.yaml.contracts.novelCore set)
+ *   - PRIVATE_KEY env exported — funds creating-account pays prize-pool deposits
+ *     (1-10 of native token per novel × 34 novels) plus submission/nomination fees
  *   - Node.js with access to viem (resolved from web/frontend/node_modules)
- *   - yaml parser (from root devDependencies)
  *
- * Reads RPC URL and contract addresses from config.yaml (the same single
- * source of truth the rest of the codebase uses).
+ * Reads RPC URL, native currency, and contract addresses from config.yaml —
+ * the same single source of truth the rest of the codebase uses. chainId is
+ * auto-detected via eth_chainId, mirroring backend/cli/frontend.
  */
 
 import { createRequire } from "module";
@@ -22,6 +24,7 @@ const require = createRequire(
 const {
   createWalletClient,
   createPublicClient,
+  defineChain,
   http,
   parseEther,
   keccak256,
@@ -29,7 +32,6 @@ const {
   parseAbi,
 } = require("viem");
 const { privateKeyToAccount } = require("viem/accounts");
-const { foundry } = require("viem/chains");
 
 import { readFileSync, readdirSync, existsSync } from "fs";
 import { join, dirname } from "path";
@@ -44,24 +46,36 @@ const configPath = process.env.ONCHAIN_NOVEL_CONFIG || join(ROOT, "config.yaml")
 const cfg = YAML.parse(readFileSync(configPath, "utf-8"));
 
 const RPC_URL = cfg.chain.rpcUrl;
-// Anvil test account #1 — deterministic, safe to hardcode for local dev.
-const PRIVATE_KEY =
-  "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d";
+const NATIVE = cfg.chain.nativeCurrency ?? { name: "Ether", symbol: "ETH", decimals: 18 };
+
+const PRIVATE_KEY = (process.env.PRIVATE_KEY || "").trim();
+if (!/^0x[0-9a-fA-F]{64}$/.test(PRIVATE_KEY)) {
+  console.error("PRIVATE_KEY env var required (0x-prefixed 32-byte hex). Export it first:");
+  console.error("  export PRIVATE_KEY=0x...");
+  process.exit(1);
+}
 
 const COVER_BASE_URL =
   "https://raw.githubusercontent.com/AshinGau/onchain-novel/refs/heads/main/story-genesis/images";
 
 const NOVEL_CORE = cfg.contracts.novelCore;
-
 if (!NOVEL_CORE) {
-  console.error("contracts.novelCore empty in config.yaml — run ./scripts/dev.sh start first");
+  console.error("contracts.novelCore empty in config.yaml — deploy contracts first");
   process.exit(1);
 }
 
-// Walk NovelCore's on-chain address book to discover RulesEngine. Same
-// pattern backend / CLI / frontend use at startup via resolveContracts.
-// config.yaml only carries novelCore; everything else is derived here.
-const _bootstrapClient = createPublicClient({ chain: foundry, transport: http(RPC_URL) });
+// Auto-detect chainId + walk NovelCore's on-chain address book to discover
+// RulesEngine. Same pattern backend / CLI / frontend use via bootstrapConfig
+// + resolveContracts. config.yaml only carries novelCore; everything else
+// is derived from chain state.
+const _bootstrapClient = createPublicClient({ transport: http(RPC_URL) });
+const CHAIN_ID = await _bootstrapClient.getChainId();
+const chain = defineChain({
+  id: CHAIN_ID,
+  name: `Chain ${CHAIN_ID}`,
+  nativeCurrency: NATIVE,
+  rpcUrls: { default: { http: [RPC_URL] } },
+});
 const RULES_ENGINE = await _bootstrapClient.readContract({
   address: NOVEL_CORE,
   abi: parseAbi(["function rulesEngine() external view returns (address)"]),
@@ -89,9 +103,9 @@ function encodeChapter(text) {
 }
 
 function randomPrizePool() {
-  // Random 1-10 ETH (integer)
-  const eth = Math.floor(Math.random() * 10) + 1;
-  return parseEther(eth.toString());
+  // Random 1-10 of the chain's native token (integer)
+  const amount = Math.floor(Math.random() * 10) + 1;
+  return parseEther(amount.toString());
 }
 
 function titleFromDir(dirName) {
@@ -173,18 +187,12 @@ const defaultConfig = {
 // ── Main ────────────────────────────────────────────────────────────────────
 async function main() {
   const account = privateKeyToAccount(PRIVATE_KEY);
-  const client = createWalletClient({
-    account,
-    chain: foundry,
-    transport: http(RPC_URL),
-  });
-  const publicClient = createPublicClient({
-    chain: foundry,
-    transport: http(RPC_URL),
-  });
+  const client = createWalletClient({ account, chain, transport: http(RPC_URL) });
+  const publicClient = createPublicClient({ chain, transport: http(RPC_URL) });
 
-  console.log(`Wallet: ${account.address}`);
-  console.log(`NovelCore: ${NOVEL_CORE}`);
+  console.log(`Chain:       ${CHAIN_ID} (native ${NATIVE.symbol})`);
+  console.log(`Wallet:      ${account.address}`);
+  console.log(`NovelCore:   ${NOVEL_CORE}`);
   console.log(`RulesEngine: ${RULES_ENGINE}\n`);
 
   // Discover novel directories (sorted)
@@ -210,7 +218,7 @@ async function main() {
 
     const coverTag = coverUri ? "🖼" : "  ";
     console.log(
-      `${coverTag} Creating: ${title}  (prize: ${Number(prizePool / 10n ** 18n)} ETH)`
+      `${coverTag} Creating: ${title}  (prize: ${Number(prizePool / 10n ** 18n)} ${NATIVE.symbol})`
     );
 
     // 1. createNovel (root chapter, must send submissionFee + initial prize pool)

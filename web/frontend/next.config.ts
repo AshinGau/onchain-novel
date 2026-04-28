@@ -38,6 +38,9 @@ export default async function config(): Promise<NextConfig> {
     env: {
       NEXT_PUBLIC_RPC_URL: cfg.chain.rpcUrl,
       NEXT_PUBLIC_CHAIN_ID: String(chainId),
+      NEXT_PUBLIC_NATIVE_NAME: cfg.chain.nativeCurrency.name,
+      NEXT_PUBLIC_NATIVE_SYMBOL: cfg.chain.nativeCurrency.symbol,
+      NEXT_PUBLIC_NATIVE_DECIMALS: String(cfg.chain.nativeCurrency.decimals),
       NEXT_PUBLIC_NOVEL_CORE: contracts.novelCore,
       NEXT_PUBLIC_ROUND_MANAGER: contracts.roundManager,
       NEXT_PUBLIC_VOTING_ENGINE: contracts.votingEngine,

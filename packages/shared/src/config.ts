@@ -31,12 +31,26 @@ const optionalHexAddress = z
     return s.length > 0 ? (s as `0x${string}`) : undefined;
   });
 
+// Native currency metadata. Can't be queried on-chain (no standard interface
+// exposes it), so it's the one piece of chain identity that has to be in
+// config. Defaults assume an ETH-native chain — leave the section out entirely
+// for mainnet/sepolia/anvil; override symbol/name/decimals for chains like
+// Gravity (G), BNB Chain (BNB), Polygon (MATIC), etc.
+const NativeCurrencySchema = z
+  .object({
+    name: z.string().default("Ether"),
+    symbol: z.string().default("ETH"),
+    decimals: z.number().int().positive().default(18),
+  })
+  .default({});
+
 const ChainSchema = z.object({
   rpcUrl: z.string().url(),
   // Optional: when omitted, callers resolve via `eth_chainId` against rpcUrl
   // (see bootstrapConfig). Keep it as an explicit override for offline tooling
   // or for sanity-checking against an expected network.
   chainId: z.number().int().positive().optional(),
+  nativeCurrency: NativeCurrencySchema,
 });
 
 // All non-novelCore addresses are derivable on-chain from NovelCore via

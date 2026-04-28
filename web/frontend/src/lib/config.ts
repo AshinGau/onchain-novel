@@ -3,9 +3,11 @@
  * client); contract addresses live in lib/contracts.ts.
  */
 
-/** Native token symbol shown in UI. EVM native asset = ETH; revisit if/when
- *  this app deploys to a non-ETH-native chain. */
-export const TOKEN_SYMBOL = "ETH";
+import { chain } from "./chain";
+
+/** Native token symbol shown in UI. Derived from the chain object built in
+ *  lib/chain.ts so it stays in sync with wagmi/RainbowKit's nativeCurrency. */
+export const TOKEN_SYMBOL = chain.nativeCurrency.symbol;
 
 /** Reader-facing labels for contract phases: 0=Idle, 1=Nominating, 2=Committing, 3=Revealing */
 export const ROUND_PHASES = ["Writing", "Nominating", "Voting", "Revealing"] as const;

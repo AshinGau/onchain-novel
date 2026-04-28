@@ -12,12 +12,17 @@ fi
 
 NOVEL_CORE="$(yq eval '.contracts.novelCore' "$ROOT/config.yaml")"
 if [[ -z "$NOVEL_CORE" ]] || [[ "$NOVEL_CORE" == "null" ]] || [[ "$NOVEL_CORE" == "\"\"" ]]; then
-  echo "Error: contracts.novelCore empty in config.yaml. Start the stack first:"
-  echo "  ./scripts/dev.sh start"
+  echo "Error: contracts.novelCore empty in config.yaml. Deploy contracts first."
   exit 1
 fi
 
-echo "=== Initializing 34 story-genesis novels on local chain ==="
+if [[ -z "${PRIVATE_KEY:-}" ]]; then
+  echo "Error: PRIVATE_KEY env var required. Export the creating account's key first:"
+  echo "  export PRIVATE_KEY=0x..."
+  exit 1
+fi
+
+echo "=== Initializing 34 story-genesis novels ==="
 echo ""
 
 node "$SCRIPT_DIR/create-novels.mjs"
