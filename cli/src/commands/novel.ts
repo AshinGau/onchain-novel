@@ -140,7 +140,10 @@ export function registerNovelCommands(program: Command): void {
     .option("--limit <n>", "results per page", "10")
     .option("--page <n>", "page number", "1")
     .option("--filter <status>", "filter by: active, completed")
-    .option("--search <query>", "search by title, id, or creator address")
+    .option(
+      "--search <query>",
+      "search by title/description substring, novel id, or creator address (0x...)",
+    )
     .action(async (opts) => {
       try {
         const params = new URLSearchParams();

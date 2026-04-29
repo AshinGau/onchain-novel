@@ -62,12 +62,14 @@ router.get("/", async (req, res) => {
         where += ` AND novels.creator = $${paramIdx++}`;
         params.push(search.toLowerCase());
       } else {
-        // Prefix-only ILIKE + 3-char minimum avoids worst-case full-table scans from `%x%`.
-        if (search.length < 3) {
-          return res.status(400).json({ error: "search term must be at least 3 characters" });
-        }
-        where += ` AND novels.title ILIKE $${paramIdx++}`;
-        params.push(`${search.replace(/[%_]/g, "\\$&")}%`);
+        // Substring ILIKE on title OR description. CJK-friendly (no char-count
+        // floor) and tolerant of where the keyword sits in the title. At
+        // current scale this is a sequential scan; revisit with a trigram or
+        // tsvector index if the catalog ever grows past tens of thousands.
+        const escaped = search.replace(/[%_]/g, "\\$&");
+        where += ` AND (novels.title ILIKE $${paramIdx} OR novels.description ILIKE $${paramIdx})`;
+        paramIdx++;
+        params.push(`%${escaped}%`);
       }
     }
 
