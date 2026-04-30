@@ -18,7 +18,7 @@ function renderNotesSkeleton(
   parentId: string | number,
 ): string {
   const isRoot = String(parentId) === "0";
-  const header = `# ${id} — ch${depth}, ${isRoot ? "root (no parent)" : `continues from ${parentId}`}`;
+  const header = `# ID.${id} — ch${depth}, ${isRoot ? "root (no parent)" : `continues from ID.${parentId}`}`;
   const preamble = `<!-- This file is your STRUCTURED analysis of chapter ${id}. Filling it IS the act
 of understanding — skimming the raw content without writing notes means you have
 not analyzed this chapter.
@@ -114,10 +114,10 @@ export function registerChapterCommands(program: Command): void {
     .action(async (chapterId) => {
       try {
         const data = await apiGet<Record<string, unknown>>(`/api/chapters/${chapterId}`);
-        header(`Chapter #${chapterId}`);
+        header(`Chapter ID.${chapterId}`);
         kv("Novel", `${data.novel_title} (#${data.novel_id})`);
         kv("Author", data.author);
-        kv("Parent", data.parent_id);
+        kv("Parent", `ID.${data.parent_id}`);
         kv("Depth", data.depth);
         kv("World Line", data.is_world_line ? "Yes" : "No");
         kv("Length", data.declared_length);
@@ -173,7 +173,7 @@ export function registerChapterCommands(program: Command): void {
           const connector = isLast ? "\\-- " : "|-- ";
           const wl = ch.is_world_line ? chalk.green(" *") : "";
           const authorShort = String(ch.author ?? "").slice(0, 8);
-          console.log(`${prefix}${connector}#${ch.id} (d=${ch.depth}) by ${authorShort}..${wl}`);
+          console.log(`${prefix}${connector}ID.${ch.id} (d=${ch.depth}) by ${authorShort}..${wl}`);
           const kids = children.get(id) ?? [];
           for (let i = 0; i < kids.length; i++) {
             const childPrefix = prefix + (isLast ? "    " : "|   ");
@@ -199,7 +199,7 @@ export function registerChapterCommands(program: Command): void {
         const data = await apiGet<{ children: Record<string, unknown>[] }>(
           `/api/chapters/${chapterId}/children`,
         );
-        header(`Children of Chapter #${chapterId}`);
+        header(`Children of Chapter ID.${chapterId}`);
         table(
           data.children.map((ch) => ({
             ID: ch.id,
@@ -235,7 +235,7 @@ export function registerChapterCommands(program: Command): void {
         const data = await apiGet<{ ancestors: Record<string, unknown>[] }>(
           `/api/chapters/${chapterId}/context?maxDepth=${maxDepth}`,
         );
-        header(`Context for Chapter #${chapterId}`);
+        header(`Context for Chapter ID.${chapterId}`);
         kv("Ancestors", data.ancestors.length);
 
         if (opts.cache) {
@@ -272,7 +272,7 @@ export function registerChapterCommands(program: Command): void {
         if (opts.summary) {
           table(
             data.ancestors.map((a) => ({
-              Chapter: `#${a.id}`,
+              Chapter: `ID.${a.id}`,
               Depth: a.depth,
               Author: String(a.author ?? "").slice(0, 12) + "...",
               WorldLine: a.is_world_line ? "yes" : "no",
@@ -285,7 +285,7 @@ export function registerChapterCommands(program: Command): void {
 
         for (const a of data.ancestors) {
           console.log(
-            chalk.gray(`\n─── Chapter #${a.id} (depth ${a.depth}, by ${String(a.author ?? "").slice(0, 10)}...) ───`),
+            chalk.gray(`\n─── Chapter ID.${a.id} (depth ${a.depth}, by ${String(a.author ?? "").slice(0, 10)}...) ───`),
           );
           if (a.content_text) {
             console.log(String(a.content_text));
@@ -312,7 +312,7 @@ export function registerChapterCommands(program: Command): void {
         const data = await apiGet<{ comments: Record<string, unknown>[] }>(
           `/api/chapters/${chapterId}/comments?page=${opts.page}&limit=${opts.limit}`,
         );
-        header(`Comments on Chapter #${chapterId}`);
+        header(`Comments on Chapter ID.${chapterId}`);
         if (data.comments.length === 0) {
           console.log(chalk.gray("  (no comments)\n"));
           return;

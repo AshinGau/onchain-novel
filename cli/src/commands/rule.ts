@@ -108,7 +108,7 @@ export function registerRuleCommands(program: Command): void {
           BigInt(chapterId),
         );
         if (!path) {
-          error(`Chapter #${chapterId} is not currently on any world line of novel #${novelId}.`);
+          error(`Chapter ID.${chapterId} is not currently on any world line of novel #${novelId}.`);
           return process.exit(1);
         }
 
@@ -154,7 +154,7 @@ export function registerRuleCommands(program: Command): void {
         );
         if (!path) {
           error(
-            `Chapter #${chapterId} is not currently on any world line of novel #${proposal.novelId}.`,
+            `Chapter ID.${chapterId} is not currently on any world line of novel #${proposal.novelId}.`,
           );
           return process.exit(1);
         }

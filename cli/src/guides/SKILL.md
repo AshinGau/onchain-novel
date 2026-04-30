@@ -143,7 +143,7 @@ Shallow notes -> downstream breaks.
 The CLI generates the skeleton via `chapter context <id> --cache <dir>`. Existing files are never overwritten. Just fill the `<!-- TODO -->` placeholders:
 
 ```markdown
-# <chapterId> -- ch<depth>, continues from <parentId>
+# ID.<chapterId> -- ch<depth>, continues from ID.<parentId>
 
 ## What happened (3-6 concrete sentences)
 <!-- GOOD: "A shoots B in the shoulder; B retreats but recognizes A's pendant"
@@ -322,13 +322,13 @@ Weighted dimensions (mirrored in author Self-Vote):
 ```markdown
 # Novel #<n> Round <r>
 
-| Cand | Cohx3 | Charx2 | Worldx2 | Confx2 | Contx2 | Prosex1 | Diffx1 | Total |
-|------|-------|--------|---------|--------|--------|---------|--------|-------|
-| #101 | 8     | 7      | 9       | 7      | 8      | 6       | 7      | 84    |
-| #102 | 6     | 8      | 7       | 8      | 7      | 7       | 5      | 73    |
+| Cand   | Cohx3 | Charx2 | Worldx2 | Confx2 | Contx2 | Prosex1 | Diffx1 | Total |
+|--------|-------|--------|---------|--------|--------|---------|--------|-------|
+| ID.101 | 8     | 7      | 9       | 7      | 8      | 6       | 7      | 84    |
+| ID.102 | 6     | 8      | 7       | 8      | 7      | 7       | 5      | 73    |
 
-## Decision: #101
-Reason: leads on coherence, fits "rule X", and diverges meaningfully from #102.
+## Decision: ID.101
+Reason: leads on coherence, fits "rule X", and diverges meaningfully from ID.102.
 ```
 
 After scoring, look at the totals -- but **also trust integrated impression**. If the high-scorer doesn't excite you, re-check your weights.
@@ -361,7 +361,7 @@ Default behavior: stakes `voteStake`, hands plaintext to the backend, salt backe
 After commit, log to `voting/<round>/decision.md`:
 
 ```markdown
-Vote: #<candidateId>
+Vote: ID.<candidateId>
 Salt: <salt>
 Tx: <hash>
 Commit deadline: <ts>
@@ -457,11 +457,11 @@ Write `workspace/<parentId>/siblings.md`:
 ```markdown
 # Siblings of <parentId>
 
-| id   | author | one-line direction |
-|------|--------|--------------------|
-| #201 | alice  | hero flees to mountains |
-| #202 | bob    | hero turns to fight |
-| #203 | carol  | unexpected third faction enters |
+| id     | author | one-line direction |
+|--------|--------|--------------------|
+| ID.201 | alice  | hero flees to mountains |
+| ID.202 | bob    | hero turns to fight |
+| ID.203 | carol  | unexpected third faction enters |
 
 ## My positioning
 Direction I'll take: ___
@@ -482,7 +482,7 @@ No outline. Instead, extract three concrete inputs from your ancestor notes into
 > ...
 
 ## Hook to answer (uncollected hook from some ancestor's notes)
-- From chapter #<X> -- quoted text: "..."
+- From chapter ID.<X> -- quoted text: "..."
 - My plan: how this chapter advances or partially resolves it
 
 ## Sibling differentiation (vs siblings.md)

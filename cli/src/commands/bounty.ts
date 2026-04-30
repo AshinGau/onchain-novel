@@ -36,7 +36,7 @@ export function registerBountyCommands(program: Command): void {
         txHash(hash);
         await waitForTx(hash);
         success(
-          `Bounty created for chapter #${chapterId} (${opts.value} ETH, deadline: ${opts.deadline})`,
+          `Bounty created for chapter ID.${chapterId} (${opts.value} ETH, deadline: ${opts.deadline})`,
         );
       } catch (err) {
         error(String(err));
@@ -58,7 +58,7 @@ export function registerBountyCommands(program: Command): void {
         });
         txHash(hash);
         await waitForTx(hash);
-        success(`Bounty #${bountyId} designated chapter #${chapterId}`);
+        success(`Bounty #${bountyId} designated chapter ID.${chapterId}`);
       } catch (err) {
         error(String(err));
         process.exit(1);
@@ -81,12 +81,12 @@ export function registerBountyCommands(program: Command): void {
         }
         header("Active Bounties");
         for (const b of data.bounties) {
-          kv(`Bounty #${b.id}`, `Chapter #${b.chapter_id} (${b.novel_title})`);
+          kv(`Bounty #${b.id}`, `Chapter ID.${b.chapter_id} (${b.novel_title})`);
           kv("  Locked", eth(BigInt(String(b.locked_amount ?? "0"))));
           if (b.create_time) kv("  Created", new Date(Number(b.create_time) * 1000).toISOString());
           kv("  Deadline", new Date(Number(b.deadline) * 1000).toISOString());
           if (Number(b.designated_chapter_id) > 0) {
-            kv("  Designated", `Chapter #${b.designated_chapter_id}`);
+            kv("  Designated", `Chapter ID.${b.designated_chapter_id}`);
           }
           console.log();
         }
@@ -137,7 +137,7 @@ export function registerBountyCommands(program: Command): void {
       try {
         const data = await apiGet<Record<string, unknown>>(`/api/bounties/${bountyId}`);
         header(`Bounty #${bountyId}`);
-        kv("Chapter", `#${data.chapter_id} (${data.novel_title})`);
+        kv("Chapter", `ID.${data.chapter_id} (${data.novel_title})`);
         kv("Tipper", data.tipper);
         kv("Locked Amount", eth(BigInt(String(data.locked_amount ?? "0"))));
         kv("Deadline", data.deadline);

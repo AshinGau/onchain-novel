@@ -140,7 +140,7 @@ export function registerVoteCommands(program: Command): void {
           );
           if (!proof || proof.length < 2) {
             error(
-              `Chapter #${chapterId} is not a strict descendant of any current worldLineAncestor of novel #${novelId}. ` +
+              `Chapter ID.${chapterId} is not a strict descendant of any current worldLineAncestor of novel #${novelId}. ` +
                 `Pass --forfeit to nominate anyway (no reward eligibility).`,
             );
             return process.exit(1);
@@ -378,7 +378,7 @@ export function registerVoteCommands(program: Command): void {
           console.log(chalk.bold("\n  World Lines:"));
           for (const wl of wlData.worldlines) {
             console.log(
-              `    Chapter #${wl.id} (depth=${wl.depth}) by ${String(wl.author ?? "").slice(0, 10)}...`,
+              `    Chapter ID.${wl.id} (depth=${wl.depth}) by ${String(wl.author ?? "").slice(0, 10)}...`,
             );
           }
         }
@@ -389,7 +389,7 @@ export function registerVoteCommands(program: Command): void {
             roundData.votes.map((v) => ({
               Voter: String(v.voter ?? "").slice(0, 12) + "...",
               Revealed: v.revealed ? "Yes" : "No",
-              Candidate: v.revealed ? v.candidate_id : "-",
+              Candidate: v.revealed ? `ID.${v.candidate_id}` : "-",
               Claimed: v.claimed ? "Yes" : "No",
             })),
           );
@@ -553,7 +553,7 @@ export function registerVoteCommands(program: Command): void {
                 mine.map((v) => ({
                   Committed: v.commit_hash ? "yes" : "no",
                   Revealed: v.revealed ? "yes" : "no",
-                  Candidate: v.revealed ? v.candidate_id : "-",
+                  Candidate: v.revealed ? `ID.${v.candidate_id}` : "-",
                   Claimed: v.claimed ? "yes" : "no",
                 })),
               );
@@ -570,7 +570,7 @@ export function registerVoteCommands(program: Command): void {
           table(
             salts.slice(0, 10).map((s) => ({
               Round: s.round,
-              Candidate: s.candidateId,
+              Candidate: `ID.${s.candidateId}`,
               SavedAt: new Date(s.createdAt * 1000).toISOString().slice(0, 19).replace("T", " "),
             })),
           );

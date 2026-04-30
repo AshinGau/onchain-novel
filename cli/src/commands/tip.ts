@@ -49,7 +49,7 @@ export function registerTipCommands(program: Command): void {
         });
         txHash(hash);
         await waitForTx(hash);
-        success(`Tipped chapter #${chapterId} with ${opts.value} ETH`);
+        success(`Tipped chapter ID.${chapterId} with ${opts.value} ETH`);
       } catch (err) {
         error(String(err));
         process.exit(1);

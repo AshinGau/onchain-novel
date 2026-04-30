@@ -102,7 +102,7 @@ export function registerUserCommands(program: Command): void {
             Novel: `#${v.novel_id}`,
             Round: v.round,
             Revealed: v.revealed ? "yes" : "no",
-            Candidate: v.revealed ? v.candidate_id : "-",
+            Candidate: v.revealed ? `ID.${v.candidate_id}` : "-",
             Claimed: v.claimed ? "yes" : "no",
             Title: String(v.novel_title ?? "").slice(0, 28),
           })),
@@ -137,7 +137,7 @@ export function registerUserCommands(program: Command): void {
         }
         table(
           data.chapters.map((c) => ({
-            Chapter: `#${c.id}`,
+            Chapter: `ID.${c.id}`,
             Novel: `#${c.novel_id}`,
             Depth: c.depth,
             WorldLine: c.is_world_line ? "yes" : "no",
