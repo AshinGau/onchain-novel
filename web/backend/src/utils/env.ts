@@ -35,6 +35,9 @@ export const env = {
   HOST: cfg.backend.host,
   KEEPER_PRIVATE_KEY: (process.env.KEEPER_PRIVATE_KEY || "") as `0x${string}`,
   KEEPER_POLL_INTERVAL_MS: cfg.backend.keeper.pollIntervalMs,
+  // Optional faucet signer for the testnet POST /api/faucet/claim endpoint.
+  // When unset, the route returns 503; the rest of the API stays online.
+  FAUCET_PRIVATE_KEY: (process.env.FAUCET_PRIVATE_KEY || "") as `0x${string}`,
   // 32-byte key (hex or base64) to encrypt stored plaintext votes. Required
   // only when accepting POST /api/votes/submit. Env-only for secrecy.
   VOTE_ENCRYPTION_KEY: process.env.VOTE_ENCRYPTION_KEY || "",

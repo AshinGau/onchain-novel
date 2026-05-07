@@ -15,7 +15,7 @@
 # chain identity not discoverable on-chain — set it whenever the symbol isn't
 # ETH so the UI and RainbowKit wallet display the right token.
 # chain:
-#   rpcUrl: https://rpc-sepolia.gravity.xyz
+#   rpcUrl: https://rpc-testnet.gravity.xyz
 #   nativeCurrency:
 #     name: Gravity
 #     symbol: G

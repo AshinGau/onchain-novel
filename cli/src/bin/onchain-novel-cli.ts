@@ -4,6 +4,7 @@ import { program } from "commander";
 import { registerBountyCommands } from "../commands/bounty.js";
 import { registerChapterCommands } from "../commands/chapter.js";
 import { registerConfigCommand } from "../commands/config.js";
+import { registerFaucetCommands } from "../commands/faucet.js";
 import { registerGuideCommands } from "../commands/guide.js";
 import { registerNovelCommands } from "../commands/novel.js";
 import { registerRuleCommands } from "../commands/rule.js";
@@ -42,6 +43,7 @@ registerTipCommands(program);
 registerBountyCommands(program);
 registerRuleCommands(program);
 registerUserCommands(program);
+registerFaucetCommands(program);
 registerGuideCommands(program);
 
 program.parseAsync().catch((err) => {

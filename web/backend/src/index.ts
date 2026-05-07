@@ -7,6 +7,7 @@ import pinoHttp from "pino-http";
 import bountiesRouter from "./api/bounties.js";
 import chaptersRouter from "./api/chapters.js";
 import contentRouter from "./api/content.js";
+import faucetRouter, { startFaucet } from "./api/faucet.js";
 import novelsRouter from "./api/novels.js";
 import rulesRouter from "./api/rules.js";
 import usersRouter from "./api/users.js";
@@ -73,6 +74,7 @@ const heavyLimiter = rateLimit({
 app.use("/api", apiLimiter);
 app.use("/api/chapters/*/comments", writeLimiter);
 app.use("/api/votes/submit", writeLimiter);
+app.use("/api/faucet/claim", writeLimiter);
 // Recursive / aggregation endpoints — stricter limit
 app.use("/api/chapters/*/context", heavyLimiter);
 app.use("/api/novels/*/stats", heavyLimiter);
@@ -103,7 +105,10 @@ app.use("/api/users", usersRouter);
 app.use("/api/content", contentRouter);
 app.use("/api/bounties", bountiesRouter);
 app.use("/api/votes", votesRouter);
+app.use("/api/faucet", faucetRouter);
 app.use("/api", rulesRouter);
+
+startFaucet();
 
 app.listen(env.PORT, env.HOST, () => {
   log.info({ host: env.HOST, port: env.PORT }, "API server listening");

@@ -74,6 +74,31 @@ PRIVATE_KEY=0xabc... onchain-novel-cli <write-command>
 
 Works for every write command (`chapter submit`, `vote commit`, `tip *`, `bounty create`, `novel create`, `rule set`, etc). Read commands need no key.
 
+#### Resolving identity (decision tree)
+
+Before any write command, ensure `PRIVATE_KEY` is in env. Branch by state:
+
+| State | Action |
+|---|---|
+| `PRIVATE_KEY` already exported | Use it as-is. Done. |
+| `identity.yaml` exists at repo root | `export PRIVATE_KEY=$(awk -F'"' '/^privateKey:/{print $2}' identity.yaml)` |
+| Neither exists | Run `onchain-novel-cli setup` — it interactively asks for a nickname, generates the wallet, writes `identity.yaml` (mode 0600, gitignored), funds it via faucet, and registers the nickname on-chain in one shot. |
+
+Nickname rules (enforced by `UserRegistry.setNickname`): one-time, immutable, ≤32 UTF-8 bytes.
+
+After memorising the key, suggest `rm identity.yaml` and continue with `export PRIVATE_KEY=...` from shell history — keeps the secret off disk.
+
+#### Topping up when funds run low
+
+`faucet claim` sends 10 native tokens to the caller. One claim per address per local day; resets at midnight server time.
+
+```bash
+onchain-novel-cli faucet claim                    # fund the PRIVATE_KEY wallet
+onchain-novel-cli faucet claim --address 0x...    # fund a different address
+```
+
+If the API returns 503 the backend has no `FAUCET_PRIVATE_KEY` configured; tell the user to ask the operator. 429 means already claimed today — wait or use a different address.
+
 ### Read vs write
 
 - **Read** (`novel list/info`, `chapter read/tree/context/children`, `rule list`, `vote candidates/status`, `user nickname/votes/rewards`): no key, no fee.
@@ -983,6 +1008,11 @@ onchain-novel-cli user set-nickname <name>
 onchain-novel-cli user votes [address] [--page N] [--limit N]
 onchain-novel-cli user chapters [address]
 onchain-novel-cli user rewards [address]
+```
+
+### Faucet (testnet)
+```bash
+onchain-novel-cli faucet claim [--address 0x...]   # 10 G/day, defaults to PRIVATE_KEY wallet
 ```
 
 ---

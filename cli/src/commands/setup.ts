@@ -1,11 +1,24 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { stdin, stdout } from "node:process";
 import { createInterface, type Interface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 import { Command } from "commander";
+import {
+  createPublicClient,
+  createWalletClient,
+  defineChain,
+  http,
+  pad,
+  stringToHex,
+} from "viem";
+import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
+import { stringify as yamlStringify } from "yaml";
 
-import { error, header, success } from "../utils/format.js";
+import { setNickname as setNicknameTx } from "../shared/index.js";
+import { apiPost } from "../utils/api.js";
+import { ensureBootstrapped, requireConfig } from "../utils/config.js";
+import { error, header, kv, success, txHash } from "../utils/format.js";
 
 async function prompt(rl: Interface, question: string, defaultValue: string): Promise<string> {
   const answer = await rl.question(`${question} [${defaultValue}]: `);
@@ -58,6 +71,119 @@ contracts:
 cli:
   apiUrl: ${apiUrl}
 `;
+}
+
+function nicknameToBytes32(nickname: string): `0x${string}` {
+  return pad(stringToHex(nickname), { size: 32, dir: "right" });
+}
+
+function appendGitignore(line: string): void {
+  const path = join(process.cwd(), ".gitignore");
+  let body = existsSync(path) ? readFileSync(path, "utf-8") : "";
+  if (body.split("\n").some((l) => l.trim() === line)) return;
+  if (body.length > 0 && !body.endsWith("\n")) body += "\n";
+  body += line + "\n";
+  writeFileSync(path, body);
+}
+
+// Writes identity.yaml first, then funds the wallet and registers the nickname
+// on-chain. Each chain step is fault-tolerant — on failure we print the
+// retryable command and bail. Re-running setup is a no-op once identity.yaml
+// exists, so the partial-success case is recovered manually.
+async function createIdentity(nickname: string): Promise<void> {
+  header(`Identity — ${nickname}`);
+
+  const privateKey = generatePrivateKey();
+  const account = privateKeyToAccount(privateKey);
+  const address = account.address;
+
+  const identityPath = join(process.cwd(), "identity.yaml");
+  const banner =
+    "# WARNING: contains a private key. File mode is 0600. Do not commit.\n" +
+    "# After memorising the key, prefer `export PRIVATE_KEY=...` then `rm identity.yaml`.\n";
+  // mode on writeFileSync sets perms at create-time (no 0644 window before
+  // chmod); explicit chmod covers the case where the file already existed
+  // (writeFileSync ignores `mode` when truncating an existing file).
+  writeFileSync(identityPath, banner + yamlStringify({ nickname, address, privateKey }), {
+    mode: 0o600,
+  });
+  chmodSync(identityPath, 0o600);
+  appendGitignore("identity.yaml");
+  success("Wrote identity.yaml (mode 0600)");
+  kv("Address", address);
+
+  // Bootstrap config.yaml + RPC chain detection. The bin's preAction skips
+  // this for `setup`, so we trigger it now that config.yaml is on disk.
+  try {
+    await ensureBootstrapped();
+  } catch (err) {
+    error(`Bootstrap failed: ${String(err)}`);
+    console.log(
+      "  Once the chain is reachable, run (with PRIVATE_KEY exported from identity.yaml):\n" +
+        "    onchain-novel-cli faucet claim\n" +
+        `    onchain-novel-cli user set-nickname ${nickname}\n`,
+    );
+    return;
+  }
+  const cfg = requireConfig();
+
+  const chain = defineChain({
+    id: cfg.chainId,
+    name: `Chain ${cfg.chainId}`,
+    nativeCurrency: cfg.nativeCurrency,
+    rpcUrls: { default: { http: [cfg.rpcUrl] } },
+  });
+  const pub = createPublicClient({ chain, transport: http(cfg.rpcUrl) });
+  const wallet = createWalletClient({ account, chain, transport: http(cfg.rpcUrl) });
+
+  // Faucet claim ──────────────────────────────────────────────────────────
+  let faucetTx: `0x${string}`;
+  try {
+    const { status, body } = await apiPost<{
+      txHash?: `0x${string}`;
+      amount?: string;
+      symbol?: string;
+      error?: string;
+    }>("/api/faucet/claim", { address });
+    if (!body?.txHash) {
+      error(`Faucet claim failed: ${body?.error ?? `HTTP ${status}`}`);
+      console.log("  Retry: onchain-novel-cli faucet claim\n");
+      return;
+    }
+    faucetTx = body.txHash;
+    txHash(faucetTx);
+    success(`Faucet sent ${body.amount} ${body.symbol}`);
+  } catch (err) {
+    error(`Faucet API call failed: ${String(err)}`);
+    console.log("  Retry: onchain-novel-cli faucet claim\n");
+    return;
+  }
+  // Receipt wait is separate — the tx is already on-chain at this point, so a
+  // timeout here is not a faucet failure, just a confirmation delay.
+  try {
+    await pub.waitForTransactionReceipt({ hash: faucetTx });
+  } catch (err) {
+    error(`Faucet tx broadcast but not yet confirmed: ${String(err)}`);
+    console.log(
+      `  Once the tx lands, run: onchain-novel-cli user set-nickname ${nickname}\n`,
+    );
+    return;
+  }
+
+  // setNickname ───────────────────────────────────────────────────────────
+  try {
+    const hash = await setNicknameTx(
+      wallet,
+      nicknameToBytes32(nickname),
+      cfg.contracts.userRegistry,
+    );
+    txHash(hash);
+    await pub.waitForTransactionReceipt({ hash });
+    success(`Nickname registered on-chain: ${nickname}`);
+  } catch (err) {
+    error(`setNickname failed: ${String(err)}`);
+    console.log(`  Retry: onchain-novel-cli user set-nickname ${nickname}\n`);
+  }
 }
 
 export function registerSetupCommand(program: Command): void {
@@ -134,7 +260,7 @@ export function registerSetupCommand(program: Command): void {
         // Defaults target Gravity Alpha Testnet — the protocol's hosted
         // reference deployment. Switch to your own RPC + novelCore for a
         // private deployment.
-        const DEFAULT_RPC = "https://rpc-sepolia.gravity.xyz";
+        const DEFAULT_RPC = "https://rpc-testnet.gravity.xyz";
         const DEFAULT_API = "http://127.0.0.1:3001";
         const DEFAULT_NOVEL_CORE = "0x2083877Fbd50aF2C73c3864D3ebdC160af8b019d";
         const DEFAULT_NATIVE = { name: "Gravity", symbol: "G", decimals: 18 };
@@ -142,6 +268,8 @@ export function registerSetupCommand(program: Command): void {
         let apiUrl = DEFAULT_API;
         let novelCore = DEFAULT_NOVEL_CORE;
         const native = { ...DEFAULT_NATIVE };
+
+        let identityNickname: string | null = null;
 
         if (stdin.isTTY) {
           console.log(
@@ -152,11 +280,6 @@ export function registerSetupCommand(program: Command): void {
           try {
             rpcUrl = await prompt(rl, "Ethereum RPC URL", DEFAULT_RPC);
             apiUrl = await prompt(rl, "Backend API URL", DEFAULT_API);
-            native.name = await prompt(rl, "Native currency name", DEFAULT_NATIVE.name);
-            native.symbol = await prompt(rl, "Native currency symbol", DEFAULT_NATIVE.symbol);
-            native.decimals = Number(
-              await prompt(rl, "Native currency decimals", String(DEFAULT_NATIVE.decimals)),
-            );
             // eslint-disable-next-line no-constant-condition
             while (true) {
               const answer = await prompt(rl, "NovelCore proxy address (0x...)", DEFAULT_NOVEL_CORE);
@@ -165,6 +288,44 @@ export function registerSetupCommand(program: Command): void {
                 break;
               }
               console.log("  not a 0x-prefixed 20-byte hex address -- try again");
+            }
+
+            // Identity step — testnet convenience. Generates a fresh wallet,
+            // writes it to identity.yaml (mode 0600 + .gitignore), claims
+            // 10 G from the backend faucet, and registers the nickname
+            // on-chain via UserRegistry.setNickname. Skip with `n` if you
+            // already export PRIVATE_KEY in your shell.
+            const identityPath = join(process.cwd(), "identity.yaml");
+            if (existsSync(identityPath)) {
+              console.log(
+                `\nidentity.yaml already exists -- skipping identity creation.\n` +
+                  "  Delete it first if you want a fresh wallet.",
+              );
+            } else {
+              const create = (
+                await prompt(rl, "Create a local identity for testing? [Y/n]", "Y")
+              ).toLowerCase();
+              if (create === "y" || create === "yes") {
+                console.log(
+                  "  Nickname is registered ON-CHAIN, ONE-TIME, and IMMUTABLE.\n" +
+                    "  Limit: ≤ 32 UTF-8 bytes.",
+                );
+                // eslint-disable-next-line no-constant-condition
+                while (true) {
+                  const nick = (await rl.question("Pick a nickname: ")).trim();
+                  if (nick.length === 0) {
+                    console.log("  nickname cannot be empty -- try again");
+                    continue;
+                  }
+                  const bytes = Buffer.byteLength(nick, "utf-8");
+                  if (bytes > 32) {
+                    console.log(`  too long (${bytes} bytes) -- max 32 UTF-8 bytes`);
+                    continue;
+                  }
+                  identityNickname = nick;
+                  break;
+                }
+              }
             }
           } finally {
             rl.close();
@@ -180,10 +341,18 @@ export function registerSetupCommand(program: Command): void {
         writeFileSync(configPath, renderConfig(rpcUrl, apiUrl, novelCore, native));
         success(`Wrote ${configPath}`);
 
+        if (identityNickname) {
+          await createIdentity(identityNickname);
+        }
+
         console.log(
           "\nNext steps:\n" +
             "  - Edit config.yaml if anything's wrong.\n" +
-            "  - export PRIVATE_KEY=0x... before running write commands.\n",
+            (identityNickname
+              ? "  - Read identity.yaml for your wallet. To harden, run\n" +
+                "      export PRIVATE_KEY=0x...   # paste the privateKey from identity.yaml\n" +
+                "      rm identity.yaml           # avoid leaking the key on disk\n"
+              : "  - export PRIVATE_KEY=0x... before running write commands.\n"),
         );
       } catch (err) {
         error(String(err));

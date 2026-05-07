@@ -15,10 +15,10 @@ chain:
   rpcUrl: http://127.0.0.1:8545
   # nativeCurrency: defaults to Ether/ETH/18 (correct for anvil/mainnet/sepolia/base).
   # Override only for non-ETH chains. Drives UI symbol + RainbowKit wallet display.
-  # nativeCurrency:
-  #   name: Gravity
-  #   symbol: G
-  #   decimals: 18
+  nativeCurrency:
+    name: Gravity
+    symbol: G
+    decimals: 18
 
   # Only `novelCore` is configured here. Every other contract (RoundManager,
   # VotingEngine, PrizePool, RulesEngine, BountyBoard, UserRegistry) is reachable

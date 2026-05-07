@@ -40,3 +40,15 @@ export function createKeeperClients(): {
   const walletClient = createWalletClient({ chain, transport, account });
   return { publicClient, walletClient, account };
 }
+
+export function createFaucetClients(): {
+  publicClient: PublicClient;
+  walletClient: WalletClient;
+  account: PrivateKeyAccount;
+} {
+  const transport = http(env.RPC_URL);
+  const publicClient = createPublicClient({ chain, transport }) as PublicClient;
+  const account = privateKeyToAccount(env.FAUCET_PRIVATE_KEY);
+  const walletClient = createWalletClient({ chain, transport, account });
+  return { publicClient, walletClient, account };
+}
