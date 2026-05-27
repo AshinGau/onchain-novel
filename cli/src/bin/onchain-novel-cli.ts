@@ -22,8 +22,8 @@ program
   .version("0.1.0");
 
 // Commands that don't touch the chain. `setup` writes a fresh config.yaml from
-// scratch; `guide` only prints embedded markdown; `config` does its own
-// bootstrap so it can render even when the chain is unreachable.
+// the bundled config.yaml.example; `guide` only prints embedded markdown;
+// `config` does its own bootstrap so it can render even when the chain is unreachable.
 const NO_BOOTSTRAP = new Set(["setup", "guide", "config"]);
 
 program.hook("preAction", async (_thisCmd, actionCmd) => {

@@ -18,9 +18,10 @@ export default defineConfig({
   splitting: false,
   sourcemap: false,
   onSuccess: async () => {
-    // Ship the guide markdowns alongside the bundle so `onchain-novel-cli setup`
-    // can still find them at runtime via a relative path from the bundle.
+    // Ship the setup assets alongside the bundle so `onchain-novel-cli setup`
+    // can still find them at runtime via relative paths from the bundle.
     const here = dirname(new URL(import.meta.url).pathname);
     cpSync(join(here, "src", "guides"), join(here, "dist", "guides"), { recursive: true });
+    cpSync(join(here, "..", "config.yaml.example"), join(here, "dist", "config.yaml.example"));
   },
 });
