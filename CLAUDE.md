@@ -63,10 +63,7 @@ npm run build            # Compile TypeScript
 ```
 
 ### Configuration
-Three layers merged in order (last wins):
-1. `config.yaml` (committed) — shared defaults, **only `contracts.novelCore`** (the rest is resolved on-chain via `resolveContracts` from NovelCore's address book), ports, DB URL. `chain.chainId` is optional — auto-detected from `chain.rpcUrl` at startup.
-2. `config.local.yaml` (gitignored) — personal override
-3. env vars — secrets (`PRIVATE_KEY`, `KEEPER_PRIVATE_KEY`, `VOTE_ENCRYPTION_KEY`), optional `DATABASE_URL`, `ONCHAIN_NOVEL_CONFIG` path
+Single config file: `config.yaml` (committed) — shared defaults, **only `contracts.novelCore`** (the rest is resolved on-chain via `resolveContracts` from NovelCore's address book), ports, DB URL. `chain.chainId` is optional — auto-detected from `chain.rpcUrl` at startup. Secrets (`PRIVATE_KEY`, `KEEPER_PRIVATE_KEY`, `FAUCET_PRIVATE_KEY`, `VOTE_ENCRYPTION_KEY`) come from env at process start.
 
 See `docs/config.md` for the full schema + deployment cheat sheet.
 

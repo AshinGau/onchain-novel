@@ -5,8 +5,8 @@ import { privateKeyToAccount } from "viem/accounts";
 import { getNickname, setNickname as setNicknameTx } from "../shared/index.js";
 import { apiGet } from "../utils/api.js";
 import { getContracts, getPublicClient, getWalletClient, waitForTx } from "../utils/client.js";
-import { getPrivateKey } from "../utils/config.js";
-import { error, eth, header, kv, success, table, txHash } from "../utils/format.js";
+import { getPrivateKey, requireConfig } from "../utils/config.js";
+import { error, header, kv, success, table, token, txHash } from "../utils/format.js";
 
 function nicknameToBytes32(nickname: string): `0x${string}` {
   const bytes = Buffer.byteLength(nickname, "utf-8");
@@ -161,6 +161,7 @@ export function registerUserCommands(program: Command): void {
     )
     .action(async (addrArg) => {
       try {
+        const { nativeCurrency } = requireConfig();
         const addr = resolveAddress(addrArg);
         const data = await apiGet<{
           unclaimedVotes: Record<string, unknown>[];
@@ -190,7 +191,7 @@ export function registerUserCommands(program: Command): void {
               Novel: `#${r.novel_id}`,
               Round: r.round ?? "-",
               Source: r.source,
-              Amount: eth(String(r.amount ?? "0")),
+              Amount: token(String(r.amount ?? "0"), nativeCurrency.decimals, nativeCurrency.symbol),
               At: String(r.created_at ?? "").slice(0, 19),
             })),
           );

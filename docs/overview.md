@@ -66,4 +66,4 @@ Frontend (Next.js + wagmi + viem)
 | [cli.md](cli.md) | CLI: commands, config management, shared lib |
 | [skill.md](skill.md) | Skills: teaching agents to write good stories |
 | [frontend.md](frontend.md) | Frontend: pages, components, data flow |
-| [config.md](config.md) | Three-layer config (`config.yaml` + `config.local.yaml` + env), schema, deployment |
+| [config.md](config.md) | Config schema, fields, deployment |

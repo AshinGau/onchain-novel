@@ -17,34 +17,6 @@ source "$HERE/lib/read-config.sh"
 
 DEPLOYED_FLAG="$STATE_DIR/deployed"
 
-# Ensure built artifacts exist for the services we're about to start. Shared
-# is always required (backend/frontend resolve @onchain-novel/shared to its
-# dist/). Backend + frontend builds are required only in release mode.
-#
-# IMPORTANT: The frontend build bakes config.yaml's contract addresses into the
-# client bundle (see web/frontend/next.config.ts). Call this AFTER deploy so
-# addresses are already in config.yaml, and pass force_frontend=true after a
-# fresh deploy to invalidate any stale .next from a prior run.
-_ensure_built() {
-  local dev_mode="$1" no_frontend="$2" force_frontend="${3:-false}"
-  local scripts=()
-  [[ -f "$REPO_ROOT/packages/shared/dist/index.js" ]] || scripts+=(build:shared)
-  if ! $dev_mode; then
-    [[ -f "$REPO_ROOT/web/backend/dist/index.js" ]] || scripts+=(build:backend)
-    if ! $no_frontend; then
-      if $force_frontend; then
-        rm -rf "$REPO_ROOT/web/frontend/.next"
-      fi
-      [[ -d "$REPO_ROOT/web/frontend/.next" ]] || scripts+=(build:frontend)
-    fi
-  fi
-  (( ${#scripts[@]} == 0 )) && return 0
-  info "Building missing artifacts: ${scripts[*]}"
-  for s in "${scripts[@]}"; do
-    (cd "$REPO_ROOT" && npm run "$s") || die "$s failed"
-  done
-}
-
 _print_contracts() {
   echo ""
   info "NovelCore address (the only one to put in config.yaml; every other contract is reachable on-chain from here):"
@@ -93,18 +65,13 @@ _print_test_accounts() {
 DEFAULT_PK="0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
 
 cmd_start() {
-  # dev.sh defaults to RELEASE mode — runs built artifacts from dist/.next.
   # Pass --dev to opt into watch mode (tsx watch / next dev). Extra flags are
   # forwarded to services.sh (--keeper, --no-frontend). Unknown flags error out.
   local svc_flags=()
-  local dev_mode=false
-  local no_frontend=false
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      --dev)         svc_flags+=(--dev); dev_mode=true ;;
-      --keeper)      svc_flags+=(--keeper) ;;
-      --no-frontend) svc_flags+=(--no-frontend); no_frontend=true ;;
-      *)             die "unknown flag for 'start': $1" ;;
+      --dev|--keeper|--no-frontend) svc_flags+=("$1") ;;
+      *)                            die "unknown flag for 'start': $1" ;;
     esac
     shift
   done
@@ -113,19 +80,12 @@ cmd_start() {
   "$HERE/anvil.sh" start
   "$HERE/db.sh" create
   "$HERE/db.sh" migrate
-  local addresses_changed=false
   if [[ -f "$DEPLOYED_FLAG" ]]; then
     ok "Contracts already deployed — reusing (run 'dev.sh reset' to redeploy)"
   else
     PRIVATE_KEY="${PRIVATE_KEY:-$DEFAULT_PK}" "$HERE/deploy.sh"
     touch "$DEPLOYED_FLAG"
-    addresses_changed=true
   fi
-
-  # Build AFTER deploy so next.config.ts picks up the real contract addresses.
-  # If addresses just changed, force a frontend rebuild to replace the stale
-  # client bundle (NEXT_PUBLIC_* are baked at build time).
-  _ensure_built "$dev_mode" "$no_frontend" "$addresses_changed"
 
   # If --keeper was requested but no key in env, fall back to the deployer key
   # — Deploy.s.sol registers the deployer as the on-chain keeper, so any other

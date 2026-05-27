@@ -53,6 +53,5 @@ lcov.info
 .local-node/
 
 # Local config override (personal) + secrets
-config.local.yaml
 config.yaml
 .secrets.env

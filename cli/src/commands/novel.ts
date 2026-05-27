@@ -13,7 +13,8 @@ import {
 import { apiGet } from "../utils/api.js";
 import { getContracts, getWalletClient, waitForTx } from "../utils/client.js";
 import { resolveContent, warnIfOutOfRange } from "../utils/content.js";
-import { error, eth, header, kv, roundPhaseName, success, table, txHash } from "../utils/format.js";
+import { requireConfig } from "../utils/config.js";
+import { error, header, kv, roundPhaseName, success, table, token, txHash } from "../utils/format.js";
 
 function buildNovelConfig(opts: Record<string, string>): NovelConfig {
   return {
@@ -112,6 +113,7 @@ export function registerNovelCommands(program: Command): void {
     .description("Show novel details")
     .action(async (id) => {
       try {
+        const { nativeCurrency } = requireConfig();
         const data = await apiGet<Record<string, unknown>>(`/api/novels/${id}`);
         header(`Novel #${id}`);
         kv("Title", data.title);
@@ -120,8 +122,8 @@ export function registerNovelCommands(program: Command): void {
         kv("Active", data.active);
         kv("Current Round", data.current_round);
         kv("Round Phase", roundPhaseName(Number(data.round_phase)));
-        kv("Pool Balance", eth(BigInt(String(data.pool_balance ?? "0"))));
-        kv("Total Tipped", eth(BigInt(String(data.total_tipped ?? "0"))));
+        kv("Pool Balance", token(BigInt(String(data.pool_balance ?? "0")), nativeCurrency.decimals, nativeCurrency.symbol));
+        kv("Total Tipped", token(BigInt(String(data.total_tipped ?? "0")), nativeCurrency.decimals, nativeCurrency.symbol));
         kv("Chapters", data.chapter_count);
         kv("Authors", data.author_count);
         kv("Views", data.view_count);
@@ -146,6 +148,7 @@ export function registerNovelCommands(program: Command): void {
     )
     .action(async (opts) => {
       try {
+        const { nativeCurrency } = requireConfig();
         const params = new URLSearchParams();
         params.set("sort", opts.sort);
         params.set("limit", opts.limit);
@@ -167,7 +170,7 @@ export function registerNovelCommands(program: Command): void {
             Active: n.active ? "Yes" : "No",
             Round: n.current_round,
             Chapters: n.chapter_count,
-            Pool: eth(BigInt(String(n.pool_balance ?? "0"))),
+            Pool: token(BigInt(String(n.pool_balance ?? "0")), nativeCurrency.decimals, nativeCurrency.symbol),
           })),
         );
         const p = data.pagination;

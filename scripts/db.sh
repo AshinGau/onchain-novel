@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Manage the postgres database used by the backend. Connection string comes
-# from config.yaml:backend.databaseUrl (overridden by DATABASE_URL env).
+# Manage the postgres database used by the backend. Connection string from
+# config.yaml:backend.databaseUrl.
 #
 # Usage:
 #   scripts/db.sh create   # create DB if missing
@@ -15,11 +15,7 @@ source "$HERE/lib/log.sh"
 source "$HERE/lib/read-config.sh"
 
 _db_url() {
-  if [[ -n "${DATABASE_URL:-}" ]]; then
-    echo "$DATABASE_URL"
-  else
-    cfg backend.databaseUrl
-  fi
+  cfg backend.databaseUrl
 }
 
 # Extract just the database name from the URL (last path segment).

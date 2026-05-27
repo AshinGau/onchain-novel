@@ -9,7 +9,8 @@ import {
 } from "../shared/index.js";
 import { apiGet } from "../utils/api.js";
 import { getContracts, getWalletClient, waitForTx } from "../utils/client.js";
-import { error, eth, header, kv, parseDuration, success, txHash } from "../utils/format.js";
+import { requireConfig } from "../utils/config.js";
+import { error, header, kv, parseDuration, success, token, txHash } from "../utils/format.js";
 
 export function registerBountyCommands(program: Command): void {
   const bounty = program.command("bounty").description("Bounty commands");
@@ -71,6 +72,7 @@ export function registerBountyCommands(program: Command): void {
     .option("--novel-id <id>", "Filter by novel ID")
     .action(async (opts) => {
       try {
+        const { nativeCurrency } = requireConfig();
         const url = opts.novelId
           ? `/api/bounties/active?novelId=${opts.novelId}`
           : "/api/bounties/active";
@@ -82,7 +84,7 @@ export function registerBountyCommands(program: Command): void {
         header("Active Bounties");
         for (const b of data.bounties) {
           kv(`Bounty #${b.id}`, `Chapter ID.${b.chapter_id} (${b.novel_title})`);
-          kv("  Locked", eth(BigInt(String(b.locked_amount ?? "0"))));
+          kv("  Locked", token(BigInt(String(b.locked_amount ?? "0")), nativeCurrency.decimals, nativeCurrency.symbol));
           if (b.create_time) kv("  Created", new Date(Number(b.create_time) * 1000).toISOString());
           kv("  Deadline", new Date(Number(b.deadline) * 1000).toISOString());
           if (Number(b.designated_chapter_id) > 0) {
@@ -135,11 +137,12 @@ export function registerBountyCommands(program: Command): void {
     .description("Show bounty details")
     .action(async (bountyId) => {
       try {
+        const { nativeCurrency } = requireConfig();
         const data = await apiGet<Record<string, unknown>>(`/api/bounties/${bountyId}`);
         header(`Bounty #${bountyId}`);
         kv("Chapter", `ID.${data.chapter_id} (${data.novel_title})`);
         kv("Tipper", data.tipper);
-        kv("Locked Amount", eth(BigInt(String(data.locked_amount ?? "0"))));
+        kv("Locked Amount", token(BigInt(String(data.locked_amount ?? "0")), nativeCurrency.decimals, nativeCurrency.symbol));
         kv("Deadline", data.deadline);
         kv("Claimed", data.claimed ? "Yes" : "No");
         console.log();

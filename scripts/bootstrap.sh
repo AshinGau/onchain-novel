@@ -9,7 +9,6 @@
 #   - repo npm deps (workspace install)
 #   - forge submodules
 #   - local postgres database
-#   - config.local.yaml scaffold (if missing)
 #
 # Supports: macOS (Homebrew) and Debian/Ubuntu (apt) and RHEL/Fedora (dnf/yum).
 # On unsupported systems it prints what's missing and exits.
@@ -189,11 +188,6 @@ if [[ ! -f "$ROOT/config.yaml" ]] && [[ -f "$ROOT/config.yaml.example" ]]; then
   cp "$ROOT/config.yaml.example" "$ROOT/config.yaml"
   ok "Created config.yaml from template"
 fi
-if [[ ! -f "$ROOT/config.local.yaml" ]] && [[ -f "$ROOT/config.local.yaml.example" ]]; then
-  cp "$ROOT/config.local.yaml.example" "$ROOT/config.local.yaml"
-  ok "Created config.local.yaml from template"
-fi
-
 info "Ensuring database exists"
 "$HERE/db.sh" create || warn "db create failed — inspect above output"
 

@@ -1,5 +1,5 @@
 import chalk from "chalk";
-import { formatEther } from "viem";
+import { formatUnits } from "viem";
 
 /** Print a labeled key-value pair */
 export function kv(label: string, value: unknown): void {
@@ -27,10 +27,10 @@ export function txHash(hash: string): void {
   console.log(chalk.green(`\u2713 Transaction sent: ${hash}`));
 }
 
-/** Format wei to ETH string */
-export function eth(wei: bigint | string): string {
+/** Format wei to human-readable token string using the chain's native currency */
+export function token(wei: bigint | string, decimals: number, symbol: string): string {
   const val = typeof wei === "string" ? BigInt(wei) : wei;
-  return `${formatEther(val)} ETH`;
+  return `${formatUnits(val, decimals)} ${symbol}`;
 }
 
 /** Print a simple table from array of objects */

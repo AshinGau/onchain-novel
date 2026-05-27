@@ -24,7 +24,7 @@ Frontend (Next.js 16)          Backend (Express)                Chain (EVM)
 
 ## Configuration
 
-All non-secret settings (ports, RPC, DB URL, contract addresses, indexer params) live in `config.yaml` at the repo root. Secrets (`PRIVATE_KEY`, `KEEPER_PRIVATE_KEY`, `VOTE_ENCRYPTION_KEY`, optional `DATABASE_URL`) come from the environment.
+All non-secret settings (ports, RPC, DB URL, contract addresses, indexer params) live in `config.yaml` at the repo root. Secrets (`PRIVATE_KEY`, `KEEPER_PRIVATE_KEY`, `FAUCET_PRIVATE_KEY`, `VOTE_ENCRYPTION_KEY`) come from the environment at process start.
 
 ## Quick Start
 

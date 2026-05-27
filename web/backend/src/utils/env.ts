@@ -2,7 +2,7 @@ import dotenv from "dotenv";
 
 import { bootstrapConfig } from "@onchain-novel/shared";
 
-// Secrets + DATABASE_URL still flow via env (dotenv stays). Non-secret fields
+// Secrets come from env (dotenv stays). Non-secret fields
 // (addresses, URLs, ports, indexer params) come from config.yaml.
 dotenv.config();
 

@@ -20,8 +20,8 @@ import { privateKeyToAccount } from "viem/accounts";
 
 import { apiGet, apiPost, fetchNovelConfig } from "../utils/api.js";
 import { getContracts, getPublicClient, getWalletClient, waitForTx } from "../utils/client.js";
-import { getPrivateKey } from "../utils/config.js";
-import { error, eth, header, kv, roundPhaseName, success, table, txHash } from "../utils/format.js";
+import { getPrivateKey, requireConfig } from "../utils/config.js";
+import { error, header, kv, roundPhaseName, success, table, token, txHash } from "../utils/format.js";
 import { getStorePath, getVoteSalt, listVoteSalts, saveVoteSalt } from "../utils/vote-store.js";
 
 function parseIdList(raw: string): bigint[] {
@@ -411,6 +411,7 @@ export function registerVoteCommands(program: Command): void {
     .option("--limit <n>", "max novels to scan", "100")
     .action(async (opts) => {
       try {
+        const { nativeCurrency } = requireConfig();
         const wantPhase = String(opts.phase).toLowerCase();
         const phaseMap: Record<string, number> = {
           nominating: 1,
@@ -477,9 +478,9 @@ export function registerVoteCommands(program: Command): void {
               remaining > 0
                 ? `${Math.floor(remaining / 3600)}h${Math.floor((remaining % 3600) / 60)}m`
                 : chalk.red("expired"),
-            Pool: eth(BigInt(String(n.pool_balance ?? "0"))),
+            Pool: token(BigInt(String(n.pool_balance ?? "0")), nativeCurrency.decimals, nativeCurrency.symbol),
             Voters: voterCount,
-            VoteStake: cfg.voteStake ? eth(cfg.voteStake) : "-",
+            VoteStake: cfg.voteStake ? token(cfg.voteStake, nativeCurrency.decimals, nativeCurrency.symbol) : "-",
             Voted: already,
           });
         }

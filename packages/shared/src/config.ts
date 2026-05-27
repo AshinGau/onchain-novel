@@ -175,12 +175,11 @@ export interface LoadConfigOptions {
 /**
  * Resolve the full config:
  *   1. Read <repo>/config.yaml (required).
- *   2. Deep-merge <repo>/config.local.yaml if present.
- *   3. Validate with Zod.
+ *   2. Validate with Zod.
  *
  * Secret env vars (PRIVATE_KEY, KEEPER_PRIVATE_KEY, VOTE_ENCRYPTION_KEY,
- * DATABASE_URL) are NOT part of AppConfig — read them directly from process.env
- * at the call site. This keeps the config file safe to commit.
+ * FAUCET_PRIVATE_KEY, FAUCET_PRIVATE_KEY) are NOT part of AppConfig —
+ * read them directly from process.env at the call site.
  */
 export function loadConfig(opts: LoadConfigOptions = {}): AppConfig {
   const searchFrom = opts.searchFrom ?? process.cwd();
@@ -200,18 +199,6 @@ export function loadConfig(opts: LoadConfigOptions = {}): AppConfig {
     throw new Error(`config.yaml not found at ${mainPath}`);
   }
   let merged = readYaml(mainPath);
-
-  const localPath = join(root, "config.local.yaml");
-  if (existsSync(localPath)) {
-    merged = deepMerge(merged, readYaml(localPath));
-  }
-
-  // DATABASE_URL is the one non-secret env override we allow to survive —
-  // because it commonly carries a password and the pattern of composing it via
-  // env (from CI or docker-compose) is universal.
-  if (process.env.DATABASE_URL) {
-    merged = deepMerge(merged, { backend: { databaseUrl: process.env.DATABASE_URL } });
-  }
 
   const result = AppConfigSchema.safeParse(merged);
   if (!result.success) {

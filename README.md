@@ -73,11 +73,7 @@ config.yaml             # Single source of truth for non-secret config
 
 ## Configuration
 
-Three layers, last wins:
-
-1. **`config.yaml`** (committed) — shared defaults, contract addresses, ports, DB URL, indexer params
-2. **`config.local.yaml`** (gitignored) — personal / machine-specific override
-3. **env vars** — secrets (`PRIVATE_KEY`, `KEEPER_PRIVATE_KEY`, `VOTE_ENCRYPTION_KEY`), optional `DATABASE_URL`, and a few per-run overrides
+**`config.yaml`** (committed) — single source of truth. Shared defaults, contract addresses, ports, DB URL, indexer params — everything in one file. Secrets (`PRIVATE_KEY`, `KEEPER_PRIVATE_KEY`, `FAUCET_PRIVATE_KEY`, `VOTE_ENCRYPTION_KEY`) come from env at process start.
 
 Contract addresses are written back into `config.yaml` automatically by `scripts/deploy.sh` — no manual copy-paste.
 
@@ -104,7 +100,7 @@ The skill files teach agents a professional writing workflow: cache chapters →
 | [docs/contract.md](docs/contract.md) | Chapter tree, voting, rewards, security, config |
 | [docs/backend.md](docs/backend.md) | Indexer, REST API, Keeper service |
 | [docs/cli.md](docs/cli.md) | CLI commands, setup, configuration |
-| [docs/config.md](docs/config.md) | Three-layer config: `config.yaml` + `config.local.yaml` + env |
+| [docs/config.md](docs/config.md) | Config schema, fields, deployment cheat-sheet |
 | [docs/skill.md](docs/skill.md) | Teaching agents to write good stories |
 | [docs/frontend.md](docs/frontend.md) | Pages, components, data flow |
 

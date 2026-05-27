@@ -42,25 +42,28 @@ parse_args() {
   done
 }
 
-_backend_url() {
-  local host port
-  host="$(cfg backend.host)"
-  port="$(cfg backend.port)"
-  echo "http://${host}:${port}"
+_backend_bind_host() {
+  cfg backend.host
+}
+
+_backend_port() {
+  cfg backend.port
+}
+
+_backend_probe_url() {
+  local host
+  host="$(_backend_bind_host)"
+  [[ "$host" == "0.0.0.0" ]] && host="127.0.0.1"
+  echo "http://${host}:$(_backend_port)"
 }
 
 _frontend_port() {
   cfg frontend.port
 }
 
-_require_built() {
-  # Used when not in --dev mode.
-  [[ -f "$ROOT/web/backend/dist/index.js" ]] \
-    || die "backend not built. Run 'npm run build:backend' or pass --dev"
-  if ! $NO_FRONTEND; then
-    [[ -d "$ROOT/web/frontend/.next" ]] \
-      || die "frontend not built. Run 'npm run build:frontend' or pass --dev"
-  fi
+_build_all() {
+  info "Building project"
+  (cd "$ROOT" && npm run build) || die "npm run build failed"
 }
 
 # If a foreign process already owns the port we're about to bind, the child
@@ -91,15 +94,15 @@ start_backend() {
     ok "backend already running (pid $(read_pid backend))"
     return 0
   fi
-  local port; port="$(cfg backend.port)"
+  local port; port="$(_backend_port)"
   _free_port backend "$port"
-  info "Starting backend ($( $DEV && echo dev || echo prod ))"
+  info "Starting backend ($( $DEV && echo dev || echo prod )) on $(_backend_bind_host):$port"
   if $DEV; then
     start_bg backend bash -c "cd '$ROOT/web/backend' && npm run dev"
   else
     start_bg backend node "$ROOT/web/backend/dist/index.js"
   fi || die "backend failed to start; see $(logfile backend)"
-  local url; url="$(_backend_url)/health"
+  local url; url="$(_backend_probe_url)/health"
   local rc=0
   wait_for --while-alive backend 30 curl -sf "$url" || rc=$?
   case "$rc" in
@@ -111,7 +114,7 @@ start_backend() {
        tail -40 "$(logfile backend)" >&2
        die "backend health-check timed out" ;;
   esac
-  ok "backend running (pid $(read_pid backend), $(_backend_url))"
+  ok "backend running (pid $(read_pid backend), probe $(_backend_probe_url))"
 }
 
 start_frontend() {
@@ -150,11 +153,11 @@ start_keeper() {
 }
 
 cmd_start() {
-  $DEV || _require_built
+  _build_all
   start_keeper
   start_backend
   start_frontend
-  ok "services ready — $(_backend_url)$(
+  ok "services ready — $(_backend_probe_url)$(
     $NO_FRONTEND || echo " + http://127.0.0.1:$(_frontend_port)"
   )"
 }

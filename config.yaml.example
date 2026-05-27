@@ -1,20 +1,13 @@
 # Single source of truth for non-secret configuration.
-#
-# Layering (last wins):
-#   config.yaml           -> base, committed
-#   config.local.yaml     -> personal override, gitignored
-#   env vars              -> secrets + per-run overrides
-#
-# Secrets (PRIVATE_KEY, KEEPER_PRIVATE_KEY, VOTE_ENCRYPTION_KEY) and optionally
-# DATABASE_URL come from env — never from YAML. Set ONCHAIN_NOVEL_CONFIG to
-# point at a different YAML file (deployment).
-#
-# Full reference: docs/config.md.
+# Non-secret configuration shared by all components (backend / frontend / CLI / scripts).
+# Secrets (PRIVATE_KEY, KEEPER_PRIVATE_KEY, FAUCET_PRIVATE_KEY, VOTE_ENCRYPTION_KEY)
+# come from env at process start — never from YAML.
 
 chain:
-  rpcUrl: http://127.0.0.1:8545
-  # nativeCurrency: defaults to Ether/ETH/18 (correct for anvil/mainnet/sepolia/base).
-  # Override only for non-ETH chains. Drives UI symbol + RainbowKit wallet display.
+  rpcUrl: https://rpc-testnet.gravity.xyz
+  # nativeCurrency: the one piece of chain identity not discoverable on-chain.
+  # Drives both UI labels (TOKEN_SYMBOL) and RainbowKit's wallet display.
+  # Default is ETH/Ether/18 — only override for non-ETH chains.
   nativeCurrency:
     name: Gravity
     symbol: G
@@ -25,14 +18,14 @@ chain:
   # from NovelCore's on-chain address book and resolved at startup. Don't edit
   # this by hand — scripts/deploy.sh writes it after `forge script Deploy.s.sol`.
 contracts:
-  novelCore: "0x610178dA211FEF7D417bC0e6FeD39F05609AD788"
+  novelCore: "0x2083877Fbd50aF2C73c3864D3ebdC160af8b019d"
 
 backend:
   host: 0.0.0.0
   port: 3001
   databaseUrl: postgresql://127.0.0.1:5432/onchain_novel
   indexer:
-    startBlock: 0
+    startBlock: 22909623
     pollIntervalMs: 1000
     confirmationBlocks: 0
     batchSize: 100
