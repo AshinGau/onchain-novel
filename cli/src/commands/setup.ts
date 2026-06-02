@@ -220,7 +220,13 @@ export function registerSetupCommand(program: Command): void {
         ".claude/commands/onchain-novel.md (so any agent can find it), and " +
         "drops onchain-novel-index.md at the project root as a discovery hint.",
     )
-    .action(async () => {
+    .option(
+      "--full",
+      "Interactive full setup: prompt for Ethereum RPC URL, Backend API URL, " +
+        "NovelCore proxy address, Frontend base URL, and Chain Explorer base URL. " +
+        "Without this flag, defaults from config.yaml.example are used without prompting.",
+    )
+    .action(async (options) => {
       try {
         header("Onchain Novel CLI Setup");
 
@@ -282,26 +288,40 @@ export function registerSetupCommand(program: Command): void {
         const DEFAULT_RPC = defaults.chain.rpcUrl;
         const DEFAULT_API = defaults.cli.apiUrl;
         const DEFAULT_NOVEL_CORE = defaults.contracts.novelCore;
+        const DEFAULT_FRONT_URL = defaults.cli.frontUrl;
+        const DEFAULT_EXPLORER = defaults.cli.chainExplorer;
 
         let identityNickname: string | null = null;
 
         if (stdin.isTTY) {
-          console.log(
-            "\nGenerating config.yaml. Press Enter to accept defaults where shown.\n" +
-              "Defaults are loaded from the bundled config.yaml.example.\n",
-          );
           const rl = createInterface({ input: stdin, output: stdout });
           try {
-            setupConfig.chain.rpcUrl = await prompt(rl, "Ethereum RPC URL", DEFAULT_RPC);
-            setupConfig.cli.apiUrl = await prompt(rl, "Backend API URL", DEFAULT_API);
-            // eslint-disable-next-line no-constant-condition
-            while (true) {
-              const answer = await prompt(rl, "NovelCore proxy address (0x...)", DEFAULT_NOVEL_CORE);
-              if (ADDRESS_RE.test(answer)) {
-                setupConfig.contracts.novelCore = answer as `0x${string}`;
-                break;
+            if (options.full) {
+              console.log(
+                "\nGenerating config.yaml (full mode). Press Enter to accept defaults where shown.\n" +
+                  "Defaults are loaded from the bundled config.yaml.example.\n",
+              );
+              setupConfig.chain.rpcUrl = await prompt(rl, "BlockChain RPC URL", DEFAULT_RPC);
+              setupConfig.cli.apiUrl = await prompt(rl, "Backend API URL", DEFAULT_API);
+              // eslint-disable-next-line no-constant-condition
+              while (true) {
+                const answer = await prompt(rl, "NovelCore proxy address (0x...)", DEFAULT_NOVEL_CORE);
+                if (ADDRESS_RE.test(answer)) {
+                  setupConfig.contracts.novelCore = answer as `0x${string}`;
+                  break;
+                }
+                console.log("  not a 0x-prefixed 20-byte hex address -- try again");
               }
-              console.log("  not a 0x-prefixed 20-byte hex address -- try again");
+              setupConfig.cli.frontUrl = await prompt(
+                rl,
+                "Frontend base URL (chapter paths appended at runtime)",
+                DEFAULT_FRONT_URL,
+              );
+              setupConfig.cli.chainExplorer = await prompt(
+                rl,
+                "Chain explorer base URL (/tx/{hash} appended at runtime)",
+                DEFAULT_EXPLORER,
+              );
             }
 
             // Identity step — testnet convenience. Generates a fresh wallet,

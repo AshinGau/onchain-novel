@@ -21,10 +21,12 @@ preamble exists because agents skip ahead and pay for it later.
    `chapter tree`, `rule list`), check the cache file first. Re-fetching costs
    tokens and pollutes the workspace with duplicates. **Section 3 Rule 1**.
 
-3. **Write-back after every `chapter submit`.** The instant a submit returns a
-   new `chapterId`: copy your draft to `chapters/<newId>.md`, run
-   `chapter context <newId> --cache novels/<novelId>/chapters`, then fill the
-   TODO skeleton. Skipping kills the next continuation. **Section 3 Rule 2**.
+3. **Write-back after every `chapter submit`.** `chapter submit` now prints
+   `chapterId` directly in its output. Copy your draft to
+   `chapters/<chapterId>.md`, run
+   `chapter context <chapterId> --cache novels/<novelId>/chapters`, then fill the
+   TODO skeleton. Also report the frontend + explorer URLs the CLI prints.
+   Skipping kills the next continuation. **Section 3 Rule 2**.
 
 4. **Notes are structured analysis, not raw-content dumps.** The
    `<chapterId>-ch<depth>-<parentId>.md` files have a 5-section schema (what
@@ -141,9 +143,9 @@ Conventions:
 
 **Rule 1 -- Read-before-fetch.** Before any read CLI call, check the local cache file (paths above). Hit -> read file. Miss -> call CLI, then write the cache.
 
-**Rule 2 -- Write-back after writes.** After `chapter submit` returns a new `chapterId`:
-1. `cp draft.md novels/<novelId>/chapters/<newId>.md`
-2. `chapter context <newId> --cache novels/<novelId>/chapters` writes a TODO skeleton for the new chapter
+**Rule 2 -- Write-back after writes.** `chapter submit` now prints `chapterId` directly in its output (along with frontend + explorer URLs). After submit:
+1. `cp draft.md novels/<novelId>/chapters/<chapterId>.md`
+2. `chapter context <chapterId> --cache novels/<novelId>/chapters` writes a TODO skeleton for the new chapter
 3. Immediately fill all `<!-- TODO -->` markers -- your understanding of your own chapter is freshest right now
 
 **Rule 3 -- Fast path.** Continuing from a chapter you just submitted = zero network calls (parent content = your draft, parent analysis = filled in Rule 2, ancestors cached, no siblings yet).
@@ -651,13 +653,21 @@ Pre-submit:
 - Wallet balance >= `submissionFee + gas`
 - `--file` is **relative to shell cwd**, not workspace. Absolute paths are safest.
 
+Post-submit output (capture all of this):
+- `✓ Transaction sent: <txHash>` — the on-chain transaction hash
+- `Chapter ID: <newChapterId>` — your new chapter's ID
+- `Frontend: <url>` — direct link to read the chapter
+- `Explorer: <url>` — link to the transaction on the chain explorer
+
+**Report the frontend and explorer URLs to the user after submission.** These are the user's primary feedback — they confirm the chapter is live and linkable.
+
 ### Step 8 -- Close the loop (write your own notes)
 
-After successful submit, get the new `chapterId` from the tx receipt or `chapter children <parentId>`. Then **immediately**:
+The `chapterId` is now printed directly by `chapter submit` (see Step 7 output). **Immediately**:
 
 ```bash
-cp draft.md novels/<novelId>/chapters/<newId>.md
-onchain-novel-cli chapter context <newId> --cache novels/<novelId>/chapters
+cp draft.md novels/<novelId>/chapters/<newChapterId>.md
+onchain-novel-cli chapter context <newChapterId> --cache novels/<novelId>/chapters
 # fill all <!-- TODO --> markers in the new skeleton
 ```
 

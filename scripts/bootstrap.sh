@@ -117,7 +117,27 @@ install_postgres() {
   esac
 }
 
-install_yq()  { pkg_install yq; }
+install_yq() {
+  # On macOS, Homebrew's yq is the correct mikefarah/yq.
+  # On Linux, `apt install yq` gives the WRONG package (kislyuk/yq, a jq
+  # wrapper) which doesn't support `yq eval`. Download the Go binary instead.
+  if [[ "$PLATFORM" == "macos" ]]; then
+    brew install yq
+    return
+  fi
+  local version="v4.44.3"
+  local arch
+  arch="$(uname -m)"
+  case "$arch" in
+    x86_64|amd64) arch="amd64" ;;
+    aarch64|arm64) arch="arm64" ;;
+    *) die "unsupported arch for yq install: $arch" ;;
+  esac
+  info "Installing mikefarah/yq ${version} (${arch})"
+  curl -sL "https://github.com/mikefarah/yq/releases/download/${version}/yq_linux_${arch}" -o /tmp/yq
+  sudo install /tmp/yq /usr/local/bin/yq
+  rm -f /tmp/yq
+}
 install_jq()  { pkg_install jq; }
 install_curl(){ pkg_install curl; }
 install_git() { pkg_install git; }

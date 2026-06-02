@@ -12,7 +12,6 @@ chain:
     name: Gravity
     symbol: G
     decimals: 18
-
   # Only `novelCore` is configured here. Every other contract (RoundManager,
   # VotingEngine, PrizePool, RulesEngine, BountyBoard, UserRegistry) is reachable
   # from NovelCore's on-chain address book and resolved at startup. Don't edit
@@ -22,19 +21,19 @@ contracts:
 
 backend:
   host: 0.0.0.0
-  port: 3001
-  databaseUrl: postgresql://127.0.0.1:5432/onchain_novel
+  port: 8545
+  databaseUrl: postgresql:///onchain_novel?host=/var/run/postgresql
   indexer:
-    startBlock: 22909623
+    startBlock: 5320000
     pollIntervalMs: 1000
     confirmationBlocks: 0
     batchSize: 100
   keeper:
     pollIntervalMs: 10000
 frontend:
-  port: 3000
+  port: 8546
   # Where SSR and the /api rewrite target the backend (same host, loopback).
-  backendUrl: http://127.0.0.1:3001
+  backendUrl: http://127.0.0.1:8545
   # Extra dev-server origins for cross-origin HMR (LAN testing). Empty =
   # same-origin only. Add hostnames like "192.168.1.2" if you access dev from
   # a phone on your LAN. Wildcards supported.
@@ -42,5 +41,10 @@ frontend:
     - "127.0.0.1"
     - "localhost"
     - "192.168.*"
+    - "34.135.19.173"
 cli:
-  apiUrl: http://127.0.0.1:3001
+  apiUrl: http://34.135.19.173:8545
+  # Base URL of the frontend. Full path: {frontUrl}/novels/{novelId}/chapter/{chapterId}
+  frontUrl: http://34.135.19.173:8546
+  # Base URL of the chain explorer. Full path: {chainExplorer}/tx/{txHash}
+  chainExplorer: https://mainnet-explorer.gravity.xyz

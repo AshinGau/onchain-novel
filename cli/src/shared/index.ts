@@ -13,6 +13,10 @@ export interface OnchainNovelConfig {
   chainId: number;
   nativeCurrency: { name: string; symbol: string; decimals: number };
   apiUrl: string;
+  /** Base URL of the frontend. Full chapter path constructed at runtime. */
+  frontUrl: string;
+  /** Base URL of the chain explorer. Full tx path constructed at runtime. */
+  chainExplorer: string;
   contracts: {
     novelCore: `0x${string}`;
     roundManager: `0x${string}`;

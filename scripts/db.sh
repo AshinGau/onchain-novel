@@ -19,13 +19,23 @@ _db_url() {
 }
 
 # Extract just the database name from the URL (last path segment).
+# Strip query string first, then grab the last /-separated segment.
 _db_name() {
-  _db_url | sed -nE 's|.*/([^/?]+)(\?.*)?$|\1|p'
+  _db_url | sed -E 's/\?.*//' | sed -nE 's|.*/([^/]+)$|\1|p'
 }
 
 # Drop the final "/dbname" to get the server URL for admin commands.
+# Preserve query string (e.g. ?host=...) for socket connections.
 _db_admin_url() {
-  _db_url | sed -E 's|/[^/?]+(\?.*)?$||'
+  local url; url="$(_db_url)"
+  local qs="${url#*\?}"
+  local path="${url%%\?*}"
+  local base; base="$(echo "$path" | sed -E 's|/[^/]+$||')"
+  if [[ "$qs" != "$url" ]]; then
+    echo "${base}?${qs}"
+  else
+    echo "$base"
+  fi
 }
 
 cmd_create() {

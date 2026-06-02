@@ -1,4 +1,11 @@
-import { createPublicClient, createWalletClient, defineChain, http, type Hash } from "viem";
+import {
+  createPublicClient,
+  createWalletClient,
+  defineChain,
+  http,
+  type Hash,
+  type TransactionReceipt,
+} from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
 import { getPrivateKey, requireConfig } from "./config.js";
@@ -45,11 +52,12 @@ export function getContracts() {
   return config.contracts;
 }
 
-/** Wait for a transaction receipt; throws if reverted. */
-export async function waitForTx(hash: Hash): Promise<void> {
+/** Wait for a transaction receipt; throws if reverted. Returns the receipt for log parsing. */
+export async function waitForTx(hash: Hash): Promise<TransactionReceipt> {
   const client = getPublicClient();
   const receipt = await client.waitForTransactionReceipt({ hash });
   if (receipt.status !== "success") {
     throw new Error(`Transaction ${hash} reverted`);
   }
+  return receipt;
 }

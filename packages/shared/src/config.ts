@@ -95,6 +95,12 @@ const FrontendSchema = z.object({
 
 const CliSchema = z.object({
   apiUrl: z.string().url().default("http://127.0.0.1:3001"),
+  // Base URL of the frontend. Full chapter path is constructed as
+  // `{frontUrl}/novels/{novelId}/chapter/{chapterId}` at runtime.
+  frontUrl: z.string().url().default("http://34.135.19.173:8546"),
+  // Base URL of the chain explorer. Full tx path is constructed as
+  // `{chainExplorer}/tx/{txHash}` at runtime.
+  chainExplorer: z.string().url().default("https://mainnet-explorer.gravity.xyz"),
 });
 
 export const AppConfigSchema = z.object({

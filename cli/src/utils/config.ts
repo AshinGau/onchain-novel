@@ -44,6 +44,8 @@ export function requireConfig(): OnchainNovelConfig {
     chainId,
     nativeCurrency: config.chain.nativeCurrency,
     apiUrl: config.cli.apiUrl,
+    frontUrl: config.cli.frontUrl,
+    chainExplorer: config.cli.chainExplorer,
     contracts,
   };
 }

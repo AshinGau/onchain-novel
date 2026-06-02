@@ -2,12 +2,12 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import chalk from "chalk";
 import { Command } from "commander";
-import { parseEther } from "viem";
-
+import { decodeEventLog, parseAbiItem, parseEther } from "viem";
 
 import { buildContentSubmission, submitChapter as submitChapterTx } from "../shared/index.js";
 import { apiGet, apiPost, fetchNovelConfig } from "../utils/api.js";
 import { getContracts, getWalletClient, waitForTx } from "../utils/client.js";
+import { requireConfig } from "../utils/config.js";
 import { resolveContent, warnIfOutOfRange } from "../utils/content.js";
 import { error, header, kv, success, table, txHash } from "../utils/format.js";
 
@@ -100,8 +100,38 @@ export function registerChapterCommands(program: Command): void {
         });
 
         txHash(hash);
-        await waitForTx(hash);
+        const receipt = await waitForTx(hash);
+
+        // Extract chapterId from the ChapterSubmitted event log.
+        const chapterSubmittedTopic = parseAbiItem(
+          "event ChapterSubmitted(uint64 indexed novelId, uint64 indexed chapterId, address indexed author, uint64 parentId, uint32 depth)",
+        );
+        let newChapterId: bigint | undefined;
+        for (const log of receipt.logs) {
+          try {
+            const decoded = decodeEventLog({ abi: [chapterSubmittedTopic], data: log.data, topics: log.topics });
+            if (decoded.eventName === "ChapterSubmitted") {
+              newChapterId = (decoded.args as { chapterId: bigint }).chapterId;
+              break;
+            }
+          } catch {
+            // log belongs to a different contract; skip
+          }
+        }
+
+        if (newChapterId !== undefined) {
+          kv("Chapter ID", newChapterId.toString());
+        }
         success("Chapter submitted");
+
+        // Print frontend + explorer URLs.
+        const cfg = requireConfig();
+        const frontendUrl = newChapterId !== undefined
+          ? `${cfg.frontUrl}/novels/${novelId}/chapter/${newChapterId}`
+          : `${cfg.frontUrl}/novels/${novelId}`;
+        const explorerUrl = `${cfg.chainExplorer}/tx/${hash}`;
+        console.log(chalk.blue(`  Frontend: ${frontendUrl}`));
+        console.log(chalk.blue(`  Explorer: ${explorerUrl}`));
       } catch (err) {
         error(String(err));
         process.exit(1);
