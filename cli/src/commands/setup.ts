@@ -317,7 +317,7 @@ export function registerSetupCommand(program: Command): void {
               );
             } else {
               const create = (
-                await prompt(rl, "Create a local identity for testing? [Y/n]", "Y")
+                await prompt(rl, "Create a new wallet for quick start [Y] / Use existing PRIVATE_KEY env [n]", "Y")
               ).toLowerCase();
               if (create === "y" || create === "yes") {
                 console.log(

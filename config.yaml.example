@@ -4,7 +4,7 @@
 # come from env at process start — never from YAML.
 
 chain:
-  rpcUrl: https://rpc-testnet.gravity.xyz
+  rpcUrl: https://mainnet-rpc.gravity.xyz
   # nativeCurrency: the one piece of chain identity not discoverable on-chain.
   # Drives both UI labels (TOKEN_SYMBOL) and RainbowKit's wallet display.
   # Default is ETH/Ether/18 — only override for non-ETH chains.
