@@ -52,24 +52,34 @@ app.use(
   }),
 );
 
+// Skip rate limiting for localhost — testing/development traffic.
+const skipLocalhost: (req: import("express").Request) => boolean = (req) => {
+  const ip = req.ip ?? req.socket.remoteAddress ?? "";
+  const local = ip === "127.0.0.1" || ip === "::1" || ip === "::ffff:127.0.0.1";
+  return local;
+};
+
 // Rate limiting
 const apiLimiter = rateLimit({
   windowMs: 60000,
   max: 600,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: skipLocalhost,
 });
 const writeLimiter = rateLimit({
   windowMs: 60000,
   max: 20,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: skipLocalhost,
 });
 const heavyLimiter = rateLimit({
   windowMs: 60000,
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: skipLocalhost,
 });
 
 app.use("/api", apiLimiter);
