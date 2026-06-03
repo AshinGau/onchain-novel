@@ -15,8 +15,8 @@ router.get("/active", async (req, res) => {
 
     let sql = `SELECT b.*, c.author AS chapter_author, c.depth, n.title AS novel_title
                FROM bounties b
-               JOIN chapters c ON c.id = b.chapter_id
-               JOIN novels n ON n.id = b.novel_id
+               JOIN chapters c ON c.id = b.chapter_id AND c.deleted = FALSE
+               JOIN novels n ON n.id = b.novel_id AND n.deleted = FALSE
                WHERE b.claimed = FALSE AND b.deadline > $1`;
     const params: (string | number)[] = [nowEpoch];
 
@@ -44,8 +44,8 @@ router.get("/:id", validateIdParams("id"), async (req, res) => {
     const bountyRes = await query(
       `SELECT b.*, c.author AS chapter_author, c.depth, n.title AS novel_title
        FROM bounties b
-       JOIN chapters c ON c.id = b.chapter_id
-       JOIN novels n ON n.id = b.novel_id
+       JOIN chapters c ON c.id = b.chapter_id AND c.deleted = FALSE
+       JOIN novels n ON n.id = b.novel_id AND n.deleted = FALSE
        WHERE b.id = $1`,
       [id],
     );

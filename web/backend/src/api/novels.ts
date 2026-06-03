@@ -39,7 +39,7 @@ router.get("/", async (req, res) => {
     }
     const filter = req.query.filter as string;
 
-    let where = "1=1";
+    let where = "novels.deleted = FALSE";
     const params: unknown[] = [];
     let paramIdx = 1;
 
@@ -88,7 +88,7 @@ router.get("/", async (req, res) => {
        FROM novels
        LEFT JOIN LATERAL (
          SELECT COUNT(*) AS chapter_count, COUNT(DISTINCT author) AS author_count
-         FROM chapters WHERE novel_id = novels.id
+         FROM chapters c WHERE c.novel_id = novels.id AND c.deleted = FALSE
        ) cs ON true
        WHERE ${where}
        ORDER BY ${orderBy}
@@ -117,9 +117,9 @@ router.get("/:id", validateIdParams("id"), async (req, res) => {
        FROM novels n
        LEFT JOIN LATERAL (
          SELECT COUNT(*) AS chapter_count, COUNT(DISTINCT author) AS author_count
-         FROM chapters WHERE novel_id = n.id
+         FROM chapters c WHERE c.novel_id = n.id AND c.deleted = FALSE
        ) cs ON true
-       WHERE n.id = $1`,
+       WHERE n.id = $1 AND n.deleted = FALSE`,
       [id],
     );
 
@@ -128,7 +128,7 @@ router.get("/:id", validateIdParams("id"), async (req, res) => {
     }
 
     // Increment view count (fire-and-forget, non-blocking)
-    query("UPDATE novels SET view_count = view_count + 1 WHERE id = $1", [id]).catch(() => {});
+    query("UPDATE novels SET view_count = view_count + 1 WHERE id = $1 AND deleted = FALSE", [id]).catch(() => {});
 
     const row = novelRes.rows[0];
     row.view_count = (parseInt(row.view_count) + 1).toString();
@@ -150,12 +150,12 @@ router.get("/:id/tree", validateIdParams("id"), async (req, res) => {
       query(
         `SELECT id, parent_id, author, depth, "timestamp",
                 is_world_line, declared_length, content_hash, created_at
-         FROM chapters WHERE novel_id = $1 AND depth <= $2
+         FROM chapters WHERE novel_id = $1 AND depth <= $2 AND deleted = FALSE
          ORDER BY id ASC`,
         [id, maxDepth],
       ),
       query(
-        `SELECT EXISTS(SELECT 1 FROM chapters WHERE novel_id = $1 AND depth > $2) AS has_more`,
+        `SELECT EXISTS(SELECT 1 FROM chapters WHERE novel_id = $1 AND depth > $2 AND deleted = FALSE) AS has_more`,
         [id, maxDepth],
       ),
     ]);
@@ -179,7 +179,7 @@ router.get("/:id/worldlines", validateIdParams("id"), async (req, res) => {
     const wlRes = await query(
       `SELECT c.id, c.parent_id, c.author, c.content_hash, c.depth, c."timestamp",
               c.is_world_line, c.declared_length
-       FROM chapters c WHERE c.novel_id = $1 AND c.is_world_line = TRUE
+       FROM chapters c WHERE c.novel_id = $1 AND c.is_world_line = TRUE AND c.deleted = FALSE
        ORDER BY c.depth DESC, c.id ASC`,
       [id],
     );
@@ -211,7 +211,7 @@ router.get("/:id/lines", validateIdParams("id"), async (req, res) => {
     // Look up worldLineCount as default limit (config is JSONB).
     const novelRes = await query<{ world_line_count: number }>(
       `SELECT (config->>'worldLineCount')::int AS world_line_count
-       FROM novels WHERE id = $1`,
+       FROM novels n WHERE n.id = $1 AND n.deleted = FALSE`,
       [id],
     );
     if (novelRes.rows.length === 0) {
@@ -226,7 +226,7 @@ router.get("/:id/lines", validateIdParams("id"), async (req, res) => {
     const chRes = await query<ChapterRow>(
       `SELECT id, parent_id, author, content_hash, depth, "timestamp",
               is_world_line, declared_length, created_at
-       FROM chapters WHERE novel_id = $1`,
+       FROM chapters c WHERE c.novel_id = $1 AND c.deleted = FALSE`,
       [id],
     );
     if (chRes.rows.length === 0) {
@@ -348,7 +348,7 @@ router.get("/:id/rounds/:round", validateIdParams("id", "round"), async (req, re
       query(
         `SELECT rc.chapter_id, rc.position, c.author, c.depth, c."timestamp", c.parent_id
          FROM round_candidates rc
-         JOIN chapters c ON c.id = rc.chapter_id
+         JOIN chapters c ON c.id = rc.chapter_id AND c.deleted = FALSE
          WHERE rc.novel_id = $1 AND rc.round = $2
          ORDER BY rc.position ASC`,
         [id, round],
@@ -373,9 +373,9 @@ router.get("/:id/forks", validateIdParams("id"), async (req, res) => {
       `SELECT n.id, n.creator, n.title, n.description, n.active,
               c.parent_id AS fork_source_chapter_id, n.pool_balance, n.created_at
        FROM novels n
-       JOIN chapters c ON c.novel_id = n.id AND c.depth = 1
-       JOIN chapters src ON src.id = c.parent_id AND src.novel_id = $1
-       WHERE c.parent_id != 0
+       JOIN chapters c ON c.novel_id = n.id AND c.depth = 1 AND c.deleted = FALSE
+       JOIN chapters src ON src.id = c.parent_id AND src.novel_id = $1 AND src.deleted = FALSE
+       WHERE c.parent_id != 0 AND n.deleted = FALSE
        ORDER BY n.created_at DESC
        LIMIT $2 OFFSET $3`,
       [id, limit, offset],
@@ -440,8 +440,8 @@ router.get("/:id/stats", validateIdParams("id"), async (req, res) => {
     await client.query("SET LOCAL statement_timeout = '3s'");
     const statsRes = await client.query(
       `SELECT
-        (SELECT COUNT(*) FROM chapters WHERE novel_id = $1) AS chapter_count,
-        (SELECT COUNT(DISTINCT author) FROM chapters WHERE novel_id = $1) AS author_count,
+        (SELECT COUNT(*) FROM chapters WHERE novel_id = $1 AND deleted = FALSE) AS chapter_count,
+        (SELECT COUNT(DISTINCT author) FROM chapters WHERE novel_id = $1 AND deleted = FALSE) AS author_count,
         (SELECT COUNT(*) FROM votes WHERE novel_id = $1) AS vote_count,
         (SELECT COALESCE(SUM(amount), 0) FROM tips WHERE novel_id = $1) AS total_tipped,
         (SELECT COUNT(*) FROM bounties WHERE novel_id = $1) AS bounty_count`,
@@ -464,6 +464,12 @@ router.get("/:id/tips", validateIdParams("id"), async (req, res) => {
     const { id } = req.params;
     const { page, limit, offset } = parsePagination(req.query);
 
+    // Reject if novel is soft-deleted.
+    const novelOk = await query("SELECT 1 FROM novels WHERE id = $1 AND deleted = FALSE", [id]);
+    if (novelOk.rows.length === 0) {
+      return res.status(404).json({ error: "Novel not found" });
+    }
+
     const tipsRes = await query(
       "SELECT * FROM tips WHERE novel_id = $1 ORDER BY block_number DESC LIMIT $2 OFFSET $3",
       [id, limit, offset],
@@ -480,6 +486,12 @@ router.get("/:id/bounties", validateIdParams("id"), async (req, res) => {
   try {
     const { id } = req.params;
     const { page, limit, offset } = parsePagination(req.query);
+
+    // Reject if novel is soft-deleted.
+    const novelOk = await query("SELECT 1 FROM novels WHERE id = $1 AND deleted = FALSE", [id]);
+    if (novelOk.rows.length === 0) {
+      return res.status(404).json({ error: "Novel not found" });
+    }
 
     const bountiesRes = await query(
       "SELECT * FROM bounties WHERE novel_id = $1 ORDER BY block_number DESC LIMIT $2 OFFSET $3",

@@ -45,7 +45,7 @@ router.get("/:address/votes", validateAddress, async (req, res) => {
     const votesRes = await query(
       `SELECT v.*, n.title AS novel_title, n.round_phase
        FROM votes v
-       LEFT JOIN novels n ON n.id = v.novel_id
+       LEFT JOIN novels n ON n.id = v.novel_id AND n.deleted = FALSE
        WHERE v.voter = $1
        ORDER BY v.commit_block DESC
        LIMIT $2 OFFSET $3`,
@@ -74,7 +74,7 @@ router.get("/:address/rewards", validateAddress, async (req, res) => {
     const unclaimedVotesRes = await query(
       `SELECT v.novel_id, v.round, n.title AS novel_title
        FROM votes v
-       LEFT JOIN novels n ON n.id = v.novel_id
+       LEFT JOIN novels n ON n.id = v.novel_id AND n.deleted = FALSE
        WHERE v.voter = $1 AND v.revealed = TRUE AND v.claimed = FALSE`,
       [addr],
     );
@@ -89,7 +89,7 @@ router.get("/:address/rewards", validateAddress, async (req, res) => {
       `SELECT rc.novel_id, rc.source, rc.amount, rc.round,
               rc.block_number, rc.created_at, n.title AS novel_title
        FROM reward_claims rc
-       LEFT JOIN novels n ON n.id = rc.novel_id
+       LEFT JOIN novels n ON n.id = rc.novel_id AND n.deleted = FALSE
        WHERE rc.claimant = $1
        ORDER BY rc.created_at DESC
        LIMIT $2 OFFSET $3`,
@@ -99,11 +99,11 @@ router.get("/:address/rewards", validateAddress, async (req, res) => {
     // Novels the user participated in (as author or voter)
     const novelsRes = await query(
       `SELECT DISTINCT t.novel_id, n.title AS novel_title FROM (
-         SELECT novel_id FROM chapters WHERE author = $1
+         SELECT novel_id FROM chapters WHERE author = $1 AND deleted = FALSE
          UNION
          SELECT novel_id FROM votes WHERE voter = $1
        ) t
-       LEFT JOIN novels n ON n.id = t.novel_id
+       LEFT JOIN novels n ON n.id = t.novel_id AND n.deleted = FALSE
        ORDER BY t.novel_id DESC
        LIMIT 200`,
       [addr],
@@ -141,13 +141,13 @@ router.get("/:address/chapters", validateAddress, async (req, res) => {
                 (SELECT COUNT(*) FROM comments cm WHERE cm.chapter_id = c.id)::int AS comment_count,
                 (SELECT COUNT(*) FROM votes v WHERE v.candidate_id = c.id AND v.revealed = TRUE)::int AS vote_count
          FROM chapters c
-         LEFT JOIN novels n ON n.id = c.novel_id
-         WHERE c.author = $1
+         LEFT JOIN novels n ON n.id = c.novel_id AND n.deleted = FALSE
+         WHERE c.author = $1 AND c.deleted = FALSE
          ORDER BY c.created_at DESC
          LIMIT $2 OFFSET $3`,
         [addr, limit, offset],
       ),
-      query(`SELECT COUNT(*)::int AS n FROM chapters WHERE author = $1`, [addr]),
+      query(`SELECT COUNT(*)::int AS n FROM chapters WHERE author = $1 AND deleted = FALSE`, [addr]),
     ]);
 
     res.json({

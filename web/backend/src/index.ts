@@ -4,6 +4,7 @@ import rateLimit from "express-rate-limit";
 import helmet from "helmet";
 import pinoHttp from "pino-http";
 
+import adminRouter from "./api/admin.js";
 import bountiesRouter from "./api/bounties.js";
 import chaptersRouter from "./api/chapters.js";
 import contentRouter from "./api/content.js";
@@ -106,6 +107,7 @@ app.use("/api/content", contentRouter);
 app.use("/api/bounties", bountiesRouter);
 app.use("/api/votes", votesRouter);
 app.use("/api/faucet", faucetRouter);
+app.use("/api/admin", adminRouter);
 app.use("/api", rulesRouter);
 
 startFaucet();

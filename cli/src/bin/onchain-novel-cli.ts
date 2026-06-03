@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { program } from "commander";
 
+import { registerAdminCommands } from "../commands/admin.js";
 import { registerBountyCommands } from "../commands/bounty.js";
 import { registerChapterCommands } from "../commands/chapter.js";
 import { registerConfigCommand } from "../commands/config.js";
@@ -35,6 +36,7 @@ program.hook("preAction", async (_thisCmd, actionCmd) => {
 });
 
 registerSetupCommand(program);
+registerAdminCommands(program);
 registerConfigCommand(program);
 registerNovelCommands(program);
 registerChapterCommands(program);

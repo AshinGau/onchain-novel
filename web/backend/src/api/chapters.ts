@@ -21,8 +21,8 @@ router.get("/:id", validateIdParams("id"), async (req, res) => {
     const chapterRes = await query(
       `SELECT c.*, n.title AS novel_title, n.config
        FROM chapters c
-       JOIN novels n ON n.id = c.novel_id
-       WHERE c.id = $1`,
+       JOIN novels n ON n.id = c.novel_id AND n.deleted = FALSE
+       WHERE c.id = $1 AND c.deleted = FALSE`,
       [id],
     );
 
@@ -41,7 +41,7 @@ router.get("/:id", validateIdParams("id"), async (req, res) => {
 router.get("/:id/siblings", validateIdParams("id"), async (req, res) => {
   try {
     const { id } = req.params;
-    const chapterRes = await query("SELECT parent_id, novel_id FROM chapters WHERE id = $1", [id]);
+    const chapterRes = await query("SELECT parent_id, novel_id FROM chapters WHERE id = $1 AND deleted = FALSE", [id]);
     if (chapterRes.rows.length === 0) {
       return res.status(404).json({ error: "Chapter not found" });
     }
@@ -49,7 +49,7 @@ router.get("/:id/siblings", validateIdParams("id"), async (req, res) => {
     const { parent_id, novel_id } = chapterRes.rows[0];
     const siblingsRes = await query(
       `SELECT id, author, depth, "timestamp", is_world_line, declared_length
-       FROM chapters WHERE novel_id = $1 AND parent_id = $2 AND id != $3
+       FROM chapters WHERE novel_id = $1 AND parent_id = $2 AND id != $3 AND deleted = FALSE
        ORDER BY "timestamp" DESC`,
       [novel_id, parent_id, id],
     );
@@ -73,12 +73,12 @@ router.get("/:id/children", validateIdParams("id"), async (req, res) => {
     const [childrenRes, countRes] = await Promise.all([
       query(
         `SELECT id, author, depth, "timestamp", is_world_line, declared_length
-         FROM chapters WHERE parent_id = $1
+         FROM chapters WHERE parent_id = $1 AND deleted = FALSE
          ORDER BY "timestamp" DESC, id DESC
          LIMIT $2 OFFSET $3`,
         [id, limit, offset],
       ),
-      query(`SELECT COUNT(*)::int AS n FROM chapters WHERE parent_id = $1`, [id]),
+      query(`SELECT COUNT(*)::int AS n FROM chapters WHERE parent_id = $1 AND deleted = FALSE`, [id]),
     ]);
     res.json({
       children: childrenRes.rows,
@@ -102,11 +102,11 @@ router.get("/:id/context", validateIdParams("id"), async (req, res) => {
     const ancestorsRes = await client.query(
       `WITH RECURSIVE chain AS (
          SELECT id, parent_id, author, depth, content_text, content_fetched, is_world_line, "timestamp", 0 AS chain_depth
-         FROM chapters WHERE id = $1
+         FROM chapters WHERE id = $1 AND deleted = FALSE
          UNION ALL
          SELECT c.id, c.parent_id, c.author, c.depth, c.content_text, c.content_fetched, c.is_world_line, c."timestamp", chain.chain_depth + 1
          FROM chapters c
-         INNER JOIN chain ON c.id = chain.parent_id
+         INNER JOIN chain ON c.id = chain.parent_id AND c.deleted = FALSE
          WHERE chain.parent_id != 0 AND chain.chain_depth < $2
        )
        SELECT id, parent_id, author, depth, content_text, content_fetched, is_world_line, "timestamp"
@@ -130,6 +130,17 @@ router.get("/:id/comments", validateIdParams("id"), async (req, res) => {
   try {
     const { id } = req.params;
     const { page, limit, offset } = parsePagination(req.query);
+
+    // Reject if chapter (or its novel) is soft-deleted.
+    const chRes = await query(
+      `SELECT 1 FROM chapters c
+       JOIN novels n ON n.id = c.novel_id AND n.deleted = FALSE
+       WHERE c.id = $1 AND c.deleted = FALSE`,
+      [id],
+    );
+    if (chRes.rows.length === 0) {
+      return res.status(404).json({ error: "Chapter not found" });
+    }
 
     const commentsRes = await query(
       "SELECT id, chapter_id, author, content, created_at FROM comments WHERE chapter_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3",
@@ -178,7 +189,7 @@ router.post("/:id/comments", validateIdParams("id"), async (req, res) => {
     }
 
     // Verify chapter exists
-    const chapterRes = await query("SELECT id FROM chapters WHERE id = $1", [id]);
+    const chapterRes = await query("SELECT id FROM chapters WHERE id = $1 AND deleted = FALSE", [id]);
     if (chapterRes.rows.length === 0) {
       return res.status(404).json({ error: "chapter not found" });
     }

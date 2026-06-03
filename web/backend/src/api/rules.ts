@@ -10,10 +10,9 @@ const router = Router();
 // GET /api/novels/:id/rules — all rules for a novel
 router.get("/novels/:id/rules", validateIdParams("id"), async (req, res) => {
   try {
-    const novelId = req.params.id;
     const result = await query(
       "SELECT name, content FROM rules WHERE novel_id = $1 ORDER BY name",
-      [novelId],
+      [req.params.id],
     );
     res.json(result.rows);
   } catch (err) {
@@ -25,7 +24,6 @@ router.get("/novels/:id/rules", validateIdParams("id"), async (req, res) => {
 // GET /api/novels/:id/rule-proposals — list proposals for a novel
 router.get("/novels/:id/rule-proposals", validateIdParams("id"), async (req, res) => {
   try {
-    const novelId = req.params.id;
     const status = req.query.status as string | undefined;
     const { page, limit, offset } = parsePagination(req.query);
 
@@ -38,7 +36,7 @@ router.get("/novels/:id/rule-proposals", validateIdParams("id"), async (req, res
 
     const result = await query(
       `SELECT * FROM rule_proposals ${where} ORDER BY id DESC LIMIT $2 OFFSET $3`,
-      [novelId, limit, offset],
+      [req.params.id, limit, offset],
     );
     res.json(result.rows);
   } catch (err) {
@@ -50,15 +48,14 @@ router.get("/novels/:id/rule-proposals", validateIdParams("id"), async (req, res
 // GET /api/rule-proposals/:id — single proposal with votes
 router.get("/rule-proposals/:id", validateIdParams("id"), async (req, res) => {
   try {
-    const proposalId = req.params.id;
-    const proposalRes = await query("SELECT * FROM rule_proposals WHERE id = $1", [proposalId]);
+    const proposalRes = await query("SELECT * FROM rule_proposals WHERE id = $1", [req.params.id]);
     if (proposalRes.rows.length === 0) {
       return res.status(404).json({ error: "Proposal not found" });
     }
 
     const votesRes = await query(
       "SELECT voter, block_number FROM rule_proposal_votes WHERE proposal_id = $1 ORDER BY block_number",
-      [proposalId],
+      [req.params.id],
     );
 
     res.json({ ...proposalRes.rows[0], votes: votesRes.rows });

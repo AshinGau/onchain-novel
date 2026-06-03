@@ -23,7 +23,8 @@ CREATE TABLE novels (
   view_count      BIGINT NOT NULL DEFAULT 0,
   last_chapter_at TIMESTAMPTZ,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  block_number    BIGINT NOT NULL
+  block_number    BIGINT NOT NULL,
+  deleted         BOOLEAN NOT NULL DEFAULT FALSE
 );
 
 CREATE INDEX idx_novels_active ON novels(active);
@@ -48,7 +49,8 @@ CREATE TABLE chapters (
   content_fetched BOOLEAN NOT NULL DEFAULT FALSE,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   block_number    BIGINT NOT NULL,
-  tx_hash         TEXT
+  tx_hash         TEXT,
+  deleted         BOOLEAN NOT NULL DEFAULT FALSE
 );
 
 CREATE INDEX idx_chapters_novel_id ON chapters(novel_id);
