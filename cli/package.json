@@ -23,12 +23,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/AshinGau/onchain-novel.git",
+    "url": "git+https://github.com/galxe/onchain-novel.git",
     "directory": "cli"
   },
-  "homepage": "https://github.com/AshinGau/onchain-novel#readme",
+  "homepage": "https://github.com/galxe/onchain-novel#readme",
   "bugs": {
-    "url": "https://github.com/AshinGau/onchain-novel/issues"
+    "url": "https://github.com/galxe/onchain-novel/issues"
   },
   "engines": {
     "node": ">=20"
