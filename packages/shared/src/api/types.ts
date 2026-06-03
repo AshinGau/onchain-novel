@@ -59,6 +59,8 @@ export interface ChapterSummary {
   declared_length: number;
   content_hash: string;
   created_at: string;
+  /** Transaction hash from when this chapter was submitted on-chain. null for pre-indexer chapters. */
+  tx_hash: string | null;
 }
 
 export interface ChapterDetail extends ChapterSummary {

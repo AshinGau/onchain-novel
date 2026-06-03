@@ -69,10 +69,12 @@ export async function handleNovelCoreEvent(
         args: [chapterId],
       })) as any;
 
+      const { txHash } = eventMeta(log);
+
       await db.query(
         `INSERT INTO chapters (id, novel_id, parent_id, author, content_hash, declared_length,
-                depth, "timestamp", is_world_line, block_number)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                depth, "timestamp", is_world_line, block_number, tx_hash)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
          ON CONFLICT (id) DO NOTHING`,
         [
           chapterId.toString(),
@@ -85,6 +87,7 @@ export async function handleNovelCoreEvent(
           chapter.timestamp.toString(),
           depth === 1,
           blockNumber,
+          txHash,
         ],
       );
 

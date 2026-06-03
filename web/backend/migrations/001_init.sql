@@ -47,7 +47,8 @@ CREATE TABLE chapters (
   content_text    TEXT,
   content_fetched BOOLEAN NOT NULL DEFAULT FALSE,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  block_number    BIGINT NOT NULL
+  block_number    BIGINT NOT NULL,
+  tx_hash         TEXT
 );
 
 CREATE INDEX idx_chapters_novel_id ON chapters(novel_id);

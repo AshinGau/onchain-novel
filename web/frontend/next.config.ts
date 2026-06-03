@@ -48,6 +48,7 @@ export default async function config(): Promise<NextConfig> {
       NEXT_PUBLIC_BOUNTY_BOARD: contracts.bountyBoard,
       NEXT_PUBLIC_RULES_ENGINE: contracts.rulesEngine,
       NEXT_PUBLIC_USER_REGISTRY: contracts.userRegistry,
+      NEXT_PUBLIC_CHAIN_EXPLORER: cfg.cli.chainExplorer,
       BACKEND_URL: cfg.frontend.backendUrl,
     },
     async rewrites() {

@@ -9,6 +9,9 @@ import { chain } from "./chain";
  *  lib/chain.ts so it stays in sync with wagmi/RainbowKit's nativeCurrency. */
 export const TOKEN_SYMBOL = chain.nativeCurrency.symbol;
 
+/** Base URL for the chain explorer. Full tx path: {CHAIN_EXPLORER}/tx/{hash} */
+export const CHAIN_EXPLORER = (process.env.NEXT_PUBLIC_CHAIN_EXPLORER ?? "") as string;
+
 /** Reader-facing labels for contract phases: 0=Idle, 1=Nominating, 2=Committing, 3=Revealing */
 export const ROUND_PHASES = ["Writing", "Nominating", "Voting", "Revealing"] as const;
 

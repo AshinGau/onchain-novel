@@ -4,6 +4,7 @@ import Link from "next/link";
 
 import { useNicknames } from "@/hooks/use-nickname";
 import type { ChapterSummary } from "@/lib/api";
+import { CHAIN_EXPLORER } from "@/lib/config";
 
 interface ChapterCardMiniProps {
   chapter: ChapterSummary;
@@ -35,9 +36,24 @@ export function ChapterCardMini({
         }}
       >
         <div className="on-row-between">
-          <span style={{ fontWeight: 600, fontSize: "0.875rem", color: "var(--color-text)" }}>
-            ID.{chapter.id}
-          </span>
+          <div className="on-row" style={{ gap: "0.25rem", alignItems: "center" }}>
+            <span style={{ fontWeight: 600, fontSize: "0.875rem", color: "var(--color-text)" }}>
+              ID.{chapter.id}
+            </span>
+            {chapter.tx_hash && CHAIN_EXPLORER && (
+              <a
+                href={`${CHAIN_EXPLORER}/tx/${chapter.tx_hash}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-link"
+                title="View on-chain transaction"
+                onClick={(e) => e.stopPropagation()}
+                style={{ fontSize: "0.75rem" }}
+              >
+                ↗
+              </a>
+            )}
+          </div>
           <div className="on-row" style={{ gap: "0.25rem" }}>
             <span className="on-badge badge-depth">#{chapter.depth}</span>
             {(showWorldLine || chapter.is_world_line) && (

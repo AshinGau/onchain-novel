@@ -13,7 +13,7 @@ import { useChapterBounties, useChapterChildren, useChapterTips } from "@/hooks/
 import { useNicknames } from "@/hooks/use-nickname";
 import { useTxAction } from "@/hooks/use-tx-action";
 import type { Bounty, ChapterDetail, ChapterSummary, Novel } from "@/lib/api";
-import { TOKEN_SYMBOL } from "@/lib/config";
+import { CHAIN_EXPLORER, TOKEN_SYMBOL } from "@/lib/config";
 import { BOUNTY_BOARD_ADDRESS, bountyBoardAbi } from "@/lib/contracts";
 import { parsePositiveDecimal, parsePositiveInt, timeAgo } from "@/lib/format";
 
@@ -195,7 +195,21 @@ export function ChapterPageClient({ chapter, novel }: Props) {
         </Link>
         <span className="text-muted">/</span>
         <span className="text-caption">
-          Chapter {chapter.depth} (ID.{chapter.id})
+          Chapter {chapter.depth} (
+          {chapter.tx_hash && CHAIN_EXPLORER ? (
+            <a
+              href={`${CHAIN_EXPLORER}/tx/${chapter.tx_hash}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-link"
+              title="View on-chain transaction"
+            >
+              ID.{chapter.id}
+            </a>
+          ) : (
+            <>ID.{chapter.id}</>
+          )}
+          )
         </span>
       </div>
 
