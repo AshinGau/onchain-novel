@@ -1,7 +1,8 @@
 "use client";
 
 import { ConnectButton } from "@rainbow-me/rainbowkit";
-import { BookOpen, LayoutDashboard, Menu, Plus, X } from "lucide-react";
+import { BookOpen, Info, LayoutDashboard, Menu, Plus, X } from "lucide-react";
+import { TOKEN_SYMBOL } from "@/lib/config";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
@@ -13,6 +14,7 @@ const NAV_LINKS = [
   { href: "/novels", label: "Novels" },
   { href: "/create", label: "Create Novel", icon: Plus },
   { href: "/dashboard", label: "My Dashboard", icon: LayoutDashboard },
+  { href: "/about", label: `Earn ${TOKEN_SYMBOL}`, icon: Info },
 ] as const;
 
 export function NavBar() {
