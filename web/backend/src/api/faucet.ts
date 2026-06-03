@@ -11,7 +11,7 @@ const router = Router();
 
 // Use NATIVE_DECIMALS from config so the value is correct on chains where
 // native isn't 18-decimal (parseEther would silently misalign).
-const CLAIM_AMOUNT = parseUnits("10", env.NATIVE_DECIMALS);
+const CLAIM_AMOUNT = parseUnits(env.FAUCET_AMOUNT, env.NATIVE_DECIMALS);
 
 // In-memory daily ledger of claimed addresses (lowercase hex). Cleared at
 // local midnight. Dev-only — losing the ledger across restarts is acceptable
@@ -53,7 +53,7 @@ export function startFaucet(): void {
     log.error({ err }, "Invalid FAUCET_PRIVATE_KEY -- faucet disabled");
     return;
   }
-  log.info({ address: clients.account.address, amount: "10" }, "Faucet enabled");
+  log.info({ address: clients.account.address, amount: env.FAUCET_AMOUNT }, "Faucet enabled");
   scheduleDailyReset();
 }
 
@@ -100,7 +100,7 @@ router.post("/claim", async (req, res) => {
     });
 
     log.info({ to: addr, txHash }, "Faucet claim sent");
-    res.json({ txHash, amount: "10", symbol: env.NATIVE_SYMBOL, to: addr });
+    res.json({ txHash, amount: env.FAUCET_AMOUNT, symbol: env.NATIVE_SYMBOL, to: addr });
   } catch (err) {
     claimedToday.delete(addr);
     log.error({ err }, "Faucet claim failed");

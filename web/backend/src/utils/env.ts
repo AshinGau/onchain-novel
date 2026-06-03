@@ -38,6 +38,9 @@ export const env = {
   // Optional faucet signer for the testnet POST /api/faucet/claim endpoint.
   // When unset, the route returns 503; the rest of the API stays online.
   FAUCET_PRIVATE_KEY: (process.env.FAUCET_PRIVATE_KEY || "") as `0x${string}`,
+  // Number of native tokens to send per claim (string to avoid fp rounding).
+  // Default "1".
+  FAUCET_AMOUNT: process.env.FAUCET_AMOUNT || "1",
   // 32-byte key (hex or base64) to encrypt stored plaintext votes. Required
   // only when accepting POST /api/votes/submit. Env-only for secrecy.
   VOTE_ENCRYPTION_KEY: process.env.VOTE_ENCRYPTION_KEY || "",

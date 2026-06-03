@@ -21,6 +21,7 @@ export PRIVATE_KEY=<redacted>
 |----------|----------|-------------|
 | `KEEPER_PRIVATE_KEY` | Only with `--keeper` | Keeper wallet private key for phase-transition transactions |
 | `FAUCET_PRIVATE_KEY` | No | Faucet wallet private key; `POST /api/faucet/claim` returns 503 if unset |
+| `FAUCET_AMOUNT` | No | Tokens per claim (default `"1"`); string to avoid fp rounding |
 | `VOTE_ENCRYPTION_KEY` | No | 32-byte hex, AES-GCM encryption for user votes; `/api/votes/submit` is disabled if unset |
 
 ```bash
@@ -197,13 +198,13 @@ export FAUCET_PRIVATE_KEY=<redacted>
 ./scripts/services.sh start
 ```
 
-The `FAUCET_PRIVATE_KEY` address must hold sufficient on-chain tokens.
+The `FAUCET_PRIVATE_KEY` address must hold sufficient on-chain tokens. Set `FAUCET_AMOUNT` to change the per-claim amount (default `"1"`).
 
 ### Rules
 
 | Item | Rule |
 |------|------|
-| Per claim | 10 native tokens (precision from `config.yaml` `nativeCurrency.decimals`) |
+| Per claim | Controlled by `FAUCET_AMOUNT` env var (default `"1"`) |
 | Rate limit | Once per address per day, resets at server-local midnight |
 | Tracking | In-memory `Set`, **cleared on service restart** |
 | 503 response | Faucet not enabled (missing `FAUCET_PRIVATE_KEY`) or faucet wallet has insufficient balance |
